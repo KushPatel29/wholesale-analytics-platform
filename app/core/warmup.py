@@ -71,9 +71,17 @@ PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
     "salesreps",
 )
 
-FILTER_OPTION_PHASES: tuple[tuple[str, str], ...] = (
-    ("statuses,regions,methods", "bootstrap"),
-    ("customers,sales_reps,suppliers,products,protein_groups,yield_range", "deferred"),
+# (dimensions, phase, whether the page sends the date window with it).
+# The deferred call carries the window and every dimension, and it is the
+# expensive one - about ten seconds cold on the hosted box. Warming it without
+# the window produced a different cache key and left it cold.
+FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
+    ("statuses,regions,methods", "bootstrap", False),
+    (
+        "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups,yield_range",
+        "deferred",
+        True,
+    ),
 )
 
 # endpoint -> extra arguments the page sends alongside the date window.
@@ -193,9 +201,14 @@ def _warm(app) -> None:
         WARMUP_PATHS
         + tuple(f"{endpoint}?{window}&{extra}" for endpoint, extra in BUNDLE_ENDPOINTS)
         + tuple(
-            f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
+            (
+                f"/api/filters/options?{window}&date_type=fiscal&_gf=1"
+                f"&dimensions={dimensions}&page={page}&phase={phase}"
+                if with_window
+                else f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
+            )
             for page in PAGES_WITH_FILTER_OPTIONS
-            for dimensions, phase in FILTER_OPTION_PHASES
+            for dimensions, phase, with_window in FILTER_OPTION_PHASES
         )
     )
     _warm_user(app, primary, primary_paths)

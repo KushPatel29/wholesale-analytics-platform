@@ -140,9 +140,22 @@ class TestWarmup:
     def test_warms_the_filter_options_every_page_requests(self):
         """The deferred options call runs on every page and was the slowest XHR
         on the ones that render server-side."""
-        phases = {phase for _, phase in warmup.FILTER_OPTION_PHASES}
+        phases = {phase for _, phase, _ in warmup.FILTER_OPTION_PHASES}
         assert phases == {"bootstrap", "deferred"}
         assert "customers" in warmup.PAGES_WITH_FILTER_OPTIONS
+
+    def test_deferred_filter_options_are_warmed_with_the_date_window(self):
+        """
+        The deferred call is the expensive one - about ten seconds cold - and
+        the page sends it with the window and every dimension. Warmed without
+        the window it lands under a different key and stays cold.
+        """
+        deferred = [p for p in warmup.FILTER_OPTION_PHASES if p[1] == "deferred"]
+        assert deferred, "no deferred phase configured"
+        dimensions, _, with_window = deferred[0]
+        assert with_window is True
+        for required in ("customers", "products", "suppliers", "sales_reps"):
+            assert required in dimensions
 
     def test_bundle_warmup_uses_the_window_the_front_end_sends(self):
         """
