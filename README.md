@@ -1,337 +1,238 @@
-Wholesale Analytics
-=============
+# Wholesale Analytics
 
-Lightweight Flask scaffold for analytics features and blueprints.
+[![ci](https://github.com/KushPatel29/wholesale-analytics-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/KushPatel29/wholesale-analytics-platform/actions/workflows/ci.yml)
+![python](https://img.shields.io/badge/python-3.12-blue)
+![duckdb](https://img.shields.io/badge/engine-DuckDB-yellow)
 
-Setup
------
+The internal BI platform I built and ran at a perishable-goods wholesale
+distributor. Not a dashboard — the whole thing: incremental ETL off the ERP
+into a partitioned parquet lake, a DuckDB query layer, row-level security down
+to a sales rep's own book, and nine dashboards that the sales floor, the buyers
+and the GM actually used.
 
-1) Create a virtual env and install deps:
+It normally reads a SQL Server the reader does not have. So it now ships a
+seeded generator that invents a comparable distributor — 620 accounts, 880
+SKUs, 326,000 order lines — and writes it through the **same ETL writer**
+production uses. A clean clone gets a working platform in about a minute.
 
-   - Windows PowerShell
-     python -m venv .venv
-     .\.venv\Scripts\Activate.ps1
-     pip install -r requirements.txt
+```bash
+pip install -r requirements.txt
+python -m seed.generate_synthetic_data     # ~18s, writes cache/fact_dataset
+cp .env.demo .env
+python manage.py init-auth-db && python manage.py seed-demo-users
+python run.py                              # http://127.0.0.1:5057
+```
 
-2) Configure environment:
+Log in as `gm` / `demo-password-1234`, then log in as `rep.dana` and watch the
+same pages narrow to one rep's accounts.
 
-   - Copy `.env.example` to `.env` and adjust values as needed.
-   - Ensure the data loader directories exist on the host (or container):
-     ```bash
-     mkdir -p /var/opt/wholesale/users
-     mkdir -p /var/opt/wholesale
-     ```
-   - Key variables for production:
-     ```env
-     FLASK_ENV=production
-     SECRET_KEY=change_me
-     MSSQL_SERVER=YOUR_SQL_HOST
-     MSSQL_DB=Wholesale Analytics
-     MSSQL_USER=YOUR_USER
-     MSSQL_PASSWORD=YOUR_PASS
-     MSSQL_ODBC_DRIVER=ODBC Driver 18 for SQL Server
-     DIRECT_SQL_ONLY=true
-     DB_READ_UNCOMMITTED=true
-     ORDER_STATUSES=packed
-     USERS_CSV_PATH=/var/opt/wholesale/users/userid.csv
-     VISIBILITY_GRANTS_JSON=/var/opt/wholesale/visibility_grants.json
-     AUTO_REFRESH_ENABLED=false
-     ```
-
-Run
 ---
 
-- Using flask CLI:
-  set FLASK_ENV=development
-  flask --app wholesale_analytics/wsgi:app run
+## What it is
 
-- Or run the module directly:
-  python -m wholesale_analytics.wsgi
+| | |
+|---|---|
+| **Scale** | 259 Python files, ~157k lines, 85 templates, 32 runbooks |
+| **Structure** | 20 blueprints, 47 services, 107 test files |
+| **Engine** | Flask + DuckDB over hive-partitioned parquet |
+| **Access** | Role permissions, row-level scoping, cost masking |
+| **Demo data** | 620 customers · 880 SKUs · 326k order lines · 24 months |
 
-Admin/User Management
----------------------
+**Dashboards:** Overview (executive), Customers (KPIs, RFM, CLV, cohorts),
+Products (with drilldown and forecasting), Suppliers, Regions, Sales Reps,
+Labor, Returns (RMA intake with two-step approval and PDF export), and an
+admin portal for users, roles and visibility.
 
-Use the Click CLI in `manage.py` to manage the local SQLite auth DB:
+---
 
-- Initialize DB tables:
-  python manage.py init-auth-db
+## The architecture worth explaining
 
-- Create or update an admin user:
-  python manage.py create-admin --username=admin --role=admin
-  (will prompt for password if omitted)
+**The fact dataset is parquet, partitioned by day, queried by DuckDB.** The ETL
+writes `cache/fact_dataset/year=/month=/day=/part-0.parquet` plus a manifest,
+and every service queries a DuckDB view over `parquet_scan(...)` with hive
+partitioning on, so a date-filtered page only touches the days it needs.
 
-In-app admin UI (recommended for day-to-day access control):
+**Revenue is derived, never stored.** The fact table holds pack weights, pack
+counts, a unit-of-billing flag and per-unit prices. The view computes revenue
+as `pack_weight × price` for catch-weight items and `pack_units × price` for
+everything else. Catch-weight is the whole problem in protein distribution — a
+ribeye is billed on the weight that actually shipped, a case of portioned
+chicken is not — and storing a revenue column would let the two definitions
+drift apart.
 
-- Visit `/admin/users` as an admin to create users.
-- Each app user must be mapped to an ERP `UserId` (GUID) from the ERP user table.
-- Admins can assign visibility by selecting one or more ERP `UserId` values.
-  Non-admin users only see data for the ERP users in their visibility list.
-- If a non-admin has no visibility configured, the UI shows "Access not configured" and returns empty data.
+**The bundle pattern.** Each page is served by one server-side payload builder
+rather than a dozen chatty endpoints, and the JSON export path is the same
+builder. An export can't disagree with the screen because it isn't computed
+separately.
 
-Sales Rep Analytics
--------------------
+**Incremental refresh with upserts.** `etl/partition_writer.py` rewrites only
+the partitions a batch touches, normalises primary keys across the int/float/
+string drift real ERP extracts have, and moves rows between partitions without
+leaving duplicates behind. The seeder calls this same function — the demo data
+is not loaded through a special path.
 
-- The **Sales Reps+** tab (`/salesreps/`) surfaces revenue, profit, top reps, and drilldowns by rep.
-- Drilldowns live at `/salesreps/rep/<id>` and inherit global filters + RBAC scope.
-- Protein filters (min/max/name-like) are available globally across analytics pages; they funnel through `FilterParams` and constrain live SQL queries and cached parquet alike.
+---
 
-Overview Forecasting
---------------------
+## Finding a row-level security bypass
 
-- Overview now has a Run Forecast control for Revenue/Units/ASP with selectable 3/6/12 month horizons.
-- Forecasts execute on-demand against the current filters at monthly grain with ETS/seasonal-naive fallbacks and non-negative clipping.
-- Results are cached for ~10 minutes per filter+metric+horizon and include warnings when history is sparse or insufficient.
-- A subtle notice is shown when filters change after a forecast; rerun to refresh with the new context.
+The access model has two halves: **scoping** (which rows you can see) and
+**masking** (which columns). Every bundle service resolves the caller's scope
+and passes it to `fact_store.build_where_clause`.
 
-Quality Gates
--------------
+`overview_v2` did not. It builds its own SQL against a raw DuckDB connection,
+and its `_where_clause` assembled date, filter and status predicates and
+stopped there. So the newest version of the overview — **the page every user
+lands on first** — returned company-wide totals to a rep scoped to their own
+book. Masking still worked, which is what made it easy to miss: costs came back
+correctly hidden, on rows the user should never have seen.
 
-Install dev tooling and run the quality suite locally before pushing:
+Measured on the seeded dataset, before and after:
+
+| Login | Scope | Revenue seen (before) | After |
+|---|---|---|---|
+| `gm` | unrestricted | $64,754,267 | $64,754,267 |
+| `manager.coast` | 2 regions | $64,754,267 | **$30,921,878** (47.8%) |
+| `rep.dana` | rep R01 | $64,754,267 | **$15,993,410** (24.7%) |
+| `rep.tomasz` | rep R04 | $64,754,267 | **$10,432,605** (16.1%) |
+
+`rep.dana`'s 24.7% lines up with the 26% book share the generator planted,
+which is the check that the fix scopes to the right rows rather than merely
+fewer of them.
+
+Five regression tests cover it, including an AST assertion that
+`_where_clause` actually *calls* the scope helper — a test that the predicate
+exists would have passed against the broken version too.
+
+---
+
+## Seven more defects, found by turning on the right lint rules
+
+CI had been red for every run since March. Two of its five steps could not have
+passed: `pip install .` with no `[project]` table, and `ruff .`, which is not a
+valid ruff invocation. With the correctness rules (`F`, `E9`, selected `B`)
+actually running, they surfaced quickly. Each of these hid behind a bare
+`except` or an unreachable branch, which is why 700 passing tests never caught
+them:
+
+| Defect | Consequence |
+|---|---|
+| `Response` and `datetime` used but never imported in two returns export routes | `/returns/<id>/export/sage.csv` was a guaranteed 500 |
+| `timezone` used in `datetime.now(timezone.utc)`, never imported | `NameError` in the churn model trainer |
+| `_cache_version()`'s fallback referenced an undefined constant | a failure in `current_data_version()` raised out of the function instead of degrading — taking every products page with it |
+| `order_col` fell back to `key_col` one line before `key_col` was assigned | `UnboundLocalError` whenever no order column resolved |
+| `cost_col` / `qty_col` never resolved in `build_customers_bundle` | CLV cost flag and the monthly trend query raised into an `except` and silently degraded |
+| `regions_bundle` never imported in the stakeholder report | the region-performance section was **always empty** |
+| `List` used in an annotation, never imported | latent |
+
+Plus 292 lines of dead code stranded after early returns in three rewritten
+handlers, which is where four of the undefined names lived.
+
+---
+
+## Access control you can log into
+
+Six demo logins, each exercising a different slice:
+
+| Login | Role | Sees |
+|---|---|---|
+| `admin` | admin | everything, plus the admin portal |
+| `gm` | gm | everything, no admin portal |
+| `manager.coast` | sales_manager | Lower Mainland + Vancouver Island only |
+| `rep.dana` | sales | Dana Whitfield's accounts only |
+| `rep.tomasz` | sales | Tomasz Bielski's accounts only |
+| `viewer.nocost` | warehouse | every row, but cost and margin come back `null` |
+
+Password for all six: `demo-password-1234`.
+
+`viewer.nocost` is the interesting one. Cost masking is enforced in the payload,
+not the template — the API returns `cost: null` and `margin_pct: null` rather
+than rendering a blank cell over a value that was sent to the browser anyway.
+
+---
+
+## What the demo data says
+
+The generator plants findings rather than asserting them, so the dashboards
+have something real to surface:
+
+> **Beef is 31% of revenue at 11.2% margin, and falling.** Landed cost carries
+> inflation the list price does not, and the quarterly trend shows the squeeze:
+> 14.4% → 13.0% → 12.5% → 12.0% → 10.7% → 10.2% → 8.8% → 8.5%. Charcuterie, at
+> 8% of revenue, earns 24.1%.
+
+> **Third-party LTL runs a 24% late rate against 3–5% for own fleet** — and it
+> is the only lane serving the far regions, so the delivery problem is a
+> routing decision, not a carrier problem.
+
+Blended margin is 16.2% on $61M a year, which is where a protein wholesaler
+should sit. None of this is asserted in a README and hoped for: it falls out of
+the catalog in `seed/catalog.py`, and the numbers above were read back out of
+DuckDB after generation.
+
+---
+
+## Running it
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q
-ruff check app data_loader.py tests
-black --check app data_loader.py tests
-mypy app data_loader.py tests
-bandit -r app data_loader.py -s B101
+python -m venv .venv
+.venv/Scripts/activate            # Windows
+source .venv/bin/activate         # macOS / Linux
+pip install -r requirements.txt
+
+python -m seed.generate_synthetic_data
+cp .env.demo .env
+python manage.py init-auth-db
+python manage.py seed-demo-users
+python run.py --fast
 ```
 
-Detailed feature runbooks and release notes live in [`docs/`](docs/).
-
-Audit & Parity Runbook
-----------------------
-
-- Ground truth (SQL): `python data_loader.py audit-sql --start 2018-01-01 --end 2035-01-01 --status packed`
-- Extract (pre-enrich): `python data_loader.py audit-extract --start 2018-01-01 --end 2035-01-01 --statuses packed`
-- Enriched + persisted + API in one report: `python data_loader.py audit-enrich --start 2018-01-01 --end 2035-01-01 --statuses packed --base-url http://127.0.0.1:5000 --as-admin`
-- Persisted-only check: `python data_loader.py audit-persisted --start 2018-01-01 --end 2035-01-01 --statuses packed --parquet cache/fact_dataset`
-- API-only check: `python data_loader.py audit-api --base-url http://127.0.0.1:5000 --start 2018-01-01 --end 2035-01-01 --statuses packed --as-admin`
-- Interpretation: SQL vs extract reveals pack/order join or UnitOfBilling errors; extract vs enriched highlights merge losses; enriched vs persisted catches parquet truncation; API gaps point to cache scope/RBAC filtering.
-- Deployment checklist: set `ORDER_STATUSES=packed`, ensure `PARQUET_PATH` exists/writable, DB connectivity OK, clear stale `cache/.sales_fact.lock`, restart gunicorn/supervisor/nginx, invalidate caches, run the audits above, hit `/health/data` and `/api/_admin/audit/window` as admin, and review `persisted_signature.json`.
-
-Performance Smoke Test
-----------------------
-
-Run a quick end-to-end loader check (uses current `.env` configuration):
+**Tests:**
 
 ```bash
-python scripts/perf_smoke.py
+pytest -q
 ```
 
-RBAC smoke test
----------------
+The suite is isolated from local state by the root `conftest.py`. That matters
+more than it sounds: the demo config turns on every v2/v3 feature flag, and
+running the suite with `.env` in place used to produce over 250 errors that
+vanished when you deleted the file. Tests now pin the flags and point the
+dataset path somewhere the demo data cannot leak in, so a clean clone, a
+machine mid-demo, and CI all agree.
+
+**The whole promise, checked:**
 
 ```bash
-python scripts/smoke_rbac.py
+python scripts/demo_smoke.py
 ```
 
-Frontend smoke check
---------------------
+Generates nothing, assumes the dataset and logins exist, then walks all 16
+pages, asserts the overview returns real numbers, asserts each scoped login
+sees a strict subset of revenue and customers, and asserts `viewer.nocost` gets
+`null` for cost. CI runs it on every push, so "a clean clone works" is checked
+rather than claimed.
 
-- Open `/overview` and confirm no console errors and charts render (Chart.js should load from `/static/vendor/chartjs/chart.umd.min.js`).
+---
 
-- List users:
-  python manage.py list-users
+## Deliberate omissions
 
-- Reset a user's password:
-  python manage.py reset-password --username=alice
+**The labor page is off in the demo.** It reads a workforce-management API with
+no synthetic equivalent. Faking a source system is worse than switching the
+page off and saying so.
 
-- Enable 2FA (prints secret + otpauth URL):
-  python manage.py enable-2fa --username=alice
+**The AI assistant is off.** It needs a local model server. The code is here;
+the demo does not pretend to run it.
 
-Backups
--------
+**The stylistic lint rules are advisory, not gating.** Ruff's full ruleset
+reports ~8,100 findings on 157k lines — mostly `UP006` typing modernisation and
+`PLR2004` magic numbers. Gating CI on those would mean a 3,000-file mechanical
+diff that reviews as noise. CI gates on the rules that find defects and reports
+the rest.
 
-Create a zip archive of the parquet cache and auth DB:
+---
 
-- Run on demand:
-  python scripts/backup.py
+## Notes
 
-Deployment Readiness Report
----------------------------
-- Configuration validation now fails fast in production when `SECRET_KEY` or secure cookie flags are unsafe; proxy headers are honored via `ProxyFix`.
-- Structured logging with rotating JSON files includes `request_id`, route, user role/id, duration, and status; uncaught errors return friendly JSON/HTML with `X-Request-ID`.
-- Fact schema guard runs on startup, recording status in `FACT_SCHEMA_STATUS` and logging missing Date/Revenue/Cost/Qty/Weight columns.
-- Health endpoints: `/health` (dataset version), `/healthz` (liveness), and `/readyz` (parquet/auth/optional MSSQL checks) remain available; admin metrics at `/metrics`.
-- Remaining risks: committed `.env` samples still present—replace with real secrets and ignore before production; audit coverage of admin actions and long-running endpoints should be reviewed prior to go-live.
-
-- Keep last N archives (env `BACKUP_KEEP_N`, default 10). Archives stored in `backups/`.
-
-- Cron example (daily 2am):
-  0 2 * * * /opt/wholesale_analytics/.venv/bin/python /opt/wholesale_analytics/scripts/backup.py >> /opt/wholesale_analytics/logs/backup.log 2>&1
-
-Nginx Reverse Proxy
--------------------
-
-Serve Flask via Gunicorn behind Nginx.
-
-1) Copy the provided config and adjust `server_name` and paths if needed:
-   sudo cp deploy/nginx_wholesale.conf /etc/nginx/sites-available/wholesale_analytics
-
-2) Enable the site (Debian/Ubuntu layout):
-   sudo ln -sf /etc/nginx/sites-available/wholesale_analytics /etc/nginx/sites-enabled/wholesale_analytics
-
-3) Ensure Gunicorn is running locally (e.g.):
-   cd /opt/wholesale_analytics
-   /opt/wholesale_analytics/.venv/bin/gunicorn -c gunicorn_conf.py wsgi:app
-
-4) Test Nginx config and reload:
-   sudo nginx -t
-   sudo systemctl reload nginx
-
-The config proxies requests to `http://127.0.0.1:8000` and serves static files from `/opt/wholesale_analytics/app/static/`.
-After any production rsync/copy into `/opt/wholesale_analytics`, re-apply nginx static ACLs so `/static/*` does not start returning `403`:
-  sudo bash scripts/fix_static_acls.sh /opt/wholesale_analytics
-  bash scripts/check_static_assets.sh http://127.0.0.1
-
-Systemd Service
----------------
-
-Run Wholesale Analytics as a systemd service.
-
-1) Copy the unit file:
-   sudo cp deploy/wholesale_analytics.service /etc/systemd/system/wholesale_analytics.service
-
-2) Reload units and enable service on boot, start now:
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now wholesale_analytics
-
-3) Check status and logs:
-   systemctl status wholesale_analytics
-   journalctl -u wholesale_analytics -f
-
-With Gunicorn bound to `127.0.0.1:8000` and Nginx configured, the app will be reachable via your server name.
-
-Data Loader
------------
-
-- Configure MSSQL env vars in `wholesale_analytics/.env`:
-  - `MSSQL_SERVER`, `MSSQL_DB` (default Wholesale Analytics)
-  - EITHER set `MSSQL_TRUSTED=true` (Windows auth) OR provide `MSSQL_USER` and `MSSQL_PASSWORD` with `MSSQL_TRUSTED=false`
-  - Optional: `ODBC_DRIVER` (default "ODBC Driver 18 for SQL Server")
-
-- Generate/refresh parquet:
-  - `python -m wholesale_analytics.data_loader`
-  - Output path defaults to `PARQUET_PATH` env (default `cache/fact_dataset`)
-
-- Notes:
-  - Requires an ODBC SQL Server driver installed on the host.
-  - `pyodbc` is included in requirements; on Windows it uses installed ODBC driver.
-
-Analytics Cache & Incremental Refresh
--------------------------------------
-
-- Dataset directory is `cache/fact_dataset/` with manifest at `cache/fact_dataset/_manifest.json`.
-- ETL state (watermark + last_success) is tracked in `cache/etl_state.json`.
-- One-time build: `python run.py build-fact --start 2017-01-01 --end today`.
-- Incremental refresh (manual): `python run.py refresh-fact --once`.
-- Continuous refresh (loop): `python run.py refresh-fact --loop --interval 300`.
-- In development, `python run.py` starts one in-process incremental refresh loop by default.
-- Disable the in-process loop with `ENABLE_INPROCESS_REFRESH=0`.
-- In production, the in-process loop is disabled by default.
-- Enable explicitly with `ENABLE_INPROCESS_REFRESH=1`.
-- If running under Gunicorn, also set `ALLOW_GUNICORN_INPROCESS_REFRESH=1`.
-- Tunables: `FACT_REFRESH_INTERVAL_SECONDS`, `FACT_REFRESH_LOOKBACK_DAYS`, `FACT_REFRESH_JITTER_SECONDS`.
-- Web workers are read-only; no in-process refresh loops run inside Gunicorn.
-- Dashboards read only from DuckDB over parquet partitions; date filters prune partitions on read so filter changes never hit SQL.
-
-Products Parquet Cache
-----------------------
-
-- Env vars:
-  - `DATA_DIR`: base directory for cached artifacts (default `cache/` under repo root)
-  - `PRODUCTS_PARQUET_PATH`: explicit products parquet file path (default `<DATA_DIR>/products.parquet`)
-  - `AUTO_CREATE_PRODUCTS_PARQUET`: create placeholder parquet when missing (default `true` in development, `false` in production)
-  - `PRODUCTS_PARQUET_SCHEMA_VERSION`: schema tag written to the sidecar meta file
-- Generate/refresh products parquet:
-  - `python manage.py build-products-parquet [--output <path>] [--source snapshot|live]`
-  - Uses `data_loader.load_snapshot()` by default; pass `--source live` to hit SQL if available.
-  - Exits non-zero with instructions if no source data is available.
-- Layout:
-  - Default cache path: `cache/products.parquet`
-  - Metadata sidecar: `cache/products.parquet.meta.json`
-
-Labor Analytics
----------------
-
-- Required environment variables are intentionally secret-free in source control:
-  - `SYNERION_BASE_URL`
-  - `SYNERION_USERNAME`
-  - `SYNERION_PASSWORD`
-  - `SYNERION_API_KEY`
-  - `SYNERION_SUBDOMAIN`
-  - `SYNERION_APP_REGION`
-  - `SYNERION_PER_PAGE`
-  - `LABOR_START_DATE`
-  - `LABOR_PARQUET_PATH`
-  - `LABOR_RAW_PATH`
-  - `LABOR_INCREMENTAL_DAYS`
-  - `LABOR_RECENT_RELOAD_DAYS`
-- Labor parquet dataset:
-  - Partitioned dataset directory defaults to `cache/labor/fact_dataset/`
-  - Raw landing files default to `cache/labor/raw/`
-  - Manifest lives at `cache/labor/fact_dataset/_manifest.json`
-  - ETL state lives at `cache/labor/labor_etl_state.json`
-- Backfill and refresh commands:
-  - `python run.py build-labor --start 2022-01-01 --end today`
-  - `python run.py refresh-labor --once --mode incremental`
-  - `python run.py refresh-labor --once --mode recent-repair`
-  - `flask --app wsgi:app labor-refresh --mode backfill --start 2022-01-01`
-- Incremental behavior:
-  - Recent windows are reloaded instead of append-only trust.
-  - Default repair window is controlled by `LABOR_RECENT_RELOAD_DAYS` (recommended 30-60 days).
-  - Detailed transaction grain is one row per employee-day-time-transaction row, with parent-day paid hours allocated across nested transactions to keep department totals accurate.
-- App surface:
-  - Labor page route: `/labor/`
-  - Export routes: `/labor/export/snapshot`, `/labor/export/detail`, `/labor/export/department-summary`, `/labor/export/watchlist`
-  - Page filters: date range, department, employee, time category, status, work rule, search
-
-Project Layout
---------------
-
-- `wholesale_analytics/app/` Flask application package with blueprints and templates
-- `wholesale_analytics/data_loader.py` placeholder to be replaced with production loader
-- `wholesale_analytics/wsgi.py` exposes `app` for `flask run` or `uvicorn` import
-
-Velocity API
-------------
-
-The Velocity module provides usage/velocity analytics endpoints.
-
-- GET `/api/velocity/summary`
-  - Params: `start`, `end`, lists `regions[]`, `methods[]`, `customers[]`, `suppliers[]`, `products[]`, `metric=units|lb`
-  - Returns KPI dictionary including products_active, total_usage_units/lb, avg weekly velocities, and movers lists.
-
-- GET `/api/velocity/series`
-  - Params: `metric=units|lb`, `freq=W|M|Y`, filters as above
-  - Returns `{ x: [iso], y: [values], rolling: { w4, w8, w13 }, meta }`
-  - x is sorted ascending and padded to include missing periods with zeros.
-
-- GET `/api/velocity/product/<product_id>`
-  - Returns per-product weekly series (units, lb) with rolling windows and a snapshot of last 4/8/13-week averages.
-
-- GET `/api/velocity/forecast/<product_id>`
-  - Params: `metric=units|lb`, any of `horizon_weeks`, `horizon_months`, `horizon_years`
-  - Returns `{ history: [{ds,y}], forecast: [{ds,yhat,yhat_lower,yhat_upper}], meta: { model, horizon } }`
-
-- GET `/api/velocity/search/products`
-  - Params: `q`, `limit` (default 20, max 50), `offset` (default 0)
-  - Returns fuzzy results: `[{ id, label: "SKU  Name (Supplier)", sku, name, supplier, category }]`
-
-- GET `/api/velocity/export`
-  - Params: `format=csv|xlsx`, `metric`, `freq`, filters
-  - Streams file with filename `velocity_<metric>_<freq>_<yyyy-mm-dd>.<ext>`
-
-Notes
-- All endpoints are authenticated.
-- 30s cache for idempotent GETs; 204 returned for empty datasets; invalid params 400.
-- Guardrails: max 5y date span, max 100 in selection lists.
-
-Regions Bundle (DuckDB)
------------------------
-
-- Regions bundle: GET `/api/regions/bundle`
-- Regions drilldown bundle: GET `/api/regions/drilldown/bundle?region_id=<id>`
-- Both endpoints are DuckDB-first (pushdown predicates, no pandas full-frame materialization) and run 3 tagged DuckDB queries per request.
-- Server pagination, sort, and search are supported via `page`, `page_size`, `sort`, `sort_dir`, `search`, and `topN`.
+Built at a Vancouver wholesale distributor. All employer identifiers, customer
+names, supplier names and cost data have been removed — the git history starts
+at the de-branded import, and every number in this repo is generated from
+`seed/catalog.py`.

@@ -300,8 +300,14 @@ def _problem_response(status: int, title: str, *, detail: str | None = None):
 
 
 def create_app() -> Flask:
-    # Load environment from a .env file if present
-    load_dotenv()
+    # Load environment from a .env file if present.
+    #
+    # WA_IGNORE_DOTENV lets the test suite opt out. The demo config turns on
+    # every v2/v3 feature flag, so a developer who has run the demo would
+    # otherwise get a completely different set of test results from CI - see
+    # the root conftest.py.
+    if os.getenv("WA_IGNORE_DOTENV", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        load_dotenv()
     # Explicitly mark this process as a web worker to block live SQL usage.
     os.environ.setdefault("APP_MODE", "web")
 

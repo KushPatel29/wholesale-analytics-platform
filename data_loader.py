@@ -67,14 +67,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PARQUET_PATH = (PROJECT_ROOT / "cache" / "fact_analytics.parquet").resolve()
 DateLike = date | datetime | str
 
-try:
-    from dotenv import load_dotenv
-    dev_path = PROJECT_ROOT / ".env.dev"
-    if dev_path.exists():
-        load_dotenv(dotenv_path=dev_path, override=True)
-    load_dotenv(override=False)
-except Exception as e:
-    log.warning("Failed to load .env files: %s", e)
+# WA_IGNORE_DOTENV lets the test suite run against the shipped defaults rather
+# than whatever .env the developer happens to have in place - see conftest.py.
+if os.getenv("WA_IGNORE_DOTENV", "").strip().lower() in {"1", "true", "yes", "on"}:
+    log.debug("Skipping .env files (WA_IGNORE_DOTENV set)")
+else:
+    try:
+        from dotenv import load_dotenv
+        dev_path = PROJECT_ROOT / ".env.dev"
+        if dev_path.exists():
+            load_dotenv(dotenv_path=dev_path, override=True)
+        load_dotenv(override=False)
+    except Exception as e:
+        log.warning("Failed to load .env files: %s", e)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
