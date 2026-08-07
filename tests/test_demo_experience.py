@@ -88,6 +88,34 @@ class TestWarmup:
     def test_secondary_paths_are_a_subset(self):
         assert set(warmup.SECONDARY_PATHS).issubset(set(warmup.WARMUP_PATHS))
 
+    def test_pacing_and_secondary_warming_are_configurable(self, monkeypatch):
+        """
+        On a 512 MB container the warm-up has to be able to back off: pace
+        itself so it does not starve real requests, and skip the secondary
+        accounts, whose separately-cached bundles cost more memory than they
+        save.
+        """
+        import inspect
+
+        source = inspect.getsource(warmup)
+        assert "DEMO_WARMUP_PACE_SECONDS" in source
+        assert "DEMO_WARMUP_SECONDARY" in source
+
+    def test_secondary_accounts_skipped_when_disabled(self, monkeypatch):
+        monkeypatch.setenv("DEMO_WARMUP_SECONDARY", "0")
+        calls = []
+        monkeypatch.setattr(warmup, "_warm_user", lambda app, user, paths: calls.append(user) or True)
+        warmup._warm(object())
+        assert calls == ["gm"], f"only the primary login should be warmed, got {calls}"
+
+    def test_secondary_accounts_warmed_when_enabled(self, monkeypatch):
+        monkeypatch.setenv("DEMO_WARMUP_SECONDARY", "1")
+        monkeypatch.setenv("DEMO_WARMUP_DELAY_SECONDS", "0")
+        calls = []
+        monkeypatch.setattr(warmup, "_warm_user", lambda app, user, paths: calls.append(user) or True)
+        warmup._warm(object())
+        assert len(calls) == len(demo_accounts.DEMO_USERS)
+
     def test_does_not_go_through_the_rate_limited_login_route(self):
         """
         /auth/login is capped at 5 requests a minute. Warming six accounts

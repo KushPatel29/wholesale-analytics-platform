@@ -83,7 +83,13 @@ def _warm_user(app, username: str, paths: tuple[str, ...]) -> bool:
                 session["_user_id"] = user_id
                 session["_fresh"] = False
 
+            pace = float(os.getenv("DEMO_WARMUP_PACE_SECONDS", "0"))
             for path in paths:
+                # Pause between pages so the warm-up never monopolises a shared
+                # CPU. Without this it competes with whoever is already on the
+                # site, and both the warm-up and their request slow to a crawl.
+                if pace > 0:
+                    time.sleep(pace)
                 page_started = time.perf_counter()
                 try:
                     page = client.get(path)
@@ -122,10 +128,16 @@ def _warm(app) -> None:
     # Then the rest, so whichever account a visitor picks is already warm.
     # Bounded by a budget: on a slow host it is better to leave some accounts
     # cold than to keep a background thread busy indefinitely.
+    #
+    # Off by default on the smallest containers. Each account holds its own set
+    # of cached bundles - the cache key includes the user and their scope - so
+    # warming all six multiplies resident memory for a benefit only the second
+    # visitor sees, and running out of memory costs everyone.
+    warm_secondary = str(os.getenv("DEMO_WARMUP_SECONDARY", "1")).strip().lower() in {"1", "true", "yes", "on"}
     try:
         from .demo_accounts import DEMO_USERS
 
-        others = [name for name in DEMO_USERS if name != primary]
+        others = [name for name in DEMO_USERS if name != primary] if warm_secondary else []
     except Exception:
         others = []
 

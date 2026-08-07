@@ -19,30 +19,46 @@ COPY . .
 # Package a self-contained portfolio demo. The generated dataset and demo
 # authentication database contain synthetic data only.
 #
-# Sized for a 512 MB / shared-CPU host rather than a laptop: 200 accounts and
-# 300 SKUs over six months is ~26k order lines, which still produces a
-# believable book with seasonality and a margin trend, but builds every page
-# in about a second per core instead of a minute.
+# Sized for a 512 MB container, not a laptop. The platform OOM-kills the whole
+# container when it is exceeded - no traceback, no worker-exit line, just a
+# fresh gunicorn master in the logs - so every memory multiplier matters: rows
+# scanned, frames materialised per request, and how many requests can be in
+# flight at once.
+#
+# 150 accounts and 220 SKUs over four months is ~11k order lines. Still a
+# believable book with seasonality and a visible margin trend, and small enough
+# that a page render and the background warm-up can overlap without tipping the
+# container over.
+#
+# products.parquet is built here too: without it every products request takes a
+# FileNotFoundError path before falling back.
 RUN cp .env.demo .env \
-    && python -m seed.generate_synthetic_data --months 6 --customers 200 --products 300 \
+    && python -m seed.generate_synthetic_data --months 4 --customers 150 --products 220 \
     && python manage.py init-auth-db \
-    && python manage.py seed-demo-users
+    && python manage.py seed-demo-users \
+    && (python manage.py build-products-parquet || echo "products parquet skipped")
 
+# Two threads rather than four: each in-flight request materialises pandas
+# frames, so thread count multiplies peak memory directly.
 ENV PORT=10000 \
     GUNICORN_WORKERS=1 \
-    GUNICORN_THREADS=4 \
+    GUNICORN_THREADS=2 \
     GUNICORN_TIMEOUT=180
 
 # DuckDB defaults to a 2 GB memory limit, which on a 512 MB container means the
-# kernel kills the worker instead of DuckDB spilling. Cap it well under the
-# container limit, and keep the thread count low so query threads do not
+# platform kills the container instead of DuckDB spilling. Cap it well under
+# the container limit and keep it single-threaded so query threads do not
 # multiply peak memory.
-ENV DUCKDB_MEMORY_LIMIT=192MB \
-    DUCKDB_THREADS=2
+ENV DUCKDB_MEMORY_LIMIT=128MB \
+    DUCKDB_THREADS=1
 
 # Build the caches in the background at boot so no visitor pays for the first
-# render of a page.
-ENV DEMO_WARMUP=1
+# render of a page. Paced so the warm-up never starves a real request on a
+# shared CPU, and limited to the documented demo login - warming all six cost
+# more memory than it saved.
+ENV DEMO_WARMUP=1 \
+    DEMO_WARMUP_PACE_SECONDS=2 \
+    DEMO_WARMUP_SECONDARY=0
 
 EXPOSE 10000
 

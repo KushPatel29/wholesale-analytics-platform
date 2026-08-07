@@ -20,8 +20,8 @@ seeded generator that invents a comparable distributor — 620 accounts, 880
 SKUs, 326,000 order lines — and writes it through the **same ETL writer**
 production uses. A clean clone gets a working platform in about a minute.
 
-The hosted demo runs a smaller cut of the same generator (200 accounts, 300
-SKUs, six months) because it lives on a 512 MB shared-CPU box, so its totals
+The hosted demo runs a smaller cut of the same generator (150 accounts, 220
+SKUs, four months) because it lives on a 512 MB shared-CPU box, so its totals
 are smaller than the ones quoted below. The shape of the data, and every
 finding, is identical.
 
