@@ -398,7 +398,8 @@ def test_runner_creates_sends_and_dedupes_data_freshness(app, monkeypatch):
         assert len(sent_messages) >= 1
         runner_messages = [item for item in sent_messages if item["to_email"] == str(user.email)]
         assert len(runner_messages) == 1
-        assert len(runner_messages[0]["attachments"]) == 0
+        assert len(runner_messages[0]["attachments"]) == 1
+        assert runner_messages[0]["attachments"][0]["filename"] == "wholesale_alert_data_freshness_sla.xlsx"
 
         with SessionLocal() as s:
             event = (

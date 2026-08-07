@@ -1,4 +1,3 @@
-import pytest
 from flask import url_for
 
 
@@ -18,7 +17,7 @@ def test_products_js_served(app):
         assert "SECTION_GROUPS" in body
         assert "bubbleXMetric" in body
         assert "visualStatusKey" in body
-        assert "products-v4-live3" in body
+        assert "products-v4-live4" in body
         assert 'data-column="velocity_per_month"' in body
         assert "updateTableLayerContextForSubset" in body
         assert "root.dataset.productsBootstrapped" in body

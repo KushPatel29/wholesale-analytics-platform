@@ -777,7 +777,7 @@ def parse_filters(args: Any) -> FilterParams:
         protein_name_like = next((str(v).strip() for v in protein_name_like if str(v).strip()), "") or None
     protein_name_like = (str(protein_name_like).strip() if protein_name_like else None)
 
-    has_entity_filters = any([
+    _has_entity_filters = any([
         regions, methods, customers, suppliers, products, sales_reps,
     ])
 

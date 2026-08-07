@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import sys
 from types import SimpleNamespace
 from typing import Dict
@@ -214,5 +213,6 @@ def test_sql_fetch_uses_named_parameters(monkeypatch: pytest.MonkeyPatch) -> Non
     df = products_service._try_fetch_fact_from_sql(filters)
 
     assert isinstance(captured["sql"], TextClause)
-    assert captured["params"] == {"product_0": "SKU123"}
+    assert captured["params"]["product_0"] == "SKU123"
+    assert set(captured["params"]) == {"product_0", "start_date", "end_date"}
     assert not df.empty

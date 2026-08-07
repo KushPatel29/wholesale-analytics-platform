@@ -1,5 +1,4 @@
 import os
-import sys
 
 # Set environment before importing app to ensure Config picks it up
 os.environ["FLASK_ENV"] = "development"

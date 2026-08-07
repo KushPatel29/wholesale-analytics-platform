@@ -9,6 +9,9 @@ SQLAlchemy>=2.0
 pyodbc>=5.3
 pandas>=2.3
 XlsxWriter>=3.2
+# Several export paths pass engine="openpyxl" to pd.ExcelWriter explicitly,
+# so XlsxWriter alone is not enough.
+openpyxl>=3.1
 cachetools>=7.0
 numpy>=2.2
 pyarrow>=23.0

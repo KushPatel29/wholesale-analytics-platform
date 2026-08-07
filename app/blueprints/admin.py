@@ -7,7 +7,7 @@ import secrets
 import string
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_file, jsonify
@@ -20,13 +20,12 @@ from ..core.rbac import (
     has_permission,
     permission_required,
 )
-from ..core.access_policy import require_admin, bump_permissions_version
+from ..core.access_policy import require_admin
 from ..auth.models import (
     SessionLocal,
     User,
     AuditLog,
     list_visibility_for_user,
-    replace_visibility_for_user,
     list_permissions,
 )
 from ..auth.password_tokens import (
@@ -42,7 +41,6 @@ from ..services.user_invites import send_password_email
 from werkzeug.utils import secure_filename
 from wtforms import Form, PasswordField
 from wtforms.validators import DataRequired
-from sqlalchemy import text as _sa_text
 
 from app.services.data_access import get_fact_context
 from app.services import analytics_utils as au

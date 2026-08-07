@@ -2132,7 +2132,7 @@ def _build_ai_signals(
     if missing_share >= 0.5:
         margin_risk = "Unknown"
 
-    labels = trajectory.get("labels") or []
+    _labels = trajectory.get("labels") or []
     rev = trajectory.get("revenue") or []
     momentum = None
     if len(rev) >= 2 and rev[-2]:
@@ -2481,7 +2481,7 @@ def _build_focus_actions(
             }
         )
 
-    fallback_counts = execution_lists or {}
+    _fallback_counts = execution_lists or {}
     if not actions:
         actions.append(
             {
@@ -2570,7 +2570,7 @@ def _metrics_and_charts(
     cost_expr = _coalesce_expr(cols, (fs.CANON.cost, "Cost", "CostPrice"), "NULL")
     qty_expr = _coalesce_expr(cols, (fs.CANON.qty_units, "ShippedItems", "QuantityOrdered", "Qty", "Quantity", "Units", "ItemCount"), "0")
     weight_expr = _coalesce_expr(cols, (fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum"), "0")
-    weight_col = _safe_col(cols, fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum")
+    _weight_col = _safe_col(cols, fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum")
     sku_col, prod_id_col, prod_name = _resolve_product_columns(cols)
     cust_id = _safe_col(cols, fs.CANON.customer_id, "CustomerID")
     cust_name = _safe_col(cols, fs.CANON.customer_name, "CustomerName", "Name")
@@ -2583,7 +2583,7 @@ def _metrics_and_charts(
     exprs = _product_exprs(cols)
     family_exprs = _family_exprs(cols)
     sku_expr = exprs["sku_expr"]
-    prod_id_expr = exprs["prod_id_expr"]
+    _prod_id_expr = exprs["prod_id_expr"]
     product_key_expr = exprs["product_key_expr"]
     product_name_expr = exprs["product_name_expr"]
     display_name_expr = exprs["display_name_expr"]
@@ -2616,7 +2616,7 @@ def _metrics_and_charts(
         "seg_scored.product_category",
         "target_gross_margin_pct",
     )
-    health_target_margin_expr = margin_rules.sql_margin_rule_expr(
+    _health_target_margin_expr = margin_rules.sql_margin_rule_expr(
         "health_classified.protein_family",
         "health_classified.product_category",
         "target_gross_margin_pct",
@@ -3800,7 +3800,7 @@ def _summary_metrics_and_context(
         "product_rollup.product_category",
         "target_gross_margin_pct",
     )
-    seg_target_margin_expr = margin_rules.sql_margin_rule_expr(
+    _seg_target_margin_expr = margin_rules.sql_margin_rule_expr(
         "seg_scored.protein_family",
         "seg_scored.product_category",
         "target_gross_margin_pct",
@@ -4746,14 +4746,14 @@ def _table_payload(
             ELSE NULL
         END
     """
-    basis_qty_expr = """
+    _basis_qty_expr = """
         CASE
             WHEN weight > 0 THEN weight
             WHEN qty > 0 THEN qty
             ELSE 0
         END
     """
-    prior_basis_qty_expr = """
+    _prior_basis_qty_expr = """
         CASE
             WHEN weight_prior > 0 THEN weight_prior
             WHEN qty_prior > 0 THEN qty_prior

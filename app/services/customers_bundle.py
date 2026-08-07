@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 import time
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 from dataclasses import replace, is_dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
@@ -1661,7 +1661,7 @@ def _clv_payload(
         return empty
 
     lookback_days = max(1, int(settings["lookback_days"]))
-    lookback_months = max(1, int(settings["lookback_months"]))
+    _lookback_months = max(1, int(settings["lookback_months"]))
     annual_orders = (active["orders"] / lookback_days * 365.25).clip(lower=0.0)
     monthly_orders = (annual_orders / 12.0).clip(lower=0.0)
 
@@ -2359,7 +2359,7 @@ def build_customers_bundle(
 ) -> Dict[str, Any]:
     started = time.perf_counter()
     normalized_sections = _normalize_requested_sections(requested_sections)
-    include_overview = normalized_sections is None or "overview" in normalized_sections
+    _include_overview = normalized_sections is None or "overview" in normalized_sections
     include_rfm = normalized_sections is None or "rfm" in normalized_sections
     include_clv = normalized_sections is None or "clv" in normalized_sections
     include_cohorts = normalized_sections is None or "cohorts" in normalized_sections
@@ -2767,7 +2767,7 @@ def build_customers_bundle(
     current_mask = merged["revenue"] > 0
     prior_mask = merged["revenue_prior_window"] > 0
     active_current_df = merged.loc[current_mask].copy()
-    active_prior_df = merged.loc[prior_mask].copy()
+    _active_prior_df = merged.loc[prior_mask].copy()
 
     total_revenue = _sum_numeric(merged.get("revenue", []))
     total_cost = _sum_numeric(merged.get("cost", []))
@@ -4081,8 +4081,8 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
     product_col = _safe_col(cols, fs.CANON.product_name, "ProductName", "SKU", "SkuName")
     product_id_col = _safe_col(cols, fs.CANON.product_id, "SKU")
     owner_rep_col = _safe_col(cols, "PrimarySalesRepName", "Owner", "AccountOwner", "AccountManager")
-    protein_col = _safe_col(cols, "Protein", "ProteinType", "ProteinName", "Category", "ProductCategory")
-    category_col = _safe_col(cols, "Category", "ProductCategory", "Protein", "ProteinType", "ProteinName")
+    _protein_col = _safe_col(cols, "Protein", "ProteinType", "ProteinName", "Category", "ProductCategory")
+    _category_col = _safe_col(cols, "Category", "ProductCategory", "Protein", "ProteinType", "ProteinName")
     customer_id = str(args.get("customer_id") or args.get("id") or "")
     if not (customer_id and date_col and revenue_col and cost_col and qty_col and order_col and product_col):
         return {"error": {"message": "Required columns missing for customer drilldown"}, "meta": {"cached": False}}
@@ -4725,7 +4725,7 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
             "min": float(min_price_raw) if pd.notna(min_price_raw) else None,
             "max": float(max_price_raw) if pd.notna(max_price_raw) else None,
         }
-    opportunity = {
+    _opportunity = {
         "top_product": top_product,
         "top_profit_product": top_profit_product,
         "top_weight_mover": top_weight_mover,
@@ -5832,10 +5832,10 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
     category_sorted = sorted(category_rows, key=lambda r: r.get("revenue", 0.0), reverse=True)
     category_weight_sorted = sorted(category_rows, key=lambda r: r.get("weight_lb", 0.0), reverse=True)
     protein_sorted = sorted(protein_rows, key=lambda r: r.get("revenue", 0.0), reverse=True)
-    protein_weight_sorted = sorted(protein_rows, key=lambda r: r.get("weight_lb", 0.0), reverse=True)
+    _protein_weight_sorted = sorted(protein_rows, key=lambda r: r.get("weight_lb", 0.0), reverse=True)
     protein_revenue_total = _sum_numeric([rec.get("revenue") for rec in protein_rows])
     protein_weight_total = _sum_numeric([rec.get("weight_lb") for rec in protein_rows])
-    top_protein_share_pct = _top_n_share(protein_rows, "revenue", 1)
+    _top_protein_share_pct = _top_n_share(protein_rows, "revenue", 1)
     top5_protein_share_pct = _top_n_share(protein_rows, "revenue", 5)
 
     under_target_margin_exposure_pct = _safe_ratio_value(

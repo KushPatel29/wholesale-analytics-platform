@@ -6,7 +6,6 @@ import pytest
 
 pytestmark = pytest.mark.slow  # Tagged slow: runs heavy aggregation paths
 
-from app.blueprints import overview as overview_api
 
 
 def _make_df():
@@ -61,7 +60,6 @@ def app():
 
 @pytest.fixture()
 def client(app, monkeypatch):
-    import app.services.frame as frame
     import app.services.fact_store as fact_store
     import data_loader as loader
 

@@ -1758,6 +1758,9 @@ def test_render_email_includes_deep_link_and_item_table(app):
 
 
 def test_returns_nav_visibility_respects_flag_and_permission(app, monkeypatch):
+    # LOGIN_DISABLED intentionally grants the wildcard permission in template
+    # context; turn it off here so this test exercises the mocked RBAC result.
+    app.config.update(LOGIN_DISABLED=False)
     user = _make_user(role="sales")
     monkeypatch.setattr("flask_login.utils._get_user", lambda: user, raising=False)
 

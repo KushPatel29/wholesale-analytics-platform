@@ -1,9 +1,8 @@
 """Enhanced analytics service with WoW/MoM/YoY calculations, predictions, and insights."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
-from decimal import Decimal
-from datetime import datetime, timedelta
+from typing import Any, Dict
+from datetime import timedelta
 
 import pandas as pd
 import numpy as np
@@ -59,19 +58,19 @@ def calculate_period_growth(
 
     # Define periods
     if period == "week":
-        freq = "W"
+        _freq = "W"
         offset_1 = timedelta(weeks=1)
         offset_yoy = timedelta(weeks=52)
     elif period == "month":
-        freq = "M"
+        _freq = "M"
         offset_1 = timedelta(days=30)
         offset_yoy = timedelta(days=365)
     elif period == "year":
-        freq = "Y"
+        _freq = "Y"
         offset_1 = timedelta(days=365)
         offset_yoy = timedelta(days=730)
     else:  # day
-        freq = "D"
+        _freq = "D"
         offset_1 = timedelta(days=1)
         offset_yoy = timedelta(days=365)
 

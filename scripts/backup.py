@@ -89,7 +89,7 @@ def prune_backups(keep_n: int = 10) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        created = create_backup()
+        _created = create_backup()
         keep = int(os.getenv("BACKUP_KEEP_N", "10"))
         prune_backups(keep)
         return 0
@@ -100,4 +100,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

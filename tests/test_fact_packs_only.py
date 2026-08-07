@@ -159,6 +159,49 @@ def test_default_status_filter_applies(seed_fact):
     assert df["OrderStatus"].iloc[0] == "packed"
 
 
+def test_reset_clears_request_cache_when_fact_source_changes(app, tmp_path, monkeypatch):
+    def _write_source(folder: str, order_id: str, price: float) -> Path:
+        target = tmp_path / folder / "fact.parquet"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            [
+                {
+                    "OrderLineId": f"OL-{order_id}",
+                    "OrderId": order_id,
+                    "DateExpected": "2025-01-15",
+                    "OrderStatus": "packed",
+                    "UnitOfBillingId": 1,
+                    "pack_item_count_sum": 1.0,
+                    "pack_weight_lb_sum": 1.0,
+                    "pack_count": 1,
+                    "Price": price,
+                    "CostPrice": 1.0,
+                }
+            ]
+        ).to_parquet(target)
+        return target
+
+    source_a = _write_source("source_a", "A", 10.0)
+    source_b = _write_source("source_b", "B", 25.0)
+    sql = "SELECT OrderId, Revenue FROM fact"
+
+    with app.test_request_context("/cache-isolation"):
+        monkeypatch.setenv("PARQUET_PATH", str(source_a))
+        fact_store.reset_duckdb_state()
+        fact_store.init_views()
+        first = fact_store.execute_sql_df(sql, [], tag="cache_source_a")
+
+        monkeypatch.setenv("PARQUET_PATH", str(source_b))
+        fact_store.reset_duckdb_state()
+        fact_store.init_views()
+        second = fact_store.execute_sql_df(sql, [], tag="cache_source_b")
+
+    assert first.iloc[0]["OrderId"] == "A"
+    assert first.iloc[0]["Revenue"] == pytest.approx(10.0)
+    assert second.iloc[0]["OrderId"] == "B"
+    assert second.iloc[0]["Revenue"] == pytest.approx(25.0)
+
+
 def test_regression_packs_only_totals_match_sql():
     base = fact_store.FACT_PATH
     if not base.exists():

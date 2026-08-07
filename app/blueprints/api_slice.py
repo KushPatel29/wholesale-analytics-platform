@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import hashlib
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pandas as pd
-from flask import Blueprint, request, Response, jsonify, session, g, current_app
+from flask import Blueprint, request, Response, session, g, current_app
 from flask_login import current_user, login_required
 
 from ..core.data_service import get_fact_df

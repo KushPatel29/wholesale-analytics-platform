@@ -3,7 +3,6 @@ Playwright E2E tests for enhanced overview analytics
 Run with: pytest tests/test_overview_playwright.py
 Or: python -m playwright codegen http://127.0.0.1:5000 (to generate tests)
 """
-import os
 import re
 
 import pytest

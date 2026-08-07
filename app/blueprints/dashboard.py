@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, redirect, url_for, flash
 from flask_login import current_user, login_required
 import pandas as pd
 
-from ..core.data_service import get_fact_df, apply_global_filters
-from ..core.filters import build_global_filter_form
+from ..core.data_service import get_fact_df
 from ..core.access_policy import require_admin
 from ..core import ml as churn_ml
 from ..core.audit import log_audit

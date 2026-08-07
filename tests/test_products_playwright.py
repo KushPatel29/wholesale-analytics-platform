@@ -1,8 +1,7 @@
-import re
 import pytest
 
 pytest.importorskip("playwright.sync_api", reason="Playwright not installed")
-from playwright.sync_api import Page, expect  # noqa: E402
+from playwright.sync_api import Page  # noqa: E402
 
 
 def _login(page: Page):

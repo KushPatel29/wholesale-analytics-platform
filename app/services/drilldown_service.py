@@ -4,7 +4,7 @@ import base64
 import math
 import json
 from dataclasses import replace
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -249,7 +249,7 @@ def _sanitize_filter_store(raw_filters: Any, *, apply_defaults: bool = True) -> 
         if not apply_defaults and isinstance(raw_filters, Mapping):
             has_explicit_dates = any(
                 key in raw_filters
-                for key in ("start", "start_date", "end", "end_date", "date_preset", "preset", "range_preset", "date_type")
+                for key in ("start", "start_date", "end", "end_date", "date_preset", "preset", "range_preset")
             )
             if not has_explicit_dates:
                 parsed = replace(parsed, start=None, end=None, preset=None)
@@ -335,7 +335,7 @@ def _merge_filters(base_store: Mapping[str, Any], patch_store: Mapping[str, Any]
     if isinstance(patch_store, Mapping):
         has_explicit_dates = any(
             patch_store.get(key) not in (None, "", [], ())
-            for key in ("start", "start_date", "end", "end_date", "date_preset", "preset", "range_preset", "date_type")
+            for key in ("start", "start_date", "end", "end_date", "date_preset", "preset", "range_preset")
         )
         if not has_explicit_dates:
             patch_params = replace(patch_params, start=None, end=None, preset=None)

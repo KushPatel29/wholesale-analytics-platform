@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 
 from app.services import labor_store
 from tests.labor_helpers import build_labor_dataset

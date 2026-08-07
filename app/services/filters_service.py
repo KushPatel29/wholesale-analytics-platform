@@ -24,7 +24,7 @@ from app.services.filters import (
     normalize_filters,
     parse_filters,
     sanitize_filters,
-    resolve_effective_filters,
+    resolve_effective_filters as resolve_effective_filters,
 )
 
 logger = logging.getLogger(__name__)

@@ -38,7 +38,6 @@ from ..core.exports import (
     sanitize_filename,
 )
 from ..core.json_sanitizer import sanitize_for_json
-from ..core.filters import build_global_filter_form
 from ..core.rbac import can_view_costs, has_permission, permission_required, requires_roles
 from ..services import analytics_utils as au
 from app.core.exceptions import DatasetNotBuiltError
@@ -1359,7 +1358,7 @@ def drilldown(customer_id):
                     
                     df_c = df_c.merge(prod_dim, on="ProductId", how="left")
                     df_c["ProductName"] = df_c.get("ProductName", pd.Series(pd.NA)).fillna(df_c["ProductName_dim"])
-        except Exception as e:
+        except Exception:
             pass # Keep going if fallback fails
 
     # Create SkuName column
@@ -2530,7 +2529,7 @@ def export():
       - threshold: int for cohorts (default 90)
     """
     page = (request.args.get("page") or "").lower().strip()
-    chart = (request.args.get("chart") or "").lower().strip()
+    _chart = (request.args.get("chart") or "").lower().strip()
     customer_id = request.args.get("customer_id")
     threshold = request.args.get("threshold", type=int) or 90
     _enforce_customers_export_access(page)
@@ -2586,7 +2585,38 @@ def export():
                 stem = "customers_clv_customers"
 
             if data_df.empty:
-                data_df = pd.DataFrame()
+                # An empty CSV with no columns is not a valid, useful export:
+                # pandas and most BI importers cannot even parse it.  Preserve
+                # the dataset schema so a zero-row result remains consumable.
+                empty_export_columns = {
+                    "Customers": [
+                        "customer_id", "customer_name", "segment", "clv_12m",
+                        "clv_selected", "clv_at_risk", "revenue", "profit",
+                        "margin_pct", "avg_order_value", "orders_per_year",
+                        "orders_per_month", "orders", "recency_days",
+                        "last_order_date", "delta_revenue", "delta_revenue_pct",
+                        "churn_probability", "churn_probability_pct", "risk_band",
+                        "growth_potential_score", "drilldown_url",
+                    ],
+                    "SegmentSummary": [
+                        "segment", "customers", "revenue", "profit", "avg_clv",
+                        "clv_at_risk", "share_pct", "delta_revenue", "playbook",
+                    ],
+                    "AtRiskHighValue": [
+                        "customer_id", "customer_name", "clv_12m", "clv_at_risk",
+                        "churn_probability_pct", "revenue", "risk_band", "drilldown_url",
+                    ],
+                    "Leaderboard": [
+                        "customer_id", "customer_name", "segment", "clv_12m",
+                        "clv_selected", "clv_at_risk", "revenue", "profit",
+                        "margin_pct", "avg_order_value", "orders_per_year",
+                        "orders_per_month", "orders", "recency_days",
+                        "last_order_date", "delta_revenue", "delta_revenue_pct",
+                        "churn_probability", "churn_probability_pct", "risk_band",
+                        "growth_potential_score", "drilldown_url",
+                    ],
+                }
+                data_df = pd.DataFrame(columns=empty_export_columns.get(sheet_name, []))
 
             metadata = {
                 "generated_at_utc": pd.Timestamp.utcnow().isoformat(),

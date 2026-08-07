@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import math
-import time
-from datetime import datetime, date
-from typing import Any, Dict, List, Optional, Tuple, Sequence
+from datetime import datetime
+from typing import Any, Dict
 
 import pandas as pd
-import numpy as np
 
 from app.services import (
     fact_store,
-    filters_service,
     salesreps_bundle,
     customers_bundle,
     products_bundle,
@@ -22,7 +18,6 @@ from app.services import (
     overview_query,
     analytics_utils as au
 )
-from app.services import fact_schema as fs
 from app.core.exports import fmt_currency, fmt_percent
 
 def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, Any]:
@@ -129,7 +124,7 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
         cust_b = customers_bundle.build_customers_bundle(filters, scope, args, requested_sections=["overview", "rfm", "movers"])
         c_insights = cust_b.get("insights", {})
         c_at_risk = c_insights.get("at_risk_customers", 0)
-        c_movers = cust_b.get("movers", {}).get("top_gainers", [])[:3]
+        _c_movers = cust_b.get("movers", {}).get("top_gainers", [])[:3]
         
         scatter_data = []
         try:
@@ -145,7 +140,7 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
         except Exception:
             pass
     except Exception:
-        c_insights, c_at_risk, c_movers, scatter_data = {}, 0, [], []
+        c_insights, c_at_risk, _c_movers, scatter_data = {}, 0, [], []
     
     try:
         prod_b = products_bundle.build_products_bundle(filters, scope, args, requested_sections=["overview", "movers"])

@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any, Optional, Set
 
 from app.core.cache_manager import CACHE_MANAGER, CacheManager
-from app.core.exceptions import DatasetNotBuiltError
 
 logger = logging.getLogger(__name__)
 

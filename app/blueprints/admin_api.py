@@ -34,9 +34,7 @@ from ..auth.models import (
     list_user_role_names,
     replace_user_roles,
     list_effective_permission_keys_for_user,
-    list_user_permission_overrides,
     list_user_permission_rules,
-    replace_user_permission_overrides,
     replace_user_permission_rules,
     list_user_scope_rules,
     replace_user_scope_rules,
@@ -1965,7 +1963,7 @@ def bulk_users():
                 u.role = role
                 replace_user_roles(u.id, [role])
             elif action == "assign_scope":
-                scoped = _apply_user_scope(int(u.id), scope_lists)
+                _scoped = _apply_user_scope(int(u.id), scope_lists)
             u.updated_at = _now()
             s.add(u)
             s.commit()

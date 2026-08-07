@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from app.services.salesreps_bundle import _salesrep_lost_accounts
 
@@ -89,8 +88,8 @@ class TestSalesrepLostAccounts:
         assert result[1]["customer_id"] == "C012"
         assert result[2]["customer_id"] == "C010"
 
-    def test_max_20_results(self):
-        """Returns at most 20 results."""
+    def test_max_100_results(self):
+        """Returns at most the documented 100 recovery opportunities."""
         customers = [
             {
                 "customer_id": f"C{i:03d}",
@@ -99,10 +98,10 @@ class TestSalesrepLostAccounts:
                 "revenue_prev_30": float(i * 100),
                 "last_order_date": "2025-07-01",
             }
-            for i in range(1, 31)  # 30 qualifying customers
+            for i in range(1, 131)  # 130 qualifying customers
         ]
         result = _salesrep_lost_accounts(customers, REF_DATE)
-        assert len(result) == 20
+        assert len(result) == 100
 
     def test_days_since_order_computed(self):
         """days_since_order is computed correctly from ref_date and last_order_date."""

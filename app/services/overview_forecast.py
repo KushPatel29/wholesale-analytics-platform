@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, is_dataclass, replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import math
-import time
 from threading import Lock
 
 import numpy as np

@@ -5,7 +5,6 @@ and that forecast/export endpoints work.
 """
 import pytest
 import pandas as pd
-from datetime import datetime, timedelta
 
 
 @pytest.fixture

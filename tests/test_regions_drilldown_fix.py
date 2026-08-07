@@ -1,7 +1,6 @@
-import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from flask import Flask
 from app.blueprints import regions
 from app.services import analytics_utils as au

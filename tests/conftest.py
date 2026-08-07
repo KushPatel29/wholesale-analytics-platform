@@ -191,7 +191,7 @@ class _DummyCache:
         self._store.pop(key, None)
 
 try:
-    import flask_caching  # type: ignore
+    import flask_caching  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
     module = types.ModuleType("flask_caching")
     module.Cache = _DummyCache
@@ -218,6 +218,27 @@ def app():
 def client(app):
     with app.test_client() as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _restore_shared_app_config(request):
+    """Prevent tests from leaking Flask feature flags into later tests.
+
+    The ``app`` fixture is session scoped for speed, while many tests mutate
+    ``app.config`` directly.  Without restoring the mapping, enabling a v2
+    page in one module silently changes the routes and templates exercised by
+    unrelated legacy tests later in the same full-suite run.
+    """
+    shared_app = None
+    original = None
+    if "app" in request.fixturenames:
+        shared_app = request.getfixturevalue("app")
+        original = dict(shared_app.config)
+    yield
+    if shared_app is not None and original is not None:
+        for key in set(shared_app.config).difference(original):
+            shared_app.config.pop(key, None)
+        shared_app.config.update(original)
 
 @pytest.fixture
 def fake_user():

@@ -1,14 +1,12 @@
 import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
-import pytest
 
 from flask import request
 
 from app.blueprints import products
-from app.services import products as services_products
 
 
 def _sample_df():

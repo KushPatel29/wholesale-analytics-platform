@@ -11,7 +11,7 @@ import csv
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from functools import lru_cache, wraps
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from pathlib import Path
@@ -21,7 +21,7 @@ from werkzeug.routing import BuildError
 import numpy as np
 import pandas as pd
 from flask import Blueprint, abort, current_app, jsonify, make_response, redirect, render_template, request, session, url_for
-from flask_login import current_user, login_required as _login_required
+from flask_login import current_user
 from io import BytesIO, StringIO
 from werkzeug.datastructures import MultiDict
 
@@ -493,13 +493,20 @@ def _json_dumps(payload: Dict[str, Any]) -> str:
     def _clean(x):
         if isinstance(x, dict):
             return {k: _clean(v) for k, v in x.items()}
-        if isinstance(x, list):
+        if isinstance(x, (list, tuple)):
             return [_clean(v) for v in x]
+        if x is pd.NA:
+            return None
         if isinstance(x, float) and (np.isnan(x) or np.isinf(x)):
             return None
         return x
 
     return json.dumps(_clean(payload), sort_keys=True, separators=(",", ":"), default=_json_default)
+
+
+def _json_safe_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a template-safe payload using the API's JSON normalization."""
+    return json.loads(_json_dumps(payload))
 
 
 def _etag(body: str) -> str:
@@ -905,7 +912,7 @@ def normalize_products_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # Determine quantity basis (weight first if available)
     weight_total = float(weight_lb.fillna(0.0).abs().sum())
-    qty_total = float(qty_units.fillna(0.0).abs().sum())
+    _qty_total = float(qty_units.fillna(0.0).abs().sum())
     use_weight = weight_total > 0.0
     qty_label = "Weight (lb)" if use_weight else "Quantity"
     qty_basis = weight_lb if use_weight else qty_units
@@ -1018,7 +1025,7 @@ def _parquet_lock(lock_path: Path, timeout: int = PARQUET_LOCK_TIMEOUT):
                         return self
                     except FileExistsError:
                         if (time.time() - start) > self.timeout:
-                            raise TimeoutError(f"Timed out acquiring lock {self.path}")
+                            raise TimeoutError(f"Timed out acquiring lock {self.path}") from None
                         time.sleep(0.1)
                     except Exception:
                         raise
@@ -2623,7 +2630,6 @@ def _kpis(df: pd.DataFrame) -> Dict[str, Any]:
             "total_qty": 0.0,
             "total_weight": 0.0,
             "unique_products": 0,
-            "avg_margin": None,
             "avg_unit_price": None,
             "median_unit_price": None,
             "revenue_per_product": None,
@@ -4417,7 +4423,7 @@ def _normalize_overview_export_row(row: Dict[str, Any]) -> Dict[str, Any]:
         out["cost_lb"] = out.get("unit_cost")
     if out.get("contribution_lb") is None:
         out["contribution_lb"] = out.get("contribution_margin_lb")
-    for field in (
+    for metric_field in (
         "revenue_current",
         "revenue_prior",
         "revenue_delta",
@@ -4439,7 +4445,7 @@ def _normalize_overview_export_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "cost_lb",
         "contribution_lb",
     ):
-        out.setdefault(field, out.get(field))
+        out.setdefault(metric_field, out.get(metric_field))
     return out
 
 
@@ -5005,7 +5011,7 @@ def export_quadrant_csv():
         classified, thresholds = [], {}
     if quadrant:
         classified = [row for row in classified if str(row.get("quadrant") or "").strip().lower() == quadrant]
-    fields = [
+    _fields = [
         "product_id",
         "sku",
         "desc",
@@ -5137,9 +5143,9 @@ def product_detail(product_id: str):
     status = get_products_parquet_status()
     sub = df[df[CAN.product_id].astype(str) == str(product_id)]
     try:
-        exists_globally = not base_df.empty and str(product_id) in set(base_df[CAN.product_id].astype(str).unique())
+        _exists_globally = not base_df.empty and str(product_id) in set(base_df[CAN.product_id].astype(str).unique())
     except Exception:
-        exists_globally = False
+        _exists_globally = False
     if sub.empty:
         product_data = {
             "product_id": str(product_id),
@@ -5157,8 +5163,8 @@ def product_detail(product_id: str):
             "products/product_detail.html",
             product_id=str(product_id),
             product_data=product_data,
-            payload=payload,
-            recommendations=recommendations,
+            payload=_json_safe_payload(payload),
+            recommendations=_json_safe_payload(recommendations),
             filters=filters,
             products_warning=status.warning or "No data available for this product in the selected window.",
         )
@@ -5190,11 +5196,15 @@ def product_detail(product_id: str):
         "products/product_detail.html",
         product_id=str(product_id),
         product_data=product_data,
-        payload=_attach_parquet_warning(payload, status, add_empty_data=not status.available),
-        recommendations=_attach_parquet_warning(
-            recommendations if isinstance(recommendations, dict) else {"recommendations": recommendations},
-            status,
-            add_empty_data=not status.available,
+        payload=_json_safe_payload(
+            _attach_parquet_warning(payload, status, add_empty_data=not status.available)
+        ),
+        recommendations=_json_safe_payload(
+            _attach_parquet_warning(
+                recommendations if isinstance(recommendations, dict) else {"recommendations": recommendations},
+                status,
+                add_empty_data=not status.available,
+            )
         ),
         filters=filters,
         products_warning=status.warning,

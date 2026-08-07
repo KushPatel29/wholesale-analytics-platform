@@ -116,7 +116,6 @@ def reset_password_cmd(username: str, password: str | None):
 @cli.command("check-config")
 def check_config_cmd():
     """Validate environment variables and directory structure."""
-    from app.config import Config
     import os
 
     click.secho("🔍 Checking Wholesale Analytics configuration...", fg="cyan")
@@ -285,7 +284,7 @@ def build_products_parquet_cmd(output: str | None, source: str) -> None:
             err=True,
         )
         click.echo(f"Error: {exc}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     if df_source is None or df_source.empty:
         click.echo(
@@ -302,7 +301,7 @@ def build_products_parquet_cmd(output: str | None, source: str) -> None:
         products_bp._write_schema_meta(Path(target), schema_version)
     except Exception as exc:  # pragma: no cover - depends on local engines
         click.echo(f"Failed to write products parquet to {target}: {exc}", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     click.echo(f"Wrote products parquet to {target} with {len(df)} rows (schema v{schema_version}).")
 

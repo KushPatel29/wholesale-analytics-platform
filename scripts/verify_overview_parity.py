@@ -20,7 +20,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import numpy as np
 
 from app.services.frame import load_canonical_df
@@ -141,7 +140,7 @@ def main():
         diff = abs(expected_aov - actual_aov)
 
         if diff < 0.01:
-            print(f"\n[OK] AOV calculation is correct")
+            print("\n[OK] AOV calculation is correct")
         else:
             print(f"\n[FAIL] AOV mismatch: expected {expected_aov:.2f}, got {actual_aov:.2f}")
             return 1
@@ -173,7 +172,7 @@ def main():
                 .head(5)
             )
 
-            print(f"\nDirect calculation from fact frame:")
+            print("\nDirect calculation from fact frame:")
             for idx, (name, revenue) in enumerate(direct_top.items(), 1):
                 print(f"  {idx}. {name}: ${revenue:,.2f}")
 

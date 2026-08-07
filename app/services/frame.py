@@ -9,7 +9,6 @@ This module now uses centralized analytics_utils for consistency.
 
 from typing import Any, Optional
 import pandas as pd
-import numpy as np
 
 from . import analytics_utils as au
 import data_loader as loader

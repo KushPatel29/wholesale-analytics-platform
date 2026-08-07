@@ -1,7 +1,7 @@
 # app/blueprints/overview.py
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Tuple, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import time
 import json
@@ -21,7 +21,6 @@ from app.core.exports import (
     sanitize_filename,
     xlsx_export_available,
 )
-from app.services.cache import cache_key as versioned_cache_key
 from app.core.data_service import get_fact_df
 from app.core.exceptions import DatasetNotBuiltError
 from app.services import fact_store
@@ -37,7 +36,6 @@ from app.services.filters import (
     filters_cache_key,
 )
 from app.services.overview_query import (
-    build_filter_options,
     compute_overview,
     etag_for,
     fact_frame,

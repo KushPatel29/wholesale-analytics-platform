@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 import uuid
 
@@ -1243,7 +1242,7 @@ def test_assistant_executive_and_analyst_modes_render_different_sections(assista
     assert executive.status_code == 200
     assert analyst.status_code == 200
     executive_answer = (executive.get_json() or {}).get("answer") or {}
-    analyst_answer = (analyst.get_json() or {}).get("answer") or {}
+    _analyst_answer = (analyst.get_json() or {}).get("answer") or {}
     exec_sections = [str(item.get("title") or "") for item in ((executive.get_json().get("answer") or {}).get("sections") or []) if isinstance(item, dict)]
     analyst_sections = [str(item.get("title") or "") for item in ((analyst.get_json().get("answer") or {}).get("sections") or []) if isinstance(item, dict)]
     assert executive_answer.get("response_mode") == "executive"

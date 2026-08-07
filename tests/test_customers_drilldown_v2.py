@@ -582,7 +582,7 @@ def test_customers_drilldown_v2_moves_shared_scripts_below_hero_and_defers_page_
 
     hero_idx = body.index('class="ciw-title"')
     assert body.index("js/auth-fetch.js") > hero_idx
-    assert body.index("https://cdn.plot.ly/plotly-2.30.0.min.js") > hero_idx
+    assert body.index("https://cdn.plot.ly/plotly-2.35.2.min.js") > hero_idx
     assert re.search(r'customer_drilldown_v2\.js(?:\?[^"]+)?"\s+defer', body)
 
 

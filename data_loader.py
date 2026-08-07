@@ -263,7 +263,7 @@ def _effective_date_series(df: pd.DataFrame) -> pd.Series:
 def _cost_source_coverage(df: pd.DataFrame) -> Dict[str, float]:
     if df is None or df.empty:
         return {"pack": 0.0, "orderline": 0.0, "product": 0.0, "null": 0.0}
-    total = len(df)
+    _total = len(df)
     def _pct(series: pd.Series) -> float:
         if series is None or series.empty:
             return 0.0
@@ -1447,8 +1447,8 @@ def extract_all(
         rid = set()
     prod_id: Set[Any]   = set(pd.Series(lines["ProductId"]).dropna().unique().tolist())
     uom_id: Set[Any]    = set(pd.Series(lines["OrderedUnitsOfMeasureId"]).dropna().unique().tolist())
-    shipper_id: Set[Any]= set(pd.Series(lines["ShipperId"]).dropna().unique().tolist())
-    rep_ids: Set[Any]   = set(pd.Series(orders["SalesRepId"]).dropna().unique().tolist()) | set(pd.Series(orders["PrimarySalesRepId"]).dropna().unique().tolist())
+    _shipper_id: Set[Any]= set(pd.Series(lines["ShipperId"]).dropna().unique().tolist())
+    _rep_ids: Set[Any]   = set(pd.Series(orders["SalesRepId"]).dropna().unique().tolist()) | set(pd.Series(orders["PrimarySalesRepId"]).dropna().unique().tolist())
 
     # Pull UsersNames once (for SalesRepName, PrimarySalesRepName)
     users = _read_sql(engine, """
@@ -2713,7 +2713,7 @@ def _detect_parquet_engine() -> str:
             import fastparquet  # noqa: F401
             return "fastparquet"
         except ImportError:
-            raise RuntimeError("No parquet engine available (pyarrow or fastparquet required)")
+            raise RuntimeError("No parquet engine available (pyarrow or fastparquet required)") from None
 
 def _parquet_columns(path: Path, engine: str) -> set[str]:
     try:
@@ -3836,7 +3836,7 @@ def _cmd_refresh(args: argparse.Namespace):
 def _cmd_initial(args: argparse.Namespace):
     if args.parquet:
         os.environ["PARQUET_PATH"] = args.parquet
-    cfg = get_config()
+    _cfg = get_config()
     start_arg = args.start or _initial_start_date()
     path = refresh_parquet(
         parquet_path=args.parquet,

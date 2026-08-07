@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -2875,7 +2875,7 @@ def _synthesize_answer(
     top_risk = risk_rows[0] if risk_rows and isinstance(risk_rows[0], Mapping) else {}
     top_risk_title = str(top_risk.get("title") or "").strip()
     top_risk_detail = str(top_risk.get("detail") or "").strip()
-    top_risk_score = top_risk.get("risk_score")
+    _top_risk_score = top_risk.get("risk_score")
     trust_caveats = _trust_caveat_items(trust_flags, results, permission_limited=permission_limited)
 
     if not substantive and forbidden:

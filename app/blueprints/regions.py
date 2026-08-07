@@ -224,7 +224,7 @@ def _build_index_payload() -> Dict[str, object]:
     df: pd.DataFrame = ctx["df"]
     region_col: Optional[str] = ctx["region_col"]
     rev_col: Optional[str] = ctx["rev_col"]
-    qty_col: Optional[str] = ctx["qty_col"]
+    _qty_col: Optional[str] = ctx["qty_col"]
 
     if not region_col or df.empty or not rev_col:
         return {

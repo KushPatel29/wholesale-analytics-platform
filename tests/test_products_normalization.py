@@ -88,7 +88,10 @@ def test_margin_pct_uses_totals():
     rows = products_bp._top_products(normalized, limit=5)
 
     assert rows
-    assert rows[0]["margin_pct"] == pytest.approx(20.0, abs=0.01)
+    # Pricing analytics consistently uses the effective-cost basis, which
+    # adds the configured flat overhead once to the aggregated product cost.
+    expected = ((400.0 - 320.85) / 400.0) * 100.0
+    assert rows[0]["margin_pct"] == pytest.approx(expected, abs=0.01)
 
 
 def test_normalize_products_backfills_protein_and_category_dimensions():

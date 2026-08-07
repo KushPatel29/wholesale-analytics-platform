@@ -129,7 +129,7 @@ def test_forecast_cache_hit(monkeypatch, app):
     monkeypatch.setattr(overview_forecast, "monthly_series", _monthly)
 
     with app.test_request_context():
-        first = overview_forecast.forecast_metric(FilterParams(), metric="revenue", horizon_months=3)
+        _first = overview_forecast.forecast_metric(FilterParams(), metric="revenue", horizon_months=3)
         second = overview_forecast.forecast_metric(FilterParams(), metric="revenue", horizon_months=3)
 
     assert calls["count"] == 1

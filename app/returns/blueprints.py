@@ -17,7 +17,7 @@ from sqlalchemy import func
 from app.cache import cache
 from app.core.access_policy import bump_permissions_version
 from app.core.access_policy import get_current_scope
-from app.core.rbac import any_permission_required, has_any_permission, permission_required
+from app.core.rbac import any_permission_required, permission_required
 from app.services import fact_store
 from . import service
 
@@ -1551,7 +1551,7 @@ def inspect(rma_id: int):
 @admin_bp.route("/", methods=["GET", "POST"])
 @login_required
 @permission_required("admin.returns.manage")
-def index():
+def index():  # noqa: F811
     _returns_on()
     returns_user_result: dict[str, object] | None = None
     if request.method == "POST":

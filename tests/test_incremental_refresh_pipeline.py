@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import os
 import shutil
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import pytest
 
 import data_loader
 from app.services import etl_state, fact_store, watermark_store

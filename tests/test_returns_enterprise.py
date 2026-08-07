@@ -1,9 +1,8 @@
 from __future__ import annotations
 import pytest
-import pandas as pd
 from datetime import datetime, timezone
 from app.returns import service
-from app.returns.models import ReturnRMA, ReturnRMAItem, ReturnEvent, get_session
+from app.returns.models import ReturnRMA, ReturnEvent, get_session
 
 @pytest.fixture(autouse=True)
 def enterprise_config(app, monkeypatch):

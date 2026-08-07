@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request, current_app, redirect, url_for
-from flask_login import login_required, current_user
+from flask import Blueprint, request, redirect, url_for
+from flask_login import login_required
 
-from app.services.filters import parse_filters, apply_filters as apply_filter_params
-from app.services.frame import canonicalize
-from app.services.overview_query import compute_overview
-from app.services.overview_summary import build_summary_payload
 
 
 pages = Blueprint("pages", __name__)

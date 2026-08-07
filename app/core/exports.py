@@ -492,7 +492,7 @@ def dataframe_to_csv_response(df: pd.DataFrame, filename: str = "export.csv"):
         return send_file(BytesIO(data), as_attachment=True, download_name=filename, mimetype=mimetype)
 
 
-def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str = "export.xlsx", threshold_rows: int = 100_000):
+def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str = "export.xlsx", threshold_rows: int = 100_000):  # noqa: F811
     """Return a Flask response streaming an XLSX file.
 
     - If total rows > threshold_rows, writes to a temporary file and streams it via send_file.

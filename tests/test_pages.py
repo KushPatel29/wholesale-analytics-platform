@@ -9,7 +9,6 @@ pytestmark = pytest.mark.slow  # Tagged slow: tests spin up app + auth flows
 
 from app import create_app
 from app.blueprints import products as products_bp
-from app.services import products as services_products
 from app.auth.models import SavedView, get_saved_view, get_session, User
 
 

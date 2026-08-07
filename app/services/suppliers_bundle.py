@@ -8,7 +8,7 @@ import json
 import math
 import os
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime as datetime, timedelta
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import pandas as pd
@@ -4927,7 +4927,7 @@ def _supplier_drilldown_v2_payload(
         margin_col="margin_pct",
         unit_cost_col="cost_lb" if "cost_lb" in product_rollup.columns else "margin_pct",
     )
-    target_margin = margin_rules.weighted_target_margin_pct(product_rollup.to_dict(orient="records"))
+    _target_margin = margin_rules.weighted_target_margin_pct(product_rollup.to_dict(orient="records"))
     margin_at_risk = product_rollup[
         (pd.to_numeric(product_rollup["revenue"], errors="coerce") > 0)
         & (pd.to_numeric(product_rollup["margin_pct"], errors="coerce") < pd.to_numeric(product_rollup["target_margin_pct"], errors="coerce"))

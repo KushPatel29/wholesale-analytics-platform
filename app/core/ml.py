@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import warnings
 import pickle
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 

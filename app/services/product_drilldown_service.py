@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import math
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -1313,7 +1313,7 @@ def _build_lifecycle_insights(
         }
 
     end_dt = pd.Timestamp(df["order_date"].max()).normalize()
-    last_sold_days = int((end_dt - pd.Timestamp(df["order_date"].max()).normalize()).days)
+    _last_sold_days = int((end_dt - pd.Timestamp(df["order_date"].max()).normalize()).days)
     monthly_df["revenue"] = pd.to_numeric(monthly_df.get("revenue"), errors="coerce").fillna(0.0)
     monthly_df["customers"] = pd.to_numeric(monthly_df.get("customers"), errors="coerce").fillna(0.0)
     months_active = int((monthly_df["revenue"] > 0).sum())

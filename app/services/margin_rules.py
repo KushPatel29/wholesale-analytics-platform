@@ -282,7 +282,10 @@ def compute_actual_profit(revenue: Any, cost: Any) -> float | None:
 def compute_actual_margin_pct(revenue: Any, cost: Any) -> float | None:
     rev = _safe_float(revenue)
     cst = _safe_float(cost)
-    if rev is None or cst is None or abs(rev) <= 1e-12:
+    # Returns/credits can make revenue non-positive.  A conventional gross
+    # margin percentage is not meaningful for those rows and, elsewhere in
+    # the application, non-positive revenue is already treated as invalid.
+    if rev is None or cst is None or rev <= 1e-12:
         return None
     return float((rev - cst) / rev * 100.0)
 

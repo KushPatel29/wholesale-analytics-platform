@@ -1,13 +1,11 @@
 from flask import Flask, abort, render_template, jsonify, request, redirect, url_for
 import os
 import json
-import threading
 from dotenv import load_dotenv
 from flask_login import LoginManager, login_required
 from flask_wtf import CSRFProtect
 from pathlib import Path
 import click
-from decimal import Decimal
 from datetime import datetime
 
 from .config import Config, validate_config_settings
@@ -59,7 +57,6 @@ def register_blueprints(app: Flask) -> None:
     from .blueprints.views import bp as views_bp
     from .blueprints.events import bp as events_bp
     from .blueprints.admin_api import bp as admin_api_bp
-    from .blueprints.events import bp as events_bp
     from .blueprints.notifications import bp as notifications_bp
     from .blueprints.drilldowns import bp as drilldowns_bp
     from .assistant.routes import bp as assistant_bp
@@ -987,10 +984,7 @@ def create_app() -> Flask:
     @app.get("/readyz")
     @login_required
     def readyz():  # pragma: no cover - environment dependent
-        from pathlib import Path as _Path
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-        import pandas as _pd
-        import json as _json
         from .auth.models import SessionLocal as _SessionLocal, User as _User
         from app.services import fact_store as _fact_store  # type: ignore
 
@@ -1150,9 +1144,6 @@ def create_app() -> Flask:
     @login_required
     @require_admin
     def data_health():  # pragma: no cover - diagnostic
-        from datetime import datetime as _dt, timezone as _tz
-        import pandas as _pd
-        from pathlib import Path as _Path
         from app.services import fact_store as _fact_store  # type: ignore
 
         parquet_path = _fact_store.FACT_PATH

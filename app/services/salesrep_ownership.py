@@ -4,7 +4,7 @@ import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, Sequence
+from typing import Any, Iterable
 
 import pandas as pd
 from flask import current_app, has_app_context

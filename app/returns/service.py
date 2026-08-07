@@ -3327,7 +3327,7 @@ def build_return_pdf_bytes(
     logo_path = Path(current_app.root_path) / "static" / "img" / logo_file
     logo_uri = logo_path.resolve().as_uri() if logo_path.exists() else None
     
-    rendered_html = render_template(
+    _rendered_html = render_template(
         "returns/return_form.html",
         document_title=document_title,
         company_header=company_header,
@@ -3535,7 +3535,7 @@ def approve_manager(
         event_type="manager_approved",
         payload={
             "notes": str(notes or "").strip(),
-            "decision_summary": str(notes or "").strip() or f"Approved by manager. Awaiting Finance.",
+            "decision_summary": str(notes or "").strip() or "Approved by manager. Awaiting Finance.",
         },
         scope=scope,
     )

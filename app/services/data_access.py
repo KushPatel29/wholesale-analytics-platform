@@ -7,7 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 import uuid
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import pandas as pd
 from cachetools import TTLCache
@@ -299,7 +299,7 @@ def get_fact_context(
     scope = _user_scope(user, sales_rep_override=sales_rep_override, region_ids_override=region_ids_override)
     role = (scope.get("role") or "").strip().lower()
     is_admin = role == "admin"
-    user_id_val = scope.get("user_id")
+    _user_id_val = scope.get("user_id")
     data_version = current_data_version()
 
     start = getattr(parsed_filters, "start", None)
@@ -319,7 +319,7 @@ def get_fact_context(
     apply_default_window = (start is None and end is None and not all_time and apply_default_override)
 
     statuses = tuple(getattr(parsed_filters, "statuses", ()) or ())
-    status_list = list(statuses) if statuses else None
+    _status_list = list(statuses) if statuses else None
 
     if has_request_context():
         try:

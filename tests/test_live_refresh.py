@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import pytest
-import numpy as np # Added import for np
 
 from app.services import event_bus
 

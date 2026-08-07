@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from flask import Blueprint, jsonify, render_template, request, session, abort, Response, current_app, url_for
+from flask import Blueprint, jsonify, render_template, request, session, abort, Response, current_app
 from flask_login import login_required, current_user
 
 from app.cache import cache
@@ -24,7 +24,7 @@ from app.services.frame import load_canonical_df
 from app.services.filters import apply_filters as apply_filter_params, filters_cache_key, resolve_filters
 from app.services.bundle_builder import to_json_safe
 from app.services.cache import cache_key as versioned_cache_key
-from app.services import analytics_utils as au, bundle_service, filters_service, fact_store, salesreps_bundle
+from app.services import analytics_utils as au, bundle_service, filters_service, salesreps_bundle
 from app.core.features import legacy_pandas_enabled
 
 bp = Blueprint("salesreps", __name__, url_prefix="/salesreps")
@@ -333,8 +333,8 @@ def _build_rep_export_response(rep_id: str, *, force_dataset: str | None = None,
     )
     return dataframes_to_xlsx_response(
         {
-            "Metadata": metadata_df,
             _sheet_label(dataset): frame,
+            "Metadata": metadata_df,
         },
         filename=filename,
         threshold_rows=200_000,
@@ -1171,12 +1171,27 @@ def rep_detail(rep_id: str):
         "alerts": [],
         "meta": {},
     }
+    v2_enabled = _drilldown_v2_enabled()
+    boot_payload = None
+    if v2_enabled:
+        bundle_args = request.args.to_dict(flat=True)
+        bundle_args["rep_id"] = rep_id
+        try:
+            candidate = bundle_service.drilldown("salesreps", bundle_args)
+        except Exception:
+            current_app.logger.exception("salesreps.drilldown.prefetch_failed", extra={"rep_id": rep_id})
+            candidate = {"error": {"message": "Sales rep drilldown prefetch failed."}}
+        if isinstance(candidate, dict) and not candidate.get("error"):
+            boot_payload = to_json_safe(candidate)
+        else:
+            v2_enabled = False
     return render_template(
         "salesreps/drilldown.html",
         rep_id=rep_id,
         payload=payload,
         filters=params,
-        salesrep_drilldown_v2_enabled=_drilldown_v2_enabled(),
+        salesrep_drilldown_v2_enabled=v2_enabled,
+        salesrep_drilldown_boot_payload=boot_payload,
     )
 
 

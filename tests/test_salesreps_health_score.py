@@ -1,7 +1,6 @@
 """Tests for the Health Score computation in salesreps_bundle (Task 2A)."""
 from __future__ import annotations
 
-import pytest
 from app.services.salesreps_bundle import _compute_health_score
 
 

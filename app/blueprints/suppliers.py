@@ -603,7 +603,7 @@ def build_overview_payload() -> Dict[str, Any]:
     """Supplier overview across current filters (used by page + API)."""
     o = _get_frame()
     df, rev_col, cost_col = o["df"], o["rev_col"], o["cost_col"]
-    units_col, weight_col = o.get("units_col"), o.get("weight_col")
+    _units_col, _weight_col = o.get("units_col"), o.get("weight_col")
     order_id_col, customer_id_col = o.get("order_id_col"), o.get("customer_id_col")
     date_col = o.get("date_col")
 
@@ -800,8 +800,8 @@ def build_table_payload(
 def build_drilldown_payload(supplier_id: str) -> Dict[str, Any]:
     o = _get_frame()
     df, rev_col, cost_col = o["df"], o["rev_col"], o["cost_col"]
-    units_col, weight_col = o.get("units_col"), o.get("weight_col")
-    order_id_col, customer_id_col = o.get("order_id_col"), o.get("customer_id_col")
+    units_col, _weight_col = o.get("units_col"), o.get("weight_col")
+    _order_id_col, customer_id_col = o.get("order_id_col"), o.get("customer_id_col")
     date_col = o.get("date_col")
 
     if df.empty or not rev_col or "SupplierId" not in df.columns:
@@ -916,7 +916,7 @@ def _build_supplier_product_details(supplier_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     show_costs = can_view_costs(current_user)
-    has_cost_col = bool(cost_col and cost_col in df_s.columns)
+    _has_cost_col = bool(cost_col and cost_col in df_s.columns)
     units_col = o.get("units_col") if o.get("units_col") in df_s.columns else _qty_item_col(df_s)
     units_col = units_col if units_col in df_s.columns else None
     weight_col = o.get("weight_col") if o.get("weight_col") in df_s.columns else _qty_weight_col(df_s)
@@ -1351,7 +1351,7 @@ def index():
         )
     except Exception:
         logger.exception("Error loading suppliers index", extra=_log_context())
-        raise InternalServerError("An error occurred while loading suppliers.")
+        raise InternalServerError("An error occurred while loading suppliers.") from None
 
 
 @bp.route("/<supplier_id>")
@@ -1503,7 +1503,7 @@ def drilldown(supplier_id):
         )
     except Exception:
         logger.exception("Error in supplier drilldown", extra=_log_context({"supplier_id": supplier_id}))
-        raise InternalServerError("An error occurred while loading supplier details.")
+        raise InternalServerError("An error occurred while loading supplier details.") from None
 
 # ───────────────────────────────────────────────────────────
 # JSON APIs
@@ -1593,7 +1593,7 @@ def export_overview():
         table = build_table_payload(page=1, per_page=TABLE_PAGE_SIZE_MAX)
     except SuppliersDataError as exc:
         logger.error("Suppliers export unavailable: %s", exc, extra=_log_context({"missing_columns": exc.missing_columns}))
-        raise BadRequest(str(exc))
+        raise BadRequest(str(exc)) from exc
 
     kpi_df = pd.DataFrame([ov.get("kpis", {})])
     trend_df = pd.DataFrame({"Month": ov.get("trend", {}).get("labels", []), "Revenue": ov.get("trend", {}).get("values", [])})
@@ -1623,7 +1623,7 @@ def export_supplier(supplier_id):
         product_details = _build_supplier_product_details(supplier_id)
     except SuppliersDataError as exc:
         logger.error("Supplier export unavailable: %s", exc, extra=_log_context({"missing_columns": exc.missing_columns, "supplier_id": supplier_id}))
-        raise BadRequest(str(exc))
+        raise BadRequest(str(exc)) from exc
     top_products_summary = _build_top_products_summary_frame(product_details)
     if top_products_summary.empty:
         top_products_summary = _round2_df(pd.DataFrame({

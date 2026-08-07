@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import pandas as pd
 from flask import current_app, render_template, url_for

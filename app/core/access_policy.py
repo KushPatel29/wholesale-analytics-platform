@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Iterable, Optional, Mapping, Any
+from typing import Iterable, Optional, Mapping
 
 from flask import abort, current_app
 

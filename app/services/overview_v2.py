@@ -16,8 +16,6 @@ from cachetools import TTLCache
 from flask import current_app, g
 from flask_login import current_user
 
-import data_loader as loader  # type: ignore
-from fact_checkpoints import log_fact_checkpoint
 
 from app.cache import cache
 from app.services import analytics_utils as au
@@ -25,7 +23,6 @@ from app.services import margin_rules
 from app.services import overview_metrics as om
 from app.services.filters import (
     FilterParams,
-    apply_filters as apply_filter_params,
     fiscal_month_label,
     filters_cache_key,
 )
@@ -1819,14 +1816,14 @@ def _compute_bundle_context(
     # Anchor month-based diagnostics to the inclusive terminal date, not the
     # exclusive bound, so completed month windows do not roll into the next month.
     period_anchor_iso = window_contract.current_end.isoformat()
-    prior_start_iso = window_contract.prior_month_start.isoformat()
-    prior_end_excl_iso = (window_contract.prior_month_end + timedelta(days=1)).isoformat()
-    yoy_start_iso = window_contract.prior_year_start.isoformat()
-    yoy_end_excl_iso = (window_contract.prior_year_end + timedelta(days=1)).isoformat()
+    _prior_start_iso = window_contract.prior_month_start.isoformat()
+    _prior_end_excl_iso = (window_contract.prior_month_end + timedelta(days=1)).isoformat()
+    _yoy_start_iso = window_contract.prior_year_start.isoformat()
+    _yoy_end_excl_iso = (window_contract.prior_year_end + timedelta(days=1)).isoformat()
     preprior_end = window_contract.prior_month_start - timedelta(days=1)
     preprior_start = preprior_end - timedelta(days=max(1, window_contract.current_days) - 1)
-    preprior_start_iso = preprior_start.isoformat()
-    preprior_end_excl_iso = (preprior_end + timedelta(days=1)).isoformat()
+    _preprior_start_iso = preprior_start.isoformat()
+    _preprior_end_excl_iso = (preprior_end + timedelta(days=1)).isoformat()
 
     date_col = _safe_col(cols, "Date", "ShipDate", "OrderDate")
     revenue_col = _safe_col(cols, "Revenue", "TotalRevenue", "Sales")

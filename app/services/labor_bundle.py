@@ -1215,7 +1215,7 @@ def _build_actions(
         actions.append(
             {
                 "title": f"Investigate {top.get('department_name')}",
-                "detail": f"Department cost, volatility, premium share, or absence share is above peer levels under the current filters.",
+                "detail": "Department cost, volatility, premium share, or absence share is above peer levels under the current filters.",
                 "scope": "department",
                 "value": top.get("department_name"),
             }
@@ -2507,8 +2507,8 @@ def _li_build_signals(filters: LaborFilters, analysis: Mapping[str, Any]) -> lis
     current_summary = analysis['current_summary']
     overall = analysis['overall']
     departments = analysis['current_departments']
-    workers = analysis['worker_summary']
-    categories = analysis['category_mix']
+    _workers = analysis['worker_summary']
+    _categories = analysis['category_mix']
     review_department = analysis.get('review_department') or {}
     review_worker = analysis.get('review_worker') or {}
     review_category = analysis.get('review_category') or {}
@@ -2989,7 +2989,7 @@ def _li_build_actions(filters: LaborFilters, analysis: Mapping[str, Any]) -> lis
     return actions[:5]
 
 
-def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:  # noqa: F811
     status = labor_store.get_status()
     filters = resolve_filters(args)
     payload: dict[str, Any] = {
@@ -3175,11 +3175,11 @@ def build_client_payload(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def build_export_frames(filters: LaborFilters, dataset: str) -> tuple[dict[str, pd.DataFrame], str]:
+def build_export_frames(filters: LaborFilters, dataset: str) -> tuple[dict[str, pd.DataFrame], str]:  # noqa: F811
     analysis = _cached_analysis(filters)
     current_summary = analysis['current_summary']
     prior_summary = analysis['prior_summary']
-    overall = analysis['overall']
+    _overall = analysis['overall']
     scope_summary = _li_build_scope_summary(filters, analysis['filter_options'], analysis['prior_start'], analysis['prior_end'], current_summary, prior_summary)
     signals_df = pd.DataFrame(
         [

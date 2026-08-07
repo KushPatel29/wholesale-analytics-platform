@@ -1142,7 +1142,7 @@ def date_column(df: pd.DataFrame) -> Optional[str]:
     return best_column(df, DATE_PRIORITY_ORDER)
 
 
-def customer_name_column(df: pd.DataFrame) -> Optional[str]:
+def customer_name_column(df: pd.DataFrame) -> Optional[str]:  # noqa: F811
     """Find the customer name column."""
     return best_column(df, ("CustomerName", "Customer Name", "Customer_Name", "customer_name", "Name"))
 

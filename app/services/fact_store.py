@@ -8,7 +8,7 @@ import os
 import threading
 import time
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -487,6 +487,9 @@ def reset_duckdb_state() -> None:
     _manifest_state.update({"checked_at": 0.0, "mtime": None, "version": None, "payload": {}})
     try:
         if has_request_context():
+            request_cache = getattr(g, "_duckdb_request_cache", None)
+            if isinstance(request_cache, dict):
+                request_cache.clear()
             state = getattr(g, "_duckdb_state", None)
             if state:
                 conn = state.get("conn")
@@ -890,7 +893,16 @@ def _execute_df(sql: str, params: List[Any], *, tag: str, cache_key: Optional[st
     request_cache_key = None
     key = None
     if cache_key or request_cache is not None:
-        payload = {"sql": sql, "params": params, "version": version}
+        # A dataset version alone is not a safe identity: tests, local tools,
+        # and controlled hot swaps can point the same process at another fact
+        # path before a manifest version changes.  Include the resolved source
+        # so request/global query caches cannot return rows from the old file.
+        payload = {
+            "sql": sql,
+            "params": params,
+            "version": version,
+            "dataset": _dataset_base_path().as_posix(),
+        }
         raw = json.dumps(payload, sort_keys=True, default=str)
         request_cache_key = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         if request_cache is not None:
@@ -1464,7 +1476,7 @@ def validate_fact_schema(strict: bool = False) -> Dict[str, Any]:
             raise RuntimeError("Fact parquet missing; build or set PARQUET_PATH") from exc
         logger.error("fact_store.schema_missing_parquet")
         return status
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive
         status["missing"] = ["parquet_unreadable"]
         if strict:
             raise
