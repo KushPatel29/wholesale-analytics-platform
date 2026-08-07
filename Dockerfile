@@ -31,4 +31,3 @@ ENV PORT=10000 \
 EXPOSE 10000
 
 CMD exec gunicorn -c gunicorn_conf.py --bind 0.0.0.0:${PORT} wsgi:app
-
