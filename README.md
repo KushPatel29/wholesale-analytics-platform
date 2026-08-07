@@ -4,6 +4,8 @@
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![duckdb](https://img.shields.io/badge/engine-DuckDB-yellow)
 
+**Live demo:** [wholesale-analytics-platform.onrender.com](https://wholesale-analytics-platform.onrender.com/)
+
 The internal BI platform I built and ran at a perishable-goods wholesale
 distributor. Not a dashboard — the whole thing: incremental ETL off the ERP
 into a partitioned parquet lake, a DuckDB query layer, row-level security down
