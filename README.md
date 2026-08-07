@@ -5,6 +5,9 @@
 ![duckdb](https://img.shields.io/badge/engine-DuckDB-yellow)
 
 **Live demo:** [wholesale-analytics-platform.onrender.com](https://wholesale-analytics-platform.onrender.com/)
+— the login page lists six accounts and what each one is allowed to see. Start
+with `gm`, then sign in as `rep.dana` and watch every figure narrow to one
+rep's book. It sleeps when idle, so the first request can take about a minute.
 
 The internal BI platform I built and ran at a perishable-goods wholesale
 distributor. Not a dashboard — the whole thing: incremental ETL off the ERP
@@ -16,6 +19,11 @@ It normally reads a SQL Server the reader does not have. So it now ships a
 seeded generator that invents a comparable distributor — 620 accounts, 880
 SKUs, 326,000 order lines — and writes it through the **same ETL writer**
 production uses. A clean clone gets a working platform in about a minute.
+
+The hosted demo runs a smaller cut of the same generator (200 accounts, 300
+SKUs, six months) because it lives on a 512 MB shared-CPU box, so its totals
+are smaller than the ones quoted below. The shape of the data, and every
+finding, is identical.
 
 ```bash
 pip install -r requirements.txt
