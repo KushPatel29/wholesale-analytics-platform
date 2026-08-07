@@ -123,8 +123,26 @@ class TestWarmup:
         - on the hosted demo that was an eight second wait after the page had
         already appeared.
         """
+        endpoints = {endpoint for endpoint, _ in warmup.BUNDLE_ENDPOINTS}
         for endpoint in ("/api/products/bundle", "/api/customers/bundle"):
-            assert endpoint in warmup.BUNDLE_ENDPOINTS
+            assert endpoint in endpoints
+
+    def test_bundle_warmup_sends_the_arguments_the_front_end_sends(self):
+        """
+        The cache key is built from the request arguments, so a products bundle
+        warmed without `_sections` lands under a different key than the one the
+        page asks for and the visitor still pays full price.
+        """
+        extras = dict(warmup.BUNDLE_ENDPOINTS)
+        assert "_sections=" in extras["/api/products/bundle"]
+        assert all("date_type=fiscal" in v for v in extras.values())
+
+    def test_warms_the_filter_options_every_page_requests(self):
+        """The deferred options call runs on every page and was the slowest XHR
+        on the ones that render server-side."""
+        phases = {phase for _, phase in warmup.FILTER_OPTION_PHASES}
+        assert phases == {"bootstrap", "deferred"}
+        assert "customers" in warmup.PAGES_WITH_FILTER_OPTIONS
 
     def test_bundle_warmup_uses_the_window_the_front_end_sends(self):
         """

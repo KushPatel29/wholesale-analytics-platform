@@ -53,15 +53,37 @@ SECONDARY_PATHS: tuple[str, ...] = (
     "/salesreps/",
 )
 
-# The JSON bundles each page fetches after render. Warming the HTML alone was
-# not enough: the page came back in a second or two and then sat waiting eight
-# seconds for its bundle, because that is where the work actually happens.
-BUNDLE_ENDPOINTS: tuple[str, ...] = (
-    "/api/products/bundle",
-    "/api/customers/bundle",
-    "/api/suppliers/bundle",
-    "/api/regions/bundle",
-    "/api/salesreps/bundle",
+# The XHRs the pages fire after render. Warming the HTML alone was not enough:
+# a page came back in a second or two and then sat waiting on these, which is
+# where the work actually happens.
+#
+# The query strings below are copied from what the front end actually sends,
+# because the cache key is built from the request arguments - a bundle warmed
+# without `_sections`, or without `date_type`, lands under a different key and
+# the visitor still pays full price. Verified by loading each page and reading
+# its network entries.
+PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
+    "overview",
+    "customers",
+    "products",
+    "suppliers",
+    "regions",
+    "salesreps",
+)
+
+FILTER_OPTION_PHASES: tuple[tuple[str, str], ...] = (
+    ("statuses,regions,methods", "bootstrap"),
+    ("customers,sales_reps,suppliers,products,protein_groups,yield_range", "deferred"),
+)
+
+# endpoint -> extra arguments the page sends alongside the date window.
+BUNDLE_ENDPOINTS: tuple[tuple[str, str], ...] = (
+    ("/api/products/bundle", "date_type=fiscal&_gf=1&_sections=overview%2Cstrategy%2Cdemand"),
+    ("/api/customers/bundle", "date_type=fiscal&_gf=1"),
+    ("/api/suppliers/bundle", "date_type=fiscal&_gf=1"),
+    ("/api/regions/bundle", "date_type=fiscal&_gf=1"),
+    ("/api/salesreps/bundle", "date_type=fiscal&_gf=1"),
+    ("/overview/api/bundle", "date_type=fiscal&_gf=1"),
 )
 
 
@@ -164,10 +186,18 @@ def _warm(app) -> None:
 
     started = time.perf_counter()
 
-    # The documented demo login goes first: every page, then the bundles those
-    # pages fetch, with the same default window the front end sends.
+    # The documented demo login goes first: every page, then the XHRs those
+    # pages fire, using the same arguments the front end sends.
     window = _default_window_query()
-    primary_paths = WARMUP_PATHS + tuple(f"{ep}?{window}" for ep in BUNDLE_ENDPOINTS)
+    primary_paths = (
+        WARMUP_PATHS
+        + tuple(f"{endpoint}?{window}&{extra}" for endpoint, extra in BUNDLE_ENDPOINTS)
+        + tuple(
+            f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
+            for page in PAGES_WITH_FILTER_OPTIONS
+            for dimensions, phase in FILTER_OPTION_PHASES
+        )
+    )
     _warm_user(app, primary, primary_paths)
 
     # Then the rest, so whichever account a visitor picks is already warm.
