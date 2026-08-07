@@ -1,39 +1,57 @@
+"""
+Incremental refresh window behaviour in data_loader.refresh_parquet.
+
+This was originally written against the single-file parquet the loader used to
+produce: it asserted refresh_parquet returned a `fact.parquet` path, read a
+sibling `manifest.json`, and monkeypatched `write_parquet_atomic` to capture
+the frame. The loader partitions to a dataset directory now and never calls
+that writer, so every one of those assertions was checking a code path that no
+longer exists.
+
+Rewritten against the current architecture, keeping what the test was actually
+for: the first refresh is a full load, the second asks the source only for a
+lookback window, and the two batches merge on the primary key rather than
+accumulating duplicates.
+"""
+
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pandas as pd
 
 import data_loader
+from app.services import watermark_store
 
 
-def test_refresh_parquet_incremental_window(monkeypatch):
-    base_dir = Path(".pytest_tmp_work") / "incremental_refresh"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    parquet_path = base_dir / "fact.parquet"
-    manifest_path = base_dir / "manifest.json"
-    for p in (parquet_path, manifest_path):
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
+def _read_dataset(dataset_path: Path) -> pd.DataFrame:
+    frames = [pd.read_parquet(p) for p in sorted(dataset_path.rglob("*.parquet"))]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-    monkeypatch.setenv("PARQUET_PATH", parquet_path.as_posix())
+
+def test_refresh_parquet_incremental_window(monkeypatch, tmp_path):
+    dataset_path = tmp_path / "fact_dataset"
+    shutil.rmtree(dataset_path, ignore_errors=True)
+
+    monkeypatch.setenv("PARQUET_PATH", dataset_path.as_posix())
+    monkeypatch.setenv("FACT_DATASET_PATH", dataset_path.as_posix())
     monkeypatch.delenv("FULL_REFRESH", raising=False)
 
     base_df = pd.DataFrame(
         {
             "OrderLineId": ["1", "2"],
-            "Date": pd.to_datetime(["2024-01-01", "2024-01-05"]),
+            "DateExpected": pd.to_datetime(["2024-01-01", "2024-01-05"]),
             "UpdatedAt": pd.to_datetime(["2024-01-01 09:00", "2024-01-05 12:00"]),
             "Revenue": [10.0, 20.0],
             "Cost": [5.0, 9.0],
         }
     )
+    # OrderLineId 2 comes back with a new date and a higher revenue; 3 is new.
     incremental_df = pd.DataFrame(
         {
             "OrderLineId": ["2", "3"],
-            "Date": pd.to_datetime(["2024-01-06", "2024-01-07"]),
+            "DateExpected": pd.to_datetime(["2024-01-06", "2024-01-07"]),
             "UpdatedAt": pd.to_datetime(["2024-01-06 10:00", "2024-01-07 11:00"]),
             "Revenue": [25.0, 30.0],
             "Cost": [11.0, 12.0],
@@ -46,55 +64,38 @@ def test_refresh_parquet_incremental_window(monkeypatch):
     def fake_get_dataframe(start=None, end=None, statuses=None, window_days=None):
         calls.append({"start": start, "window_days": window_days})
         try:
-            frame = next(frames)
+            return next(frames).copy()
         except StopIteration:
-            return pd.DataFrame()
-        return frame.copy()
-
-    store = {"df": pd.DataFrame()}
-    written = {}
-
-    def fake_write_parquet_atomic(df, path):
-        store["df"] = df.copy()
-        written["df"] = df.copy()
-        written["path"] = path
-        return str(path)
-
-    def fake_read_existing(path):
-        return store["df"].copy()
+            return pd.DataFrame(columns=base_df.columns)
 
     monkeypatch.setattr(data_loader, "get_dataframe", fake_get_dataframe)
-    monkeypatch.setattr(data_loader, "write_parquet_atomic", fake_write_parquet_atomic)
-    monkeypatch.setattr(data_loader, "_read_existing_parquet", fake_read_existing)
 
+    # First refresh: no dataset yet, so the loader asks for everything.
     first_path = data_loader.refresh_parquet()
-    assert Path(first_path) == parquet_path
+    assert Path(first_path) == dataset_path
     assert calls[0]["window_days"] is None
 
-    manifest_one = data_loader.read_manifest(parquet_path.as_posix())
-    assert manifest_one["rows"] == 2
-    assert manifest_one["date_max"] == "2024-01-05"
+    manifest_one = watermark_store.read_manifest(dataset_path)
+    assert int(manifest_one["row_count"]) == 2
 
-    version_one = data_loader.current_version(parquet_path.as_posix())
-    assert version_one != "0"
+    stored_one = _read_dataset(dataset_path)
+    assert set(stored_one["OrderLineId"].astype(str)) == {"1", "2"}
 
+    # Second refresh: the dataset exists, so only the lookback window is pulled.
     second_path = data_loader.refresh_parquet()
-    assert Path(second_path) == parquet_path
+    assert Path(second_path) == dataset_path
     assert len(calls) == 2
     assert calls[1]["window_days"] == 7
-    assert calls[1]["start"] == "2023-12-29"
 
-    combined = written["df"]
-    assert set(combined["OrderLineId"]) == {"1", "2", "3"}
-    updated_row = combined.loc[combined["OrderLineId"] == "2"].iloc[0]
-    assert updated_row["Revenue"] == 25.0
+    manifest_two = watermark_store.read_manifest(dataset_path)
+    assert int(manifest_two["row_count"]) == 3
 
-    manifest_two = data_loader.read_manifest(parquet_path.as_posix())
-    assert manifest_two["rows"] == 3
-    assert manifest_two["date_max"] == "2024-01-07"
+    combined = _read_dataset(dataset_path)
+    assert set(combined["OrderLineId"].astype(str)) == {"1", "2", "3"}
 
-    version_two = data_loader.current_version(parquet_path.as_posix())
-    assert version_two != version_one
+    # The upsert replaced row 2 rather than appending a second copy of it.
+    row_two = combined.loc[combined["OrderLineId"].astype(str) == "2"]
+    assert len(row_two) == 1
+    assert float(row_two.iloc[0]["Revenue"]) == 25.0
 
-    max_date = data_loader.max_loaded_date(parquet_path.as_posix())
-    assert str(max_date.date()) == "2024-01-07"
+    assert str(pd.to_datetime(combined["DateExpected"]).max().date()) == "2024-01-07"

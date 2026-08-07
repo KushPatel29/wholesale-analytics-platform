@@ -43,7 +43,7 @@ def test_summary_handles_cost(app, monkeypatch):
     _disable_cache(monkeypatch)
     df = pd.DataFrame(
         {
-            "Date": pd.date_range("2024-01-01", periods=3, freq="M"),
+            "Date": pd.date_range("2024-01-01", periods=3, freq="ME"),
             "Revenue": [1000, 1100, 1200],
             "Cost": [500, 550, 600],
             "QuantityShipped": [10, 11, 12],
@@ -62,7 +62,7 @@ def test_summary_without_cost_is_graceful(app, monkeypatch):
     _disable_cache(monkeypatch)
     df = pd.DataFrame(
         {
-            "Date": pd.date_range("2024-01-01", periods=2, freq="M"),
+            "Date": pd.date_range("2024-01-01", periods=2, freq="ME"),
             "Revenue": [1000, 800],
             "QuantityShipped": [5, 4],
             "OrderId": [1, 2],

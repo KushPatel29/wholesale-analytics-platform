@@ -392,7 +392,7 @@ def _build_drilldown_payload(region_name: str) -> Dict[str, object]:
         if not dfm.empty:
             # Monthly aggregation
             # We use to_period('M').to_timestamp() to align to month start/end consistently
-            m_rev = dfm.set_index("Date").resample("M")[rev_col].sum().fillna(0).sort_index()
+            m_rev = dfm.set_index("Date").resample("ME")[rev_col].sum().fillna(0).sort_index()
             
             # Format months for chart
             months = [d.strftime("%Y-%m") for d in m_rev.index]

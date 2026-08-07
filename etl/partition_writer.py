@@ -288,19 +288,125 @@ def _write_partition(df: pd.DataFrame, partition_dir: Path, *, year: int, month:
     if partition_dir.exists():
         shutil.rmtree(partition_dir, ignore_errors=True)
     partition_dir.mkdir(parents=True, exist_ok=True)
-    work = df.copy()
-    if "year" not in work.columns:
-        work["year"] = year
-    if "month" not in work.columns:
-        work["month"] = month
-    if "day" not in work.columns:
-        work["day"] = day
+    # Do NOT store year/month/day in the file: they are already encoded in the
+    # directory names, which is the whole point of hive partitioning. Writing
+    # them as columns too gave every file an int64 `year` while pyarrow infers
+    # int32 for the partition field of the same name, so opening the dataset
+    # raised "Unable to merge: Field year has incompatible types". _count_rows
+    # swallowed that and returned None, and the manifest silently fell back to
+    # arithmetic that over-counted whenever rows moved between partitions.
+    # The caller already strips these before handing the frame over; this keeps
+    # the two ends consistent.
+    work = df.drop(columns=["year", "month", "day"], errors="ignore").copy()
     part_path = partition_dir / "part-0.parquet"
     tmp_path = partition_dir / f"part-0.{os.getpid()}.{int(time.time() * 1000)}.tmp.parquet"
     # pandas' parquet writer is materially more stable here than constructing an
     # intermediate Arrow table for historical labor rows with mixed extension dtypes.
     work.to_parquet(tmp_path, index=False)
     os.replace(tmp_path, part_path)
+
+
+def _migrate_legacy_partitions(
+    dataset_path: Path,
+    *,
+    pk_col: str,
+    pk_set: set,
+    date_col: str,
+    replace_window_start: Optional[date | datetime | str] = None,
+    replace_window_end: Optional[date | datetime | str] = None,
+) -> int:
+    """
+    Fold partitions written under an older, coarser layout into the current one.
+
+    This writer partitions to year=/month=/day=. Datasets written by earlier
+    versions stop at year=/month=, and the rewrite loop only ever looks inside
+    a day= directory. Two things went wrong as a result:
+
+    - a row whose date changed was written to its new day= partition while the
+      old copy sat untouched in the month directory, so it was counted twice;
+    - a mixed-depth dataset confuses pyarrow's hive partitioning, so the
+      manifest row_count came back higher than the number of rows on disk.
+
+    Rather than patch around both, normalise the layout: read each month-level
+    parquet, drop the rows this upsert supersedes, rewrite the survivors into
+    proper day= partitions, and delete the legacy file. Returns the number of
+    superseded rows dropped.
+    """
+    if not dataset_path.exists():
+        return 0
+
+    legacy_files = [
+        parquet
+        for month_dir in dataset_path.glob("year=*/month=*")
+        if month_dir.is_dir()
+        for parquet in month_dir.glob("*.parquet")
+    ]
+    if not legacy_files:
+        return 0
+
+    removed = 0
+    for parquet in legacy_files:
+        try:
+            frame = pd.read_parquet(parquet)
+        except Exception:
+            logger.debug("partition_writer.legacy_partition_read_failed", exc_info=True)
+            continue
+        if frame.empty:
+            try:
+                parquet.unlink()
+            except Exception:
+                pass
+            continue
+
+        survivors = frame
+        if pk_set and pk_col in survivors.columns:
+            keep = ~_normalize_pk_series(survivors[pk_col]).isin(pk_set)
+            removed += int(len(survivors) - int(keep.sum()))
+            survivors = survivors.loc[keep]
+
+        # Rows inside an explicit replace window are dropped unless the incoming
+        # batch reasserted them, matching what the day-level loop does.
+        if replace_window_start is not None and replace_window_end is not None and date_col in survivors.columns:
+            survivors, dropped_window = _drop_existing_rows_in_window(
+                survivors,
+                date_col=date_col,
+                start=replace_window_start,
+                end=replace_window_end,
+            )
+            removed += int(dropped_window)
+
+        try:
+            parquet.unlink()
+        except Exception:
+            logger.warning("partition_writer.legacy_partition_unlink_failed", exc_info=True)
+            continue
+
+        if survivors.empty or date_col not in survivors.columns:
+            continue
+
+        placed = _add_partitions(survivors, date_col)
+        for year, month, day in _partition_keys(placed):
+            subset = placed.loc[
+                (placed["year"] == year) & (placed["month"] == month) & (placed["day"] == day)
+            ].drop(columns=["year", "month", "day"], errors="ignore")
+            if subset.empty:
+                continue
+            part_dir = parquet.parent.parent.parent / f"year={year}" / f"month={month}" / f"day={day}"
+            existing = _read_partition(parquet.parent.parent.parent, year, month, day)
+            if existing is not None and not existing.empty:
+                aligned_existing, aligned_new = _align_columns(existing, subset)
+                subset = pd.concat(
+                    [f for f in (aligned_existing, aligned_new) if f is not None and not f.empty],
+                    ignore_index=True,
+                    sort=False,
+                )
+            _write_partition(subset, part_dir, year=year, month=month, day=day)
+
+    logger.info(
+        "partition_writer.legacy_partitions_migrated",
+        extra={"files": len(legacy_files), "rows_removed": removed, "pk_col": pk_col},
+    )
+    return removed
 
 
 def _clone_dataset(src: Path, dst: Path) -> None:
@@ -465,6 +571,17 @@ def upsert_dataset(
         shutil.rmtree(tmp_dir, ignore_errors=True)
     _clone_dataset(dataset_path, tmp_dir)
 
+    # Fold any legacy month-level partitions into the day= layout before the
+    # rewrite loop runs, so a row whose date changed cannot survive in both.
+    legacy_removed = _migrate_legacy_partitions(
+        tmp_dir,
+        pk_col=pk_col,
+        pk_set=pk_set,
+        date_col=date_col,
+        replace_window_start=replace_window_start,
+        replace_window_end=replace_window_end,
+    )
+
     existing_total = None
     if existing_manifest and existing_manifest.get("row_count") is not None:
         try:
@@ -476,7 +593,7 @@ def upsert_dataset(
 
     existing_counts: List[int] = []
     new_counts: List[int] = []
-    removed_total = 0
+    removed_total = int(legacy_removed)
     removed_window_total = 0
 
     for year, month, day in touched:

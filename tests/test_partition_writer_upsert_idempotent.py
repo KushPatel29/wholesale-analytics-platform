@@ -78,17 +78,35 @@ def test_upsert_idempotent_and_moves_across_partitions(tmp_path):
     assert int(meta2.get("row_count") or 0) == 3
 
     # Ensure the moved key is not duplicated across partitions.
-    dec_part = dataset_path / "year=2025" / "month=12" / "part-0.parquet"
-    jan_part = dataset_path / "year=2026" / "month=1" / "part-0.parquet"
-    assert dec_part.exists()
-    assert jan_part.exists()
-    dec = pd.read_parquet(dec_part)
-    jan = pd.read_parquet(jan_part)
-    # Normalize to string for comparison across pyarrow/pandas dtypes.
-    dec_ids = set(pd.Series(dec["OrderLineId"]).astype("string").tolist())
-    jan_ids = set(pd.Series(jan["OrderLineId"]).astype("string").tolist())
-    assert "2" not in dec_ids
+    #
+    # Read by globbing rather than by a hard-coded directory depth: the writer
+    # partitions to year=/month=/day=, while this test seeds the "historical"
+    # dataset at year=/month=. Pinning either depth tests the layout instead of
+    # the property that actually matters, which is that OrderLineId 2 exists
+    # exactly once, in January.
+    def _ids_under(*path_parts: str) -> set[str]:
+        root = dataset_path.joinpath(*path_parts)
+        ids: set[str] = set()
+        for parquet in root.rglob("*.parquet"):
+            frame = pd.read_parquet(parquet)
+            if "OrderLineId" in frame.columns:
+                ids |= set(pd.Series(frame["OrderLineId"]).astype("string").tolist())
+        return ids
+
+    dec_ids = _ids_under("year=2025", "month=12")
+    jan_ids = _ids_under("year=2026", "month=1")
+    assert dec_ids, "December partition should still hold the untouched row"
+    assert jan_ids, "January partition should hold the moved and new rows"
+    assert "2" not in dec_ids, "stale copy of the moved key survived in December"
     assert "2" in jan_ids
+
+    # And exactly once across the whole dataset.
+    all_ids = [
+        value
+        for parquet in dataset_path.rglob("*.parquet")
+        for value in pd.Series(pd.read_parquet(parquet)["OrderLineId"]).astype("string").tolist()
+    ]
+    assert all_ids.count("2") == 1
 
 
 def test_upsert_replaces_date_window_rows_deterministically(tmp_path):
@@ -135,7 +153,15 @@ def test_upsert_replaces_date_window_rows_deterministically(tmp_path):
     )
     assert int(meta.get("row_count") or 0) == 2
 
-    jan_part = dataset_path / "year=2026" / "month=1" / "part-0.parquet"
-    jan = pd.read_parquet(jan_part)
-    ids = set(pd.Series(jan["OrderLineId"]).astype("string").tolist())
+    # Globbed rather than read from a fixed depth: the seeded dataset is
+    # year=/month= and the writer normalises it to year=/month=/day=.
+    jan_root = dataset_path / "year=2026" / "month=1"
+    ids = {
+        value
+        for parquet in jan_root.rglob("*.parquet")
+        for value in pd.Series(pd.read_parquet(parquet)["OrderLineId"]).astype("string").tolist()
+    }
+    # 10 predates the replace window and survives; 20 was reasserted by the
+    # incoming batch; 30 sat inside the window and was not reasserted, so it is
+    # deleted.
     assert ids == {"10", "20"}

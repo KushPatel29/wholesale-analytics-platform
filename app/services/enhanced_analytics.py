@@ -269,13 +269,13 @@ def generate_predictions(df: pd.DataFrame, periods: int = 4) -> Dict[str, Any]:
     # Aggregate by month
     try:
         if "Revenue" in df.columns:
-            df_monthly = df.set_index("Date").resample("M").agg({
+            df_monthly = df.set_index("Date").resample("ME").agg({
                 "Revenue": "sum"
             }).reset_index()
             df_monthly.columns = ["ds", "y"]
         else:
             # Count transactions if no Revenue
-            df_monthly = df.set_index("Date").resample("M").size().reset_index()
+            df_monthly = df.set_index("Date").resample("ME").size().reset_index()
             df_monthly.columns = ["ds", "y"]
     except Exception as e:
         current_app.logger.error(f"Failed to resample data: {e}")

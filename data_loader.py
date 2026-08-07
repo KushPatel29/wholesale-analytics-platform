@@ -3117,6 +3117,27 @@ def get_fact_df(from_cache: bool = True, parquet_path: Optional[str] = None) -> 
             return df
     return get_dataframe()
 
+def _resolve_partition_date_col(df) -> str:
+    """
+    Pick the column the fact dataset is partitioned on.
+
+    Production frames carry DateExpected, so it was hardcoded at every call
+    site. Any frame without it - an older extract, or a caller that supplies
+    only `Date` - blew up with "Missing date column for partitioning" instead
+    of falling back. watermark_store already knows the candidate order; use it,
+    and keep DateExpected as the preference.
+    """
+    from app.services import watermark_store
+
+    try:
+        if df is not None and "DateExpected" in getattr(df, "columns", []):
+            return "DateExpected"
+        chosen = watermark_store.choose_date_column(df) if df is not None else None
+        return chosen or "DateExpected"
+    except Exception:
+        return "DateExpected"
+
+
 def refresh_parquet(
     parquet_path: Optional[str] = None,
     force_full: bool = False,
@@ -3136,25 +3157,50 @@ def refresh_parquet(
     ds_path = watermark_store.resolve_dataset_path()
     p = Path(parquet_path if parquet_path else get_config().parquet_path)
     
-    existing_small = _read_existing_parquet(p)
+    # Whether a full refresh is needed is a question about the *partitioned
+    # dataset*, not about the single-file parquet this loader used to write.
+    # The check used to read that legacy file, which the partitioned writer
+    # never creates - so it was always empty, the full-refresh branch was taken
+    # every time, and the incremental path below was unreachable. On a
+    # production-sized fact that is the difference between a windowed refresh
+    # and reloading history on every run.
+    existing_manifest = watermark_store.read_manifest(ds_path) or {}
+    try:
+        existing_rows = int(existing_manifest.get("row_count") or 0)
+    except (TypeError, ValueError):
+        existing_rows = 0
+    dataset_present = existing_rows > 0 and any(Path(ds_path).rglob("*.parquet"))
+    if not dataset_present:
+        # Fall back to the legacy single-file layout so a dataset that has not
+        # been migrated yet still counts as existing data.
+        dataset_present = not _read_existing_parquet(p).empty
+
     full_refresh_env = _get_bool("FULL_REFRESH", False)
     default_window = int(os.getenv("INCREMENTAL_WINDOW_DAYS", "7"))
     loader_kwargs = {"best_effort": best_effort} if best_effort else {}
     start_arg = start_date or _initial_start_date()
 
-    if full_refresh_env or force_full or existing_small.empty:
+    if full_refresh_env or force_full or not dataset_present:
         df = get_dataframe(start=start_arg, end=None, **loader_kwargs)
         # Migrate to partitioned dataset
         manifest = upsert_dataset(
             df, 
             dataset_path=ds_path, 
-            pk_col="OrderLineId", 
-            date_col="DateExpected"
+            pk_col="OrderLineId",
+            date_col=_resolve_partition_date_col(df),
         )
         return str(ds_path)
 
-    manifest = watermark_store.read_manifest(ds_path)
-    date_max = manifest.get("date_max")
+    manifest = existing_manifest or watermark_store.read_manifest(ds_path)
+    # upsert_dataset writes max_date / max_dateexpected; nothing has ever
+    # written "date_max". Reading only that key meant the high-water mark was
+    # always missing and the branch below fell straight back to a full reload,
+    # which is the other half of why the incremental path never ran.
+    date_max = (
+        manifest.get("max_date")
+        or manifest.get("max_dateexpected")
+        or manifest.get("date_max")
+    )
     if not date_max:
         # Fallback to checking the monolithic file signature if partitioned manifest is missing
         old_sig_path = p.parent / "persisted_signature.json"
@@ -3167,13 +3213,13 @@ def refresh_parquet(
     
     if not date_max:
         df = get_dataframe(start=start_arg, end=None, **loader_kwargs)
-        upsert_dataset(df, dataset_path=ds_path, pk_col="OrderLineId", date_col="DateExpected")
+        upsert_dataset(df, dataset_path=ds_path, pk_col="OrderLineId", date_col=_resolve_partition_date_col(df))
         return str(ds_path)
 
     last_ts = pd.to_datetime(date_max, errors="coerce")
     if pd.isna(last_ts):
         df = get_dataframe(start=start_arg, end=None, **loader_kwargs)
-        upsert_dataset(df, dataset_path=ds_path, pk_col="OrderLineId", date_col="DateExpected")
+        upsert_dataset(df, dataset_path=ds_path, pk_col="OrderLineId", date_col=_resolve_partition_date_col(df))
         return str(ds_path)
 
     start_dt = (last_ts - pd.Timedelta(days=default_window)).date().isoformat()
@@ -3185,11 +3231,11 @@ def refresh_parquet(
     
     log.info(f"Heartbeat: found {len(incr)} new/updated records in incremental window.")
     upsert_dataset(
-        incr, 
-        dataset_path=ds_path, 
-        pk_col="OrderLineId", 
-        date_col="DateExpected",
-        existing_manifest=manifest
+        incr,
+        dataset_path=ds_path,
+        pk_col="OrderLineId",
+        date_col=_resolve_partition_date_col(incr),
+        existing_manifest=manifest,
     )
     return str(ds_path)
 

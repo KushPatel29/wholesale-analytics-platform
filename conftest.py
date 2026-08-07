@@ -38,14 +38,23 @@ os.environ["AUTHZ_ENFORCEMENT"] = "0"
 os.environ["AUTHZ_ENFORCEMENT_MODE"] = "warn"
 os.environ["LABOR_ANALYTICS_ENABLED"] = "1"
 
-# Deliberately NOT pinned here: the dataset path. Many fixtures monkeypatch
-# PARQUET_PATH to their own tmp_path parquet, and the resolver reads
-# `FACT_DATASET_PATH or PARQUET_PATH` - so setting either one globally wins
-# over those fixtures and every test that builds its own dataset dies with
-# DatasetNotBuiltError. The demo config's dataset entries are dropped instead,
-# leaving the application's own default in place.
+# Point the dataset at an empty directory so a locally generated demo dataset
+# in cache/ cannot be picked up. Without this, tests that fall back to the
+# default path scan 326k real rows instead of finding nothing, which is both
+# wrong and slow - it was the difference between a 3 minute and a 17 minute run.
+#
+# This must go through PARQUET_PATH and NOT FACT_DATASET_PATH: the resolver
+# reads `FACT_DATASET_PATH or PARQUET_PATH`, and many fixtures monkeypatch
+# PARQUET_PATH to their own tmp parquet. Setting FACT_DATASET_PATH here would
+# outrank those fixtures and kill ~250 tests with DatasetNotBuiltError.
+#
+# setdefault, not assignment: with .env out of the picture, PARQUET_PATH is
+# only set here if the developer exported it deliberately. That makes the
+# dataset-backed parity suite opt-in rather than permanently skipped:
+#
+#     PARQUET_PATH=cache/fact_dataset pytest tests/test_overview_parity.py
 os.environ.pop("FACT_DATASET_PATH", None)
-os.environ.pop("PARQUET_PATH", None)
+os.environ.setdefault("PARQUET_PATH", (ROOT / ".pytest_tmp" / "empty_dataset").as_posix())
 
 # Feature flags: the shipped defaults, not the demo's. Tests that want a flag
 # on set it themselves via monkeypatch or app.config.

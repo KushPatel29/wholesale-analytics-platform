@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 @pytest.fixture
 def sample_sales_data(tmp_path):
     """Create sample parquet sales data."""
-    dates = pd.date_range(start="2023-01-01", periods=24, freq="M")
+    dates = pd.date_range(start="2023-01-01", periods=24, freq="ME")
     products = ["SKU-001", "SKU-002", "SKU-003"]
     customers = ["CUST-A", "CUST-B", "CUST-C"]
     regions = ["North", "South", "East", "West"]

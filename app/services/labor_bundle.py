@@ -1939,8 +1939,20 @@ def _li_format_number(value: Any, default: str = "n/a", decimals: int = 1) -> st
     return fmt.format(safe)
 
 
+def _li_day_label(value) -> str:
+    """
+    Format a date as "Jan 5, 2026" without a zero-padded day.
+
+    `%-d` is a glibc extension. On Windows strftime rejects it with
+    "ValueError: Invalid format string", which took the whole labor page down
+    with a 500 rather than degrading. Building the string from the parts is
+    portable and produces identical output.
+    """
+    return f"{value.strftime('%b')} {value.day}, {value.year}"
+
+
 def _li_window_label(start: date, end: date) -> str:
-    return f"{start.strftime('%b %-d, %Y')} to {end.strftime('%b %-d, %Y')}"
+    return f"{_li_day_label(start)} to {_li_day_label(end)}"
 
 
 def _li_refresh_label(raw: Any) -> str | None:
@@ -1949,7 +1961,7 @@ def _li_refresh_label(raw: Any) -> str | None:
     ts = pd.to_datetime(raw, errors='coerce', utc=True)
     if pd.isna(ts):
         return str(raw)
-    return ts.strftime('%b %-d, %Y %H:%M UTC')
+    return f"{_li_day_label(ts)} {ts.strftime('%H:%M')} UTC"
 
 
 def _li_priority_tone(score: Any) -> str:

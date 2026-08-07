@@ -1357,6 +1357,25 @@ def sync_permissions() -> dict[str, int]:
             (int(row.role_id), int(row.permission_id))
             for row in s.query(RolePermission).all()
         }
+        # A role whose key list is ["*"] means "every permission". The wildcard
+        # itself was filtered out and nothing was put in its place, so the
+        # admin role ended up with zero role_permission rows and
+        # list_role_permissions("admin") returned an empty set - which reads as
+        # "an admin can do nothing" to anything that inspects the tables rather
+        # than going through the is-admin short circuit. Expand it instead, so
+        # the stored data says what is actually true.
+        _universe = {
+            str(key).strip().lower()
+            for keys in ROLE_PERMISSION_SYNC_KEYS.values()
+            for key in keys
+            if str(key).strip() and str(key).strip() != "*"
+        }
+        _universe |= {
+            str(key).strip().lower()
+            for key in DEFAULT_PERMISSION_CATALOG
+            if str(key).strip() and str(key).strip() != "*"
+        }
+
         for role_name, perm_keys in ROLE_PERMISSION_SYNC_KEYS.items():
             role_obj = roles_by_name.get(str(role_name).strip().lower())
             if role_obj is None:
@@ -1364,7 +1383,9 @@ def sync_permissions() -> dict[str, int]:
                 if role_obj is None:
                     continue
                 roles_by_name[(role_obj.name or "").strip().lower()] = role_obj
-            for perm_key in sorted({str(key).strip().lower() for key in perm_keys if str(key).strip() and str(key).strip() != "*"}):
+            _raw = {str(key).strip().lower() for key in perm_keys if str(key).strip()}
+            _effective = set(_universe) if "*" in _raw else (_raw - {"*"})
+            for perm_key in sorted(_effective):
                 perm_obj = perms_by_key.get(perm_key)
                 if perm_obj is None:
                     perm_obj = Permission(key=perm_key, description=DEFAULT_PERMISSION_CATALOG.get(perm_key), created_at=now)
