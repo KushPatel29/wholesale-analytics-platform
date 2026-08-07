@@ -1,0 +1,17 @@
+pandas>=2.2
+numpy>=1.26
+pyodbc>=5.1
+SQLAlchemy>=2.0
+python-dotenv>=1.0
+pyarrow>=16.0
+fastparquet>=2024.5
+pytest>=8.0
+pytest-cov>=4.1
+pytest-mock>=3.14
+requests>=2.32
+mypy>=1.10
+types-requests>=2.32
+ruff>=0.6
+black>=24.8
+bandit>=1.7
+cachetools>=5.3

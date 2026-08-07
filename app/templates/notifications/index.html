@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+{% macro notif_field_label(control_id, label_text) -%}
+<label class="form-label small text-uppercase" for="{{ control_id }}">{{ label_text }}</label>
+{%- endmacro %}
+
+{% block filters_bar %}{% endblock %}
+
+{% block head_extras %}
+<style>
+  .notif-shell {
+    max-width: 1180px;
+    margin: 0 auto 2.5rem;
+  }
+  .notif-hero {
+    background:
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 36%),
+      linear-gradient(135deg, rgba(16, 46, 77, 0.98), rgba(9, 26, 45, 0.98));
+    border-radius: 1.35rem;
+    padding: 1.6rem;
+    color: #f8fbff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 54px rgba(4, 17, 31, 0.18);
+    margin-bottom: 1.5rem;
+  }
+  .notif-subtle {
+    color: rgba(248, 251, 255, 0.8);
+  }
+  .notif-section {
+    margin-bottom: 1.5rem;
+  }
+  .notif-card {
+    background: #ffffff;
+    border: 1px solid rgba(9, 26, 45, 0.08);
+    border-radius: 1rem;
+    box-shadow: 0 14px 32px rgba(9, 26, 45, 0.08);
+    padding: 1.2rem;
+    height: 100%;
+  }
+  .notif-card.config-ready {
+    background: linear-gradient(180deg, #ffffff, #f8fafc);
+  }
+  .notif-badge {
+    border-radius: 999px;
+    font-size: 0.72rem;
+    padding: 0.35rem 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+  .notif-badge.live {
+    background: rgba(22, 163, 74, 0.12);
+    color: #166534;
+  }
+  .notif-badge.config {
+    background: rgba(37, 99, 235, 0.12);
+    color: #1d4ed8;
+  }
+  .notif-badge.planned {
+    background: rgba(148, 163, 184, 0.16);
+    color: #475569;
+  }
+  .notif-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .notif-span-12 { grid-column: span 12; }
+  .notif-span-8 { grid-column: span 8; }
+  .notif-span-6 { grid-column: span 6; }
+  .notif-span-4 { grid-column: span 4; }
+  .notif-span-3 { grid-column: span 3; }
+  .notif-metric {
+    border-radius: 0.95rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.95rem 1rem;
+  }
+  .notif-kpi {
+    border-radius: 1rem;
+    background: #ffffff;
+    border: 1px solid rgba(9, 26, 45, 0.08);
+    box-shadow: 0 10px 24px rgba(9, 26, 45, 0.06);
+    padding: 1rem;
+  }
+  .notif-kpi-label {
+    color: #475569;
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .notif-kpi-value {
+    color: #0f172a;
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-top: 0.4rem;
+  }
+  .notif-detail-box {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 0.9rem;
+    padding: 0.85rem 0.95rem;
+    height: 100%;
+  }
+  .notif-detail-box dt {
+    color: #475569;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.2rem;
+  }
+  .notif-detail-box dd {
+    color: #0f172a;
+    margin: 0 0 0.7rem;
+    font-size: 0.92rem;
+  }
+  .notif-detail-box dd:last-child {
+    margin-bottom: 0;
+  }
+  .notif-threshold-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+  .notif-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .notif-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+  .notif-helper {
+    color: #64748b;
+    font-size: 0.85rem;
+  }
+  .notif-inline-note {
+    color: #64748b;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+  @media (max-width: 900px) {
+    .notif-span-8, .notif-span-6, .notif-span-4, .notif-span-3 { grid-column: span 12; }
+    .notif-threshold-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="notif-shell">
+  <section class="notif-hero">
+    <div class="d-flex flex-column flex-xl-row justify-content-between gap-3 align-items-xl-start">
+      <div>
+        <div class="text-uppercase small fw-semibold mb-2">Notifications & Alerts</div>
+        <h1 class="h3 mb-2">Alert controls that match your production scope</h1>
+        <div class="notif-subtle">
+          Configure every alert here, save thresholds per alert, and send sample emails on demand. The live runner executes only alert types marked as live-runner ready, while the rest are fully config-ready for rollout validation.
+        </div>
+      </div>
+      <div class="notif-actions">
+        <form method="post" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-light" type="submit" name="action" value="test_all_immediate" {% if not current_user.email %}disabled{% endif %}>Send all real-time samples</button>
+        </form>
+        <form method="post" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-light" type="submit" name="action" value="test_all_samples" {% if not current_user.email %}disabled{% endif %}>Send all samples</button>
+        </form>
+      </div>
+    </div>
+    <div class="notif-grid mt-4">
+      <div class="notif-span-3">
+        <div class="notif-metric">
+          <div class="small text-uppercase mb-1" style="opacity:.76;">Delivery target</div>
+          <div class="fw-semibold">{{ current_user.email or "No email on file" }}</div>
+          <div class="small mt-1" style="opacity:.72;">
+            {% if current_user.role == 'sales' %}
+            Sales users stay locked to “My customers only”.
+            {% else %}
+            Managers can switch between their own accounts and their full authorized scope.
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-metric">
+          <div class="small text-uppercase mb-1" style="opacity:.76;">Configured alerts</div>
+          <div class="fw-semibold">{{ notification_summary.enabled }} of {{ notification_summary.total }}</div>
+          <div class="small mt-1" style="opacity:.72;">Saved and ready for delivery rules.</div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-metric">
+          <div class="small text-uppercase mb-1" style="opacity:.76;">Live runner alerts</div>
+          <div class="fw-semibold">{{ notification_summary.live }}</div>
+          <div class="small mt-1" style="opacity:.72;">Evaluated by the hourly job today.</div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-metric">
+          <div class="small text-uppercase mb-1" style="opacity:.76;">Real-time sample set</div>
+          <div class="fw-semibold">{{ notification_summary.immediate }}</div>
+          <div class="small mt-1" style="opacity:.72;">Current alerts configured for immediate delivery.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notif-section">
+    <div class="notif-grid">
+      <div class="notif-span-3">
+        <div class="notif-kpi">
+          <div class="notif-kpi-label">Total alerts</div>
+          <div class="notif-kpi-value">{{ notification_summary.total }}</div>
+          <div class="notif-helper mt-2">Full catalog visible within your RBAC scope.</div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-kpi">
+          <div class="notif-kpi-label">Enabled now</div>
+          <div class="notif-kpi-value">{{ notification_summary.enabled }}</div>
+          <div class="notif-helper mt-2">These alerts will use your saved thresholds and delivery settings.</div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-kpi">
+          <div class="notif-kpi-label">Live runner</div>
+          <div class="notif-kpi-value">{{ notification_summary.live }}</div>
+          <div class="notif-helper mt-2">Actively evaluated by the background runner today.</div>
+        </div>
+      </div>
+      <div class="notif-span-3">
+        <div class="notif-kpi">
+          <div class="notif-kpi-label">Config-ready</div>
+          <div class="notif-kpi-value">{{ notification_summary.config_ready }}</div>
+          <div class="notif-helper mt-2">Fully configurable and sample-email ready for rollout validation.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% for section in notification_sections %}
+  <section class="notif-section">
+    <div class="notif-section-head">
+      <h2 class="h5 mb-0">{{ section["name"] }}</h2>
+      <div class="small text-muted">{{ section["items"]|length }} alert{{ '' if section["items"]|length == 1 else 's' }}</div>
+    </div>
+    <div class="notif-grid">
+      {% for item in section["items"] %}
+      {% set item_dom_id = ('notif-' ~ item.key)|replace('_', '-')|replace('.', '-')|replace(' ', '-')|replace('/', '-') %}
+      <div class="notif-span-6">
+        <div class="notif-card {% if not item.runner_supported %}config-ready{% endif %}">
+          <div class="d-flex justify-content-between gap-3 align-items-start mb-3">
+            <div>
+              <div class="fw-semibold">{{ item.name }}</div>
+              <div class="small text-muted mt-1">{{ item.description }}</div>
+            </div>
+            <div class="d-flex flex-column gap-2 align-items-end">
+              <span class="notif-badge {% if item.runner_supported %}live{% else %}config{% endif %}">
+                {{ "Live runner" if item.runner_supported else "Config ready" }}
+              </span>
+              <span class="notif-badge {% if item.enabled %}config{% else %}planned{% endif %}">
+                {{ "Enabled" if item.enabled else "Disabled" }}
+              </span>
+            </div>
+          </div>
+
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="type_key" value="{{ item.key }}">
+            <div class="notif-grid">
+              <div class="notif-span-12">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="{{ item_dom_id }}-enabled" name="{{ item.key }}_enabled" value="1" aria-label="{{ item.name }} alert enabled" {% if item.enabled %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="{{ item_dom_id }}-enabled">Alert enabled</label>
+                  </div>
+                  <div class="notif-inline-note">
+                    {{ "This alert can create live events now." if item.runner_supported else "This alert is saved and sample-email ready while runner rollout finishes." }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="notif-span-4">
+                {{ notif_field_label(item_dom_id ~ '-frequency', 'Frequency') }}
+                <select class="form-select" id="{{ item_dom_id }}-frequency" name="{{ item.key }}_frequency" aria-label="{{ item.name }} frequency" aria-describedby="{{ item_dom_id }}-frequency-help">
+                  <option value="immediate" {% if item.frequency == 'immediate' %}selected{% endif %}>Real-time</option>
+                  <option value="daily" {% if item.frequency == 'daily' %}selected{% endif %}>Daily digest</option>
+                  <option value="weekly" {% if item.frequency == 'weekly' %}selected{% endif %}>Weekly digest</option>
+                </select>
+                <div id="{{ item_dom_id }}-frequency-help" class="visually-hidden">
+                  Choose how often {{ item.name }} alerts are delivered.
+                </div>
+              </div>
+
+              <div class="notif-span-4">
+                {{ notif_field_label(item_dom_id ~ '-scope', 'Scope') }}
+                <select class="form-select" id="{{ item_dom_id }}-scope" name="{{ item.key }}_scope_mode" aria-label="{{ item.name }} scope" aria-describedby="{{ item_dom_id }}-scope-help">
+                  <option value="self" {% if item.scope_mode == 'self' %}selected{% endif %}>My customers only</option>
+                  <option value="rbac" {% if item.scope_mode == 'rbac' %}selected{% endif %} {% if current_user.role == 'sales' %}disabled{% endif %}>Authorized scope</option>
+                </select>
+                <div id="{{ item_dom_id }}-scope-help" class="visually-hidden">
+                  Scope controls whether this alert uses only your customers or your full authorized RBAC scope.
+                </div>
+              </div>
+
+              <div class="notif-span-4">
+                {{ notif_field_label(item_dom_id ~ '-cooldown-hours', 'Cooldown (hours)') }}
+                <input class="form-control" id="{{ item_dom_id }}-cooldown-hours" type="number" min="1" max="168" name="{{ item.key }}_cooldown_hours" value="{{ item.thresholds.cooldown_hours or 24 }}" aria-label="{{ item.name }} cooldown hours" aria-describedby="{{ item_dom_id }}-cooldown-help">
+                <div id="{{ item_dom_id }}-cooldown-help" class="visually-hidden">
+                  Minimum hours between repeated deliveries for {{ item.name }} alerts.
+                </div>
+              </div>
+
+              <div class="notif-span-8">
+                <div class="form-label small text-uppercase mb-2">Thresholds</div>
+                {% if item.threshold_fields %}
+                <div class="notif-threshold-grid">
+                  {% for field in item.threshold_fields %}
+                  {% set field_dom_id = item_dom_id ~ '-' ~ field.key|replace('_', '-') %}
+                  <div>
+                    {{ notif_field_label(field_dom_id, field.label) }}
+                    <input
+                      class="form-control"
+                      id="{{ field_dom_id }}"
+                      type="number"
+                      name="{{ field.input_name }}"
+                      value="{{ field.value }}"
+                      min="{{ field.min }}"
+                      max="{{ field.max }}"
+                      step="{{ field.step }}"
+                      aria-label="{{ item.name }} {{ field.label }}"
+                      aria-describedby="{{ field_dom_id }}-help"
+                    >
+                    <div id="{{ field_dom_id }}-help" class="visually-hidden">
+                      {{ field.label }} threshold used when evaluating {{ item.name }} alerts.
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="notif-detail-box">
+                  <div class="small text-muted">This alert only uses cooldown and scope. No extra thresholds are required.</div>
+                </div>
+                {% endif %}
+              </div>
+
+              <div class="notif-span-4">
+                <label class="form-label small text-uppercase">What this means</label>
+                <dl class="notif-detail-box mb-0">
+                  <dt>How it triggers</dt>
+                  <dd>{{ item.description }}</dd>
+                  <dt>Delivery behavior</dt>
+                  <dd>{{ "Live runner with dedupe and cooldown." if item.runner_supported else "Config-ready with sample-email support; runner evaluation activates when its scoped query ships." }}</dd>
+                  <dt>Scope applied</dt>
+                  <dd>{{ item.scope_label }}</dd>
+                </dl>
+              </div>
+            </div>
+
+            {% if not current_user.email %}
+            <div class="alert alert-warning mt-3 mb-0">
+              Your user record does not have an email address yet, so alerts cannot be delivered.
+            </div>
+            {% endif %}
+
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+              <button class="btn btn-primary" type="submit" name="action" value="save">Save settings</button>
+              <button class="btn btn-outline-success" type="submit" name="action" value="enable">Enable</button>
+              <button class="btn btn-outline-secondary" type="submit" name="action" value="disable">Disable</button>
+              <button class="btn btn-outline-dark" type="submit" name="action" value="test_email" {% if not current_user.email %}disabled{% endif %}>Send sample email</button>
+            </div>
+            <div class="notif-inline-note mt-2">
+              SMTP delivery uses the production relay only. Sample emails use your current thresholds and scope settings without touching live datasets.
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

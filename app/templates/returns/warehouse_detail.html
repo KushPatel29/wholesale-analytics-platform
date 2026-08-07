@@ -1,0 +1,53 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="returns-page py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-1">Warehouse: Return #{{ rma.id }}</h1>
+      <p class="text-muted mb-0">Current status: {{ rma.status_label }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_warehouse.scan') }}">Back to Scan</a>
+  </div>
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h5">Receive</h2>
+          <p class="text-muted">Mark the return as physically received before inspection.</p>
+          <form method="post" action="{{ url_for('returns_warehouse.receive', rma_id=rma.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-success" type="submit">Mark Received</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h5">Inspect</h2>
+          <form method="post" action="{{ url_for('returns_warehouse.inspect', rma_id=rma.id) }}" enctype="multipart/form-data" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label" for="disposition">Disposition</label>
+              <select class="form-select" id="disposition" name="disposition">
+                <option value="refund">Refund</option>
+                <option value="restock">Restock / Complete</option>
+                <option value="deny">Deny</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" for="notes">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+            </div>
+            <div>
+              <label class="form-label" for="photos">Photos</label>
+              <input class="form-control" id="photos" name="photos" type="file" multiple>
+            </div>
+            <button class="btn btn-primary" type="submit">Save Inspection</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

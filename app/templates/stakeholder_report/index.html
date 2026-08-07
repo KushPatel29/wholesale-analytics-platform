@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Vancouver Market Pulse | MTD Performance Audit | Wholesale Analytics{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260411-v20') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+<style>
+  #stakeholderReport {
+    --report-bg: #f4f7f9;
+    --report-ink: #111827;
+    --report-ink-soft: #4b5563;
+    --report-border: #e5e7eb;
+    --report-surface: rgba(255, 255, 255, 0.95);
+    --report-surface-dark: #0f172a;
+    --report-accent: #1e293b;
+    --report-primary: #0f172a;
+    --report-highlight: #3b82f6;
+    --report-success: #10b981;
+    --report-warning: #f59e0b;
+    --report-danger: #ef4444;
+    --report-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --report-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --report-shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    
+    background: var(--report-bg);
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(210,100%,97%,1) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(210,100%,97%,1) 0px, transparent 50%);
+    min-height: 100vh;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--report-ink);
+    line-height: 1.6;
+  }
+
+  .report-branding {
+    padding: 2.5rem 0 1rem 0;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.03) 0%, transparent 100%);
+  }
+
+  .report-branding h1 {
+    font-size: 2.25rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--report-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .report-branding p {
+    color: var(--report-ink-soft);
+    font-weight: 500;
+    font-size: 1.125rem;
+  }
+
+  .report-controls {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+    padding: 1rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: var(--report-shadow-sm);
+  }
+
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .control-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .control-label {
+    font-size: 0.55rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6b7280;
+  }
+
+  .control-select {
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    padding: 0.35rem 1.75rem 0.35rem 0.75rem;
+    background-color: #f3f4f6;
+    color: var(--report-ink);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1em 1em;
+    min-width: 130px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .control-select:hover {
+    background-color: #e5e7eb;
+  }
+
+  .report-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+  }
+
+  .workspace-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 3rem;
+  }
+
+  .report-nav {
+    position: sticky;
+    top: 6.5rem;
+    height: fit-content;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .report-nav-item {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--report-ink-soft);
+    text-decoration: none !important;
+    padding: 0.6rem 0.875rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-left: 2px solid transparent;
+  }
+
+  .report-nav-item i {
+    font-size: 1rem;
+    color: #9ca3af;
+    transition: transform 0.2s, color 0.2s;
+  }
+
+  .report-nav-item:hover {
+    background: rgba(255,255,255,0.6);
+    color: var(--report-ink);
+  }
+
+  .report-nav-item.active {
+    background: #ffffff;
+    color: var(--report-primary);
+    border-left-color: var(--report-highlight);
+    box-shadow: var(--report-shadow-sm);
+  }
+
+  .report-nav-item.active i { 
+    color: var(--report-highlight); 
+  }
+
+  .report-section {
+    margin-bottom: 4rem;
+    scroll-margin-top: 7rem;
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); filter: blur(2px); }
+    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--report-border);
+  }
+
+  .section-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+    display: block;
+  }
+
+  .section-title {
+    font-size: 1.75rem;
+    font-weight: 900;
+    color: var(--report-ink);
+    margin-bottom: 0;
+    letter-spacing: -0.03em;
+  }
+
+  .report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .report-card {
+    background: var(--report-surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.7);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: var(--report-shadow);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .report-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--report-shadow-lg);
+    border-color: rgba(255,255,255,1);
+  }
+
+  .report-card.dark-mode {
+    background: var(--report-surface-dark);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f8fafc;
+  }
+
+  .report-card.dark-mode .card-label { color: #94a3b8; }
+  .report-card.dark-mode .card-value { color: #ffffff; }
+  .report-card.dark-mode .text-muted { color: #94a3b8 !important; }
+
+  .card-label {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-value {
+    font-size: 2.25rem;
+    font-weight: 900;
+    color: var(--report-ink);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card-trend {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: #f3f4f6;
+  }
+
+  .trend-up { color: var(--report-success); background: #ecfdf5; }
+  .trend-down { color: var(--report-danger); background: #fef2f2; }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+  }
+
+  .exec-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .exec-table th {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #d1d5db;
+    background: transparent;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .exec-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: #374151;
+  }
+  
+  .exec-table tbody tr:hover td {
+    background: #f9fafb;
+  }
+
+  .exec-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .section-visibility-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .section-toggle {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 0.35rem 0.875rem;
+    border-radius: 2rem;
+    border: 1px solid #d1d5db;
+    background: rgba(255,255,255,0.8);
+    color: #4b5563;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .section-toggle:hover {
+    background: #ffffff;
+    color: var(--report-ink);
+  }
+
+  .section-toggle.active {
+    background: var(--report-primary);
+    color: white;
+    border-color: var(--report-primary);
+  }
+
+  .ai-insight-block {
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+  }
+
+  .ai-insight-block::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.8), transparent);
+  }
+
+  .status-badge {
+    font-size: 0.625rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.25rem;
+  }
+  .status-success { background: #dcfce7; color: #059669; }
+  .status-warning { background: #fef3c7; color: #d97706; }
+  .status-danger { background: #fee2e2; color: #dc2626; }
+  .status-info { background: #dbeafe; color: #2563eb; }
+
+  .report-shimmer {
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @media (max-width: 1024px) {
+    .workspace-layout { grid-template-columns: 1fr; }
+    .report-nav { display: none; }
+  }
+
+  @media print {
+    .report-controls, .report-nav, .navbar, .btn-print { display: none !important; }
+    .report-container { max-width: 100%; padding: 0; }
+    .report-section { page-break-inside: avoid; margin-bottom: 3rem; opacity: 1 !important; }
+    .workspace-layout { display: block; }
+    #stakeholderReport { background: white; }
+    .report-card, .ai-insight-block { box-shadow: none; border: 1px solid #e5e7eb; color: black; background: white; }
+    .ai-insight-block .text-white { color: black !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="stakeholderReport" class="is-loading" data-bundle-url="{{ url_for('bundles.stakeholder_report_bundle') }}">
+  
+  <div class="report-branding">
+    <h1>Vancouver Market Pulse</h1>
+    <p>MTD Performance Audit & BC Territory Diagnostics</p>
+  </div>
+
+  <!-- Config Layer -->
+  <div class="report-controls">
+    <div class="max-width-container d-flex justify-content-between align-items-center">
+      <div class="control-group">
+        <div class="control-item">
+          <span class="control-label">Perspective</span>
+          <select id="reportTypeSelect" class="control-select">
+            <option value="executive" selected>Executive Briefing</option>
+            <option value="sales">Sales Performance</option>
+            <option value="commercial">Commercial Review</option>
+            <option value="operational">Operational Mixed</option>
+            <option value="custom">Custom Configuration</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <span class="control-label">Audience Focus</span>
+          <select id="audienceSelect" class="control-select">
+            <option value="executive" selected>C-Suite / Leadership</option>
+            <option value="manager">Management Routine</option>
+            <option value="analyst">Deep Analytics</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <span class="control-label">Data Density</span>
+          <select id="detailSelect" class="control-select">
+            <option value="summary">Summary Insights</option>
+            <option value="standard" selected>Standard Reporting</option>
+            <option value="deep">Comprehensive</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="d-flex gap-2 align-items-center">
+        <span class="small text-muted fw-bold me-3" id="lastSyncTime"><i class="bi bi-arrow-repeat spin"></i> Syncing Live Models...</span>
+        <button class="btn btn-outline-dark btn-sm fw-bold px-3" id="savePresetBtn">
+          <i class="bi bi-bookmark-plus me-1"></i> SAVE VIEW
+        </button>
+        <button class="btn btn-dark btn-sm fw-bold px-3" onclick="window.print()">
+          <i class="bi bi-file-earmark-pdf me-1"></i> GENERATE PDF
+        </button>
+      </div>
+    </div>
+    
+    <!-- Section Toggles -->
+    <div id="sectionToggles" class="max-width-container mt-3 pt-3 border-top" style="display: none;">
+      <span class="control-label">Active Modules</span>
+      <div class="section-visibility-list" id="visibilityList">
+        <!-- Dynamic Toggle Buttons -->
+      </div>
+    </div>
+  </div>
+
+  <div class="report-container">
+    <div class="workspace-layout">
+      <!-- Sidebar Nav -->
+      <div>
+        <nav class="report-nav" id="reportStickyNav">
+          <span class="section-eyebrow ps-2 mb-2">Report Hierarchy</span>
+          <div id="dynamicNavItems">
+            <!-- Dynamic Nav Items -->
+          </div>
+        </nav>
+      </div>
+
+      <!-- Main Content -->
+      <div>
+        <div id="reportContent">
+          <!-- Sections will be rendered here dynamically -->
+          <div class="text-center py-5 mt-5">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h4 class="fw-bold">Synthesizing Wholesale Analytics Intelligence...</h4>
+            <p class="text-muted fw-bold small">Running AI models, formatting multidimensional arrays, and preparing visuals.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260414-v3"></script>
+{% endblock %}

@@ -1,0 +1,113 @@
+
+{% macro section_header(kicker, title, subtitle, description) -%}
+  <header class="labor-section-head">
+    <div class="labor-section-kicker">{{ kicker }}</div>
+    <div class="labor-section-title-row">
+      <div>
+        <h2 class="labor-section-title">{{ title }}</h2>
+        <div class="labor-section-subtitle">{{ subtitle }}</div>
+      </div>
+      <p class="labor-section-copy mb-0">{{ description }}</p>
+    </div>
+  </header>
+{%- endmacro %}
+
+{% macro metric_value(metric) -%}
+  {% set fmt = metric.format or 'text' %}
+  {% if fmt == 'currency' %}
+    {{ (metric.value|currency) if metric.value is not none else 'n/a' }}
+  {% elif fmt == 'percent' %}
+    {{ ('%0.1f%%'|format(metric.value * 100)) if metric.value is not none else 'n/a' }}
+  {% elif fmt == 'score' %}
+    {{ ('%0.0f'|format(metric.value)) if metric.value is not none else 'n/a' }}
+  {% elif fmt == 'integer' %}
+    {{ metric.value if metric.value is not none else 0 }}
+  {% elif fmt == 'number' %}
+    {{ ('%0.1f'|format(metric.value)) if metric.value is not none else 'n/a' }}
+  {% else %}
+    {{ metric.value if metric.value not in (none, '') else 'n/a' }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro metric_delta(metric) -%}
+  {% if metric.delta is not none %}
+    {% if metric.delta_format == 'points' %}
+      {{ '%+0.1f pts'|format(metric.delta * 100) }}
+    {% else %}
+      {{ '%+0.1f%%'|format(metric.delta * 100) }}
+    {% endif %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro metric_card(metric) -%}
+  <article class="labor-metric-card labor-metric-card-{{ metric.tone or 'default' }}">
+    <div class="labor-metric-label">{{ metric.label }}</div>
+    <div class="labor-metric-value">{{ metric_value(metric) }}</div>
+    <div class="labor-metric-definition">{{ metric.definition }}</div>
+    <div class="labor-metric-meta">
+      {% if metric.delta is not none %}
+        <span class="labor-delta labor-delta-{{ metric.tone or 'default' }}">{{ metric_delta(metric) }} {{ metric.delta_label or '' }}</span>
+      {% elif metric.note %}
+        <span class="labor-metric-note">{{ metric.note }}</span>
+      {% endif %}
+    </div>
+    {% if metric.note and metric.delta is not none %}
+      <div class="labor-metric-note mt-2">{{ metric.note }}</div>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% macro signal_card(signal) -%}
+  <article class="labor-signal-card labor-signal-card-{{ signal.tone or 'secondary' }}">
+    <div class="labor-signal-title">{{ signal.title }}</div>
+    <div class="labor-signal-copy">
+      <p><strong>What changed:</strong> {{ signal.what_changed }}</p>
+      <p><strong>Why it matters:</strong> {{ signal.why_it_matters }}</p>
+      <p><strong>Inspect next:</strong> {{ signal.inspect_next }}</p>
+    </div>
+    {% if signal.action_label and signal.action_url %}
+      <a class="labor-inline-action" href="{{ signal.action_url }}">{{ signal.action_label }}</a>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% macro mini_stat(label, value, hint=None, tone='default') -%}
+  <div class="labor-mini-stat labor-mini-stat-{{ tone }}">
+    <div class="labor-mini-stat__label">{{ label }}</div>
+    <div class="labor-mini-stat__value">{{ value }}</div>
+    {% if hint %}
+      <div class="labor-mini-stat__hint">{{ hint }}</div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro watchlist_panel(section) -%}
+  <article class="labor-watch-panel card border-0">
+    <div class="card-body">
+      <div class="labor-watch-panel__title">{{ section.title }}</div>
+      <div class="labor-watch-panel__subtitle">{{ section.subtitle }}</div>
+      {% if section.rows %}
+        <div class="labor-watch-items mt-3">
+          {% for row in section.rows %}
+            <div class="labor-watch-item labor-watch-item-{{ row.tone or 'warning' }}">
+              <div class="labor-watch-item__head">
+                <div>
+                  <div class="labor-watch-item__entity">{{ row.entity }}</div>
+                  <div class="labor-watch-item__scope">{{ row.scope_label }}</div>
+                </div>
+                <span class="labor-posture labor-posture-{{ row.tone or 'warning' }}">{{ row.risk_posture }}</span>
+              </div>
+              <div class="labor-watch-item__reason">{{ row.reason }}</div>
+              <div class="labor-watch-item__magnitude">{{ row.magnitude }}</div>
+              {% if row.action_label and row.action_url %}
+                <a class="labor-inline-action mt-2" href="{{ row.action_url }}">{{ row.action_label }}</a>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="labor-empty mt-3">{{ section.empty_message }}</div>
+      {% endif %}
+    </div>
+  </article>
+{%- endmacro %}

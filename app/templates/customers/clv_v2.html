@@ -1,0 +1,803 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+{% set clv = clv or {} %}
+{% set settings = clv.get('settings') or {} %}
+{% set filters_state = clv.get('filters') or {} %}
+{% set cards = clv.get('cards') or {} %}
+{% set concentration = clv.get('concentration') or {} %}
+{% set clv_at_risk = clv.get('clv_at_risk') or {} %}
+{% set margin_leverage = clv.get('margin_leverage') or {} %}
+{% set segment_summary = clv.get('segment_summary') or clv.get('segment_leaderboard') or [] %}
+{% set segment_playbooks = clv.get('segment_playbooks') or [] %}
+{% set leaderboard = clv.get('leaderboard') or clv.get('top') or [] %}
+{% set customers_table = clv.get('customers_table') or {} %}
+{% set charts = clv.get('charts') or {} %}
+{% set clv_defs = (definitions.get('clv') or {}) if definitions else {} %}
+
+{% macro fmt_currency(value) -%}
+  {% if value is not none and value == value %}
+    {{ value|currency }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_percent(value) -%}
+  {% if value is not none and value == value %}
+    {{ '%.1f'|format(value|float) }}%
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_int(value) -%}
+  {% if value is not none and value == value %}
+    {{ '{:,.0f}'.format(value|float) }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.rfm') }}">RFM</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link active" href="{{ url_for('customers.clv') }}">CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+</ul>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="CLV explained">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">CLV Explained</h2>
+    <span class="small text-muted">{{ settings.get('computed_window_note') or ('Computed using last ' ~ (settings.get('lookback_months') or 12) ~ ' months ending on ' ~ (settings.get('lookback_end') or 'n/a') ~ '.') }}</span>
+  </div>
+  <div class="card-body py-3">
+    <div class="row g-3 small">
+      <div class="col-12 col-lg-7">
+        <div><strong>Definition</strong>: {{ clv_defs.get('overview') or 'Expected gross profit over selected horizon using observed behavior.' }}</div>
+        <div><strong>Formula</strong>: {{ clv_defs.get('formula') or 'CLV = (AOV × Orders/Year × BasisFactor) × HorizonYears × RetentionFactor × DiscountFactor.' }}</div>
+        <div><strong>Inputs</strong>: AOV, Frequency, Margin basis, Retention model, Discount rate.</div>
+      </div>
+      <div class="col-12 col-lg-5">
+        <div><strong>Monetary basis</strong>: {{ settings.get('monetary_basis') or 'revenue' }}</div>
+        <div><strong>Retention model</strong>: {{ settings.get('retention_model') or 'simple' }}</div>
+        <div><strong>Score note</strong>: CLV values are non-negative and scoped to active filters + RBAC.</div>
+        {% if settings.get('monetary_caveat') %}
+        <div class="text-warning-emphasis"><strong>Cost coverage caveat</strong>: {{ settings.get('monetary_caveat') }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="CLV settings">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">CLV Settings</h2>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#clvSettingsPanel" aria-expanded="false" aria-controls="clvSettingsPanel">Configure</button>
+  </div>
+  <div id="clvSettingsPanel" class="collapse">
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-12 col-md-2">
+          <label for="clvLookback" class="form-label form-label-sm mb-1">Lookback (months)</label>
+          <select id="clvLookback" class="form-select form-select-sm" aria-label="CLV lookback months">
+            {% for m in [6, 12, 24, 36] %}
+            <option value="{{ m }}" {% if settings.get('lookback_months') == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="clvHorizon" class="form-label form-label-sm mb-1">Horizon (months)</label>
+          <select id="clvHorizon" class="form-select form-select-sm" aria-label="CLV horizon months">
+            {% for m in [6, 12, 24] %}
+            <option value="{{ m }}" {% if settings.get('horizon_months') == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="clvDiscountRate" class="form-label form-label-sm mb-1">Discount rate %</label>
+          <input id="clvDiscountRate" type="number" min="0" max="15" step="0.1" class="form-control form-control-sm" value="{{ settings.get('discount_rate_pct') if settings.get('discount_rate_pct') is not none else 8 }}" aria-label="CLV discount rate">
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="clvMonetaryBasis" class="form-label form-label-sm mb-1">Monetary basis</label>
+          <select id="clvMonetaryBasis" class="form-select form-select-sm" aria-label="CLV monetary basis">
+            <option value="gross_profit" {% if settings.get('requested_monetary_basis') in ['gross_profit', 'profit'] %}selected{% endif %}>Gross Profit</option>
+            <option value="revenue" {% if settings.get('requested_monetary_basis') == 'revenue' %}selected{% endif %}>Revenue</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="clvRetentionModel" class="form-label form-label-sm mb-1">Retention model</label>
+          <select id="clvRetentionModel" class="form-select form-select-sm" aria-label="CLV retention model">
+            <option value="simple" {% if settings.get('retention_model') != 'advanced' %}selected{% endif %}>Simple proxy</option>
+            <option value="advanced" {% if settings.get('retention_model') == 'advanced' %}selected{% endif %}>Advanced proxy</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="clvTopMode" class="form-label form-label-sm mb-1">Top list mode</label>
+          <select id="clvTopMode" class="form-select form-select-sm" aria-label="CLV top list mode">
+            <option value="clv" {% if settings.get('top_mode') != 'clv_at_risk' and settings.get('top_mode') != 'growth_potential' %}selected{% endif %}>Top by CLV</option>
+            <option value="clv_at_risk" {% if settings.get('top_mode') == 'clv_at_risk' %}selected{% endif %}>Top by CLV-at-risk</option>
+            <option value="growth_potential" {% if settings.get('top_mode') == 'growth_potential' %}selected{% endif %}>Top by Growth Potential</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button id="clvApplySettingsBtn" class="btn btn-sm btn-primary" type="button">Apply</button>
+        <button id="clvResetBtn" class="btn btn-sm btn-outline-secondary" type="button">Reset CLV Filters</button>
+      </div>
+      <div class="small text-muted mt-2">
+        Lookback: {{ settings.get('lookback_start') }} to {{ settings.get('lookback_end') }}. Prior window: {{ settings.get('prior_start') }} to {{ settings.get('prior_end') }}.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="CLV headline cards">
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">Customers in lookback</div><div class="h4 mb-0">{{ fmt_int(cards.get('customers_lookback')) }}</div><div class="small text-muted">Revenue: {{ fmt_currency(cards.get('revenue_lookback')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">Total CLV (12m)</div><div class="h4 mb-0">{{ fmt_currency(cards.get('total_clv')) }}</div><div class="small text-muted">Average: {{ fmt_currency(cards.get('avg_clv_12m')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">CLV at Risk</div><div class="h4 mb-0">{{ fmt_currency(clv_at_risk.get('total')) }}</div><div class="small text-muted">{{ fmt_percent(clv_at_risk.get('pct_total')) }} of total CLV</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">Repeat Rate</div><div class="h4 mb-0">{{ fmt_percent(cards.get('repeat_rate_lookback')) }}</div><div class="small text-muted">Reactivation: {{ fmt_percent(cards.get('reactivation_rate')) }}</div></div></div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="Enterprise CLV metrics">
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="small text-muted text-uppercase">CLV Concentration</div>
+        <div class="small">Top 1 share: <strong>{{ fmt_percent(concentration.get('top1_share_pct')) }}</strong></div>
+        <div class="small">Top 10 share: <strong>{{ fmt_percent(concentration.get('top10_share_pct')) }}</strong></div>
+        <div class="small">HHI: <strong>{{ fmt_int(concentration.get('hhi')) }}</strong></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="small text-muted text-uppercase">Margin Leverage</div>
+        <div class="small">Target margin: <strong>{{ fmt_percent(margin_leverage.get('target_margin_pct')) }}</strong></div>
+        <div class="small">Eligible accounts: <strong>{{ fmt_int(margin_leverage.get('eligible_customers')) }}</strong></div>
+        <div class="small">Estimated uplift: <strong>{{ fmt_currency(margin_leverage.get('estimated_uplift')) }}</strong></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="small text-muted text-uppercase">Risk & Opportunity</div>
+        <div class="small">Top segment by revenue: <strong>{{ cards.get('top_segment_by_revenue') or '—' }}</strong></div>
+        <div class="small">Top segment by growth: <strong>{{ cards.get('top_segment_by_growth') or '—' }}</strong></div>
+        <div class="small">At-risk revenue stake: <strong>{{ fmt_currency(cards.get('at_risk_revenue_stake')) }}</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Segment leaderboard">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">Segment Leaderboard</h2>
+    <a id="clvExportSegmentsBtn" class="btn btn-sm btn-outline-primary" href="#">Export Segment Summary</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Segment</th>
+          <th class="text-end">Customers</th>
+          <th class="text-end">Revenue</th>
+          {% if show_costs %}<th class="text-end">Profit</th>{% endif %}
+          <th class="text-end">Avg CLV</th>
+          <th class="text-end">Avg churn risk</th>
+          <th class="text-end">Share %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in segment_summary %}
+        {% if (row.get('customers') or 0) > 0 %}
+        <tr>
+          <td class="fw-semibold">{{ row.get('segment') }}</td>
+          <td class="text-end">{{ fmt_int(row.get('customers')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('revenue')) }}</td>
+          {% if show_costs %}<td class="text-end">{{ fmt_currency(row.get('profit')) }}</td>{% endif %}
+          <td class="text-end">{{ fmt_currency(row.get('avg_clv')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('churn_risk_avg')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('share_pct')) }}</td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No segment rows available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Top customers by selected mode">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">Top Customers by {{ settings.get('top_mode') or 'clv' }}</h2>
+    <a id="clvExportLeaderboardBtn" class="btn btn-sm btn-outline-primary" href="#">Export Leaderboard</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Customer</th>
+          <th>Segment</th>
+          <th class="text-end">CLV (12m)</th>
+          <th class="text-end">CLV at Risk</th>
+          <th class="text-end">Revenue</th>
+          <th class="text-end">Margin %</th>
+          <th class="text-end">Growth Potential</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in leaderboard %}
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+          <td>
+            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="small text-muted">{{ row.get('customer_id') }}</div>
+          </td>
+          <td>{{ row.get('segment') }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('clv_12m')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('clv_at_risk')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('revenue')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('margin_pct')) }}</td>
+          <td class="text-end">{{ fmt_percent((row.get('growth_potential_score') or 0) * 100) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No top customers for current settings.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="CLV charts row one">
+  <div class="col-12 col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">CLV Distribution</h2></div>
+      <div class="card-body">
+        <canvas id="clvDistributionChart" height="180" aria-label="CLV distribution"></canvas>
+        <div class="small text-muted mt-2">What this means: Understand concentration of customer value and long-tail potential.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">CLV vs Churn Risk</h2></div>
+      <div class="card-body">
+        <canvas id="clvChurnScatterChart" height="180" aria-label="CLV churn scatter"></canvas>
+        <div class="small text-muted mt-2">What this means: Identify high-value accounts with elevated churn probability.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="CLV charts row two">
+  <div class="col-12 col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">Gross Margin % by Top CLV Accounts</h2></div>
+      <div class="card-body">
+        <canvas id="clvMarginChart" height="180" aria-label="CLV margin bar chart"></canvas>
+        <div class="small text-muted mt-2">What this means: Highlights margin headroom on strategically important accounts.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white">
+        <h2 class="h6 mb-0">Revenue vs Orders (Bubble = CLV)</h2>
+        <div class="small text-muted">Quadrant lines use selected population medians. Click any point for drilldown.</div>
+      </div>
+      <div class="card-body">
+        <canvas id="clvRevenueOrdersChart" height="180" aria-label="Revenue orders bubble chart"></canvas>
+        <div class="small text-muted mt-2">What this means: Distinguish high-frequency and high-revenue account clusters.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Segment playbooks">
+  <div class="card-header bg-white"><h2 class="h6 mb-0">Segment Playbooks</h2></div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for play in segment_playbooks %}
+      <div class="col-12 col-xl-6">
+        <div class="border rounded p-3 h-100">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="fw-semibold">{{ play.get('segment') }}</div>
+              <div class="small text-muted">Goal: {{ play.get('goal') }}</div>
+            </div>
+            <div class="small text-muted">{{ fmt_int(play.get('customers')) }} customers</div>
+          </div>
+          <ul class="small mb-2">
+            {% for action in play.get('actions') or [] %}
+            <li>{{ action }}</li>
+            {% endfor %}
+          </ul>
+          <div class="small text-muted mb-1">Key accounts</div>
+          <div class="small">
+            {% for account in play.get('key_accounts') or [] %}
+              {% if account.get('url') %}<a href="{{ account.get('url') }}">{{ account.get('customer_name') or account.get('customer_id') }}</a>{% else %}{{ account.get('customer_name') or account.get('customer_id') }}{% endif %}
+              <span class="text-muted">({{ fmt_currency(account.get('clv_12m')) }})</span>{% if not loop.last %}, {% endif %}
+            {% else %}
+              <span class="text-muted">No key accounts in selection.</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12"><div class="text-muted small">No segment playbooks available for current filters.</div></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Customers in selection">
+  <div class="card-header bg-white">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="clvSearch" class="form-label small mb-1">Search customer</label>
+        <input id="clvSearch" class="form-control form-control-sm" value="{{ filters_state.get('search') or '' }}" aria-label="Search CLV customers">
+      </div>
+      <div class="col-12 col-md-3">
+        <label for="clvSegmentFilter" class="form-label small mb-1">Segments</label>
+        <select id="clvSegmentFilter" class="form-select form-select-sm" multiple aria-label="CLV segment filter">
+          {% for row in segment_summary %}
+          {% set seg_name = row.get('segment') %}
+          {% if seg_name %}
+          <option value="{{ seg_name }}" {% if seg_name in (filters_state.get('segments') or []) %}selected{% endif %}>{{ seg_name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="clvMinClv" class="form-label small mb-1">Min CLV</label>
+        <input id="clvMinClv" class="form-control form-control-sm" type="number" min="0" step="100" value="{{ filters_state.get('min_clv') or 0 }}" aria-label="Minimum CLV filter">
+      </div>
+      <div class="col-6 col-md-2">
+        <label for="clvSortBy" class="form-label small mb-1">Sort by</label>
+        <select id="clvSortBy" class="form-select form-select-sm" aria-label="CLV table sort">
+          <option value="clv_12m" {% if customers_table.get('sort_by') == 'clv_12m' %}selected{% endif %}>CLV (12m)</option>
+          <option value="clv_at_risk" {% if customers_table.get('sort_by') == 'clv_at_risk' %}selected{% endif %}>CLV at risk</option>
+          <option value="revenue" {% if customers_table.get('sort_by') == 'revenue' %}selected{% endif %}>Revenue</option>
+          <option value="profit" {% if customers_table.get('sort_by') == 'profit' %}selected{% endif %}>Profit</option>
+          <option value="margin_pct" {% if customers_table.get('sort_by') == 'margin_pct' %}selected{% endif %}>Margin %</option>
+          <option value="orders_per_year" {% if customers_table.get('sort_by') == 'orders_per_year' %}selected{% endif %}>Orders/year</option>
+          <option value="recency_days" {% if customers_table.get('sort_by') == 'recency_days' %}selected{% endif %}>Recency</option>
+          <option value="delta_revenue" {% if customers_table.get('sort_by') == 'delta_revenue' %}selected{% endif %}>Δ Revenue</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="clvSortDir" class="form-label small mb-1">Dir</label>
+        <select id="clvSortDir" class="form-select form-select-sm" aria-label="CLV sort direction">
+          <option value="desc" {% if customers_table.get('sort_dir') != 'asc' %}selected{% endif %}>Desc</option>
+          <option value="asc" {% if customers_table.get('sort_dir') == 'asc' %}selected{% endif %}>Asc</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="clvPageSize" class="form-label small mb-1">Rows</label>
+        <select id="clvPageSize" class="form-select form-select-sm" aria-label="CLV page size">
+          {% for n in [25, 50, 100] %}
+          <option value="{{ n }}" {% if customers_table.get('page_size') == n %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-5">
+        <div class="d-flex gap-2 flex-wrap">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="clvHighRiskOnly" {% if filters_state.get('high_risk_only') %}checked{% endif %}>
+            <label class="form-check-label small" for="clvHighRiskOnly">High risk only</label>
+          </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="clvLowMarginOnly" {% if filters_state.get('low_margin_only') %}checked{% endif %}>
+            <label class="form-check-label small" for="clvLowMarginOnly">Low margin only</label>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-7 d-flex gap-2 flex-wrap justify-content-md-end">
+        <button id="clvApplyTableBtn" class="btn btn-sm btn-primary" type="button">Apply</button>
+        <a id="clvExportCustomersXlsxBtn" class="btn btn-sm btn-success" href="#">Export Customers XLSX</a>
+        <a id="clvExportCustomersCsvBtn" class="btn btn-sm btn-outline-success" href="#">Export Customers CSV</a>
+        <a id="clvExportAtRiskBtn" class="btn btn-sm btn-outline-primary" href="#">Export At-Risk High Value</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm" aria-label="CLV customer table">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">Customers in Selection</h2>
+    <div class="small text-muted">Rows: {{ fmt_int(customers_table.get('total_rows')) }}</div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0 clv-table-v2">
+      <thead class="table-light position-sticky top-0">
+        <tr>
+          <th title="Customer name and ID">Customer</th>
+          <th title="CLV segment">Segment</th>
+          <th class="text-end" title="12-month CLV estimate">CLV (12m)</th>
+          <th class="text-end" title="CLV weighted by churn probability">CLV at risk</th>
+          <th class="text-end" title="Revenue in selected window">Revenue</th>
+          {% if show_costs %}<th class="text-end" title="Gross profit in selected window">Gross Profit</th>{% endif %}
+          <th class="text-end" title="Gross margin percent">Margin %</th>
+          <th class="text-end" title="Average order value">AOV</th>
+          <th class="text-end" title="Annualized order frequency">Orders/year</th>
+          <th class="text-end" title="Days since last order">Recency</th>
+          <th class="text-end" title="Last order date">Last order</th>
+          <th class="text-end" title="Revenue delta versus prior window">Δ Revenue</th>
+          <th class="text-end" title="Revenue delta percent versus prior window">Δ Revenue %</th>
+          <th class="text-end" title="Action">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in customers_table.get('rows') or [] %}
+        {% set risk_class = 'risk-low' if (row.get('risk_band') == 'Low') else ('risk-med' if (row.get('risk_band') == 'Medium') else 'risk-high') %}
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+          <td>
+            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="small text-muted">{{ row.get('customer_id') }}</div>
+          </td>
+          <td>
+            <span class="badge segment-badge">{{ row.get('segment') }}</span>
+            <span class="badge {{ risk_class }}">{{ row.get('risk_band') }}</span>
+          </td>
+          <td class="text-end fw-semibold">{{ fmt_currency(row.get('clv_12m')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('clv_at_risk')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('revenue')) }}</td>
+          {% if show_costs %}<td class="text-end">{{ fmt_currency(row.get('profit')) }}</td>{% endif %}
+          <td class="text-end">{{ fmt_percent(row.get('margin_pct')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('avg_order_value')) }}</td>
+          <td class="text-end">{{ '%.2f'|format(row.get('orders_per_year') or 0) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('recency_days')) }}</td>
+          <td class="text-end">{{ row.get('last_order_date') or '—' }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('delta_revenue')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('delta_revenue_pct')) }}</td>
+          <td class="text-end"><a href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="14" class="text-center text-muted py-4">No customers match current CLV filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="small text-muted">Page {{ customers_table.get('page') or 1 }} of {{ customers_table.get('total_pages') or 1 }}</div>
+    <div class="btn-group btn-group-sm">
+      <button id="clvPrevPageBtn" class="btn btn-outline-secondary" type="button" {% if (customers_table.get('page') or 1) <= 1 %}disabled{% endif %}>Prev</button>
+      <button id="clvNextPageBtn" class="btn btn-outline-secondary" type="button" {% if (customers_table.get('page') or 1) >= (customers_table.get('total_pages') or 1) %}disabled{% endif %}>Next</button>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.addEventListener("load", () => {
+  const q = new URLSearchParams(window.location.search);
+  const tablePayload = {{ ((clv.get('customers_table') or {}) | tojson) }};
+  const clvDist = {{ (((clv.get('charts') or {}).get('clv_distribution') or []) | tojson) }};
+  const clvChurn = {{ ((((clv.get('charts') or {}).get('clv_vs_churn') or {}).get('points') or []) | tojson) }};
+  const revOrders = {{ ((((clv.get('charts') or {}).get('revenue_orders') or {}).get('points') or []) | tojson) }};
+  const revOrdersQuadrants = {{ ((((clv.get('charts') or {}).get('revenue_orders') or {}).get('quadrants') or {}) | tojson) }};
+  const marginTop = {{ ((((clv.get('charts') or {}).get('margin_top_customers') or {}) | tojson)) }};
+
+  const pageNum = Number(tablePayload.page || 1);
+  const totalPages = Number(tablePayload.total_pages || 1);
+
+  const setParam = (key, value) => {
+    const text = (value ?? "").toString().trim();
+    if (!text) q.delete(key);
+    else q.set(key, text);
+  };
+
+  const selectedSegments = () => {
+    const sel = document.getElementById("clvSegmentFilter");
+    if (!sel) return "";
+    const vals = Array.from(sel.selectedOptions || []).map((o) => o.value).filter(Boolean);
+    return vals.join(",");
+  };
+
+  const applyControls = ({ reset = false, keepPage = false } = {}) => {
+    const keys = [
+      "clv_lookback_months", "clv_horizon_months", "clv_discount_rate", "clv_monetary_basis", "clv_retention_model",
+      "clv_top_mode", "clv_scatter_mode", "clv_search", "clv_segments", "clv_min_clv", "clv_high_risk_only",
+      "clv_low_margin_only", "clv_sort_by", "clv_sort_dir", "clv_page_size", "clv_page"
+    ];
+    if (reset) {
+      keys.forEach((k) => q.delete(k));
+      window.location.search = q.toString();
+      return;
+    }
+
+    setParam("clv_lookback_months", document.getElementById("clvLookback")?.value);
+    setParam("clv_horizon_months", document.getElementById("clvHorizon")?.value);
+    setParam("clv_discount_rate", document.getElementById("clvDiscountRate")?.value);
+    setParam("clv_monetary_basis", document.getElementById("clvMonetaryBasis")?.value);
+    setParam("clv_retention_model", document.getElementById("clvRetentionModel")?.value);
+    setParam("clv_top_mode", document.getElementById("clvTopMode")?.value);
+    setParam("clv_search", document.getElementById("clvSearch")?.value);
+    setParam("clv_segments", selectedSegments());
+    setParam("clv_min_clv", document.getElementById("clvMinClv")?.value);
+    setParam("clv_sort_by", document.getElementById("clvSortBy")?.value);
+    setParam("clv_sort_dir", document.getElementById("clvSortDir")?.value);
+    setParam("clv_page_size", document.getElementById("clvPageSize")?.value);
+
+    if (document.getElementById("clvHighRiskOnly")?.checked) q.set("clv_high_risk_only", "1");
+    else q.delete("clv_high_risk_only");
+    if (document.getElementById("clvLowMarginOnly")?.checked) q.set("clv_low_margin_only", "1");
+    else q.delete("clv_low_margin_only");
+
+    if (!keepPage) q.set("clv_page", "1");
+    window.location.search = q.toString();
+  };
+
+  document.getElementById("clvApplySettingsBtn")?.addEventListener("click", () => applyControls({ reset: false }));
+  document.getElementById("clvApplyTableBtn")?.addEventListener("click", () => applyControls({ reset: false }));
+  document.getElementById("clvResetBtn")?.addEventListener("click", () => applyControls({ reset: true }));
+
+  document.getElementById("clvPrevPageBtn")?.addEventListener("click", () => {
+    const next = Math.max(1, pageNum - 1);
+    q.set("clv_page", String(next));
+    window.location.search = q.toString();
+  });
+  document.getElementById("clvNextPageBtn")?.addEventListener("click", () => {
+    const next = Math.min(totalPages, pageNum + 1);
+    q.set("clv_page", String(next));
+    window.location.search = q.toString();
+  });
+
+  const buildExportUrl = (type, format) => {
+    const p = new URLSearchParams(window.location.search);
+    p.set("type", type);
+    p.set("format", format);
+    return "{{ url_for('customers.clv_export_alias') }}?" + p.toString();
+  };
+  const eCustomersXlsx = document.getElementById("clvExportCustomersXlsxBtn");
+  const eCustomersCsv = document.getElementById("clvExportCustomersCsvBtn");
+  const eSegments = document.getElementById("clvExportSegmentsBtn");
+  const eAtRisk = document.getElementById("clvExportAtRiskBtn");
+  const eLeaderboard = document.getElementById("clvExportLeaderboardBtn");
+  if (eCustomersXlsx) eCustomersXlsx.href = buildExportUrl("customers", "xlsx");
+  if (eCustomersCsv) eCustomersCsv.href = buildExportUrl("customers", "csv");
+  if (eSegments) eSegments.href = buildExportUrl("segments", "xlsx");
+  if (eAtRisk) eAtRisk.href = buildExportUrl("at_risk", "xlsx");
+  if (eLeaderboard) eLeaderboard.href = buildExportUrl("leaderboard", "xlsx");
+
+  document.querySelectorAll(".table-row-click").forEach((row) => {
+    const href = row.getAttribute("data-href");
+    if (!href) return;
+    row.addEventListener("click", () => (window.location.href = href));
+    row.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        window.location.href = href;
+      }
+    });
+  });
+
+  if (typeof Chart === "undefined") return;
+
+  const segmentColor = (segment) => {
+    const palette = {
+      "Whales": "#0f4c81",
+      "High Value": "#1f7a8c",
+      "Growth": "#2f9e44",
+      "At Risk High Value": "#c92a2a",
+      "Low Value / Nurture": "#6c757d"
+    };
+    return palette[segment] || "#607d8b";
+  };
+
+  const distCanvas = document.getElementById("clvDistributionChart");
+  if (distCanvas && Array.isArray(clvDist) && clvDist.length) {
+    new Chart(distCanvas, {
+      type: "bar",
+      data: {
+        labels: clvDist.map((d) => `${Math.round(Number(d.bin_start || 0)).toLocaleString()}-${Math.round(Number(d.bin_end || 0)).toLocaleString()}`),
+        datasets: [{ label: "Customers", data: clvDist.map((d) => Number(d.count || 0)), backgroundColor: "#345995" }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+
+  const churnCanvas = document.getElementById("clvChurnScatterChart");
+  if (churnCanvas && Array.isArray(clvChurn) && clvChurn.length) {
+    const points = clvChurn.map((p) => ({
+      x: Number(p.x || 0),
+      y: Number(p.y || 0),
+      customer_name: p.customer_name,
+      customer_id: p.customer_id,
+      segment: p.segment,
+      revenue: Number(p.revenue || 0),
+      clv_12m: Number(p.clv_12m || 0),
+      risk_band: p.risk_band,
+      url: p.url,
+      r: Math.max(3, Math.min(14, Math.sqrt(Number(p.bubble || 0)) / 30))
+    }));
+
+    new Chart(churnCanvas, {
+      type: "bubble",
+      data: {
+        datasets: [{
+          label: "Customers",
+          data: points,
+          backgroundColor: points.map((p) => segmentColor(p.segment)),
+          borderColor: "rgba(255,255,255,0.7)",
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        parsing: false,
+        scales: {
+          x: { title: { display: true, text: "CLV (12m)" }, ticks: { callback: (v) => "$" + Number(v).toLocaleString() } },
+          y: { title: { display: true, text: "Churn Risk %" } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const p = context.raw || {};
+                return `${p.customer_name || p.customer_id} | ${p.segment} | CLV ${Number(p.clv_12m || 0).toLocaleString()} | Revenue ${Number(p.revenue || 0).toLocaleString()} | ${p.risk_band || ""}`;
+              }
+            }
+          }
+        },
+        onClick(_evt, elements, chart) {
+          if (!elements || !elements.length) return;
+          const idx = elements[0].index;
+          const point = chart.data.datasets[0].data[idx];
+          if (point && point.url) window.location.href = point.url;
+        }
+      }
+    });
+  }
+
+  const marginCanvas = document.getElementById("clvMarginChart");
+  const marginLabels = Array.isArray(marginTop.labels) ? marginTop.labels : [];
+  const marginValues = Array.isArray(marginTop.values) ? marginTop.values : [];
+  if (marginCanvas && marginLabels.length && marginValues.length) {
+    const colors = marginValues.map((v) => {
+      if (v >= 27) return "#2f9e44";
+      if (v >= 18) return "#f08c00";
+      return "#c92a2a";
+    });
+    new Chart(marginCanvas, {
+      type: "bar",
+      data: {
+        labels: marginLabels,
+        datasets: [{ label: "Margin %", data: marginValues, backgroundColor: colors }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { callback: (v) => Number(v).toLocaleString() + "%" } } }
+      }
+    });
+  }
+
+  const revOrdersCanvas = document.getElementById("clvRevenueOrdersChart");
+  if (revOrdersCanvas && Array.isArray(revOrders) && revOrders.length) {
+    const points = revOrders.map((p) => ({
+      x: Number(p.x || 0),
+      y: Number(p.y || 0),
+      customer_name: p.customer_name,
+      customer_id: p.customer_id,
+      segment: p.segment,
+      clv_12m: Number(p.clv_12m || 0),
+      revenue: Number(p.revenue || 0),
+      margin_pct: Number(p.margin_pct || 0),
+      risk_band: p.risk_band,
+      url: p.url,
+      r: Math.max(3, Math.min(14, Math.sqrt(Number(p.bubble || 0)) / 20))
+    }));
+
+    const revenueMedian = Number(revOrdersQuadrants.revenue_median || 0);
+    const ordersMedian = Number(revOrdersQuadrants.orders_median || 0);
+
+    const quadrantPlugin = {
+      id: "clvQuadrants",
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales?.x || !scales?.y) return;
+        const xPixel = scales.x.getPixelForValue(revenueMedian);
+        const yPixel = scales.y.getPixelForValue(ordersMedian);
+        ctx.save();
+        ctx.strokeStyle = "rgba(108,117,125,0.75)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xPixel, chartArea.top);
+        ctx.lineTo(xPixel, chartArea.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPixel);
+        ctx.lineTo(chartArea.right, yPixel);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+
+    new Chart(revOrdersCanvas, {
+      type: "bubble",
+      data: {
+        datasets: [{
+          label: "Customers",
+          data: points,
+          backgroundColor: points.map((p) => segmentColor(p.segment)),
+          borderColor: "rgba(255,255,255,0.7)",
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        parsing: false,
+        scales: {
+          x: { title: { display: true, text: "Revenue" }, ticks: { callback: (v) => "$" + Number(v).toLocaleString() } },
+          y: { title: { display: true, text: "Orders" } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const p = context.raw || {};
+                return `${p.customer_name || p.customer_id} | ${p.segment} | Rev ${Number(p.revenue || 0).toLocaleString()} | Orders ${context.raw?.y || 0} | CLV ${Number(p.clv_12m || 0).toLocaleString()} | Margin ${Number(p.margin_pct || 0).toFixed(1)}%`;
+              }
+            }
+          }
+        },
+        onClick(_evt, elements, chart) {
+          if (!elements || !elements.length) return;
+          const idx = elements[0].index;
+          const point = chart.data.datasets[0].data[idx];
+          if (point && point.url) window.location.href = point.url;
+        }
+      },
+      plugins: [quadrantPlugin]
+    });
+  }
+});
+</script>
+<style>
+:root {
+  --clv-primary: #1f4e79;
+  --clv-secondary: #2f6f95;
+  --clv-accent: #0f766e;
+  --clv-warn: #f08c00;
+  --clv-danger: #c92a2a;
+  --clv-muted: #6c757d;
+  --clv-surface: #f7f9fb;
+}
+
+.segment-badge {
+  background: rgba(31, 78, 121, 0.12);
+  color: var(--clv-primary);
+  font-weight: 600;
+}
+
+.risk-low { background: rgba(47, 158, 68, 0.14); color: #2f9e44; }
+.risk-med { background: rgba(240, 140, 0, 0.14); color: var(--clv-warn); }
+.risk-high { background: rgba(201, 42, 42, 0.14); color: var(--clv-danger); }
+
+.clv-table-v2 tbody tr:nth-child(even) {
+  background-color: var(--clv-surface);
+}
+
+.table-row-click:focus {
+  outline: 2px solid var(--clv-secondary);
+  outline-offset: -2px;
+}
+</style>
+{% endblock %}

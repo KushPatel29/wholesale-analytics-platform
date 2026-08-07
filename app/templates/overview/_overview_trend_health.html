@@ -1,0 +1,36 @@
+<section class="overview-panel" id="trendDiagnosticsCard">
+  <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="panel-eyebrow">Trend diagnostics</div>
+      <h2 class="panel-title">Revenue baseline with diagnostic overlays</h2>
+      <div class="panel-subtitle">This is the core diagnostic workspace for time-series behavior, with clear controls for trading cadence, sparse windows, and overlay context.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="btn-group btn-group-sm" role="group" id="trendFreqToggle" aria-label="Trend frequency">
+        <button type="button" class="btn btn-outline-secondary active" data-trend-freq="monthly">Monthly</button>
+        <button type="button" class="btn btn-outline-secondary" data-trend-freq="weekly">Weekly</button>
+      </div>
+      <label class="small text-muted mb-0" for="trendOverlayMetric">Overlay</label>
+      <select id="trendOverlayMetric" class="form-select form-select-sm w-auto" aria-label="Overlay metric">
+        <option value="profit">Profit</option>
+        <option value="margin_pct">Margin %</option>
+        <option value="units">Units</option>
+      </select>
+      <div class="form-check form-check-inline mb-0">
+        <input class="form-check-input" type="checkbox" id="trendRollingToggle" checked>
+        <label class="form-check-label small" for="trendRollingToggle">Rolling Avg</label>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" id="trendExportBtn" type="button">Export</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="trend-meta-row">
+      <div class="summary" id="trendSummaryText">Monthly revenue baseline with profit overlay and rolling average.</div>
+      <div class="summary" id="trendSparseText">Window diagnostics will appear after data loads.</div>
+    </div>
+    <div class="chart-placeholder" aria-label="Trend chart">
+      <div id="trendEmpty" class="text-muted text-center py-5 d-none">No data for selected window or filters.</div>
+      <canvas id="trendChart" width="400" height="340"></canvas>
+    </div>
+  </div>
+</section>

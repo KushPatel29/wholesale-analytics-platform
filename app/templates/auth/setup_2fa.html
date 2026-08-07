@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h2 class="mb-3">Two-Factor Authentication</h2>
+
+    {% if enabled %}
+      <div class="alert alert-success">2FA is already enabled for your account.</div>
+    {% else %}
+      <p>Scan the QR code below with your authenticator app (e.g., Google Authenticator, Authy) or enter the secret manually.</p>
+
+      {% if ascii_qr %}
+        <pre style="line-height: 0.9; font-size: 10px; background: #111; color: #0f0; padding: 8px;">
+{{ ascii_qr }}
+        </pre>
+      {% else %}
+        <div class="alert alert-info">
+          QR code generation not available. Use the secret or URI below in your app.
+        </div>
+      {% endif %}
+
+      <div class="mb-2"><strong>Secret:</strong> <code>{{ secret }}</code></div>
+      <div class="mb-3"><strong>URI:</strong> <code style="word-break: break-all;">{{ otpauth_uri }}</code></div>
+
+      <form method="post" action="{{ url_for('auth.confirm_2fa') }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.totp_code.label(class='form-label') }}
+          {{ form.totp_code(class='form-control', autocomplete='one-time-code', placeholder='123456') }}
+        </div>
+        <div class="d-grid">
+          {{ form.submit(class='btn btn-primary') }}
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+

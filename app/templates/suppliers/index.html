@@ -1,0 +1,347 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+
+<div id="SuppliersApp"
+     class="container-fluid py-4 bg-light"
+     data-page="suppliers"
+     data-bundle-url="{{ url_for('bundles.suppliers_bundle') }}"
+     data-show-costs="{{ show_costs|tojson }}">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-3">
+    <div class="col">
+      <h2 class="mb-0">Suppliers Overview</h2>
+      <div class="text-muted small">Aggregated across your current filters</div>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a id="suppliersExportXlsx"
+         class="btn btn-sm btn-success-subtle border-success"
+         href="{{ url_for('bundles.suppliers_export_xlsx') }}"
+         title="Download overview (KPIs, Trend, Top, Table) as Excel">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Excel
+      </a>
+      <a id="suppliersExportCsv"
+         class="btn btn-sm btn-secondary-subtle border-secondary"
+         href="{{ url_for('bundles.suppliers_export_csv') }}"
+         title="Download table as CSV">
+        <i class="bi bi-filetype-csv me-1"></i> Export CSV
+      </a>
+    </div>
+  </div>
+
+  {% if error_message %}
+  <div class="alert alert-warning border-warning shadow-sm" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+  </div>
+  {% endif %}
+
+  <!-- KPI Cards -->
+  <div class="row g-3 mb-3" aria-live="polite">
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-cash-coin me-1"></i>Total Revenue</div>
+          <div class="fs-4 fw-bold" id="kpiRevenue">{{ (kpis.total_revenue if kpis else 0)|currency }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-buildings me-1"></i>Suppliers</div>
+          <div class="fs-4 fw-bold" id="kpiSuppliers">{{ (kpis.total_suppliers if kpis else 0)|int }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-bag-check me-1"></i>Avg Order Value</div>
+          <div class="fs-4 fw-bold" id="kpiAOV">{{ (kpis.avg_order_value if kpis else 0)|currency }}</div>
+        </div>
+      </div>
+    </div>
+    {% if show_costs %}
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-activity me-1"></i>Avg Margin %</div>
+          <div class="fs-4 fw-bold" id="kpiMargin">
+            {% if kpis and kpis.avg_margin is not none %}{{ '%.1f'|format(kpis.avg_margin) }}%{% else %}<span class="text-muted">n/a</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-bullseye me-1"></i>HHI (Market Conc.)</div>
+          <div class="fs-4 fw-bold" id="kpiHHI">{{ (kpis.concentration_hhi if kpis else 0)|round(0) }}</div>
+          <div class="text-muted small">0–10,000 (higher = concentrated)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-graph-up-arrow me-1"></i>Top1 / Top5 Share</div>
+          <div class="fs-6 fw-bold">
+            <span id="kpiTop1">{{ (kpis.concentration_top1_share if kpis else 0)|round(1) }}%</span>
+            <span class="text-muted">·</span>
+            <span id="kpiTop5">{{ (kpis.concentration_top5_share if kpis else 0)|round(1) }}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts: Trend + Top Suppliers -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-7">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Revenue Trend (Last 12 Months)</h5>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" type="button"
+              onclick="ExportKit.exportArrayToCSV('supplier_trend', trendLabels, trendValues, 'Month', 'Revenue')">
+              CSV
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="trendChart" class="chart-container skeleton" aria-label="Supplier revenue trend">
+            <div class="loading shimmer"></div>
+          </div>
+          {% if not trend_labels or trend_labels|length == 0 %}
+            <p class="text-muted small mt-2 mb-0">No monthly revenue available in the current window.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Top Suppliers by Revenue</h5>
+          <div class="btn-group btn-group-sm">
+            <a class="btn btn-outline-secondary" href="{{ url_for('suppliers.export_overview', format='csv') }}">CSV</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="topSuppliersChart" class="chart-container skeleton" aria-label="Top suppliers by revenue">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table + controls -->
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+            <h5 class="card-title mb-0">Suppliers — Current Filters</h5>
+            <div class="d-flex gap-2 align-items-center">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="search" class="form-control" id="tableSearch" placeholder="Search supplier…" aria-label="Search suppliers">
+                <button class="btn btn-outline-secondary" id="btnClearSearch" title="Clear search">Clear</button>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" type="button"
+                      onclick="ExportKit.exportTableToCSV('supTable','suppliers_table')">
+                CSV (Client)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-body pt-2">
+          <div class="table-responsive position-relative">
+            <div id="tableOverlay" class="loading-overlay d-none" aria-live="polite" aria-busy="true">
+              <div class="spinner-border" role="status" aria-label="Loading"></div>
+            </div>
+
+            <table id="supTable" class="table table-striped table-hover align-middle table-suppliers">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th class="sortable" data-key="SupplierName" scope="col">Supplier</th>
+                  <th class="text-end sortable" data-key="Revenue" scope="col">Revenue</th>
+                  <th class="text-end sortable" data-key="Cost" scope="col">Cost</th>
+                  <th class="text-end sortable" data-key="Profit" scope="col">Profit</th>
+                  <th class="text-end sortable" data-key="MarginPct" scope="col">Margin %</th>
+                  <th class="text-end sortable" data-key="ROIPct" scope="col">ROI %</th>
+                  <th class="text-end sortable" data-key="Units" scope="col">Units</th>
+                  <th class="text-end sortable" data-key="WeightLb" scope="col">Weight (lb)</th>
+                  <th class="text-end sortable" data-key="AvgSalePricePerLb" scope="col">Avg Sale Price / lb</th>
+                  <th class="text-end sortable" data-key="AvgCostPerUnit" scope="col">Avg Cost / Unit</th>
+                  <th class="text-end sortable" data-key="AvgCostPerLb" scope="col">Avg Cost / lb</th>
+                  <th class="text-end sortable" data-key="ProfitPerUnit" scope="col">Profit / Unit</th>
+                  <th class="text-end sortable" data-key="ProfitPerLb" scope="col">Profit / lb</th>
+                  <th class="text-end sortable" data-key="Products" scope="col">Products</th>
+                  <th class="text-end sortable" data-key="Orders" scope="col">Orders</th>
+                  <th class="sortable" data-key="LastSold" scope="col">Last Sold</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="supTbody">
+                {% for row in (table_rows or []) %}
+                <tr>
+                  <td class="text-truncate" style="max-width: 360px;" title="{{ row.SupplierName or ('Supplier ' ~ row.SupplierId) }}">
+                    <a class="text-decoration-none link-primary" href="{{ url_for('suppliers.drilldown', supplier_id=row.SupplierId) }}">
+                      {{ row.SupplierName or ('Supplier ' ~ row.SupplierId) }}
+                    </a>
+                  </td>
+                  <td class="num">{{ row.Revenue|currency }}</td>
+                  {% set cost = row.get('Cost') %}
+                  {% set profit = row.get('Profit') %}
+                  {% set margin = row.get('MarginPct') %}
+                  {% set roi = row.get('ROIPct') %}
+                  {% set avg_cost_unit = row.get('AvgCostPerUnit') %}
+                  {% set avg_cost_lb = row.get('AvgCostPerLb') %}
+                  {% set profit_per_unit = row.get('ProfitPerUnit') %}
+                  {% set profit_per_lb = row.get('ProfitPerLb') %}
+                  {% set units = row.get('Units') %}
+                  {% set weight = row.get('WeightLb') %}
+                  <td class="num">
+                    {% if show_costs and cost is not none and cost == cost %}
+                      {{ cost|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and profit is not none and profit == profit %}
+                      {{ profit|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and margin is not none and margin == margin %}
+                      {{ '%.1f'|format(margin) }}%
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and roi is not none and roi == roi %}
+                      {{ '%.1f'|format(roi) }}%
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="num">
+                    {% if units is not none and units == units %}
+                      {{ units|intcomma }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if weight is not none and weight == weight %}
+                      {{ weight|intcomma }}
+                    {% else %}—{% endif %}
+                  </td>
+                  {% set avg_sale_lb = row.get('AvgSalePricePerLb') %}
+                  <td class="num">{{ avg_sale_lb is not none and avg_sale_lb == avg_sale_lb and avg_sale_lb|currency or '—' }}</td>
+                  <td class="num">
+                    {% if show_costs and avg_cost_unit is not none and avg_cost_unit == avg_cost_unit %}
+                      {{ avg_cost_unit|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and avg_cost_lb is not none and avg_cost_lb == avg_cost_lb %}
+                      {{ avg_cost_lb|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and profit_per_unit is not none and profit_per_unit == profit_per_unit %}
+                      {{ profit_per_unit|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if show_costs and profit_per_lb is not none and profit_per_lb == profit_per_lb %}
+                      {{ profit_per_lb|currency }}
+                    {% else %}—{% endif %}
+                  </td>
+                  {% set products = row.get('Products') %}
+                  <td class="num">
+                    {% if products is not none and products == products %}
+                      {{ products|intcomma }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="num">{{ row.Orders|intcomma }}</td>
+                  <td>{{ row.LastSold or '—' }}</td>
+                  <td>
+                    <a class="btn btn-sm btn-outline-secondary"
+                       href="{{ url_for('bundles.suppliers_products_export_csv', supplier_id=row.SupplierId) }}">Export Products</a>
+                  </td>
+                </tr>
+                {% endfor %}
+                {% if not table_rows or table_rows|length == 0 %}
+                <tr><td colspan="17" class="text-center text-muted">No suppliers for current filters.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+
+            <!-- Infinite scroll sentinel -->
+            <div id="infiniteSentinel" class="w-100" style="height:1px;"></div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <div id="tableStatus" class="text-muted small" aria-live="polite"></div>
+            <div class="d-flex gap-2">
+              <span class="text-muted small me-2" id="tableCount"></span>
+              <button id="loadMore" class="btn btn-sm btn-outline-secondary">Load more</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ======= Scripts ======= -->
+<script src="{{ url_for('static', filename='js/suppliers.js') }}" defer></script>
+
+<style>
+  :root{
+    --soft-shadow: 0 8px 20px rgba(0,0,0,.08);
+  }
+  .kpi-card .fs-4{ font-size: clamp(1.25rem, 2vw, 1.5rem)!important; }
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform .15s ease-in-out, box-shadow .15s ease-in-out; }
+    .card:hover { transform: translateY(-2px); box-shadow: var(--soft-shadow); }
+  }
+  .chart-container { width: 100%; min-height: 380px; position: relative; }
+  .table-suppliers th { position: sticky; top: 0; background: var(--bs-body-bg,#fff); z-index: 1; cursor: pointer; }
+  .table-suppliers th.asc::after { content: ' ↑'; }
+  .table-suppliers th.desc::after { content: ' ↓'; }
+  .table-suppliers td, .table-suppliers th { white-space: nowrap; }
+  .table-suppliers td.num { text-align: right; }
+
+  /* Skeleton loader for charts */
+  .skeleton { background: #f6f7f8; position: relative; overflow: hidden; border-radius: .25rem; }
+  .skeleton .loading.shimmer {
+    position:absolute; inset:0;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+    transform: translateX(-100%);
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+  /* Loading overlay for table */
+  .loading-overlay{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,.6); z-index: 5;
+  }
+
+  /* Subtle themed buttons (fallback if Bootstrap utilities missing) */
+  .btn-success-subtle{ background: #e9f7ef; color:#198754; }
+  .btn-secondary-subtle{ background: #eef1f6; color:#495057; }
+  .btn-success-subtle:hover{ background:#dff3e7; }
+  .btn-secondary-subtle:hover{ background:#e7ebf3; }
+</style>
+{% endblock %}
+
+
+

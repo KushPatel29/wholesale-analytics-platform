@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+<div id="RegionDrilldownMeta"
+     class="d-none"
+     data-page="region_drilldown"
+     data-entity-id="{{ region_name }}"
+     data-bundle-url="{{ url_for('bundles.regions_drilldown_bundle') }}"></div>
+
+<div id="RegionDrilldownApp"
+     class="container-fluid py-3 bg-light"
+     data-page="region_drilldown"
+     data-entity-id="{{ region_name }}"
+     data-bundle-url="{{ url_for('bundles.regions_drilldown_bundle') }}">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-3">
+    <div class="col">
+      <h2 class="mb-0">Region: {{ region_name }}</h2>
+      <div class="text-muted small">All figures reflect your current filters.</div>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.index') }}">Back</a>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('regions.churn_download', region_name=region_name) }}">Download Churn</a>
+      <button class="btn btn-sm btn-outline-secondary" id="revCsvBtn" type="button">Revenue CSV</button>
+    </div>
+  </div>
+
+  
+  <!-- KPI cards -->
+  <div class="row g-3 mb-3" aria-live="polite">
+    <div class="col-md-3 col-6">
+       <div class="card text-center shadow-sm h-100">
+         <div class="card-body">
+           <div class="text-muted small">Total Revenue</div>
+           <div class="fs-4 fw-bold" id="regionKpiRevenue">&mdash;</div>
+           <div class="small text-muted"><span id="regionKpiOrders">0</span> Orders</div>
+         </div>
+       </div>
+    </div>
+    <div class="col-md-3 col-6">
+       <div class="card text-center shadow-sm h-100">
+         <div class="card-body">
+           <div class="text-muted small">MoM Growth</div>
+           <div class="fs-4 fw-bold" id="regionKpiMom">&mdash;</div>
+           <div class="small text-muted">Last Month vs Prev</div>
+         </div>
+       </div>
+    </div>
+    <div class="col-md-3 col-6">
+       <div class="card text-center shadow-sm h-100">
+         <div class="card-body">
+           <div class="text-muted small">WoW Growth</div>
+           <div class="fs-4 fw-bold" id="regionKpiWow">&mdash;</div>
+           <div class="small text-muted">Last Week vs Prev</div>
+         </div>
+       </div>
+    </div>
+    <div class="col-md-3 col-6">
+       <div class="card text-center shadow-sm h-100">
+         <div class="card-body">
+           <div class="text-muted small">YoY Growth</div>
+           <div class="fs-4 fw-bold" id="regionKpiYoy">&mdash;</div>
+           <div class="small text-muted">vs Last Year</div>
+         </div>
+       </div>
+    </div>
+  </div>
+
+  <!-- Region summary -->
+  <div class="row g-3 mb-3" aria-live="polite">
+    <div class="col-md-3 col-6">
+      <div class="card text-center shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Customers</div>
+          <div class="fs-4 fw-bold" id="regionKpiCustomers">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card text-center shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Avg Order Value</div>
+          <div class="fs-4 fw-bold" id="regionKpiAov">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card text-center shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Profit</div>
+          <div class="fs-4 fw-bold" id="regionKpiProfit">&mdash;</div>
+          <div class="small text-muted">Margin <span id="regionKpiMargin">&mdash;</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card text-center shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Loyalty</div>
+          <div class="small text-muted">Repeat <span id="regionKpiRepeat">&mdash;</span></div>
+          <div class="small text-muted">Churn <span id="regionKpiChurn">&mdash;</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Row: Trend + Top Customers -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <h5 class="card-title mb-0">Monthly Revenue</h5>
+            <div class="form-check form-switch ms-2">
+              <input class="form-check-input" type="checkbox" id="logScale">
+              <label class="form-check-label small" for="logScale">Log</label>
+            </div>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="revPngBtn" type="button">PNG</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="region_rev_chart" class="chart-container skeleton" data-lazy="true" style="min-height:360px;">
+            <div class="loading shimmer"></div>
+          </div>
+          <p id="regionTrendEmpty" class="text-muted small mt-2 mb-0 d-none">No monthly revenue found for this region.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <h5 class="card-title mb-0">Top Customers</h5>
+            <select id="custTopN" class="form-select form-select-sm" style="width:auto;">
+              <option value="10" selected>Top 10</option>
+              <option value="15">Top 15</option>
+              <option value="25">Top 25</option>
+            </select>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="custCsvBtn" type="button">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="region_cust_bar" class="chart-container skeleton" data-lazy="true" style="min-height:360px;">
+            <div class="loading shimmer"></div>
+          </div>
+          <p id="regionTopCustEmpty" class="text-muted small mt-2 mb-0 d-none">No customers found for this region.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row: Top Products + Churn Table -->
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <h5 class="card-title mb-0">Top Products</h5>
+            <select id="prodTopN" class="form-select form-select-sm" style="width:auto;">
+              <option value="10" selected>Top 10</option>
+              <option value="15">Top 15</option>
+              <option value="25">Top 25</option>
+            </select>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="prodCsvBtn" type="button">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="region_prod_bar" class="chart-container skeleton" data-lazy="true" style="min-height:360px;">
+            <div class="loading shimmer"></div>
+          </div>
+          <p id="regionTopProdEmpty" class="text-muted small mt-2 mb-0 d-none">No products found for this region.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Churned Customers</h5>
+          <div class="d-flex gap-2">
+            <input id="churnSearch" type="search" class="form-control form-control-sm" placeholder="Search customers…">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.churn_download', region_name=region_name) }}">Download</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive" style="max-height:360px; overflow:auto;">
+            <table id="churnTable" class="table table-sm table-striped align-middle">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>Customer</th>
+                  <th class="text-end">Revenue</th>
+                  <th>Last Order</th>
+                  <th class="text-end">Days Since</th>
+                </tr>
+              </thead>
+              <tbody id="churnTbody">
+                <tr><td colspan="4" class="text-center text-muted">Loading churn list...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Row: Shipping Mix + Weekday Revenue -->
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Shipping Method Mix</h5>
+        </div>
+        <div class="card-body">
+          <div id="region_ship_mix" class="chart-container" style="min-height:320px;"></div>
+          <p id="regionShipEmpty" class="text-muted small mt-2 mb-0 d-none">No shipping method data for this region.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Weekday Revenue</h5>
+        </div>
+        <div class="card-body">
+          <div id="region_weekday_chart" class="chart-container" style="min-height:320px;"></div>
+          <p id="regionWeekdayEmpty" class="text-muted small mt-2 mb-0 d-none">No weekday revenue data for this region.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+
+<style>
+  .chart-container { width: 100%; position: relative; }
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform .15s ease-in-out, box-shadow .15s ease-in-out; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+  }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/regions_drilldown.js') }}" defer></script>
+{% endblock %}

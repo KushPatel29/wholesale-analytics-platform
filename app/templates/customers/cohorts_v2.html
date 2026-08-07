@@ -1,0 +1,833 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+{% set controls = payload.get('controls') or {} %}
+{% set kpis = payload.get('kpis') or {} %}
+{% set retention = payload.get('retention') or {} %}
+{% set trend = payload.get('trend') or {} %}
+{% set segmentation = payload.get('segmentation') or {} %}
+{% set drivers = payload.get('drivers') or {} %}
+{% set warnings = payload.get('warnings') or [] %}
+{% set table_payload = table or (payload.get('table') or {}) %}
+{% set completeness = payload.get('data_completeness') or {} %}
+{% set meta = payload.get('meta') or {} %}
+{% set state = cohort_state or payload.get('state') or {} %}
+{% set state_query = cohort_state_query or {} %}
+{% set passthrough_pairs = cohort_passthrough_pairs or [] %}
+{% set state_form_action = cohort_state_action_url or url_for('customers.cohorts') %}
+{% set state_form_method = 'post' if cohorts_state_v2_enabled else 'get' %}
+{% set control_keys = ['threshold','lookback_months','cohort_granularity','cohort_horizon','reactivation_window_days','at_risk_window_days','status','segmentation','table_search','table_page','dataset','format','cohort','month_index','search','page','page_size'] %}
+
+<ul class="nav nav-tabs mb-3 cohort-tabs">
+  <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/customers/cohorts"><i class="bi bi-people me-1"></i>Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/clv"><i class="bi bi-currency-dollar me-1"></i>CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>Dashboard</a></li>
+</ul>
+
+{% if warnings %}
+  <div class="alert alert-warning shadow-soft border-faint">
+    {% for w in warnings %}
+      <div class="small">{{ w }}</div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <span class="badge {% if completeness.get('status') == 'incomplete' %}text-bg-warning{% else %}text-bg-success{% endif %}">
+    {% if completeness.get('status') == 'incomplete' %}Data Incomplete{% else %}Data Complete{% endif %}
+  </span>
+  {% if completeness.get('unknown_region_customers') %}
+    <span class="badge text-bg-light border">
+      Unknown Region: {{ '{:,}'.format(completeness.get('unknown_region_customers') or 0) }}
+      ({{ '%.2f'|format(completeness.get('unknown_region_pct') or 0) }}%)
+    </span>
+  {% endif %}
+  {% if completeness.get('low_sample_regions') %}
+    <span class="badge text-bg-light border">
+      Low-Sample Regions: {{ '{:,}'.format(completeness.get('low_sample_regions') or 0) }}
+    </span>
+  {% endif %}
+  {% if meta.get('analysis_window_start') and meta.get('analysis_window_end') %}
+    <span class="badge text-bg-light border">
+      Window: {{ meta.get('analysis_window_start') }} to {{ meta.get('analysis_window_end') }}
+    </span>
+  {% endif %}
+</div>
+
+{% if cohorts_debug_ui_enabled %}
+  <details class="card border-0 shadow-sm mb-3">
+    <summary class="card-body small fw-semibold">Effective Cohorts State</summary>
+    <div class="card-body pt-0">
+      <div class="small text-muted">Controls: {{ state|tojson }}</div>
+      <div class="small text-muted">Filters hash: {{ meta.get('filters_hash') }}</div>
+      <div class="small text-muted">State hash: {{ meta.get('state_hash') }}</div>
+      <div class="small text-muted">Scope hash: {{ meta.get('scope_hash') }}</div>
+      <div class="small text-muted">Effective window: {{ meta.get('analysis_window_start') }} to {{ meta.get('analysis_window_end') }}</div>
+      <div class="small text-muted">Churn cutoff: {{ meta.get('churn_cutoff_date') }}</div>
+      <div class="small text-muted">Customers considered: {{ '{:,}'.format(kpis.get('customers_total') or 0) }}</div>
+      <div class="small text-muted">Cache key: {{ meta.get('cache_key') }}</div>
+    </div>
+  </details>
+{% endif %}
+
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-3">
+    <form method="{{ state_form_method }}" action="{{ state_form_action }}" class="row g-3 align-items-end" id="cohortsControlsForm">
+      {% if cohorts_state_v2_enabled %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% endif %}
+      {% for key, value in passthrough_pairs %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <input type="hidden" class="cohorts-segmentation-input" name="segmentation" value="{{ state.get('segmentation') or 'region' }}">
+      <input type="hidden" class="cohorts-status-input" name="status" value="{{ state.get('status') or 'at_risk' }}">
+      <input type="hidden" name="table_search" value="{{ state.get('table_search') or '' }}">
+      <input type="hidden" name="table_page" value="{{ state.get('table_page') or 1 }}">
+      <input type="hidden" name="page_size" value="{{ state.get('page_size') or 25 }}">
+      <input type="hidden" name="reactivation_window_days" value="{{ controls.get('reactivation_window_days') or 30 }}">
+      <input type="hidden" name="at_risk_window_days" value="{{ controls.get('at_risk_window_days') or 30 }}">
+      <div class="col-12 col-md-2">
+        <label class="form-label mb-1 fw-semibold" for="thresholdSelect">
+          Churn Threshold
+          <i class="bi bi-info-circle text-muted" title="{{ payload.get('definitions', {}).get('churn') }}"></i>
+        </label>
+        <select id="thresholdSelect" name="threshold" class="form-select form-select-sm">
+          {% for val in [30, 60, 90, 120, 180, 365] %}
+            <option value="{{ val }}" {% if (controls.get('churn_threshold_days') or 90) == val %}selected{% endif %}>{{ val }} days</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label mb-1 fw-semibold" for="lookbackSelect">Lookback</label>
+        <select id="lookbackSelect" name="lookback_months" class="form-select form-select-sm">
+          {% for val in [12, 24, 36, 48] %}
+            <option value="{{ val }}" {% if (controls.get('lookback_months') or 24) == val %}selected{% endif %}>Last {{ val }} months</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label mb-1 fw-semibold" for="granularitySelect">
+          Cohort Granularity
+          <i class="bi bi-info-circle text-muted" title="{{ payload.get('definitions', {}).get('cohort') }}"></i>
+        </label>
+        <select id="granularitySelect" name="cohort_granularity" class="form-select form-select-sm">
+          <option value="month" {% if (controls.get('cohort_granularity') or 'month') == 'month' %}selected{% endif %}>Month</option>
+          <option value="quarter" {% if (controls.get('cohort_granularity') or 'month') == 'quarter' %}selected{% endif %}>Quarter</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label mb-1 fw-semibold" for="horizonSelect">Retention Horizon</label>
+        <select id="horizonSelect" name="cohort_horizon" class="form-select form-select-sm">
+          {% for val in [6, 8, 12, 18] %}
+            <option value="{{ val }}" {% if (controls.get('cohort_horizon') or 12) == val %}selected{% endif %}>0 to {{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary btn-sm" type="submit">
+            <i class="bi bi-check-circle me-1"></i>Apply
+          </button>
+          <a class="btn btn-outline-secondary btn-sm export-link" data-export-dataset="status_list" href="#">
+            <i class="bi bi-download me-1"></i>Export Table
+          </a>
+        </div>
+        <div class="small text-muted mt-2">
+          {{ payload.get('definitions', {}).get('retention') }}
+        </div>
+        <div class="small text-muted">
+          {{ payload.get('definitions', {}).get('region') }}
+        </div>
+        <div class="small text-muted">
+          {{ payload.get('definitions', {}).get('trend') }}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Active Customers</div>
+        <div class="h4 mb-0">{{ '{:,}'.format(kpis.get('active_customers') or 0) }}</div>
+        {% if cohorts_hardened_v3_enabled %}
+          <div class="small text-muted">Includes at-risk customers</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Churned Customers</div>
+        <div class="h4 mb-0">{{ '{:,}'.format(kpis.get('churned_customers') or 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Churn Rate</div>
+        <div class="h4 mb-0">{{ '%.2f'|format(kpis.get('churn_rate_pct') or 0) }}%</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Reactivation Rate</div>
+        <div class="h4 mb-0">{{ '%.2f'|format(kpis.get('reactivation_rate_pct') or 0) }}%</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small" title="{{ payload.get('definitions', {}).get('net_retention') }}">90d Revenue Retention</div>
+        <div class="h4 mb-0">
+          {% if kpis.get('net_retention_pct') is not none %}
+            {{ '%.2f'|format(kpis.get('net_retention_pct')) }}%
+          {% else %}
+            --
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Lost Revenue Est.</div>
+        <div class="h4 mb-0">${{ '{:,.0f}'.format(kpis.get('lost_revenue_estimate') or 0) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Cohort Retention Heatmap</h5>
+          <a class="btn btn-sm btn-outline-success export-link" data-export-dataset="cohort_heatmap" href="#">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+          </a>
+        </div>
+        <div id="cohortHeatmapV2" style="height: 430px;"></div>
+        <div id="cohortHeatmapEmpty" class="text-muted small py-3 d-none">
+          Not enough cohort data in the selected window. Increase lookback or broaden filters.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Churn by Region</h5>
+          <a class="btn btn-sm btn-outline-success export-link" data-export-dataset="churn_region" href="#">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+          </a>
+        </div>
+        <div id="churnRegionV2" style="height: 430px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Churn Trend: Count + Rate</h5>
+          <a class="btn btn-sm btn-outline-success export-link" data-export-dataset="churn_trend" href="#">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+          </a>
+        </div>
+        <div id="churnTrendV2" style="height: 400px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Churn Segmentation</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <select id="segDimension" class="form-select form-select-sm">
+              <option value="region" {% if (state.get('segmentation') or 'region') == 'region' %}selected{% endif %}>Region</option>
+              {% if is_admin_scope %}
+              <option value="sales_rep" {% if (state.get('segmentation') or 'region') == 'sales_rep' %}selected{% endif %}>Sales Rep</option>
+              {% endif %}
+              <option value="segment" {% if (state.get('segmentation') or 'region') == 'segment' %}selected{% endif %}>Revenue Tier</option>
+            </select>
+            <a class="btn btn-sm btn-outline-success export-link" id="segExportBtn" data-export-dataset="churn_region" href="#">
+              <i class="bi bi-file-earmark-arrow-down"></i>
+            </a>
+          </div>
+        </div>
+        <div id="churnSegmentationV2" style="height: 400px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">Top Churn Risk Customers</h5>
+          <a class="btn btn-sm btn-outline-success export-link" data-export-dataset="churn_drivers" href="#">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+          </a>
+        </div>
+        <div class="table-responsive" style="max-height: 320px;">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th class="text-end">Lost Rev</th>
+                <th class="text-end">Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in drivers.get('top_churn_risk', []) %}
+                <tr>
+                  <td>
+                    <a href="{{ url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" class="text-decoration-none">
+                      {{ row.get('customer_name') }}
+                    </a>
+                    <div class="small text-muted">{{ row.get('region') or 'Unknown' }}</div>
+                  </td>
+                  <td class="text-end">${{ '{:,.0f}'.format(row.get('lost_revenue_estimate') or 0) }}</td>
+                  <td class="text-end">{{ row.get('days_since_last') or 0 }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="3" class="text-muted text-center">No churn-risk customers in selected filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="mb-2">At-Risk Action List (Preview)</h5>
+        <div class="table-responsive" style="max-height: 320px;">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th class="text-end">Prev 90d</th>
+                <th class="text-end">Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in drivers.get('at_risk_preview', []) %}
+                <tr>
+                  <td>
+                    <a href="{{ url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" class="text-decoration-none">
+                      {{ row.get('customer_name') }}
+                    </a>
+                    <div class="small text-muted">{{ row.get('sales_rep') or 'Unassigned' }}</div>
+                  </td>
+                  <td class="text-end">${{ '{:,.0f}'.format(row.get('revenue_prev_90') or 0) }}</td>
+                  <td class="text-end">{{ row.get('days_since_last') or 0 }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="3" class="text-muted text-center">No at-risk customers in selected filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h5 class="mb-0">Churned / At-Risk / Reactivated Customers</h5>
+      <a class="btn btn-sm btn-outline-success export-link" data-export-dataset="status_list" href="#">
+        <i class="bi bi-file-earmark-arrow-down"></i> Export Full List
+      </a>
+    </div>
+    <form method="{{ state_form_method }}" action="{{ state_form_action }}" class="row g-2 mb-2 align-items-end" id="statusFilterForm">
+      {% if cohorts_state_v2_enabled %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% endif %}
+      {% for key, value in passthrough_pairs %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <input type="hidden" name="threshold" value="{{ controls.get('churn_threshold_days') or 90 }}">
+      <input type="hidden" name="lookback_months" value="{{ controls.get('lookback_months') or 24 }}">
+      <input type="hidden" name="cohort_granularity" value="{{ controls.get('cohort_granularity') or 'month' }}">
+      <input type="hidden" name="cohort_horizon" value="{{ controls.get('cohort_horizon') or 12 }}">
+      <input type="hidden" name="reactivation_window_days" value="{{ controls.get('reactivation_window_days') or 30 }}">
+      <input type="hidden" name="at_risk_window_days" value="{{ controls.get('at_risk_window_days') or 30 }}">
+      <input type="hidden" class="cohorts-segmentation-input" name="segmentation" value="{{ state.get('segmentation') or 'region' }}">
+      <input type="hidden" name="page_size" value="{{ state.get('page_size') or 25 }}">
+      <input type="hidden" name="table_page" id="tablePageInput" value="{{ table_payload.get('page') or state.get('table_page') or 1 }}">
+      <div class="col-12 col-md-3">
+        <label class="form-label mb-1" for="statusSelect">Status</label>
+        <select id="statusSelect" name="status" class="form-select form-select-sm">
+          <option value="active" {% if (state.get('status') or 'at_risk') == 'active' %}selected{% endif %}>Active</option>
+          <option value="at_risk" {% if (state.get('status') or 'at_risk') == 'at_risk' %}selected{% endif %}>At-risk</option>
+          <option value="churned" {% if (state.get('status') or 'at_risk') == 'churned' %}selected{% endif %}>Churned</option>
+          <option value="reactivated" {% if (state.get('status') or 'at_risk') == 'reactivated' %}selected{% endif %}>Reactivated</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-5">
+        <label class="form-label mb-1" for="tableSearch">Search</label>
+        <input id="tableSearch" name="table_search" type="search" class="form-control form-control-sm" value="{{ table_payload.get('search') or '' }}" placeholder="Customer, region, rep">
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2">
+        <button class="btn btn-primary btn-sm mt-auto" type="submit">Apply</button>
+        <button class="btn btn-outline-secondary btn-sm mt-auto" type="button" id="prevPageBtn">Prev</button>
+        <button class="btn btn-outline-secondary btn-sm mt-auto" type="button" id="nextPageBtn">Next</button>
+      </div>
+    </form>
+
+    <div class="small text-muted mb-2">
+      Showing {{ '{:,}'.format(table_payload.get('rows', [])|length) }} of {{ '{:,}'.format(table_payload.get('total_rows') or 0) }} rows
+      (page {{ table_payload.get('page') or 1 }} / {{ table_payload.get('total_pages') or 0 }}).
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Region</th>
+            <th>Sales Rep</th>
+            <th>Status</th>
+            <th class="text-end">Days Since Last</th>
+            <th class="text-end">Prev 90d</th>
+            <th class="text-end">Last 90d</th>
+            <th class="text-end">Lost Rev Est.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in table_payload.get('rows', []) %}
+            <tr>
+              <td>
+                <a href="{{ url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" class="text-decoration-none">
+                  {{ row.get('customer_name') }}
+                </a>
+              </td>
+              <td>{{ row.get('region') or 'Unknown' }}</td>
+              <td>{{ row.get('sales_rep') or 'Unassigned' }}</td>
+              <td>{{ row.get('status') }}</td>
+              <td class="text-end">{{ row.get('days_since_last') or 0 }}</td>
+              <td class="text-end">${{ '{:,.0f}'.format(row.get('revenue_prev_90') or 0) }}</td>
+              <td class="text-end">${{ '{:,.0f}'.format(row.get('revenue_last_90') or 0) }}</td>
+              <td class="text-end">${{ '{:,.0f}'.format(row.get('lost_revenue_estimate') or 0) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="text-muted text-center py-3">No customers found for this status.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="cohortCellModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cohortCellModalTitle">Cohort Drilldown</h5>
+        <div class="d-flex align-items-center gap-2">
+          <a class="btn btn-sm btn-outline-success" id="cohortCellExport" href="#">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export
+          </a>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Region</th>
+                <th>Sales Rep</th>
+                <th>Status</th>
+                <th class="text-end">Days Since Last</th>
+                <th class="text-end">Lost Rev Est.</th>
+              </tr>
+            </thead>
+            <tbody id="cohortCellRows">
+              <tr><td colspan="6" class="text-muted text-center py-3">Select a cell to view details.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const retention = {{ retention|tojson }};
+  const trend = {{ trend|tojson }};
+  const segmentation = {{ segmentation|tojson }};
+  const tablePayload = {{ table_payload|tojson }};
+  const baseStateParams = {{ state_query|tojson }};
+  const basePassthroughPairs = {{ passthrough_pairs|tojson }};
+
+  function mergedParams(extras = {}) {
+    const params = new URLSearchParams();
+    (basePassthroughPairs || []).forEach(([key, value]) => {
+      if (key === undefined || value === undefined) return;
+      params.append(String(key), String(value));
+    });
+    Object.entries(baseStateParams || {}).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') return;
+      params.set(key, String(value));
+    });
+    const live = new URLSearchParams(window.location.search);
+    live.forEach((value, key) => {
+      if (value === null || value === undefined || value === '') return;
+      params.set(key, value);
+    });
+    Object.entries(extras || {}).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') {
+        params.delete(key);
+        return;
+      }
+      params.set(key, String(value));
+    });
+    return params;
+  }
+
+  function replaceUrlState(extras = {}) {
+    const params = mergedParams(extras);
+    const nextQuery = params.toString();
+    const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname;
+    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+      window.history.replaceState({}, '', nextUrl);
+    }
+    return params;
+  }
+
+  function buildExportUrl(dataset, extras = {}) {
+    const params = mergedParams(extras);
+    params.set('dataset', dataset);
+    return `/customers/cohorts/export?${params.toString()}`;
+  }
+
+  function refreshExportLinks() {
+    document.querySelectorAll('.export-link').forEach((link) => {
+      const dataset = link.getAttribute('data-export-dataset') || 'status_list';
+      link.href = buildExportUrl(dataset);
+    });
+  }
+
+  replaceUrlState();
+  refreshExportLinks();
+
+  const cohortValues = retention.values || [];
+  const cohortLabels = retention.cohorts || [];
+  const cohortPeriods = retention.cohort_periods || [];
+  const monthIndexes = retention.month_indexes || [];
+  const retained = retention.retained || [];
+  const cohortSizes = retention.cohort_sizes || [];
+
+  if (cohortLabels.length && monthIndexes.length && cohortValues.length) {
+    const hover = cohortValues.map((row, r) =>
+      row.map((v, c) => {
+        const retainedCount = (retained[r] || [])[c] || 0;
+        const cohortSize = cohortSizes[r] || 0;
+        return `${cohortLabels[r]}<br>Month ${monthIndexes[c]}<br>Retention: ${Number(v || 0).toFixed(2)}%<br>Retained: ${retainedCount}/${cohortSize}`;
+      })
+    );
+
+    const custom = cohortValues.map((row, r) =>
+      row.map((_, c) => [cohortPeriods[r], monthIndexes[c], cohortLabels[r]])
+    );
+
+    Plotly.newPlot('cohortHeatmapV2', [{
+      type: 'heatmap',
+      x: monthIndexes,
+      y: cohortLabels,
+      z: cohortValues,
+      customdata: custom,
+      text: hover,
+      hoverinfo: 'text',
+      colorscale: [[0, '#b2182b'], [0.5, '#fddbc7'], [1, '#1a9850']],
+      zmin: 0,
+      zmax: 100
+    }], {
+      margin: {t: 20, l: 100, r: 20, b: 50},
+      xaxis: {title: 'Months Since First Purchase'},
+      yaxis: {title: 'Cohort'},
+    }, {responsive: true, displayModeBar: false});
+  } else {
+    document.getElementById('cohortHeatmapV2').style.display = 'none';
+    document.getElementById('cohortHeatmapEmpty').classList.remove('d-none');
+  }
+
+  const regionRows = segmentation.region_chart || segmentation.region || [];
+  const regionLabels = regionRows.map(r => r.segment);
+  const regionCounts = regionRows.map(r => Number(r.churned_customers || 0));
+  const regionRates = regionRows.map(r => Number(r.churn_rate_pct || 0));
+  const regionText = regionRows.map((r) => {
+    const sampleNote = r.low_sample ? ` (low sample < ${r.low_sample_threshold || 10})` : '';
+    return `${Number(r.churned_customers || 0)}/${Number(r.customers || 0)}${sampleNote}`;
+  });
+  const regionColors = regionRows.map(r => r.low_sample ? '#95a5a6' : '#c0392b');
+  Plotly.newPlot('churnRegionV2', [
+    {
+      type: 'bar',
+      name: 'Churned Customers',
+      x: regionLabels,
+      y: regionCounts,
+      text: regionText,
+      hovertemplate: '%{x}<br>Churned Customers: %{y}<br>Churned/Customers: %{text}<extra></extra>',
+      marker: {color: regionColors}
+    },
+    {
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Churn Rate %',
+      x: regionLabels,
+      y: regionRates,
+      yaxis: 'y2',
+      hovertemplate: '%{x}<br>Churn Rate: %{y:.2f}%<extra></extra>',
+      line: {color: '#2c3e50', width: 2},
+      marker: {size: 6}
+    }
+  ], {
+    margin: {t: 20, l: 50, r: 50, b: 100},
+    xaxis: {title: 'Region', tickangle: -35, automargin: true},
+    yaxis: {title: 'Churned Customers'},
+    yaxis2: {
+      title: 'Churn Rate %',
+      overlaying: 'y',
+      side: 'right',
+      rangemode: 'tozero'
+    },
+    legend: {orientation: 'h'}
+  }, {responsive: true, displayModeBar: false});
+
+  const trendMonths = trend.months || [];
+  const trendNew = trend.new_churn || [];
+  const trendReactivated = trend.reactivations || [];
+  const trendRate = trend.churn_rate_pct || [];
+  const trendChurned = trend.churned_count || [];
+  Plotly.newPlot('churnTrendV2', [
+    {
+      type: 'bar',
+      name: 'New Churn',
+      x: trendMonths,
+      y: trendNew,
+      marker: {color: '#d35400'}
+    },
+    {
+      type: 'bar',
+      name: 'Reactivations',
+      x: trendMonths,
+      y: trendReactivated,
+      marker: {color: '#16a085'}
+    },
+    {
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Churn Rate %',
+      x: trendMonths,
+      y: trendRate,
+      yaxis: 'y2',
+      line: {color: '#8e44ad', width: 2},
+      marker: {size: 6}
+    },
+    {
+      type: 'scatter',
+      mode: 'lines',
+      name: 'Net Churned Count',
+      x: trendMonths,
+      y: trendChurned,
+      line: {color: '#2c3e50', width: 2, dash: 'dot'}
+    }
+  ], {
+    barmode: 'group',
+    margin: {t: 20, l: 50, r: 50, b: 60},
+    xaxis: {title: 'Month'},
+    yaxis: {title: 'Customers'},
+    yaxis2: {
+      title: 'Churn Rate %',
+      overlaying: 'y',
+      side: 'right',
+      rangemode: 'tozero'
+    },
+    legend: {orientation: 'h'}
+  }, {responsive: true, displayModeBar: false});
+
+  const segSets = {
+    region: segmentation.region || [],
+    sales_rep: segmentation.sales_rep || [],
+    segment: segmentation.segment || [],
+  };
+  const segDatasetMap = {
+    region: 'churn_region',
+    sales_rep: 'churn_sales_rep',
+    segment: 'churn_segment',
+  };
+
+  function renderSegChart(kind) {
+    const rows = segSets[kind] || [];
+    const labels = rows.map(r => r.segment);
+    const values = rows.map(r => r.churn_rate_pct || 0);
+    Plotly.newPlot('churnSegmentationV2', [{
+      type: 'bar',
+      x: labels,
+      y: values,
+      text: rows.map(r => `${r.churned_customers}/${r.customers}${r.low_sample ? ' (low sample)' : ''}`),
+      hovertemplate: '%{x}<br>Churn Rate: %{y:.2f}%<br>Churned/Customers: %{text}<extra></extra>',
+      marker: {color: rows.map(r => r.low_sample ? '#95a5a6' : '#34495e')}
+    }], {
+      margin: {t: 20, l: 50, r: 10, b: 90},
+      yaxis: {title: 'Churn Rate %'},
+      xaxis: {title: kind === 'segment' ? 'Segment' : (kind === 'sales_rep' ? 'Sales Rep' : 'Region'), tickangle: -30, automargin: true}
+    }, {responsive: true, displayModeBar: false});
+
+    const segExportBtn = document.getElementById('segExportBtn');
+    if (segExportBtn) {
+      segExportBtn.href = buildExportUrl(segDatasetMap[kind] || 'churn_region');
+      segExportBtn.setAttribute('data-export-dataset', segDatasetMap[kind] || 'churn_region');
+    }
+    document.querySelectorAll('.cohorts-segmentation-input').forEach((input) => {
+      input.value = String(kind || 'region');
+    });
+    replaceUrlState({segmentation: kind});
+    refreshExportLinks();
+  }
+
+  const segDimension = document.getElementById('segDimension');
+  if (segDimension) {
+    renderSegChart(segDimension.value);
+    segDimension.addEventListener('change', () => renderSegChart(segDimension.value));
+  }
+
+  const heatmapDiv = document.getElementById('cohortHeatmapV2');
+  const cellRowsBody = document.getElementById('cohortCellRows');
+  const modalTitle = document.getElementById('cohortCellModalTitle');
+  const modalExport = document.getElementById('cohortCellExport');
+  const modalEl = document.getElementById('cohortCellModal');
+  const modal = (modalEl && window.bootstrap && window.bootstrap.Modal) ? new window.bootstrap.Modal(modalEl) : null;
+
+  async function loadCell(cohortPeriod, monthIndex, cohortLabel) {
+    if (!modal || !cellRowsBody || !modalTitle || !modalExport) return;
+    modalTitle.textContent = `Cohort ${cohortLabel} • Month ${monthIndex}`;
+    modalExport.href = buildExportUrl('cohort_drilldown', {cohort: cohortPeriod, month_index: monthIndex});
+    cellRowsBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Loading...</td></tr>';
+    modal.show();
+
+    const params = mergedParams();
+    params.set('cohort', cohortPeriod);
+    params.set('month_index', String(monthIndex));
+    const resp = await fetch(`/customers/cohorts/drilldown?${params.toString()}`);
+    if (!resp.ok) {
+      cellRowsBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-3">Failed to load drilldown.</td></tr>';
+      return;
+    }
+    const payload = await resp.json();
+    const rows = payload.rows || [];
+    if (!rows.length) {
+      cellRowsBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No customers in this cohort cell.</td></tr>';
+      return;
+    }
+    cellRowsBody.innerHTML = rows.map((r) => `
+      <tr>
+        <td><a href="/customers/drilldown/${encodeURIComponent(r.customer_id)}" class="text-decoration-none">${r.customer_name || r.customer_id || ''}</a></td>
+        <td>${r.region || 'Unknown'}</td>
+        <td>${r.sales_rep || 'Unassigned'}</td>
+        <td>${r.status || ''}</td>
+        <td class="text-end">${Number(r.days_since_last || 0)}</td>
+        <td class="text-end">$${Number(r.lost_revenue_estimate || 0).toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+      </tr>
+    `).join('');
+  }
+
+  if (heatmapDiv) {
+    heatmapDiv.on('plotly_click', (evt) => {
+      const point = evt?.points?.[0];
+      if (!point) return;
+      const custom = point.customdata || [];
+      const cohortPeriod = custom[0];
+      const monthIndex = custom[1];
+      const cohortLabel = custom[2] || String(point.y || '');
+      if (cohortPeriod === undefined || monthIndex === undefined) return;
+      loadCell(cohortPeriod, monthIndex, cohortLabel);
+    });
+  }
+
+  const pageInput = document.getElementById('tablePageInput');
+  const totalPages = Number(tablePayload.total_pages || 0);
+  const currentPage = Number(tablePayload.page || 1);
+  const form = document.getElementById('statusFilterForm');
+  const statusSelect = document.getElementById('statusSelect');
+
+  const prevBtn = document.getElementById('prevPageBtn');
+  const nextBtn = document.getElementById('nextPageBtn');
+  if (statusSelect && form) {
+    statusSelect.addEventListener('change', () => {
+      document.querySelectorAll('.cohorts-status-input').forEach((input) => {
+        input.value = String(statusSelect.value || 'at_risk');
+      });
+      if (pageInput) {
+        pageInput.value = '1';
+      }
+      replaceUrlState({status: statusSelect.value || 'at_risk', table_page: 1});
+      form.requestSubmit ? form.requestSubmit() : form.submit();
+    });
+  }
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (!pageInput || !form) return;
+      const next = Math.max(1, currentPage - 1);
+      pageInput.value = String(next);
+      replaceUrlState({table_page: next});
+      form.submit();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (!pageInput || !form) return;
+      const next = Math.min(totalPages || currentPage, currentPage + 1);
+      pageInput.value = String(next);
+      replaceUrlState({table_page: next});
+      form.submit();
+    });
+  }
+})();
+</script>
+
+<style>
+.cohort-tabs .nav-link {
+  border-radius: 10px 10px 0 0;
+  font-weight: 600;
+}
+.card h5 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+@media (max-width: 767.98px) {
+  #cohortHeatmapV2,
+  #churnRegionV2,
+  #churnTrendV2,
+  #churnSegmentationV2 {
+    height: 320px !important;
+  }
+}
+</style>
+{% endblock %}

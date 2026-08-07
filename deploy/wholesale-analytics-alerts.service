@@ -1,0 +1,13 @@
+[Unit]
+Description=Wholesale Analytics Analytics Notifications & Alerts Runner
+After=network.target
+
+[Service]
+Type=oneshot
+User=wa-app
+Group=www-data
+WorkingDirectory=/opt/wholesale_analytics
+EnvironmentFile=/etc/wholesale_analytics/wholesale.env
+ExecStart=/opt/wholesale_analytics/.venv/bin/python /opt/wholesale_analytics/scripts/alerts_runner.py
+Nice=5
+

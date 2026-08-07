@@ -1,0 +1,69 @@
+<section class="overview-panel" id="riskWatchlistCard">
+  <div class="panel-header">
+    <div class="panel-eyebrow">Top 10 SKU risk</div>
+    <h2 class="panel-title">Concentration summary and SKU margin watchlist</h2>
+    <div class="panel-subtitle">Customer concentration stays visible, but the main finance handoff here is the top 10 SKU margin-risk list ranked by current exposure and profit pressure.</div>
+  </div>
+  <div class="panel-body">
+    <div class="row g-3">
+      <div class="col-xl-4">
+        <div class="risk-summary-card h-100">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="mb-0">Concentration risk</h6>
+            <button class="btn btn-sm btn-outline-secondary" id="concentrationExportBtn" type="button">Export</button>
+          </div>
+          <div id="concentrationPanel" class="small text-muted"></div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="risk-summary-card h-100">
+          <div class="focus-summary-grid mb-3">
+            <article class="focus-summary-card">
+              <div class="focus-label">Lead SKU risk</div>
+              <div class="focus-title" id="focusSkuRiskTitle">Loading…</div>
+              <div class="focus-value" id="focusSkuRiskValue">-</div>
+              <div class="focus-detail" id="focusSkuRiskDetail">Preparing the highest-priority SKU margin issue.</div>
+            </article>
+            <article class="focus-summary-card">
+              <div class="focus-label">Watchlist size</div>
+              <div class="focus-title" id="focusSkuRiskCountTitle">SKU watchlist</div>
+              <div class="focus-value" id="focusSkuRiskCountValue">-</div>
+              <div class="focus-detail" id="focusSkuRiskCountDetail">Preparing the top-10 SKU risk count and revenue exposure.</div>
+            </article>
+            <article class="focus-summary-card">
+              <div class="focus-label">Profitability posture</div>
+              <div class="focus-title" id="focusProfitabilityTitle">Margin quality</div>
+              <div class="focus-value" id="focusProfitabilityValue">-</div>
+              <div class="focus-detail" id="focusProfitabilityDetail">Preparing the current margin-distribution signal.</div>
+            </article>
+          </div>
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="mb-0">Top 10 SKU margin watchlist</h6>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-sm btn-outline-secondary" id="marginRiskExportBtn" type="button">Export</button>
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#negativeMarginCollapse" aria-expanded="true" aria-controls="negativeMarginCollapse">
+                Toggle watchlist
+              </button>
+            </div>
+          </div>
+          <div id="profitabilityPanel" class="small mb-2"></div>
+          <div id="marginRiskSummary" class="small text-muted mb-2"></div>
+          <div class="small mb-2">
+            <a href="#" id="marginRiskDrilldownLink" class="text-decoration-none">View margin-risk drilldown</a>
+          </div>
+          <div class="collapse show" id="negativeMarginCollapse">
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <select id="negativeMarginSupplierFilter" class="form-select form-select-sm w-auto" aria-label="Filter by supplier">
+                <option value="">All suppliers</option>
+              </select>
+              <select id="negativeMarginProteinFilter" class="form-select form-select-sm w-auto" aria-label="Filter by protein">
+                <option value="">All proteins</option>
+              </select>
+            </div>
+            <ul id="marginRiskList" class="watchlist-list small mb-0"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

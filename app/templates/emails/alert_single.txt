@@ -1,0 +1,14 @@
+{% set name = recipient_name or "there" -%}
+Hello {{ name }},
+
+{{ payload.summary or "A Wholesale Analytics alert was triggered." }}
+
+{% if payload.details %}
+Details:
+{% for item in payload.details -%}
+- {{ item.label }}: {{ item.value }}
+{% endfor %}
+{% endif %}
+
+Review the related page: {{ details_url }}
+Manage alerts: {{ manage_url }}

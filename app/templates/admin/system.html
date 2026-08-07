@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}System Checks{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-3">System Checks</h2>
+
+  <div class="mb-4">
+    <h5>Environment</h5>
+    <div>
+      {% for name, ver in versions.items() %}
+        <span class="badge bg-secondary me-1">{{ name }} {{ ver }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <h5>Database</h5>
+    {% if loader_cfg_error %}
+      <div class="alert alert-warning small py-2 px-3">{{ loader_cfg_error }}</div>
+    {% endif %}
+    {% if loader_cfg %}
+      <div>Server: <code>{{ loader_cfg.server or loader_cfg.database_url or 'n/a' }}</code></div>
+      <div>Database: <code>{{ loader_cfg.database }}</code></div>
+      <div>Driver: <code>{{ loader_cfg.driver }}</code></div>
+    {% endif %}
+    <div class="mt-2">
+      Direct SQL mode:
+      {% if direct_sql_mode %}
+        <span class="badge bg-warning text-dark">Enabled</span>
+      {% else %}
+        <span class="badge bg-success">Disabled</span>
+      {% endif %}
+    </div>
+    {% if driver_info and driver_info.detail %}
+      <div class="small text-muted mt-1">Drivers: {{ driver_info.detail }}</div>
+    {% endif %}
+  </div>
+
+  <div class="mb-4">
+    <h5>Cache</h5>
+    <div>Directory: <code>{{ cache_dir }}</code></div>
+    <div>Rows: <strong>{{ cache_rows }}</strong></div>
+    <div>Parquet mtime: <code>{{ parquet_mtime or 'n/a' }}</code></div>
+  </div>
+
+  <div class="mb-4">
+    <h5>Authorization</h5>
+    <div>
+      <span class="text-muted small me-2">Roles:</span>
+      {% if rbac_roles %}
+        {% for role in rbac_roles %}
+          <span class="badge bg-primary me-1">{{ role }}</span>
+        {% endfor %}
+      {% else %}
+        <span class="text-muted">none</span>
+      {% endif %}
+    </div>
+    <div class="mt-2">
+      <span class="text-muted small me-2">Permissions:</span>
+      {% if rbac_permissions %}
+        {% for perm in rbac_permissions %}
+          <span class="badge bg-secondary me-1">{{ perm }}</span>
+        {% endfor %}
+      {% else %}
+        <span class="text-muted">none</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <h5>Checks</h5>
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr><th>Check</th><th>Status</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+      {% for c in checks %}
+        {% set color = 'success' if c.status=='ok' else ('warning' if c.status=='warn' else 'danger') %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td><span class="badge bg-{{ color }} text-uppercase">{{ c.status }}</span></td>
+          <td><code>{{ c.detail }}</code></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-4">
+    <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">Back to Admin</a>
+  </div>
+</div>
+{% endblock %}

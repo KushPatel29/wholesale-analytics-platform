@@ -1,0 +1,244 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Returns Analytics</h1>
+      <p class="text-muted mb-0">Scoped returns metrics sourced from the returns tracker tables.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.index') }}">Back to Tracker</a>
+      <a class="btn btn-outline-success" href="{{ url_for('returns_portal.analytics', export='xlsx', from=filters.from, to=filters.to) }}">Export All Data</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label" for="analyticsFrom">From</label>
+          <input class="form-control" id="analyticsFrom" name="from" type="date" value="{{ filters.from }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="analyticsTo">To</label>
+          <input class="form-control" id="analyticsTo" name="to" type="date" value="{{ filters.to }}">
+        </div>
+        <div class="col-md-6 d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Apply Window</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.analytics') }}">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">Total Returns</div><div class="display-6">{{ analytics.summary.total_returns }}</div></div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">Total Credit</div><div class="display-6">{{ analytics.summary.total_credit_amount|currency }}</div></div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body"><div class="text-muted small">Total Weight</div><div class="display-6">{{ '%.3f'|format(analytics.summary.total_weight_lb or 0) }}</div></div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <div class="text-muted small">Supplier Credit %</div>
+              <div class="display-6">{{ '%.1f'|format(analytics.summary.supplier_credit_pct or 0) }}%</div>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='supplier_credit', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Returns Volume Trend</h2>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='volume_by_week', export='xlsx', from=filters.from, to=filters.to) }}">Export week</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='volume_by_month', export='xlsx', from=filters.from, to=filters.to) }}">Export month</a>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Week</th><th>Count</th></tr></thead>
+              <tbody>
+                {% for row in preview.volume_by_week %}
+                <tr><td>{{ row.week }}</td><td>{{ row.return_count }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Top Customers By Return Credit</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='top_customers', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Customer</th><th>Credit</th><th>Returns</th></tr></thead>
+              <tbody>
+                {% for row in preview.top_customers %}
+                <tr><td>{{ row.customer_name or row.customer_id }}</td><td>{{ row.total_credit_amount|currency }}</td><td>{{ row.return_count }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Approval Funnel</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='approval_funnel', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Status</th><th>Count</th></tr></thead>
+              <tbody>
+                {% for row in preview.approval_funnel %}
+                <tr><td>{{ row.status_label }}</td><td>{{ row.return_count }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Approval SLA</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='approval_detail', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Metric</th><th>Median (hrs)</th><th>P90 (hrs)</th></tr></thead>
+              <tbody>
+                {% for row in preview.approval_sla %}
+                <tr><td>{{ row.metric }}</td><td>{{ row.median_hours }}</td><td>{{ row.p90_hours }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Credit Issued Trend</h2>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='credit_by_week', export='xlsx', from=filters.from, to=filters.to) }}">Export week</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='credit_by_month', export='xlsx', from=filters.from, to=filters.to) }}">Export month</a>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>Week</th><th>Total Credit</th></tr></thead>
+              <tbody>
+                {% for row in preview.credit_by_week %}
+                <tr><td>{{ row.week }}</td><td>{{ row.total_credit_amount|currency }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Top SKUs By Return Credit</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='top_skus', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead><tr><th>SKU</th><th>Credit</th><th>Lines</th></tr></thead>
+              <tbody>
+                {% for row in preview.top_skus %}
+                <tr><td>{{ row.product_code }}</td><td>{{ row.total_credit_amount|currency }}</td><td>{{ row.return_count }}</td></tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Reason / Category Breakdown</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='reason_breakdown', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="small text-muted mb-2">Reasons</div>
+              <ul class="list-group list-group-flush">
+                {% for row in preview.reason_breakdown %}
+                <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.reason_for_return or row.reason_code }}</span><span>{{ row.total_credit_amount|currency }}</span></li>
+                {% else %}
+                <li class="list-group-item px-0 text-muted">No data.</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <div class="small text-muted mb-2">Categories</div>
+              <ul class="list-group list-group-flush">
+                {% for row in preview.category_breakdown %}
+                <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.category }}</span><span>{{ row.total_credit_amount|currency }}</span></li>
+                {% else %}
+                <li class="list-group-item px-0 text-muted">No data.</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">Warehouse Follow-up Breakdown</h2>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='follow_up_breakdown', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
+          </div>
+          <ul class="list-group list-group-flush">
+            {% for row in preview.follow_up_breakdown %}
+            <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.follow_up_action }}</span><span>{{ row.line_count }}</span></li>
+            {% else %}
+            <li class="list-group-item px-0 text-muted">No data.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

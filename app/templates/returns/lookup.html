@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-1">Return Lookup</h1>
+      <p class="text-muted mb-0">Find an order in your current scope and start an RMA.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.create') }}">Manual Return</a>
+  </div>
+  <form method="post" class="card shadow-sm border-0 mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="order_id">Order ID</label>
+        <input class="form-control" id="order_id" name="order_id" value="{{ request.form.get('order_id', '') }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="email">Email</label>
+        <input class="form-control" id="email" name="email" type="email" value="{{ request.form.get('email', '') }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="phone">Phone</label>
+        <input class="form-control" id="phone" name="phone" value="{{ request.form.get('phone', '') }}">
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">Search Orders</button>
+      </div>
+    </div>
+  </form>
+
+  {% if results %}
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Customer</th>
+            <th>Contact</th>
+            <th>Lines</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in results %}
+          <tr>
+            <td>{{ row.order_id }}</td>
+            <td>
+              <div>{{ row.customer_name or row.customer_id }}</div>
+              <small class="text-muted">{{ row.customer_id }}</small>
+            </td>
+            <td>
+              <div>{{ row.customer_email or "n/a" }}</div>
+              <small class="text-muted">{{ row.customer_phone or "" }}</small>
+            </td>
+            <td>{{ row.line_count }}</td>
+            <td>{{ row.order_total|currency if row.order_total is not none else "-" }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-primary" href="{{ url_for('returns_portal.create', order_id=row.order_id) }}">Start Return</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,721 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+<div
+  id="RegionsOverviewV2App"
+  class="regions-v2 container-fluid py-4 bg-light"
+  data-page="regions_v2"
+  data-bundle-url="{{ url_for('bundles.regions_bundle') }}"
+  data-export-url="{{ url_for('regions.export_overview') }}"
+  data-export-momentum-url="{{ url_for('regions.export_momentum') }}"
+>
+  <section class="regions-v2-hero card border-0 shadow-sm mb-3">
+    <div class="card-body p-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <div class="text-uppercase small fw-semibold text-primary mb-2">Regional Command Center</div>
+          <h2 class="mb-1">Regions Performance</h2>
+          <p class="regions-v2-hero-subtitle mb-0">Revenue, profit, concentration, retention, and momentum across the active filtered regions.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a id="regionsV2ExportXlsx" class="btn btn-success btn-sm" href="{{ url_for('regions.export_overview', format='xlsx') }}">
+            Export Excel
+          </a>
+          <a id="regionsV2ExportCsv" class="btn btn-outline-secondary btn-sm" href="{{ url_for('regions.export_overview', format='csv') }}">
+            Export CSV
+          </a>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-3" aria-live="polite">
+        <span class="badge text-bg-light border" id="regionsV2Window">Window: -</span>
+        <span class="badge text-bg-light border" id="regionsV2Regions">Regions in scope: -</span>
+        <span class="badge text-bg-light border" id="regionsV2Customers">Customers in scope: -</span>
+        <span class="badge text-bg-light border" id="regionsV2Orders">Orders in scope: -</span>
+        <span class="badge text-bg-light border" id="regionsV2PacksCoverage">Packs coverage: -</span>
+        <span class="badge text-bg-light border" id="regionsV2CostCoverage">Cost coverage: -</span>
+        <span class="badge text-bg-light border" id="regionsV2Freshness">Freshness: -</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="overview-kpis" class="mb-3" aria-live="polite">
+    <div class="regions-v2-kpi-grid">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Total Revenue</div>
+          <div class="fs-4 fw-semibold" id="kpiRevenue">-</div>
+          <div class="small text-muted" id="kpiRevenueMeta">Current filtered window</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Total Profit</div>
+          <div class="fs-4 fw-semibold" id="kpiProfit">-</div>
+          <div class="small text-muted" id="kpiProfitMeta">Protected by cost coverage badges</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Margin %</div>
+          <div class="fs-4 fw-semibold" id="kpiMargin">-</div>
+          <div class="small text-muted" id="kpiMarginMeta">Gross profit / revenue</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Regions in Scope</div>
+          <div class="fs-4 fw-semibold" id="kpiRegionCount">-</div>
+          <div class="small text-muted" id="kpiRegionCountMeta">Active regions in window</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Avg Order Value</div>
+          <div class="fs-4 fw-semibold" id="kpiAov">-</div>
+          <div class="small text-muted" id="kpiAovMeta">Revenue per distinct order</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">YoY Growth</div>
+          <div class="fs-4 fw-semibold" id="kpiYoy">-</div>
+          <div class="small text-muted" id="kpiYoyMeta">Same window last year</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Revenue Delta vs Prior Period</div>
+          <div class="fs-4 fw-semibold" id="kpiDeltaRevenue">-</div>
+          <div class="small text-muted" id="kpiDeltaRevenueMeta">Immediately preceding equivalent window</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Revenue Concentration <span class="text-muted" title="HHI = Herfindahl-Hirschman Index on region revenue share. Higher means more concentrated.">?</span></div>
+          <div class="fs-4 fw-semibold" id="kpiConcentration">-</div>
+          <div class="small text-muted" id="kpiConcentrationMeta">Top 1 / Top 5 / HHI</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Regional Volatility <span class="text-muted" title="12-month revenue coefficient of variation. Lower is more stable.">?</span></div>
+          <div class="fs-4 fw-semibold" id="kpiVolatility">-</div>
+          <div class="small text-muted" id="kpiVolatilityMeta">Lower is more stable</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Repeat Rate</div>
+          <div class="fs-4 fw-semibold" id="kpiRepeatRate">-</div>
+          <div class="small text-muted" id="kpiRepeatRateMeta">Customers with 2+ orders</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">Churn Risk Regions</div>
+          <div class="fs-4 fw-semibold" id="kpiRiskRegions">-</div>
+          <div class="small text-muted" id="kpiRiskRegionsMeta">High-risk mix or retention profile</div>
+        </div>
+      </div>
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="small text-muted">New Customer Share</div>
+          <div class="fs-4 fw-semibold" id="kpiNewCustomerShare">-</div>
+          <div class="small text-muted" id="kpiNewCustomerShareMeta">Revenue from new customers</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="regions-v2-nav card shadow-sm border-0 mb-3">
+    <div class="card-body py-2">
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="#overview-section">Overview</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#momentum-section">Momentum</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#profitability-section">Profitability</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#concentration-section">Concentration</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#retention-section">Retention / Risk</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#regions-table-section">Regions Table</a>
+        <a class="btn btn-sm btn-outline-secondary" href="#exports-section">Exports</a>
+      </div>
+    </div>
+  </nav>
+
+  <section id="overview-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Overview</h4>
+        <div class="text-muted small">Regional scale, mix breadth, and operating context under the active filters.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-8">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h5 class="mb-0">Revenue by Region</h5>
+              <div class="small text-muted">Horizontal ranking for fast comparison across long region names.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <select id="regionsV2TopN" class="form-select form-select-sm">
+                <option value="10">Top 10</option>
+                <option value="15" selected>Top 15</option>
+                <option value="25">Top 25</option>
+                <option value="0">All</option>
+              </select>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="regionsV2LogScale">
+                <label class="form-check-label small" for="regionsV2LogScale">Log scale</label>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="regionsV2RevenueChart" class="regions-v2-chart"></div>
+            <p id="regionsV2RevenueEmpty" class="text-muted small mb-0 d-none">No regional revenue found for the active filters.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Operational Mix</h5>
+            <div class="small text-muted">Dominant shipping method plus supplier and product breadth by region.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive regions-v2-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Region</th>
+                    <th class="text-end">Ship Mix</th>
+                    <th class="text-end">Suppliers</th>
+                    <th class="text-end">Products</th>
+                  </tr>
+                </thead>
+                <tbody id="regionsV2OperationsBody">
+                  <tr><td colspan="4" class="text-center text-muted">Loading operational mix...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="momentum-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Momentum</h4>
+        <div class="text-muted small">Current window vs immediately preceding equivalent window.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a id="regionsV2MomentumCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_momentum', format='csv') }}">Export CSV</a>
+        <a id="regionsV2MomentumXlsx" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_momentum', format='xlsx') }}">Export Excel</a>
+      </div>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Top Gaining Region</div>
+            <div class="fs-5 fw-semibold" id="regionsV2TopGainer">-</div>
+            <div class="small text-muted" id="regionsV2TopGainerMeta">-</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Top Declining Region</div>
+            <div class="fs-5 fw-semibold" id="regionsV2TopDecliner">-</div>
+            <div class="small text-muted" id="regionsV2TopDeclinerMeta">-</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Prior Period Status</div>
+            <div class="fs-5 fw-semibold" id="regionsV2PriorStatus">-</div>
+            <div class="small text-muted" id="regionsV2PriorStatusMeta">Stable labels prevent low-base distortion.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h5 class="mb-0">Regional Momentum</h5>
+          <div class="small text-muted">Default sort is delta revenue. Use tabs to isolate gainers or decliners.</div>
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Momentum tabs">
+          <button type="button" class="btn btn-outline-secondary active" data-momentum-tab="all">All</button>
+          <button type="button" class="btn btn-outline-secondary" data-momentum-tab="gainers">Gainers</button>
+          <button type="button" class="btn btn-outline-secondary" data-momentum-tab="decliners">Decliners</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive regions-v2-tall-table">
+          <table class="table table-sm table-hover align-middle mb-0" id="regionsV2MomentumTable">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="sortable" data-momentum-sort="region">Region</th>
+                <th class="text-end sortable" data-momentum-sort="revenue_current">Revenue Current</th>
+                <th class="text-end sortable" data-momentum-sort="revenue_prior">Revenue Prior</th>
+                <th class="text-end sortable" data-momentum-sort="delta_revenue">Δ Revenue $</th>
+                <th class="text-end sortable" data-momentum-sort="delta_revenue_pct">Δ Revenue %</th>
+                <th class="text-end sortable" data-momentum-sort="delta_orders">Orders Δ</th>
+                <th class="text-end sortable" data-momentum-sort="delta_customers">Customers Δ</th>
+                <th class="text-end sortable" data-momentum-sort="profit_delta">Profit Δ</th>
+                <th class="text-end sortable" data-momentum-sort="margin_delta_pp">Margin Δ (pp)</th>
+              </tr>
+            </thead>
+            <tbody id="regionsV2MomentumBody">
+              <tr><td colspan="9" class="text-center text-muted">Loading momentum...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="profitability-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Profitability</h4>
+        <div class="text-muted small">Top regions ranked by the selected metric plus unit economics for operating decisions.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h5 class="mb-0">Regional Profitability</h5>
+              <div class="small text-muted">Switch between revenue, profit, margin %, and AOV.</div>
+            </div>
+            <select id="regionsV2ProfitMetric" class="form-select form-select-sm">
+              <option value="revenue">Revenue</option>
+              <option value="profit">Profit</option>
+              <option value="margin_pct">Margin %</option>
+              <option value="aov">AOV</option>
+            </select>
+          </div>
+          <div class="card-body">
+            <div id="regionsV2ProfitChart" class="regions-v2-chart"></div>
+            <p id="regionsV2ProfitEmpty" class="text-muted small mb-0 d-none">No profitability data available for the active filters.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Unit Economics Highlights</h5>
+            <div class="small text-muted">Revenue per customer, profit per order, revenue per unit, and revenue per lb.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive regions-v2-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Region</th>
+                    <th class="text-end">Rev / Cust</th>
+                    <th class="text-end">Profit / Order</th>
+                    <th class="text-end">Rev / Unit</th>
+                  </tr>
+                </thead>
+                <tbody id="regionsV2UnitBody">
+                  <tr><td colspan="4" class="text-center text-muted">Loading unit economics...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="concentration-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Concentration</h4>
+        <div class="text-muted small">Dependency risk, revenue concentration, and quadrant-based regional prioritization.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Concentration & Dependency</h5>
+            <div class="small text-muted">Over-reliant regions where top customer or top product concentration is elevated.</div>
+          </div>
+          <div class="card-body">
+            <div class="small text-muted mb-2" id="regionsV2ConcentrationSummary">Loading concentration summary...</div>
+            <div class="table-responsive regions-v2-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Region</th>
+                    <th class="text-end">Top Cust %</th>
+                    <th class="text-end">Top Prod %</th>
+                    <th class="text-end">Top Supp %</th>
+                  </tr>
+                </thead>
+                <tbody id="regionsV2ConcentrationBody">
+                  <tr><td colspan="4" class="text-center text-muted">Loading concentration rows...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Region Opportunity Matrix</h5>
+            <div class="small text-muted">X-axis = revenue. Y-axis = margin %. Quadrants use selected-region medians.</div>
+          </div>
+          <div class="card-body">
+            <div id="regionsV2OpportunityChart" class="regions-v2-chart"></div>
+            <p id="regionsV2OpportunityEmpty" class="text-muted small mb-0 d-none">Not enough regions with revenue and margin data to render the matrix.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="retention-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Retention / Risk</h4>
+        <div class="text-muted small">Repeat behavior, churn pressure, active customers, and action-priority watchouts.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Retention Health by Region</h5>
+            <div class="small text-muted">Repeat %, churn %, active customers last 30 / 90 days, and new vs returning mix.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive regions-v2-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Region</th>
+                    <th class="text-end">Repeat %</th>
+                    <th class="text-end">Churn %</th>
+                    <th class="text-end">30d / 90d Active</th>
+                    <th class="text-end">New %</th>
+                  </tr>
+                </thead>
+                <tbody id="regionsV2RetentionBody">
+                  <tr><td colspan="5" class="text-center text-muted">Loading retention rows...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="mb-0">Concentration & Risk Priorities</h5>
+            <div class="small text-muted">High concentration, low margin, high churn, negative trend, and weak coverage in one scan.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive regions-v2-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Region</th>
+                    <th>Risk</th>
+                    <th>Summary</th>
+                    <th class="text-end">Δ Revenue</th>
+                    <th>Quality</th>
+                  </tr>
+                </thead>
+                <tbody id="regionsV2RiskBody">
+                  <tr><td colspan="5" class="text-center text-muted">Loading risk priorities...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="regions-table-section" class="mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Regions Table</h4>
+        <div class="text-muted small">Command table for drilldown, prioritization, and server-side filtered export.</div>
+      </div>
+    </div>
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-transparent">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="d-flex flex-wrap gap-2" id="regionsV2QuickFilters" role="group" aria-label="Region quick filters">
+            <button type="button" class="btn btn-sm btn-outline-secondary active" data-quick-filter="">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick-filter="high_revenue">High revenue</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick-filter="high_risk">High risk</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick-filter="high_concentration">High concentration</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick-filter="margin_weak">Margin weak</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-quick-filter="fast_growth">Fast growth</button>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white">Search</span>
+              <input id="regionsV2Search" type="search" class="form-control" placeholder="Search region...">
+              <button id="regionsV2SearchClear" type="button" class="btn btn-outline-secondary">Clear</button>
+            </div>
+            <a id="regionsV2TableCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_overview', format='csv') }}">Table CSV</a>
+            <a id="regionsV2TableXlsx" class="btn btn-sm btn-primary" href="{{ url_for('regions.export_overview', format='xlsx') }}">Table Excel</a>
+          </div>
+        </div>
+      </div>
+      <div class="card-body pt-2">
+        <div class="table-responsive regions-v2-table-wrap">
+          <table class="table table-sm table-hover align-middle mb-0" id="regionsV2Table">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="sortable" data-sort="region">Region</th>
+                <th class="text-end sortable" data-sort="customers">Customers</th>
+                <th class="text-end sortable" data-sort="orders">Orders</th>
+                <th class="text-end sortable" data-sort="revenue">Revenue</th>
+                <th class="text-end sortable" data-sort="profit">Profit</th>
+                <th class="text-end sortable" data-sort="margin_pct">Margin %</th>
+                <th class="text-end sortable" data-sort="aov">AOV</th>
+                <th class="text-end sortable" data-sort="repeat_pct">Repeat %</th>
+                <th class="text-end sortable" data-sort="churn_pct">Churn %</th>
+                <th class="text-end sortable" data-sort="new_customer_pct">New Cust %</th>
+                <th class="text-end sortable" data-sort="top_customer_share_pct">Top Cust %</th>
+                <th class="text-end sortable" data-sort="top_product_share_pct">Top Prod %</th>
+                <th class="text-end sortable" data-sort="delta_revenue">Δ Revenue $</th>
+                <th class="text-end sortable" data-sort="delta_revenue_pct">Δ Revenue %</th>
+                <th class="sortable" data-sort="cost_coverage_pct">Data Quality</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="regionsV2TableBody">
+              <tr><td colspan="16" class="text-center text-muted">Loading regions...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+          <div id="regionsV2TableStatus" class="small text-muted">Loading...</div>
+          <div class="btn-group btn-group-sm">
+            <button id="regionsV2Prev" type="button" class="btn btn-outline-secondary">Prev</button>
+            <button id="regionsV2Next" type="button" class="btn btn-outline-secondary">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="exports-section" class="mb-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h4 class="mb-0">Exports</h4>
+        <div class="text-muted small">All exports are server-side and preserve current scope and global filters.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Regional summary</div>
+            <div class="d-grid gap-2 mt-3">
+              <a id="regionsV2SummaryXlsx" class="btn btn-sm btn-success" href="{{ url_for('regions.export_overview', format='xlsx') }}">Excel</a>
+              <a id="regionsV2SummaryCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_overview', format='csv') }}">CSV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Regional momentum</div>
+            <div class="d-grid gap-2 mt-3">
+              <a id="regionsV2ExportMomentumXlsx" class="btn btn-sm btn-success" href="{{ url_for('regions.export_momentum', format='xlsx') }}">Excel</a>
+              <a id="regionsV2ExportMomentumCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_momentum', format='csv') }}">CSV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Region KPI table</div>
+            <div class="d-grid gap-2 mt-3">
+              <a id="regionsV2ExportTableXlsx" class="btn btn-sm btn-success" href="{{ url_for('regions.export_overview', format='xlsx') }}">Excel</a>
+              <a id="regionsV2ExportTableCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_overview', format='csv') }}">CSV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="small text-muted">Risk / concentration</div>
+            <div class="d-grid gap-2 mt-3">
+              <a id="regionsV2ExportRiskXlsx" class="btn btn-sm btn-success" href="{{ url_for('regions.export_overview', format='xlsx') }}">Excel</a>
+              <a id="regionsV2ExportRiskCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_overview', format='csv') }}">CSV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .regions-v2 .regions-v2-hero {
+    background:
+      radial-gradient(circle at top right, rgba(13, 110, 253, 0.12), transparent 32%),
+      linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+  .regions-v2 .regions-v2-hero .regions-v2-hero-subtitle {
+    color: #41576f;
+  }
+  .regions-v2 .regions-v2-kpi-grid {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  @media (max-width: 1199px) {
+    .regions-v2 .regions-v2-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 767px) {
+    .regions-v2 .regions-v2-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .regions-v2 .regions-v2-nav {
+    position: sticky;
+    top: 0.75rem;
+    z-index: 20;
+  }
+  .regions-v2 .regions-v2-chart {
+    min-height: 340px;
+    width: 100%;
+  }
+  .regions-v2 .regions-v2-mini-table,
+  .regions-v2 .regions-v2-tall-table,
+  .regions-v2 .regions-v2-table-wrap {
+    max-height: 360px;
+    overflow: auto;
+  }
+  .regions-v2 .regions-v2-table-wrap { max-height: 560px; }
+  .regions-v2 .table thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .regions-v2 .table thead th.sortable.asc::after { content: " \2191"; }
+  .regions-v2 .table thead th.sortable.desc::after { content: " \2193"; }
+  .regions-v2 .metric-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+  }
+  .regions-v2 .metric-stack-end {
+    align-items: flex-end;
+  }
+  .regions-v2 .metric-sub {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.28rem;
+    font-size: 0.72rem;
+    color: #667085;
+  }
+  .regions-v2 .status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.46rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .regions-v2 .status-red {
+    color: #b42318;
+    background: rgba(180, 35, 24, 0.08);
+    border-color: rgba(180, 35, 24, 0.16);
+  }
+  .regions-v2 .status-orange {
+    color: #b54708;
+    background: rgba(181, 71, 8, 0.08);
+    border-color: rgba(181, 71, 8, 0.16);
+  }
+  .regions-v2 .status-yellow {
+    color: #8a5b00;
+    background: rgba(250, 204, 21, 0.16);
+    border-color: rgba(202, 138, 4, 0.2);
+  }
+  .regions-v2 .status-light-green {
+    color: #15803d;
+    background: rgba(134, 239, 172, 0.2);
+    border-color: rgba(34, 197, 94, 0.18);
+  }
+  .regions-v2 .status-green {
+    color: #027a48;
+    background: rgba(2, 122, 72, 0.08);
+    border-color: rgba(2, 122, 72, 0.16);
+  }
+  .regions-v2 .status-neutral {
+    color: #475467;
+    background: rgba(71, 84, 103, 0.08);
+    border-color: rgba(71, 84, 103, 0.12);
+  }
+  .regions-v2 .risk-pill {
+    border-radius: 999px;
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .regions-v2 .risk-high {
+    color: #b42318;
+    background: rgba(180, 35, 24, 0.08);
+    border-color: rgba(180, 35, 24, 0.16);
+  }
+  .regions-v2 .risk-medium {
+    color: #b54708;
+    background: rgba(181, 71, 8, 0.08);
+    border-color: rgba(181, 71, 8, 0.16);
+  }
+  .regions-v2 .risk-low,
+  .regions-v2 .quality-ok {
+    color: #027a48;
+    background: rgba(2, 122, 72, 0.08);
+    border-color: rgba(2, 122, 72, 0.16);
+  }
+  .regions-v2 .quality-watch {
+    color: #b54708;
+    background: rgba(181, 71, 8, 0.08);
+    border-color: rgba(181, 71, 8, 0.16);
+  }
+  .regions-v2 .quality-critical {
+    color: #b42318;
+    background: rgba(180, 35, 24, 0.08);
+    border-color: rgba(180, 35, 24, 0.16);
+  }
+  .regions-v2 .delta-up { color: #027a48; }
+  .regions-v2 .delta-down { color: #b42318; }
+  .regions-v2 .delta-stable { color: #475467; }
+  .regions-v2 .btn[data-quick-filter].active {
+    color: #fff;
+    background: #0d6efd;
+    border-color: #0d6efd;
+  }
+</style>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/regions_v2.js') }}" defer></script>
+{% endblock %}

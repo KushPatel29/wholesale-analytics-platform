@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Wholesale Analytics Enterprise Assistant{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css', v='20260325-theme-refine') }}">
+{% endblock %}
+
+{% block content %}
+<section class="assistant-page shell-card"
+         id="assistantPage"
+         data-context-url="{{ url_for('assistant.assistant_context_api_v2') }}"
+         data-chat-url="{{ url_for('assistant.assistant_chat_api_v2') }}"
+         data-suggestions-url="{{ url_for('assistant.assistant_suggestions_api_v2') }}"
+         data-proactive-url="{{ url_for('assistant.assistant_proactive_api_v2') }}"
+         data-health-url="{{ url_for('assistant.assistant_health_api_v2') }}"
+         data-thread-url-base="{{ url_for('assistant.assistant_thread_api_v2', thread_id='__THREAD__')|replace('__THREAD__', '') }}"
+         data-export-job-url-base="{{ url_for('assistant.assistant_export_job_status_api_v2', job_id='__JOB__')|replace('__JOB__', '') }}"
+         data-initial-context='{{ assistant_context|tojson }}'>
+  <header class="assistant-header">
+    <div>
+      <p class="assistant-kicker">Wholesale Analytics Intelligence Copilot</p>
+      <h1 class="assistant-title">Wholesale Analytics Enterprise Assistant</h1>
+      <p class="assistant-subtitle">Scoped business answers for leadership, operations, sales, procurement, product, and returns workflows.</p>
+    </div>
+    <div class="assistant-header-meta">
+      <span class="chip" id="assistantPageChip">Page: {{ assistant_context.page or 'overview' }}</span>
+      <span class="chip" id="assistantWindowChip">Window: {{ assistant_context.filters.start or 'auto' }} → {{ assistant_context.filters.end or 'auto' }}</span>
+      {% if assistant_context.entity and assistant_context.entity.id %}
+      <span class="chip" id="assistantEntityChip">Entity: {{ assistant_context.entity.label or assistant_context.entity.id }}</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="assistant-layout">
+    <aside class="assistant-side shell-card">
+      <h2 class="side-title">Suggested Questions</h2>
+      <div id="assistantPrompts" class="prompt-list">
+        {% for prompt in assistant_context.suggested_prompts %}
+        <button class="prompt-btn" type="button" data-prompt="{{ prompt }}">{{ prompt }}</button>
+        {% endfor %}
+      </div>
+
+      <h3 class="side-subtitle">What Stands Out</h3>
+      <div id="assistantProactive" class="proactive-list">
+        <p class="text-muted small mb-0">Loading scoped proactive insights...</p>
+      </div>
+      <button id="assistantRefreshProactiveBtn" class="btn btn-outline-secondary btn-sm mt-2" type="button">Refresh Insights</button>
+
+      <h3 class="side-subtitle">Access Snapshot</h3>
+      <div class="chip-grid" id="assistantAccessChips">
+        {% for module, enabled in assistant_context.module_access.items() %}
+        <span class="chip {{ 'chip-on' if enabled else 'chip-off' }}">{{ module|replace('_', ' ')|title }}: {{ 'On' if enabled else 'Off' }}</span>
+        {% endfor %}
+      </div>
+
+      <h3 class="side-subtitle">Trust / Sensitivity</h3>
+      <div class="chip-grid" id="assistantSensitiveChips">
+        {% for token, enabled in assistant_context.sensitive_data_access.items() %}
+        <span class="chip {{ 'chip-on' if enabled else 'chip-off' }}">{{ token|replace('_', ' ')|title }}: {{ 'Visible' if enabled else 'Hidden' }}</span>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <section class="assistant-chat shell-card">
+      <div class="chat-scroll" id="assistantMessages" aria-live="polite"></div>
+      <div id="assistantBanner" class="assistant-banner d-none"></div>
+      <form id="assistantForm" class="assistant-form">
+        <input type="hidden" id="assistantCsrf" value="{{ csrf_token() }}">
+        <div class="assistant-controls">
+          <label class="assistant-control">
+            <span>Mode</span>
+            <select id="assistantMode" class="form-select form-select-sm">
+              <option value="standard" selected>Standard</option>
+              <option value="executive">Executive</option>
+              <option value="analyst">Analyst</option>
+              <option value="simple">Simple</option>
+            </select>
+          </label>
+          <label class="assistant-control">
+            <span>Depth</span>
+            <select id="assistantDetailLevel" class="form-select form-select-sm">
+              <option value="standard" selected>Standard</option>
+              <option value="short">Concise</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </label>
+          <label class="assistant-control assistant-control-toggle">
+            <input type="checkbox" id="assistantVoiceReady">
+            <span>Voice-ready summary</span>
+          </label>
+          {% if assistant_context.debug_available %}
+          <label class="assistant-control assistant-control-toggle">
+            <input type="checkbox" id="assistantDebugToggle">
+            <span>Admin debug</span>
+          </label>
+          {% endif %}
+        </div>
+        <textarea id="assistantInput"
+                  class="form-control"
+                  rows="3"
+                  maxlength="4000"
+                  placeholder="Ask about business drivers, module watchouts, executive summary, returns workflow, or KPI definitions..."
+                  required></textarea>
+        <div class="assistant-form-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="assistantClearBtn">New Thread</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="assistantSendBtn">Ask Assistant</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/assistant.js') }}" defer></script>
+{% endblock %}

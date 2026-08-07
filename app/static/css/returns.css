@@ -1,0 +1,52 @@
+.returns-page {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.returns-page .card-body {
+  padding: 1.25rem;
+}
+
+.returns-page .returns-inline-status {
+  min-height: 1.25rem;
+}
+
+.returns-page .returns-items-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.returns-page .returns-summary-row {
+  border-top: 1px solid var(--wa-border, #e5e7eb);
+  padding-top: 0.75rem;
+}
+
+.returns-page .returns-recent-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.returns-page .returns-scan-video {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--wa-border, #e5e7eb);
+  background: #000;
+  max-height: 320px;
+  object-fit: cover;
+}
+
+.returns-page .returns-scan-preview-wrap {
+  min-height: 140px;
+}
+
+.returns-page .returns-admin-grid .card {
+  height: 100%;
+}
+
+@media (max-width: 992px) {
+  .returns-page {
+    max-width: 100%;
+  }
+}

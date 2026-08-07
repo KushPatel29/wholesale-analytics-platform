@@ -1,0 +1,182 @@
+{% extends "returns/base.html" %}
+{% block returns_title %}Returns Admin{% endblock %}
+{% block content %}
+<section class="returns-page py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Returns Admin</h1>
+      <p class="text-muted mb-0">Policies, settings, integrations, and access controls for Returns operations.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_admin.reasons') }}">Reason Mapping</a>
+      <a class="btn btn-outline-dark" href="{{ url_for('returns_admin.settings') }}">Settings</a>
+    </div>
+  </div>
+
+  <div class="row g-3 returns-admin-grid">
+    <div class="col-xl-7">
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Policy Editor</h2>
+          <form method="post" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="form_action" value="save_policy">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label" for="version">Version</label>
+                <input class="form-control" id="version" name="version" value="next">
+              </div>
+              <div class="col-md-8 d-flex align-items-end">
+                <div class="form-check">
+                  <input class="form-check-input" id="activate" name="activate" type="checkbox" value="1" checked>
+                  <label class="form-check-label" for="activate">Activate immediately</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="rules_json">Rules JSON</label>
+                <textarea class="form-control font-monospace" id="rules_json" name="rules_json" rows="11">{"auto_approve_reason_codes":["damaged","wrong_item"],"evidence_required_reason_codes":["damaged","quality_issue"],"auto_review_risk_threshold":0.35}</textarea>
+              </div>
+              <div class="col-12">
+                <button class="btn btn-primary" type="submit">Save Policy</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Email Templates</h2>
+          <ul class="mb-0">
+            {% for row in templates %}
+            <li>{{ row.name }} <span class="text-muted">({{ row.key }})</span></li>
+            {% else %}
+            <li class="text-muted">No templates configured.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Policy Versions</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Version</th>
+                  <th>Active</th>
+                  <th>Created</th>
+                  <th>Rules</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in policies %}
+                <tr>
+                  <td>{{ row.version }}</td>
+                  <td>{{ "yes" if row.is_active else "no" }}</td>
+                  <td>{{ row.created_at }}</td>
+                  <td><code>{{ row.rules|tojson }}</code></td>
+                </tr>
+                {% else %}
+                <tr><td class="text-muted" colspan="4">No policies found.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-5">
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Integrations Status</h2>
+          <dl class="row small mb-0">
+            {% for key, value in integrations.items() %}
+            <dt class="col-6">{{ key }}</dt>
+            <dd class="col-6">{{ value }}</dd>
+            {% else %}
+            <dt class="col-12 text-muted">No integration status found.</dt>
+            {% endfor %}
+          </dl>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Create Returns-only User</h2>
+          <form method="post" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="form_action" value="create_returns_user">
+            <div class="col-12">
+              <label class="form-label" for="returns_user_name">Name</label>
+              <input class="form-control" id="returns_user_name" name="returns_user_name" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="returns_user_email">Email / Username</label>
+              <input class="form-control" id="returns_user_email" name="returns_user_email" placeholder="returns.user@the distributormeats.com" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="returns_temp_password">Temporary Password (optional)</label>
+              <input class="form-control" id="returns_temp_password" name="returns_temp_password" placeholder="Auto-generate if blank">
+            </div>
+            <div class="col-12">
+              <div class="small text-muted mb-2">Optional permissions</div>
+              <div class="form-check">
+                <input class="form-check-input" id="returns_perm_create" name="returns_perm_create" type="checkbox" value="1">
+                <label class="form-check-label" for="returns_perm_create">Allow creating returns</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" id="returns_perm_export" name="returns_perm_export" type="checkbox" value="1">
+                <label class="form-check-label" for="returns_perm_export">Allow exports</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" id="returns_perm_approvals" name="returns_perm_approvals" type="checkbox" value="1">
+                <label class="form-check-label" for="returns_perm_approvals">Allow approvals queue</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" id="returns_perm_scan" name="returns_perm_scan" type="checkbox" value="1">
+                <label class="form-check-label" for="returns_perm_scan">Allow warehouse scan</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <button class="btn btn-primary" type="submit">Create Returns-only User</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {% if returns_user_result %}
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-3">User Created</h2>
+          <dl class="row small mb-0">
+            <dt class="col-5">Username</dt>
+            <dd class="col-7">{{ returns_user_result.username }}</dd>
+            <dt class="col-5">Temp Password</dt>
+            <dd class="col-7"><code>{{ returns_user_result.temp_password }}</code></dd>
+            <dt class="col-5">Permissions</dt>
+            <dd class="col-7">{{ returns_user_result.permissions|join(', ') }}</dd>
+          </dl>
+          <div class="alert alert-warning py-2 mt-3 mb-0">
+            Prompt the user to reset their password at first login.
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Mapping Shortcuts</h2>
+          <div class="d-grid gap-2">
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('returns_admin.reasons') }}">Reason Mapping</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('returns_admin.settings') }}">Returns Settings</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('returns_portal.approvals') }}">Approvals Queue</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

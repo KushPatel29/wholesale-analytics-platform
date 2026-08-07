@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block head_extras %}
+<style>
+  .roles-hero {
+    background: linear-gradient(120deg, #1f6feb 0%, #0a2342 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .roles-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.1fr) minmax(320px, 1.4fr);
+    gap: 1rem;
+  }
+  @media (max-width: 992px) {
+    .roles-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .role-row.active {
+    background: #e9f2ff;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="roles-hero mb-3 d-flex justify-content-between align-items-center">
+  <div>
+    <div class="small text-uppercase opacity-75">Admin</div>
+    <h3 class="h5 mb-1">Roles & Permissions</h3>
+    <div class="small">
+      {% if can_manage_roles %}
+      Manage page access and export permissions without code changes.
+      {% else %}
+      View current role access. Role editing is read-only for your account.
+      {% endif %}
+    </div>
+  </div>
+  <a class="btn btn-light btn-sm" href="{{ url_for('admin.users') }}">Back to Users</a>
+</div>
+
+<div id="roleAlerts"></div>
+
+<div class="roles-grid">
+  <div class="card">
+    <div class="card-body">
+      <h5 class="card-title">Roles</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Permissions</th>
+            </tr>
+          </thead>
+          <tbody id="roleTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h5 class="card-title">Role Editor</h5>
+      <form id="roleCreateForm" class="row g-2 mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4">
+          <label class="form-label small">New Role Name</label>
+          <input type="text" class="form-control" id="newRoleName" placeholder="manager_west">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">Description</label>
+          <input type="text" class="form-control" id="newRoleDescription" placeholder="Optional description">
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-primary" type="submit">Create</button>
+        </div>
+      </form>
+
+      <form id="roleEditForm">
+        <input type="hidden" id="editRoleId">
+        <div class="mb-2">
+          <label class="form-label small">Selected Role</label>
+          <input type="text" class="form-control" id="editRoleName" readonly>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Description</label>
+          <input type="text" class="form-control" id="editRoleDescription">
+        </div>
+        <div class="mb-2">
+          <div class="small fw-semibold mb-1">Permissions</div>
+          <div id="permissionChecklist" class="border rounded p-2" style="max-height: 360px; overflow:auto;">
+            {% for perm in permissions %}
+            <label class="form-check mb-1 d-block">
+              <input class="form-check-input permission-input" type="checkbox" value="{{ perm.key }}">
+              <span class="form-check-label">{{ perm.key }}</span>
+              {% if perm.description %}<small class="text-muted d-block ms-4">{{ perm.description }}</small>{% endif %}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="d-grid">
+          <button class="btn btn-success" type="submit">Save Role</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const authFetch = window.authFetch || fetch;
+  const csrfToken = "{{ csrf_token() }}";
+  const canManageRoles = {{ "true" if can_manage_roles else "false" }};
+  const roleBody = document.getElementById("roleTableBody");
+  const alertHost = document.getElementById("roleAlerts");
+  const createForm = document.getElementById("roleCreateForm");
+  const editForm = document.getElementById("roleEditForm");
+  const editRoleId = document.getElementById("editRoleId");
+  const editRoleName = document.getElementById("editRoleName");
+  const editRoleDescription = document.getElementById("editRoleDescription");
+  const permissionInputs = () => Array.from(document.querySelectorAll(".permission-input"));
+
+  const state = { roles: [], selectedRoleId: null };
+
+  const notify = (message, variant = "success") => {
+    const el = document.createElement("div");
+    el.className = `alert alert-${variant} alert-dismissible fade show`;
+    el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    alertHost.appendChild(el);
+    setTimeout(() => { try { el.remove(); } catch (_) {} }, 5000);
+  };
+
+  async function loadRoles() {
+    const resp = await authFetch("/api/_admin/roles");
+    if (!resp.ok) throw new Error("Failed to load roles");
+    const data = await resp.json();
+    state.roles = Array.isArray(data.roles) ? data.roles : [];
+    renderRoles();
+    if (!state.selectedRoleId && state.roles.length) {
+      selectRole(state.roles[0].id);
+    }
+  }
+
+  function applyRoleEditorMode() {
+    if (canManageRoles) return;
+    for (const field of createForm.querySelectorAll("input, button")) {
+      field.disabled = true;
+    }
+    for (const field of editForm.querySelectorAll("input, button")) {
+      if (field.id === "editRoleName") continue;
+      field.disabled = true;
+    }
+    for (const input of permissionInputs()) {
+      input.disabled = true;
+    }
+  }
+
+  function renderRoles() {
+    roleBody.innerHTML = "";
+    for (const role of state.roles) {
+      const tr = document.createElement("tr");
+      tr.className = "role-row";
+      tr.dataset.roleId = String(role.id);
+      if (state.selectedRoleId === role.id) tr.classList.add("active");
+      tr.innerHTML = `<td><button type="button" class="btn btn-link p-0 role-select">${role.name}</button></td><td>${role.permission_count || 0}</td>`;
+      tr.querySelector(".role-select").addEventListener("click", () => selectRole(role.id));
+      roleBody.appendChild(tr);
+    }
+  }
+
+  function selectRole(roleId) {
+    const role = state.roles.find((r) => r.id === roleId);
+    if (!role) return;
+    state.selectedRoleId = roleId;
+    editRoleId.value = String(role.id);
+    editRoleName.value = role.name || "";
+    editRoleDescription.value = role.description || "";
+    const selected = new Set(role.permissions || []);
+    for (const input of permissionInputs()) {
+      input.checked = selected.has(input.value);
+    }
+    renderRoles();
+  }
+
+  createForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!canManageRoles) {
+      notify("Role editing is read-only for your account.", "warning");
+      return;
+    }
+    const name = document.getElementById("newRoleName").value.trim();
+    const description = document.getElementById("newRoleDescription").value.trim();
+    if (!name) {
+      notify("Role name is required.", "warning");
+      return;
+    }
+    const resp = await authFetch("/api/_admin/roles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+      body: JSON.stringify({ name, description, permissions: [] }),
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      notify(payload.error || "Failed to create role.", "danger");
+      return;
+    }
+    notify("Role created.");
+    document.getElementById("newRoleName").value = "";
+    document.getElementById("newRoleDescription").value = "";
+    await loadRoles();
+    if (payload.role && payload.role.id) selectRole(payload.role.id);
+  });
+
+  editForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!canManageRoles) {
+      notify("Role editing is read-only for your account.", "warning");
+      return;
+    }
+    const roleId = Number(editRoleId.value || 0);
+    if (!roleId) {
+      notify("Select a role first.", "warning");
+      return;
+    }
+    const description = editRoleDescription.value.trim();
+    const permissions = permissionInputs().filter((el) => el.checked).map((el) => el.value);
+    const resp = await authFetch(`/api/_admin/roles/${roleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+      body: JSON.stringify({ description, permissions }),
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      notify(payload.error || "Failed to save role.", "danger");
+      return;
+    }
+    notify("Role updated.");
+    await loadRoles();
+    selectRole(roleId);
+  });
+
+  applyRoleEditorMode();
+  loadRoles().catch((err) => notify(err.message || "Failed to initialize roles page.", "danger"));
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% set name = recipient_name or "there" -%}
+Hello {{ name }},
+
+{{ digest_label }} from Wholesale Analytics:
+
+{% for item in items -%}
+- {{ item.alert_name }}: {{ item.summary }}
+  Review: {{ item.details_url }}
+{% endfor %}
+
+Manage alerts: {{ manage_url }}

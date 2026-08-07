@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="alert alert-warning">
+      <h4 class="alert-heading">Forbidden (403)</h4>
+      <p>You do not have permission to access this page.</p>
+      {% if user_role %}
+      <p class="mb-0"><small>Your role: <code>{{ user_role }}</code>. Required role(s): <code>{{ required_roles|join(', ') }}</code>.</small></p>
+      {% endif %}
+    </div>
+    <a class="btn btn-outline-secondary" href="/">Go back home</a>
+  </div>
+  </div>
+{% endblock %}
+

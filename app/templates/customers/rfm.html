@@ -1,0 +1,377 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+<ul class="nav nav-tabs mb-3 rfm-tabs">
+  <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/cohorts"><i class="bi bi-people me-1"></i>Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/clv"><i class="bi bi-currency-dollar me-1"></i>CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>Dashboard</a></li>
+  </ul>
+
+<div class="row mb-3">
+  <div class="col-lg-4 mb-3">
+    <div class="card border-0 shadow-lg rfm-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); animation: fadeInLeft 0.6s ease-out;">
+      <div class="card-body text-white">
+        <h5 class="card-title mb-3 d-flex align-items-center">
+          <i class="bi bi-pie-chart-fill me-2"></i>
+          Segment Distribution
+        </h5>
+        <div id="seg_pie" style="height:320px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8 mb-3">
+    <div class="card border-0 shadow-lg rfm-card" style="animation: fadeInRight 0.6s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-trophy-fill text-warning me-2"></i>Top 10 by RFM Score</span>
+          <span class="badge bg-primary-subtle text-primary">{{ top_rows|length }} Customers</span>
+        </h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle rfm-table">
+            <thead class="table-light">
+              <tr>
+                <th><i class="bi bi-person me-1"></i>Customer</th>
+                <th class="text-center"><span class="badge bg-danger-subtle text-danger">R</span></th>
+                <th class="text-center"><span class="badge bg-success-subtle text-success">F</span></th>
+                <th class="text-center"><span class="badge bg-info-subtle text-info">M</span></th>
+                <th class="text-center"><span class="badge bg-primary">RFM</span></th>
+                <th class="text-end"><i class="bi bi-cash me-1"></i>Monetary</th>
+                <th class="text-end"><i class="bi bi-cart me-1"></i>Frequency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in top_rows %}
+              <tr style="animation: fadeIn {{ 0.3 + loop.index * 0.05 }}s ease-out;">
+                <td><a href="/customers/drilldown/{{ row['CustomerId'] }}" class="text-decoration-none fw-semibold">{{ row['CustomerName'] or row['CustomerId'] }}</a></td>
+                <td class="text-center"><span class="badge bg-danger">{{ row['R_Score'] }}</span></td>
+                <td class="text-center"><span class="badge bg-success">{{ row['F_Score'] }}</span></td>
+                <td class="text-center"><span class="badge bg-info">{{ row['M_Score'] }}</span></td>
+                <td class="text-center"><span class="badge bg-primary fs-6">{{ row['RFM_Score'] }}</span></td>
+                <td class="text-end fw-semibold text-success">{{ row['Monetary']|currency }}</td>
+                <td class="text-end">{{ row['Frequency'] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card border-0 shadow-lg rfm-card" style="animation: fadeInUp 0.7s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center">
+          <i class="bi bi-graph-up me-2 text-primary"></i>
+          Frequency vs Monetary Analysis
+        </h5>
+        <div id="rfm_scatter" style="height:380px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Load SheetJS for Excel export if not already present #}
+<script>
+if (typeof XLSX === 'undefined') {
+  const s = document.createElement('script');
+  s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  s.crossOrigin = "anonymous";
+  document.head.appendChild(s);
+}
+</script>
+
+<script>
+  const seg_labels = {{ seg_labels|tojson }};
+  const seg_values = {{ seg_values|tojson }};
+  const sx = {{ scatter_x|tojson }};
+  const sy = {{ scatter_y|tojson }};
+  const st = {{ scatter_text|tojson }};
+  const sc = {{ rfm_scores|tojson }};
+  const pieColors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'];
+
+  // Helper to check if data is valid
+  const hasData = (arr) => Array.isArray(arr) && arr.length > 0 && arr.some(v => v != null);
+
+  // Segment Distribution Pie Chart
+  if (hasData(seg_labels) && hasData(seg_values)) {
+    Plotly.newPlot('seg_pie', [{
+      labels: seg_labels,
+      values: seg_values,
+      type: 'pie',
+      hole: 0.4,
+      marker: {colors: pieColors},
+      textfont: {size: 14, color: 'white'},
+      hovertemplate: '%{label}<br>Count: %{value}<br>%{percent}<extra></extra>'
+    }], {
+      margin: {t:20},
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: {color: 'white'}
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    const pieDiv = document.getElementById('seg_pie');
+    if (pieDiv) {
+      pieDiv.innerHTML = '<div class="text-white small text-center py-5"><i class="bi bi-info-circle me-2"></i>No segment data available.</div>';
+    }
+  }
+
+  // Frequency vs Monetary Scatter
+  if (hasData(sx) && hasData(sy) && hasData(st)) {
+    const scatterTrace = {
+      x: sx,
+      y: sy,
+      text: st,
+      type: 'scatter',
+      mode: 'markers',
+      marker: {
+        color: sc,
+        colorscale: [[0, '#667eea'], [0.5, '#764ba2'], [1, '#f093fb']],
+        size: 12,
+        showscale: true,
+        line: {width: 1, color: 'white'}
+      },
+      hovertemplate: '<b>%{text}</b><br>Frequency: %{x}<br>Monetary: %{y:$,.0f}<extra></extra>'
+    };
+    Plotly.newPlot('rfm_scatter', [scatterTrace], {
+      margin: {t:20, l:60, r:40, b:60},
+      xaxis: {title: {text: 'Frequency', font: {size: 14, color: '#667eea'}}, gridcolor: '#e0e0e0'},
+      yaxis: {title: {text: 'Monetary', font: {size: 14, color: '#667eea'}}, gridcolor: '#e0e0e0'},
+      plot_bgcolor: '#f8f9fa',
+      paper_bgcolor: 'white',
+      hovermode: 'closest'
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    const scatterDiv = document.getElementById('rfm_scatter');
+    if (scatterDiv) {
+      scatterDiv.innerHTML = '<div class="text-muted small text-center py-5"><i class="bi bi-info-circle me-2"></i>No RFM data available.</div>';
+    }
+  }
+
+  // Excel export helpers
+  function plotlyToAOA(gd) {
+    if (!gd || !gd.data || gd.data.length === 0) return [["No data"]];
+    const traces = gd.data;
+    const type0 = (traces[0].type || "").toLowerCase();
+
+    // Pie chart
+    if (type0.includes('pie')) {
+      const labels = traces[0].labels || [];
+      const values = traces[0].values || [];
+      const rows = [["Segment", "Count"]];
+      for (let i=0; i<labels.length; i++) {
+        rows.push([labels[i], values[i]]);
+      }
+      return rows;
+    }
+
+    // Scatter
+    if (type0.includes('scatter')) {
+      const header = ['Frequency', 'Monetary', 'Customer'];
+      const rows = [header];
+      const maxLen = Math.max(...traces.map(t => (t.x?.length || 0)));
+      for (let i=0; i<maxLen; i++) {
+        const row = [
+          traces[0].x?.[i] ?? '',
+          traces[0].y?.[i] ?? '',
+          traces[0].text?.[i] ?? ''
+        ];
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    // Default
+    const hasX = traces.some(t => Array.isArray(t.x));
+    const xRef = traces.find(t => Array.isArray(t.x))?.x;
+    const maxLen = Math.max(...traces.map(t => (t.x?.length || t.y?.length || 0)));
+    const header = [hasX ? 'X' : 'Index'];
+    traces.forEach((t, i) => header.push(t.name || `Trace ${i+1}`));
+    const rows = [header];
+    for (let i=0; i<maxLen; i++) {
+      const xVal = hasX ? (xRef?.[i] ?? (i+1)) : i+1;
+      const row = [xVal];
+      traces.forEach(t => {
+        let v = t.y?.[i] ?? '';
+        row.push(v != null ? v : '');
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function aoaToExcel(aoa, filename="chart.xlsx", sheetName="Sheet1") {
+    if (typeof XLSX === 'undefined') {
+      const csv = aoa.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename.replace(/\.xlsx$/i,'') + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+    XLSX.writeFile(wb, filename);
+  }
+
+  function exportPlotlyDiv(divId, fname, sheet) {
+    const gd = document.getElementById(divId);
+    if (!gd) return;
+    const aoa = plotlyToAOA(gd);
+    const card = gd.closest('.card');
+    const titleEl = card?.querySelector('.card-title');
+    const title = titleEl?.textContent?.trim() || sheet || divId;
+    const filename = fname || title.replace(/[^\w\d\-]+/g,'_') + '.xlsx';
+    aoaToExcel(aoa, filename, title);
+  }
+
+  // Add export buttons dynamically
+  const addExportButton = (chartId) => {
+    const el = document.getElementById(chartId);
+    if (!el || el.innerHTML.includes('No')) return;
+
+    const card = el.closest('.card-body')?.closest('.card');
+    if (!card) return;
+
+    const titleEl = card.querySelector('.card-title');
+    if (!titleEl || titleEl.querySelector('.btn-outline-success')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-success ms-auto';
+    btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet"></i>';
+    btn.title = 'Export to Excel';
+    btn.onclick = () => {
+      const title = titleEl.textContent.trim();
+      exportPlotlyDiv(chartId, title.replace(/[^\w\d\-]+/g,'_') + '.xlsx', title);
+    };
+
+    if (titleEl.classList.contains('d-flex')) {
+      titleEl.appendChild(btn);
+    } else {
+      titleEl.classList.add('d-flex', 'align-items-center', 'justify-content-between');
+      titleEl.appendChild(btn);
+    }
+  };
+
+  // Add export buttons on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      addExportButton('seg_pie');
+      addExportButton('rfm_scatter');
+    }, 500);
+  });
+</script>
+
+<style>
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.rfm-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.rfm-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0,0,0,0.3) !important;
+}
+
+.rfm-tabs .nav-link {
+  transition: all 0.3s ease;
+  border-radius: 10px 10px 0 0;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+}
+
+.rfm-tabs .nav-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s;
+}
+
+.rfm-tabs .nav-link:hover::before {
+  left: 100%;
+}
+
+.rfm-tabs .nav-link:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  transform: translateY(-3px);
+}
+
+.rfm-tabs .nav-link.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+}
+
+.rfm-table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.rfm-table tbody tr:hover {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.05), rgba(240, 147, 251, 0.05));
+  transform: translateX(5px);
+}
+
+.badge {
+  transition: all 0.2s ease;
+}
+
+.badge:hover {
+  transform: scale(1.1);
+}
+</style>
+
+{% endblock %}

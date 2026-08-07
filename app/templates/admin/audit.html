@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+  <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Audit Log</h2>
+    <a class="btn btn-outline-secondary btn-sm" href="/admin/users">Users</a>
+  </div>
+  <div class="col-12">
+    <div class="card"><div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>IP</th>
+              <th>Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+            <tr>
+              <td>{{ e.ts }}</td>
+              <td>{{ e.username }}</td>
+              <td>{{ e.action }}</td>
+              <td>{{ e.ip }}</td>
+              <td><code style="white-space: pre-wrap;">{{ e.meta or '' }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
+

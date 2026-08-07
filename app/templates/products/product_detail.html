@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Product Detail: {{ product_id }}{% endblock %}
+
+{% block content %}
+
+{% if products_warning %}
+  <div class="alert alert-warning" role="alert">{{ products_warning }}</div>
+{% endif %}
+
+<div id="productDetailPage" class="page-shell shadow-soft">
+  <section class="overview-hero d-flex flex-wrap justify-content-between align-items-start gap-4">
+    <div>
+      <h1 class="display-5 fw-bold mb-2 text-primary">
+        <i class="bi bi-box-seam me-2"></i>Product: {{ product_data.desc | default(product_id) }}
+      </h1>
+      <p class="text-muted mb-0">Product ID: {{ product_id }}</p>
+      <p class="text-muted mb-0">SKU: {{ product_data.sku | default('N/A') }}</p>
+    </div>
+    <div class="text-end">
+      <div class="btn-group mb-2" role="group" aria-label="Product actions">
+        <button class="btn btn-primary" id="exportProductDataBtn" type="button">
+          <i class="bi bi-download me-1"></i>Export
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4 my-4">
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Total Revenue</p>
+        <div class="kpi-value">{{ product_data.revenue | currency }}</div>
+      </article>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Total Quantity</p>
+        <div class="kpi-value">{{ product_data.qty | intcomma }}</div>
+      </article>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Average Price</p>
+        <div class="kpi-value">{{ product_data.avg_price | currency }}</div>
+      </article>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Margin %</p>
+        <div class="kpi-value">{{ product_data.margin_pct | percent }}</div>
+      </article>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Category</p>
+        <div class="kpi-value">{{ product_data.category | default('N/A') }}</div>
+      </article>
+    </div>
+    <div class="col-md-6 col-lg-4">
+      <article class="kpi-card shadow-soft">
+        <p class="kpi-label">Supplier</p>
+        <div class="kpi-value">{{ product_data.supplier | default('N/A') }}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="my-4">
+    <h4 class="mb-3">Product Insights & Recommendations</h4>
+    {% if recommendations %}
+      <div class="list-group">
+        {% for rec in recommendations %}
+          <div class="list-group-item list-group-item-action flex-column align-items-start">
+            <div class="d-flex w-100 justify-content-between">
+              <h5 class="mb-1">{{ rec.title | default(rec.type) }}</h5>
+              <small class="text-muted">Confidence: {{ rec.confidence | percent }}</small>
+            </div>
+            <p class="mb-1">{{ rec.explanation | default(rec.notes) }}</p>
+            {% if rec.actions %}
+              <small>Actions: {{ rec.actions | join(', ') }}</small>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert alert-info" role="alert">
+        No specific recommendations for this product at the moment.
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="row g-4 my-4">
+    <div class="col-lg-8">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Revenue Trend</h5>
+        </div>
+        <div class="card-body">
+          <div id="productRevenueTrendChart" class="chart-placeholder" style="min-height: 300px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Price Distribution</h5>
+        </div>
+        <div class="card-body">
+          <div id="productPriceDistributionChart" class="chart-placeholder" style="min-height: 300px;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const payload = {{ payload | tojson }};
+    const product_id = "{{ product_id }}";
+    const product_data = {{ product_data | tojson }};
+
+    // Render Revenue Trend Chart (simplified for now)
+    const trendChartDom = document.getElementById('productRevenueTrendChart');
+    if (trendChartDom) {
+        const trendChart = echarts.init(trendChartDom);
+        const trendOption = {
+            tooltip: {
+                trigger: 'axis'
+            },
+            xAxis: {
+                type: 'category',
+                data: payload.trend.labels
+            },
+            yAxis: {
+                type: 'value'
+            },
+            series: [{
+                name: 'Revenue',
+                type: 'line',
+                data: payload.trend.revenue
+            }]
+        };
+        trendChart.setOption(trendOption);
+    }
+
+    // Render Price Distribution Chart (simplified for now)
+    const priceDistChartDom = document.getElementById('productPriceDistributionChart');
+    if (priceDistChartDom) {
+        const priceDistChart = echarts.init(priceDistChartDom);
+        const priceDistOption = {
+            tooltip: {
+                trigger: 'axis'
+            },
+            xAxis: {
+                type: 'value'
+            },
+            yAxis: {
+                type: 'category',
+                data: ['Price'] // Placeholder
+            },
+            series: [{
+                name: 'Unit Price',
+                type: 'bar',
+                data: [product_data.avg_price] // Display average price as a bar for simplicity
+            }]
+        };
+        priceDistChart.setOption(priceDistOption);
+    }
+});
+</script>
+{% endblock %}

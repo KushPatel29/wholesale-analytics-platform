@@ -1,0 +1,17 @@
+[Unit]
+Description=Background Data Loader for wholesale-analytics
+After=network.target postgresql.service
+
+[Service]
+User=kush
+Group=kush
+WorkingDirectory=/opt/wholesale-analytics
+Environment="PATH=/opt/wholesale-analytics/venv/bin"
+Environment="DB_PASS=change_this_strong_password"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/wholesale-analytics/venv/bin/python worker.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

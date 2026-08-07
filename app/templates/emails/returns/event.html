@@ -1,0 +1,79 @@
+<div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+  <div style="margin-bottom: 16px;">
+    <div style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">{{ event_label }}</div>
+    <h2 style="margin: 6px 0 0; font-size: 22px;">Return #{{ rma.id }}</h2>
+  </div>
+
+  <table style="border-collapse: collapse; width: 100%; margin-bottom: 16px;">
+    <tbody>
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Status</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ rma.status_label or rma.status }}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Order</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ rma.order_id }}</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Customer</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ rma.customer_name or rma.customer_id }}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Rep</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ summary.rep_name or '-' }}</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Submitted</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ summary.date_submitted or '-' }}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Reason</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ summary.primary_reason or '-' }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if detail %}
+  <p style="margin: 0 0 16px;"><strong>Detail:</strong> {{ detail }}</p>
+  {% endif %}
+
+  <table style="border-collapse: collapse; width: 100%; margin-bottom: 16px;">
+    <thead>
+      <tr>
+        <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left; background: #f9fafb;">SKU</th>
+        <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left; background: #f9fafb;">Description</th>
+        <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: right; background: #f9fafb;">Weight</th>
+        <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: right; background: #f9fafb;">Credit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in top_items %}
+      <tr>
+        <td style="padding: 8px; border: 1px solid #e5e7eb;">{{ item.product_code or item.sku or '-' }}</td>
+        <td style="padding: 8px; border: 1px solid #e5e7eb;">{{ item.product_desc or item.product_name or '-' }}</td>
+        <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">{{ '%.3f'|format(item.weight_lb or 0) }}</td>
+        <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">${{ '%.2f'|format(item.credit_amount or 0) }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="padding: 8px; border: 1px solid #e5e7eb; color: #6b7280;">No line items</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table style="border-collapse: collapse; width: 100%; margin-bottom: 20px;">
+    <tbody>
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Total Credit</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">${{ '%.2f'|format(summary.total_credit_amount or 0) }}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Total Weight</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ '%.3f'|format(summary.total_weight_lb or 0) }} lb</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Total Packs</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ summary.total_packs or 0 }}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;"><strong>Category / Follow-up</strong></td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ summary.primary_category or '-' }} / {{ summary.primary_follow_up or '-' }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin: 0;">
+    <a href="{{ return_url }}" style="display: inline-block; padding: 10px 16px; background: #111827; color: #ffffff; text-decoration: none; border-radius: 6px;">Open Return</a>
+  </p>
+</div>

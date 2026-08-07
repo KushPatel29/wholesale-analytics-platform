@@ -1,0 +1,2964 @@
+{% extends 'base.html' %}
+
+{% block head_extras %}
+<style>
+  .admin-hero {
+    background: linear-gradient(135deg, #0d6efd 0%, #0b2f6a 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 10px 30px rgba(13, 110, 253, 0.25);
+  }
+  .badge-pill {
+    border-radius: 50rem;
+    padding: 0.35rem 0.7rem;
+  }
+  .admin-table thead {
+    background: #f7f9fc;
+    border-bottom: 1px solid #e5e8ec;
+  }
+  .admin-table td, .admin-table th {
+    vertical-align: middle;
+  }
+  .mini-stat {
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e9eef5;
+  }
+  .card-ghost {
+    border: 1px dashed #cfd6e4;
+    background: #fbfdff;
+  }
+  #accessModal .modal-dialog.access-modal-dialog {
+    width: min(1400px, calc(100vw - 1.5rem));
+    max-width: min(1400px, calc(100vw - 1.5rem));
+    height: calc(100dvh - 1.5rem);
+    margin: 0.75rem auto;
+  }
+  #accessModal .modal-content.access-modal-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    border-radius: 18px;
+  }
+  #accessModal form.access-modal-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+  #accessModal .modal-header.access-modal-header,
+  #accessModal .modal-footer.access-modal-footer {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    background: #fff;
+  }
+  #accessModal .modal-header.access-modal-header {
+    border-bottom: 1px solid #e6ebf3;
+  }
+  #accessModal .modal-body.access-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 1rem;
+  }
+  #accessModal .modal-footer.access-modal-footer {
+    gap: 0.5rem;
+    align-items: center;
+    border-top: 1px solid #e6ebf3;
+    box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+  }
+  .access-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .access-top-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
+    gap: 0.9rem;
+  }
+  .access-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
+    gap: 1rem;
+    align-items: start;
+  }
+  .access-main {
+    display: grid;
+    gap: 0.9rem;
+    min-width: 0;
+  }
+  .access-main,
+  .access-sidebar,
+  .access-workspace,
+  .access-top-grid {
+    min-width: 0;
+  }
+  .access-shell,
+  .access-section {
+    border: 1px solid #e3e8f0;
+    border-radius: 14px;
+    padding: 0.85rem 0.95rem;
+    background: #fff;
+  }
+  .access-shell h6,
+  .access-section h6 {
+    margin-bottom: 0.65rem;
+  }
+  .access-kicker {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #667085;
+    margin-bottom: 0.35rem;
+  }
+  .access-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .access-status-bar {
+    border: 1px solid #d9e2ee;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 0.7rem 0.85rem;
+  }
+  .access-status-bar.is-dirty {
+    border-color: #f0c36d;
+    background: #fff8e8;
+  }
+  .access-mode-hint {
+    border-radius: 12px;
+    padding: 0.75rem 0.85rem;
+    background: #f8fafc;
+    border: 1px solid #e4e9f1;
+  }
+  .access-mode-hint.locked {
+    background: #fff8e8;
+    border-color: #f0c36d;
+  }
+  .access-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .access-toolbar .btn-group {
+    flex-wrap: wrap;
+  }
+  .access-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+  .access-mode-option {
+    border: 1px solid #dbe4f0;
+    border-radius: 12px;
+    padding: 0.8rem 0.9rem;
+    background: #f8fbff;
+  }
+  .access-mode-option.active {
+    border-color: #0d6efd;
+    box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.2);
+    background: #eef5ff;
+  }
+  .access-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .access-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid #d9e2ee;
+    background: #f8fafc;
+    color: #344054;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.6rem;
+  }
+  .access-pill.allow {
+    border-color: #b7dfc8;
+    background: #ecfdf3;
+    color: #05603a;
+  }
+  .access-pill.deny {
+    border-color: #f1c0c0;
+    background: #fef3f2;
+    color: #b42318;
+  }
+  .access-pill.inherited {
+    border-color: #d0d8e4;
+    background: #f5f7fa;
+    color: #475467;
+  }
+  .access-matrix {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.8rem;
+  }
+  .access-module-card {
+    border: 1px solid #e4e9f1;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fbfdff 0%, #fff 100%);
+    overflow: hidden;
+  }
+  .access-module-card > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.85rem 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 0.75rem;
+  }
+  .access-module-card > summary::-webkit-details-marker {
+    display: none;
+  }
+  .access-module-meta {
+    color: #667085;
+    font-size: 0.82rem;
+  }
+  .access-module-body {
+    border-top: 1px solid #edf1f6;
+    padding: 0.85rem 0.95rem;
+  }
+  .access-module-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.7rem;
+  }
+  .access-checklist {
+    display: grid;
+    gap: 0.55rem;
+  }
+  .access-check {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.6rem;
+    align-items: start;
+    border: 1px solid #e8edf4;
+    border-radius: 12px;
+    padding: 0.6rem 0.7rem;
+    background: #fff;
+  }
+  .access-check.is-disabled {
+    opacity: 0.6;
+  }
+  .access-check-type {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #667085;
+  }
+  .access-check-state {
+    white-space: nowrap;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    background: #f2f4f7;
+    color: #344054;
+  }
+  .access-check-state.allow {
+    background: #ecfdf3;
+    color: #05603a;
+  }
+  .access-check-state.deny {
+    background: #fef3f2;
+    color: #b42318;
+  }
+  .access-check-state.inherited {
+    background: #f5f7fa;
+    color: #475467;
+  }
+  .access-sidebar {
+    display: grid;
+    gap: 0.9rem;
+    position: sticky;
+    top: 0;
+    align-self: start;
+  }
+  .access-summary-list {
+    margin: 0;
+    padding-left: 1rem;
+  }
+  .access-warning-list {
+    margin: 0;
+    padding-left: 1rem;
+    color: #b54708;
+  }
+  .access-warning-list li + li {
+    margin-top: 0.35rem;
+  }
+  .access-empty-state {
+    border: 1px dashed #d0d8e4;
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    color: #667085;
+    background: #fbfcfe;
+  }
+  .access-footer-status {
+    min-width: 0;
+    margin-right: auto;
+  }
+  @media (max-width: 991px) {
+    .access-grid,
+    .access-workspace,
+    .access-top-grid {
+      grid-template-columns: 1fr;
+    }
+    .access-sidebar {
+      position: static;
+    }
+  }
+  @media (max-width: 767px) {
+    #accessModal .modal-dialog.access-modal-dialog {
+      width: calc(100vw - 0.5rem);
+      max-width: calc(100vw - 0.5rem);
+      height: calc(100dvh - 0.5rem);
+      margin: 0.25rem auto;
+    }
+    #accessModal .modal-body.access-modal-body {
+      padding: 0.85rem;
+    }
+    #accessModal .modal-footer.access-modal-footer {
+      justify-content: stretch;
+    }
+    #accessModal .modal-footer.access-modal-footer .btn,
+    #accessModal .modal-footer.access-modal-footer .btn-group {
+      width: 100%;
+    }
+    .access-footer-status {
+      width: 100%;
+      margin-right: 0;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-hero mb-4 d-flex justify-content-between align-items-center gap-3">
+  <div>
+    <div class="text-uppercase small fw-semibold opacity-75">Admin Control</div>
+    <h2 class="h4 mb-1">People, Roles & Visibility</h2>
+    <div class="small">Single pane to add, approve, scope, preview, and audit every user.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-light btn-sm" href="{{ url_for('admin.roles') }}">Roles & Permissions</a>
+    <button class="btn btn-light btn-sm" data-bulk="approve">Bulk Approve</button>
+    <button class="btn btn-outline-light btn-sm" data-bulk="disable">Bulk Disable</button>
+    <button class="btn btn-outline-light btn-sm" data-bulk="assign_role">Bulk Role</button>
+    <button class="btn btn-outline-light btn-sm" data-bulk="assign_scope">Bulk Scope</button>
+  </div>
+</div>
+
+<div id="adminAlerts"></div>
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="card-title mb-0">Invite / Create User</h5>
+          <span class="badge bg-secondary badge-pill small">Safe by default</span>
+        </div>
+        <p class="text-muted small mb-3">New accounts start inactive and unapproved until you explicitly approve.</p>
+        <form id="createUserForm" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if admin_user_select_enabled %}
+          <div class="col-12">
+            <div class="btn-group w-100" role="group" aria-label="Create mode">
+              <input type="radio" class="btn-check" name="createMode" id="createModeNew" value="new" checked>
+              <label class="btn btn-outline-primary btn-sm" for="createModeNew">Create new user</label>
+              <input type="radio" class="btn-check" name="createMode" id="createModeExisting" value="existing">
+              <label class="btn btn-outline-primary btn-sm" for="createModeExisting">Select existing user</label>
+            </div>
+            <div class="form-text">Selecting an existing user updates roles and scope without creating a duplicate account.</div>
+          </div>
+          <div class="col-12 d-none" id="existingUserBlock">
+            <label class="form-label small" for="existingUserSearch">Select Existing User</label>
+            <input class="form-control" id="existingUserSearch" placeholder="Search users by name or email">
+            <div class="list-group mt-2" id="existingUserResults"></div>
+            <input type="hidden" id="existingUserId" name="existing_user_id">
+            <div class="small text-muted mt-1" id="existingUserSelected">No existing user selected.</div>
+          </div>
+          {% endif %}
+          <div class="col-12">
+            <label class="form-label small" for="newEmail">Email</label>
+            <input class="form-control" id="newEmail" name="email" type="email" placeholder="user@company.com" autocomplete="email">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small" for="newFirst">First name</label>
+            <input class="form-control" id="newFirst" name="first_name" autocomplete="given-name">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small" for="newLast">Last name</label>
+            <input class="form-control" id="newLast" name="last_name" autocomplete="family-name">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small" for="newRole">Role</label>
+            <select class="form-select" id="newRole" name="role">
+              {% for r in roles %}
+              <option value="{{ r }}">{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label small" for="newErpSearch">ERP User (Required)</label>
+            <input class="form-control" id="newErpSearch" placeholder="Search ERP users by name or ID">
+            <div class="list-group mt-2" id="newErpResults"></div>
+            <input type="hidden" id="newErpUserId" name="erp_user_id">
+            <div class="small text-muted mt-1" id="newErpSelected">No ERP user selected.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label small" for="newVisibilitySearch">Allowed Sales Reps</label>
+            <input class="form-control" id="newVisibilitySearch" placeholder="Search sales reps by ID or name">
+            <div class="list-group mt-2" id="newVisibilityResults"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="newVisibilityAllBtn">All ERP Users</button>
+            <div class="mt-2" id="newVisibilitySelected"></div>
+            <div class="form-text">If empty, the user will have no data access configured.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label small" for="newCustomerSearch">Allowed Customers</label>
+            <input class="form-control" id="newCustomerSearch" placeholder="Search customers by ID or name">
+            <div class="list-group mt-2" id="newCustomerResults"></div>
+            <div class="mt-2" id="newCustomerSelected"></div>
+            <div class="form-text">Optional for finer-grained access.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small" for="newCustomerScope">Advanced Customer Scope (IDs CSV)</label>
+            <input class="form-control" id="newCustomerScope" placeholder="CUST-1,CUST-2">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small" for="newRegionScope">Region Scope (IDs CSV)</label>
+            <input class="form-control" id="newRegionScope" placeholder="West,East">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small" for="newSupplierScope">Supplier Scope (IDs CSV)</label>
+            <input class="form-control" id="newSupplierScope" placeholder="SUP-1,SUP-2">
+          </div>
+          <div class="col-md-6 d-flex align-items-center gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="newApprove" name="approve">
+              <label class="form-check-label small" for="newApprove">Approve & enable now</label>
+            </div>
+          </div>
+          <div class="col-12 d-grid gap-2">
+            <button class="btn btn-primary" type="submit" id="createUserSubmitBtn">Create User</button>
+            <small class="text-muted" id="createUserHelpText">Invite email is sent automatically after creation.</small>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="card-title mb-0">Search & Filters</h5>
+              <span class="text-muted small">Defaults to active users</span>
+            </div>
+            <form id="adminUsersFiltersForm" class="row g-2 align-items-end">
+              <div class="col-md-5">
+                <label class="form-label small" for="filterQuery">Search</label>
+                <input class="form-control" id="filterQuery" name="query" placeholder="Email or name">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small" for="filterRole">Role</label>
+                <select class="form-select" id="filterRole" name="role">
+                  <option value="">Any</option>
+                  {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small" for="filterStatus">Status</label>
+                <select class="form-select" id="filterStatus" name="status">
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
+                  <option value="pending">Pending</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div class="col-md-2 text-end">
+                <button class="btn btn-outline-primary w-100" type="submit">Go</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card h-100 card-ghost">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="card-title mb-0">Live Audit</h5>
+              <a class="small text-decoration-none" href="{{ url_for('admin.audit') }}">Open full audit log</a>
+            </div>
+            <p class="text-muted small mb-2">Every change to roles, scopes, approval, and resets is captured. Drill in per user using the Audit button.</p>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <div class="mini-stat">
+                  <div class="small text-muted">Pending approval</div>
+                  <div class="fw-bold" data-stat="pending">-</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mini-stat">
+                  <div class="small text-muted">Active</div>
+                  <div class="fw-bold" data-stat="active">-</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mini-stat">
+                  <div class="small text-muted">Disabled</div>
+                  <div class="fw-bold" data-stat="disabled">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="card-title mb-0">People & Access</h5>
+      <div class="text-muted small" id="adminUserSummary">Loading users-</div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle admin-table" id="adminUserTable">
+        <thead>
+          <tr>
+            <th style="width:30px;"><input class="form-check-input" type="checkbox" id="selectAll"></th>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>ERP User</th>
+            <th>Visibility</th>
+            <th>Approved</th>
+            <th>Active</th>
+            <th>Last login</th>
+            <th>Updated</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody data-user-table-body>
+        </tbody>
+      </table>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-2">
+      <div id="adminUserPagination" class="small text-muted"></div>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary" data-page="prev">Prev</button>
+        <button class="btn btn-outline-secondary" data-page="next">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scope modal -->
+<div class="modal fade" id="scopeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="scopeForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Visibility</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="scopeUserId">
+          <div class="mb-3">
+            <label class="form-label small" for="scopeVisibilitySearch">Allowed Sales Reps</label>
+            <input class="form-control" id="scopeVisibilitySearch" placeholder="Search sales reps by ID or name">
+            <div class="list-group mt-2" id="scopeVisibilityResults"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="scopeVisibilityAllBtn">All ERP Users</button>
+          </div>
+          <div>
+            <div class="fw-semibold small mb-1">Selected Visibility</div>
+            <div id="scopeVisibilitySelected"></div>
+            <div class="form-text">If empty, the user will have no data access configured.</div>
+          </div>
+          <hr>
+          <div class="mb-3">
+            <label class="form-label small" for="scopeCustomerSearch">Allowed Customers</label>
+            <input class="form-control" id="scopeCustomerSearch" placeholder="Search customers by ID or name">
+            <div class="list-group mt-2" id="scopeCustomerResults"></div>
+            <div class="mt-2" id="scopeCustomerSelected"></div>
+          </div>
+          <hr>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small" for="scopeCustomerIds">Advanced Customer IDs (CSV)</label>
+              <input class="form-control form-control-sm" id="scopeCustomerIds" placeholder="CUST-1,CUST-2">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small" for="scopeRegionIds">Region IDs (CSV)</label>
+              <input class="form-control form-control-sm" id="scopeRegionIds" placeholder="West,East">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small" for="scopeSupplierIds">Supplier IDs (CSV)</label>
+              <input class="form-control form-control-sm" id="scopeSupplierIds" placeholder="SUP-1,SUP-2">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit" id="scopeSaveBtn">Save scope</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Access modal -->
+<div class="modal fade" id="accessModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl access-modal-dialog">
+    <div class="modal-content access-modal-content">
+      <form id="accessForm" class="access-modal-form">
+        <div class="modal-header access-modal-header">
+          <h5 class="modal-title">Access Editor</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body access-modal-body">
+          <div id="accessFlagNotice" class="alert alert-warning d-none mb-3">
+            `ADMIN_PERMISSIONS_V2` is off. These settings are saved now; full route-level enforcement turns on when the flag is enabled.
+          </div>
+          <div id="accessStatusBar" class="access-status-bar mb-3 small text-muted">Loading editor status…</div>
+          <div id="accessResultBanner" class="d-none mb-3" role="alert"></div>
+          <input type="hidden" id="accessUserId">
+          <div class="access-workspace">
+            <div class="access-main">
+              <div class="access-top-grid">
+                <section class="access-shell">
+                  <div class="access-kicker">User Summary</div>
+                  <div id="accessUserSummary" class="small text-muted">Loading…</div>
+                </section>
+                <section class="access-shell">
+                  <div class="access-kicker">Role / Source Of Access</div>
+                  <div id="accessSourceSummary" class="small text-muted mb-3">Loading effective access source…</div>
+                  <div id="accessModeHint" class="access-mode-hint locked mb-3">Loading access mode…</div>
+                  <div class="access-mode-grid mb-3">
+                    <label class="access-mode-option" id="accessModeRoleCard" for="accessModeRole">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="accessSourceMode" id="accessModeRole" value="role">
+                        <span class="form-check-label fw-semibold">Use role defaults only</span>
+                      </div>
+                      <div class="small text-muted">User inherits role permissions without per-user allow/deny overrides.</div>
+                    </label>
+                    <label class="access-mode-option" id="accessModeCustomCard" for="accessModeCustom">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="accessSourceMode" id="accessModeCustom" value="custom">
+                        <span class="form-check-label fw-semibold">Allow per-user overrides</span>
+                      </div>
+                      <div class="small text-muted">Inherited role access stays visible, and this user can be explicitly granted or denied access.</div>
+                    </label>
+                  </div>
+                  <div class="row g-3">
+                    <div class="col-lg-7">
+                      <div class="small text-muted mb-1">Inherited from role</div>
+                      <div id="accessRoleDefaults" class="access-pill-row"></div>
+                    </div>
+                    <div class="col-lg-5">
+                      <div class="small text-muted mb-1">Explicit overrides</div>
+                      <div id="accessOverrideSummary" class="access-pill-row"></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <section class="access-shell">
+                <div class="access-kicker">Quick Actions</div>
+                <div id="accessQuickActions" class="access-toolbar"></div>
+                <hr>
+                <div class="access-toolbar">
+                  <div class="flex-grow-1">
+                    <label class="form-label small mb-1" for="accessSearch">Search permissions</label>
+                    <input class="form-control form-control-sm" id="accessSearch" placeholder="Search modules, permissions, exports, or sensitive controls">
+                  </div>
+                  <div class="form-check form-switch ms-auto mt-4">
+                    <input class="form-check-input" type="checkbox" id="accessEnabledOnly">
+                    <label class="form-check-label small" for="accessEnabledOnly">Enabled only</label>
+                  </div>
+                </div>
+              </section>
+              <section class="access-shell">
+                <div class="access-kicker">Page Access Matrix</div>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <div class="access-legend small">
+                    <span class="access-pill inherited">Inherited</span>
+                    <span class="access-pill allow">Explicit allow</span>
+                    <span class="access-pill deny">Explicit hide</span>
+                  </div>
+                  <div class="small text-muted">Selecting a child permission auto-enables its required page access.</div>
+                </div>
+                <div id="accessPermissionGrid"></div>
+              </section>
+            </div>
+            <aside class="access-sidebar">
+              <section class="access-shell">
+                <div class="access-kicker">Effective Access Preview</div>
+                <div id="accessPreview" class="small text-muted">Select permissions to preview module access.</div>
+              </section>
+              <section class="access-shell">
+                <div class="access-kicker">Validation</div>
+                <div id="accessWarnings" class="small text-muted">No warnings.</div>
+              </section>
+            </aside>
+          </div>
+        </div>
+        <div class="modal-footer access-modal-footer">
+          <div id="accessFooterStatus" class="access-footer-status small text-muted">No unsaved changes.</div>
+          <button class="btn btn-outline-secondary" type="button" id="accessPreviewBtn">Preview effective access</button>
+          <button class="btn btn-outline-secondary" type="button" id="accessResetBtn">Reset changes</button>
+          <button class="btn btn-outline-secondary" type="button" id="accessRoleResetBtn">Reset to role defaults</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit" id="accessSaveBtn">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk action modal -->
+<div class="modal fade" id="bulkModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="bulkForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bulkModalTitle">Bulk Update</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="bulkAction">
+          <div id="bulkSelectionSummary" class="small text-muted mb-3">No users selected.</div>
+          <div id="bulkHelp" class="alert alert-info py-2 mb-3">Review the change before applying it.</div>
+          <div id="bulkRoleBlock" class="d-none">
+            <label class="form-label small" for="bulkRole">Role</label>
+            <select class="form-select" id="bulkRole">
+              {% for r in roles %}
+              <option value="{{ r }}">{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="bulkScopeBlock" class="d-none">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="bulkScopeAll">
+              <label class="form-check-label" for="bulkScopeAll">Grant all ERP users</label>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small" for="bulkVisibilityIds">Allowed Sales Reps (CSV)</label>
+              <textarea class="form-control" id="bulkVisibilityIds" rows="2" placeholder="ERP-1, ERP-2"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small" for="bulkCustomerIds">Allowed Customers (CSV)</label>
+              <textarea class="form-control" id="bulkCustomerIds" rows="2" placeholder="CUST-1, CUST-2"></textarea>
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="bulkRegionIds">Region Scope (CSV)</label>
+                <input class="form-control" id="bulkRegionIds" placeholder="West, East">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="bulkSupplierIds">Supplier Scope (CSV)</label>
+                <input class="form-control" id="bulkSupplierIds" placeholder="SUP-1, SUP-2">
+              </div>
+            </div>
+          </div>
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="bulkConfirm" required>
+            <label class="form-check-label small" for="bulkConfirm">I understand this updates every selected user immediately.</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit">Apply bulk update</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Audit modal -->
+<div class="modal fade" id="auditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Audit Trail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <select class="form-select form-select-sm w-auto" id="auditActionFilter">
+            <option value="">All actions</option>
+            <option value="admin_create_user">Create</option>
+            <option value="admin_update_user">Update</option>
+            <option value="admin_update_role">Role</option>
+            <option value="admin_update_visibility">Visibility</option>
+            <option value="admin_reset_password">Reset password</option>
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" id="auditReload">Reload</button>
+        </div>
+        <div id="auditList" class="list-group list-group-flush small"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Preview as user</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="previewContent"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const csrfToken = "{{ csrf_token() }}";
+  const roles = {{ roles|tojson }};
+  const adminUserSelectEnabled = {{ admin_user_select_enabled|tojson }};
+  const adminPermissionsV2 = {{ config.get('ADMIN_PERMISSIONS_V2', False)|tojson }};
+  const ALL_SCOPE_TOKEN = "__all__";
+  const authFetch = window.authFetch || fetch;
+  const tableBody = document.querySelector('[data-user-table-body]');
+  const alertHost = document.getElementById('adminAlerts');
+  const summaryEl = document.getElementById('adminUserSummary');
+  const paginationEl = document.getElementById('adminUserPagination');
+  const auditFilter = document.getElementById('auditActionFilter');
+  const auditReload = document.getElementById('auditReload');
+  const createUserSubmitBtn = document.getElementById('createUserSubmitBtn');
+  const createUserHelpText = document.getElementById('createUserHelpText');
+  const accessFlagNotice = document.getElementById('accessFlagNotice');
+  const scopeSaveBtn = document.getElementById('scopeSaveBtn');
+
+  const createModeNew = document.getElementById('createModeNew');
+  const createModeExisting = document.getElementById('createModeExisting');
+  const existingUserBlock = document.getElementById('existingUserBlock');
+  const existingUserSearch = document.getElementById('existingUserSearch');
+  const existingUserResults = document.getElementById('existingUserResults');
+  const existingUserId = document.getElementById('existingUserId');
+  const existingUserSelected = document.getElementById('existingUserSelected');
+
+  const newErpSearch = document.getElementById('newErpSearch');
+  const newErpResults = document.getElementById('newErpResults');
+  const newErpUserId = document.getElementById('newErpUserId');
+  const newErpSelected = document.getElementById('newErpSelected');
+  const newEmail = document.getElementById('newEmail');
+  const newFirst = document.getElementById('newFirst');
+  const newLast = document.getElementById('newLast');
+
+  const newVisibilitySearch = document.getElementById('newVisibilitySearch');
+  const newVisibilityResults = document.getElementById('newVisibilityResults');
+  const newVisibilityAllBtn = document.getElementById('newVisibilityAllBtn');
+  const newVisibilitySelected = document.getElementById('newVisibilitySelected');
+  const newCustomerSearch = document.getElementById('newCustomerSearch');
+  const newCustomerResults = document.getElementById('newCustomerResults');
+  const newCustomerSelected = document.getElementById('newCustomerSelected');
+  const newCustomerScope = document.getElementById('newCustomerScope');
+  const newRegionScope = document.getElementById('newRegionScope');
+  const newSupplierScope = document.getElementById('newSupplierScope');
+
+  const scopeVisibilitySearch = document.getElementById('scopeVisibilitySearch');
+  const scopeVisibilityResults = document.getElementById('scopeVisibilityResults');
+  const scopeVisibilityAllBtn = document.getElementById('scopeVisibilityAllBtn');
+  const scopeVisibilitySelected = document.getElementById('scopeVisibilitySelected');
+  const scopeCustomerSearch = document.getElementById('scopeCustomerSearch');
+  const scopeCustomerResults = document.getElementById('scopeCustomerResults');
+  const scopeCustomerSelected = document.getElementById('scopeCustomerSelected');
+  const scopeCustomerIds = document.getElementById('scopeCustomerIds');
+  const scopeRegionIds = document.getElementById('scopeRegionIds');
+  const scopeSupplierIds = document.getElementById('scopeSupplierIds');
+  const accessUserId = document.getElementById('accessUserId');
+  const accessUserSummary = document.getElementById('accessUserSummary');
+  const accessPermissionGrid = document.getElementById('accessPermissionGrid');
+  const accessPreview = document.getElementById('accessPreview');
+  const accessRoleDefaults = document.getElementById('accessRoleDefaults');
+  const accessSourceSummary = document.getElementById('accessSourceSummary');
+  const accessOverrideSummary = document.getElementById('accessOverrideSummary');
+  const accessQuickActions = document.getElementById('accessQuickActions');
+  const accessSearch = document.getElementById('accessSearch');
+  const accessEnabledOnly = document.getElementById('accessEnabledOnly');
+  const accessWarnings = document.getElementById('accessWarnings');
+  const accessModeRole = document.getElementById('accessModeRole');
+  const accessModeCustom = document.getElementById('accessModeCustom');
+  const accessModeRoleCard = document.getElementById('accessModeRoleCard');
+  const accessModeCustomCard = document.getElementById('accessModeCustomCard');
+  const accessModeHint = document.getElementById('accessModeHint');
+  const accessStatusBar = document.getElementById('accessStatusBar');
+  const accessResultBanner = document.getElementById('accessResultBanner');
+  const accessPreviewBtn = document.getElementById('accessPreviewBtn');
+  const accessResetBtn = document.getElementById('accessResetBtn');
+  const accessRoleResetBtn = document.getElementById('accessRoleResetBtn');
+  const accessFooterStatus = document.getElementById('accessFooterStatus');
+  const accessSaveBtn = document.getElementById('accessSaveBtn');
+  const accessModalElement = document.getElementById('accessModal');
+  const accessModalBody = accessModalElement ? accessModalElement.querySelector('.access-modal-body') : null;
+  const bulkActionInput = document.getElementById('bulkAction');
+  const bulkModalTitle = document.getElementById('bulkModalTitle');
+  const bulkSelectionSummary = document.getElementById('bulkSelectionSummary');
+  const bulkHelp = document.getElementById('bulkHelp');
+  const bulkRoleBlock = document.getElementById('bulkRoleBlock');
+  const bulkScopeBlock = document.getElementById('bulkScopeBlock');
+  const bulkRole = document.getElementById('bulkRole');
+  const bulkScopeAll = document.getElementById('bulkScopeAll');
+  const bulkVisibilityIds = document.getElementById('bulkVisibilityIds');
+  const bulkCustomerIds = document.getElementById('bulkCustomerIds');
+  const bulkRegionIds = document.getElementById('bulkRegionIds');
+  const bulkSupplierIds = document.getElementById('bulkSupplierIds');
+  const bulkConfirm = document.getElementById('bulkConfirm');
+  const bulkForm = document.getElementById('bulkForm');
+  const bulkSubmitBtn = bulkForm ? bulkForm.querySelector('button[type="submit"]') : null;
+
+  const initialFilters = {{ admin_user_filters|tojson }};
+
+  const state = {
+    page: 1,
+    pageSize: 25,
+    role: initialFilters.role || '',
+    status: initialFilters.status || 'active',
+    query: initialFilters.query || '',
+    total: 0,
+    selected: new Set(),
+    cache: new Map(),
+    erpCache: new Map(),
+    erpQueryCache: new Map(),
+    existingUserCache: new Map(),
+    existingUserQueryCache: new Map(),
+    repCache: new Map(),
+    customerCache: new Map(),
+    repQueryCache: new Map(),
+    customerQueryCache: new Map(),
+    newVisibility: new Map(),
+    newCustomers: new Map(),
+    scopeVisibility: new Map(),
+    scopeCustomers: new Map(),
+    newErpSelection: null,
+    existingUserSelection: null,
+    createMode: "new",
+    access: null,
+  };
+
+  let scopeModal = null;
+  let accessModal = null;
+  let bulkModal = null;
+  let auditModal = null;
+  let previewModal = null;
+  let bootstrapWarned = false;
+  let accessSavePending = false;
+  let usersLoadController = null;
+  let usersLoadSeq = 0;
+  let accessLoadController = null;
+  let accessLoadSeq = 0;
+  let auditLoadController = null;
+  let auditLoadSeq = 0;
+  let previewLoadController = null;
+  let previewLoadSeq = 0;
+
+  function createNoopModal(name) {
+    return {
+      show() {
+        if (!bootstrapWarned) {
+          console.warn(`Bootstrap modal support unavailable; ${name} actions are disabled.`);
+          bootstrapWarned = true;
+        }
+      },
+      hide() {},
+    };
+  }
+
+  function buildModal(id, name) {
+    const el = document.getElementById(id);
+    if (!el) return createNoopModal(name);
+    const modalApi = window.bootstrap && window.bootstrap.Modal;
+    if (!modalApi) return createNoopModal(name);
+    try {
+      if (typeof modalApi.getOrCreateInstance === 'function') {
+        return modalApi.getOrCreateInstance(el);
+      }
+      return new modalApi(el);
+    } catch (err) {
+      console.warn(`Failed to initialize ${name} modal.`, err);
+      return createNoopModal(name);
+    }
+  }
+
+  function ensureModals() {
+    if (!scopeModal) scopeModal = buildModal('scopeModal', 'scope');
+    if (!accessModal) accessModal = buildModal('accessModal', 'access');
+    if (!bulkModal) bulkModal = buildModal('bulkModal', 'bulk');
+    if (!auditModal) auditModal = buildModal('auditModal', 'audit');
+    if (!previewModal) previewModal = buildModal('previewModal', 'preview');
+  }
+
+  function syncAccessModalLayout({ resetScroll = false } = {}) {
+    if (resetScroll && accessModalBody) {
+      accessModalBody.scrollTop = 0;
+    }
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {
+        if (accessModal && typeof accessModal.handleUpdate === 'function') {
+          accessModal.handleUpdate();
+        }
+      });
+      return;
+    }
+    if (accessModal && typeof accessModal.handleUpdate === 'function') {
+      accessModal.handleUpdate();
+    }
+  }
+
+  function notify(message, variant = "success") {
+    const el = document.createElement('div');
+    el.className = `alert alert-${variant} alert-dismissible fade show`;
+    el.role = "alert";
+    el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    alertHost.appendChild(el);
+    setTimeout(() => el.classList.remove('show'), 5000);
+    setTimeout(() => el.remove(), 5200);
+  }
+
+  function setInlineAlert(container, message, variant = 'info') {
+    if (!container) return;
+    if (!message) {
+      container.className = 'd-none';
+      container.innerHTML = '';
+      return;
+    }
+    container.className = `alert alert-${variant} mb-3`;
+    container.innerHTML = message;
+  }
+
+  function setPendingButton(button, pending, pendingLabel) {
+    if (!button) return;
+    if (pending) {
+      if (!button.dataset.originalLabel) {
+        button.dataset.originalLabel = button.innerHTML;
+      }
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      if (pendingLabel) {
+        button.textContent = pendingLabel;
+      }
+      return;
+    }
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    if (button.dataset.originalLabel) {
+      button.innerHTML = button.dataset.originalLabel;
+      delete button.dataset.originalLabel;
+    }
+  }
+
+  function confirmAction(message) {
+    if (!message) return true;
+    if (typeof window.confirm !== 'function') return true;
+    return window.confirm(message);
+  }
+
+  async function api(url, options = {}) {
+    const opts = {
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      },
+      ...options,
+    };
+    const res = await authFetch(url, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.error || res.statusText || 'Request failed';
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  const boolBadge = (val, yes = "Yes", no = "No") => val
+    ? `<span class="badge bg-success">${yes}</span>`
+    : `<span class="badge bg-secondary">${no}</span>`;
+
+  function formatDate(value) {
+    if (!value) return '-';
+    try {
+      return new Date(value).toLocaleString();
+    } catch (e) {
+      return value;
+    }
+  }
+
+  function formatName(user) {
+    if (user.full_name) return user.full_name;
+    const parts = [user.first_name, user.last_name].filter(Boolean);
+    return parts.join(' ') || '-';
+  }
+
+  function isAdmin(user) {
+    return String(user.role || '').toLowerCase() === 'admin';
+  }
+
+  function formatVisibility(user) {
+    const list = user.visibility || (user.scope && user.scope.allowed_erp_user_ids) || [];
+    const hasAllScope = list.map(v => String(v).toLowerCase()).includes(ALL_SCOPE_TOKEN);
+    if (isAdmin(user) || (user.scope && user.scope.scope_mode === 'all') || hasAllScope) {
+      return '<span class="badge bg-primary">All</span>';
+    }
+    if (!list.length) return '<span class="text-muted">No access</span>';
+    const shown = list.slice(0, 3).map(v => String(v));
+    const extra = list.length > 3 ? ` +${list.length - 3}` : '';
+    return `${shown.join(', ')}${extra}`;
+  }
+
+  function formatErpId(user) {
+    const id = user.erp_user_id || user.sales_rep_id;
+    return id ? String(id) : '<span class="text-muted">Unlinked</span>';
+  }
+
+  function normalizeErpUser(raw) {
+    if (!raw) return null;
+    const id = raw.user_id || raw.UserId || raw.id || raw.erp_user_id;
+    if (!id) return null;
+    const first = raw.first_name || raw.FirstName || raw.first || '';
+    const last = raw.last_name || raw.LastName || raw.last || '';
+    const full = raw.full_name || raw.FullName || [first, last].filter(Boolean).join(' ').trim();
+    const label = full ? `${full} (${id})` : String(id);
+    return { id: String(id), first_name: first, last_name: last, full_name: full, label };
+  }
+
+  function normalizeLookupItem(raw) {
+    if (!raw) return null;
+    let id = raw.id || raw.user_id || raw.UserId || raw.erp_user_id;
+    if (!id) return null;
+    const idToken = String(id).trim().toLowerCase();
+    if (idToken === "all" || idToken === "*" || idToken === ALL_SCOPE_TOKEN) {
+      id = ALL_SCOPE_TOKEN;
+    }
+    const first = raw.first_name || raw.FirstName || "";
+    const last = raw.last_name || raw.LastName || "";
+    const full = raw.full_name || raw.FullName || [first, last].filter(Boolean).join(" ").trim();
+    const email = raw.email || "";
+    const fallback = full && email ? `${full} (${email})` : (full || email || String(id));
+    const label = (String(id) === ALL_SCOPE_TOKEN)
+      ? (raw.label || "All ERP Users (All Access)")
+      : (raw.label || fallback);
+    return {
+      ...raw,
+      id: String(id),
+      label: String(label),
+      first_name: first || raw.first_name || "",
+      last_name: last || raw.last_name || "",
+      full_name: full || raw.full_name || "",
+      email: email || raw.email || "",
+    };
+  }
+
+  function cacheErpUser(user) {
+    if (!user) return;
+    state.erpCache.set(user.id, user);
+  }
+
+  function getLabelFromCache(cacheMap, id) {
+    const cached = cacheMap.get(String(id));
+    if (cached) return cached.label;
+    return String(id);
+  }
+
+  function getErpLabel(id) {
+    return getLabelFromCache(state.erpCache, id);
+  }
+
+  async function fetchLookupItems(endpoint, query, queryCache, itemCache, normalizer = normalizeLookupItem) {
+    const key = query.toLowerCase();
+    if (queryCache.has(key)) {
+      return queryCache.get(key);
+    }
+    const separator = endpoint.includes("?") ? "&" : "?";
+    const res = await api(`${endpoint}${separator}q=${encodeURIComponent(query)}&limit=20`);
+    const raw = res.items || res.users || res.results || res.data || [];
+    const items = raw.map(normalizer).filter(Boolean);
+    items.forEach((item) => itemCache.set(String(item.id), item));
+    queryCache.set(key, items);
+    return items;
+  }
+
+  async function fetchErpUsers(query) {
+    return fetchLookupItems("/api/admin/erp-users", query, state.erpQueryCache, state.erpCache, normalizeErpUser);
+  }
+
+  async function fetchExistingUsers(query) {
+    return fetchLookupItems("/admin/api/users/search", query, state.existingUserQueryCache, state.existingUserCache);
+  }
+
+  async function fetchRepOptions(query) {
+    return fetchLookupItems("/admin/api/reps/search", query, state.repQueryCache, state.repCache);
+  }
+
+  async function fetchCustomerOptions(query) {
+    return fetchLookupItems("/admin/api/customers/search", query, state.customerQueryCache, state.customerCache);
+  }
+
+  function renderSearchResults(container, items, onSelect) {
+    if (!container) return;
+    if (!items.length) {
+      container.innerHTML = '<div class="list-group-item text-muted">No matches.</div>';
+      return;
+    }
+    container.innerHTML = items.map(item => `
+      <button type="button" class="list-group-item list-group-item-action" data-result-id="${item.id}">
+        ${item.label}
+      </button>
+    `).join('');
+    container.querySelectorAll('[data-result-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.resultId;
+        const match = items.find(item => String(item.id) === String(id));
+        if (match) onSelect(match);
+      });
+    });
+  }
+
+  function debounce(fn, wait) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  function renderSelected(container, map, emptyText) {
+    if (!container) return;
+    if (!map.size) {
+      container.innerHTML = `<span class="text-muted">${emptyText}</span>`;
+      return;
+    }
+    container.innerHTML = Array.from(map.entries()).map(([id, label]) => `
+      <span class="badge bg-light text-dark border me-1 mb-1 d-inline-flex align-items-center">
+        <span class="me-1">${label}</span>
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" data-remove-id="${id}">x</button>
+      </span>
+    `).join('');
+  }
+
+  function bindRemove(container, map, emptyText) {
+    if (!container) return;
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-id]');
+      if (!btn) return;
+      const id = btn.dataset.removeId;
+      map.delete(id);
+      renderSelected(container, map, emptyText);
+    });
+  }
+
+  function setupSearch(inputEl, resultsEl, fetcher, onSelect, onQueryChange) {
+    if (!inputEl || !resultsEl) return;
+    const run = debounce(async () => {
+      const q = inputEl.value.trim();
+      if (onQueryChange) onQueryChange(q);
+      if (q.length < 2) {
+        resultsEl.innerHTML = '';
+        return;
+      }
+      try {
+        const items = await fetcher(q);
+        renderSearchResults(resultsEl, items, onSelect);
+      } catch (err) {
+        resultsEl.innerHTML = `<div class="list-group-item text-muted">${err.message}</div>`;
+      }
+    }, 300);
+    inputEl.addEventListener('input', run);
+  }
+
+  function setNewErpSelection(user) {
+    state.newErpSelection = user;
+    newErpUserId.value = user.id;
+    newErpSelected.textContent = user.label;
+    newErpSearch.value = user.label;
+    newErpResults.innerHTML = '';
+    autoFillCustomersFromReps(createAutoRepIds(), state.newCustomers, newCustomerSelected, 'No customers selected.');
+  }
+
+  function clearNewErpSelection() {
+    state.newErpSelection = null;
+    newErpUserId.value = '';
+    newErpSelected.textContent = 'No ERP user selected.';
+    newErpSearch.value = '';
+    newErpResults.innerHTML = '';
+  }
+
+  function addSelection(map, item) {
+    if (!item) return;
+    const id = String(item.id || "").trim();
+    if (!id) return;
+    if (id.toLowerCase() === ALL_SCOPE_TOKEN) {
+      map.clear();
+      map.set(ALL_SCOPE_TOKEN, item.label || "All ERP Users (All Access)");
+      return;
+    }
+    if (map.has(ALL_SCOPE_TOKEN)) {
+      map.delete(ALL_SCOPE_TOKEN);
+    }
+    if (!map.has(id)) {
+      map.set(id, item.label || id);
+    }
+  }
+
+  function getCreateMode() {
+    if (!adminUserSelectEnabled) return "new";
+    return createModeExisting && createModeExisting.checked ? "existing" : "new";
+  }
+
+  function clearExistingUserSelection() {
+    state.existingUserSelection = null;
+    if (existingUserId) existingUserId.value = "";
+    if (existingUserSelected) existingUserSelected.textContent = "No existing user selected.";
+  }
+
+  function setExistingUserSelection(user) {
+    state.existingUserSelection = user;
+    if (existingUserId) existingUserId.value = String(user.id || "");
+    if (existingUserSelected) existingUserSelected.textContent = user.label || String(user.id || "");
+    if (existingUserSearch) existingUserSearch.value = user.label || "";
+    if (existingUserResults) existingUserResults.innerHTML = "";
+    if (newEmail && user.email) newEmail.value = user.email;
+    if (newFirst && user.first_name) newFirst.value = user.first_name;
+    if (newLast && user.last_name) newLast.value = user.last_name;
+    if (user.erp_user_id) {
+      newErpUserId.value = String(user.erp_user_id);
+      newErpSelected.textContent = String(user.erp_user_id);
+    }
+    autoFillCustomersFromReps(createAutoRepIds(), state.newCustomers, newCustomerSelected, 'No customers selected.');
+  }
+
+  function syncCreateModeUi() {
+    const isExisting = getCreateMode() === "existing";
+    const mode = isExisting ? "existing" : "new";
+    const modeChanged = state.createMode !== mode;
+    state.createMode = mode;
+    if (existingUserBlock) existingUserBlock.classList.toggle("d-none", !isExisting);
+    if (newEmail) newEmail.required = !isExisting;
+    if (newErpSearch) newErpSearch.required = !isExisting;
+    if (modeChanged && !isExisting) {
+      clearExistingUserSelection();
+      clearNewErpSelection();
+      if (existingUserSearch) existingUserSearch.value = "";
+      if (existingUserResults) existingUserResults.innerHTML = "";
+    }
+    if (createUserSubmitBtn) {
+      createUserSubmitBtn.textContent = isExisting ? "Assign Roles/Scope" : "Create User";
+    }
+    if (createUserHelpText) {
+      createUserHelpText.textContent = isExisting
+        ? "This updates the selected existing account and does not create a duplicate user."
+        : "Invite email is sent automatically after creation.";
+    }
+  }
+
+  function csvTokens(raw) {
+    if (!raw) return [];
+    return String(raw)
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+
+  function buildAccessPermissionLookup(editor, registry) {
+    const lookup = new Map();
+    (editor.modules || []).forEach(module => {
+      (module.items || []).forEach(item => {
+        lookup.set(item.key, {
+          ...item,
+          moduleLabel: module.label,
+          moduleId: module.id,
+          requires: Array.isArray(item.requires) ? item.requires.map(dep => String(dep)) : [],
+        });
+      });
+    });
+    (editor.sensitive_data || []).forEach(item => {
+      lookup.set(item.key, {
+        ...item,
+        moduleLabel: 'Sensitive Data Visibility',
+        moduleId: 'sensitive_data',
+        requires: Array.isArray(item.requires) ? item.requires.map(dep => String(dep)) : [],
+      });
+    });
+    (registry || []).forEach(group => {
+      (group.permissions || []).forEach(item => {
+        if (!lookup.has(item.key)) {
+          lookup.set(item.key, {
+            key: item.key,
+            label: item.label || item.key,
+            description: item.description || item.key,
+            type: group.group || 'permission',
+            moduleLabel: group.module || group.group || 'General',
+            moduleId: (group.module || group.group || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+            requires: [],
+          });
+        }
+      });
+    });
+    return lookup;
+  }
+
+  function buildAccessDependencyMaps(lookup) {
+    const dependencyMap = new Map();
+    const dependentMap = new Map();
+    if (!lookup) return { dependencyMap, dependentMap };
+    lookup.forEach((item, key) => {
+      const requires = new Set((item.requires || []).map(dep => String(dep)).filter(Boolean));
+      dependencyMap.set(key, requires);
+      requires.forEach(dep => {
+        if (!dependentMap.has(dep)) dependentMap.set(dep, new Set());
+        dependentMap.get(dep).add(key);
+      });
+    });
+    return { dependencyMap, dependentMap };
+  }
+
+  function buildAccessState(userId, payload) {
+    const user = payload.user || {};
+    const source = payload.access_source || {};
+    const editor = payload.editor || {};
+    const rolePermissions = new Set(payload.role_permissions || []);
+    const savedSourceMode = source.use_role_defaults_only ? 'role' : 'custom';
+    const editorState = payload.editor_state || {};
+    const savedSelected = new Set(editorState.selected_permissions || user.permissions || Array.from(rolePermissions));
+    const lookup = buildAccessPermissionLookup(editor, payload.registry || []);
+    const { dependencyMap, dependentMap } = buildAccessDependencyMaps(lookup);
+    return {
+      userId: Number(userId),
+      user,
+      source,
+      editor,
+      registry: payload.registry || [],
+      lookup,
+      rolePermissions,
+      savedSelected,
+      selected: new Set(Array.from(savedSelected)),
+      sourceMode: savedSourceMode,
+      savedSourceMode,
+      dependencyMap,
+      dependentMap,
+      unlockHintShown: false,
+      lastSavedLabel: '',
+    };
+  }
+
+  function accessModulesForEditor() {
+    if (!state.access) return [];
+    const editor = state.access.editor || {};
+    const modules = Array.isArray(editor.modules) ? [...editor.modules] : [];
+    const sensitive = Array.isArray(editor.sensitive_data) ? editor.sensitive_data : [];
+    if (sensitive.length) {
+      modules.push({
+        id: 'sensitive_data',
+        label: 'Sensitive Data Visibility',
+        description: 'Cost, profit, margin, pricing recommendations, and masked export controls.',
+        items: sensitive,
+      });
+    }
+    return modules;
+  }
+
+  function accessSetsEqual(left, right) {
+    if (left.size !== right.size) return false;
+    for (const key of left) {
+      if (!right.has(key)) return false;
+    }
+    return true;
+  }
+
+  function accessSelectedKeys() {
+    if (!state.access) return new Set();
+    if (state.access.sourceMode === 'role') {
+      return new Set(Array.from(state.access.rolePermissions || []));
+    }
+    return new Set(Array.from(state.access.selected || []));
+  }
+
+  function accessSavedSelection() {
+    if (!state.access) return new Set();
+    if (state.access.savedSourceMode === 'role') {
+      return new Set(Array.from(state.access.rolePermissions || []));
+    }
+    return new Set(Array.from(state.access.savedSelected || []));
+  }
+
+  function accessSavedStateFromPayload(payload) {
+    const accessSource = (payload && payload.access_source) || {};
+    const editorState = (payload && payload.editor_state) || {};
+    return {
+      sourceMode: accessSource.use_role_defaults_only ? 'role' : 'custom',
+      selected: new Set((editorState.selected_permissions || []).map(key => String(key))),
+    };
+  }
+
+  function verifyAccessSaveResult(requestedMode, requestedSelected, payload) {
+    const saved = accessSavedStateFromPayload(payload);
+    if (requestedMode === 'role') {
+      if (saved.sourceMode !== 'role') {
+        throw new Error('Role-default reset did not persist. The server kept custom overrides.');
+      }
+      return;
+    }
+    if (saved.sourceMode !== 'custom') {
+      throw new Error('Custom override mode did not persist. The server returned role-default mode.');
+    }
+    if (!accessSetsEqual(saved.selected, requestedSelected)) {
+      throw new Error('The server returned a different effective permission set than the one you saved. Review the updated policy before closing the editor.');
+    }
+  }
+
+  function accessPermissionLabel(key) {
+    if (!state.access || !state.access.lookup) return key;
+    const item = state.access.lookup.get(key);
+    return (item && item.label) || key;
+  }
+
+  function accessPermissionState(key, selected, rolePermissions) {
+    if (selected.has(key) && rolePermissions.has(key)) return { label: 'Inherited', className: 'inherited' };
+    if (selected.has(key)) return { label: 'Granted', className: 'allow' };
+    if (rolePermissions.has(key)) return { label: 'Denied', className: 'deny' };
+    return { label: 'Off', className: '' };
+  }
+
+  function accessDraftHasChanges() {
+    if (!state.access) return false;
+    const currentSelected = accessSelectedKeys();
+    const roleSelected = new Set(Array.from(state.access.rolePermissions || []));
+    if (state.access.sourceMode === 'role') {
+      return state.access.savedSourceMode !== 'role';
+    }
+    if (state.access.savedSourceMode === 'role' && accessSetsEqual(currentSelected, roleSelected)) {
+      return false;
+    }
+    return state.access.savedSourceMode !== 'custom' || !accessSetsEqual(currentSelected, accessSavedSelection());
+  }
+
+  function accessOverrideState() {
+    if (!state.access) return { allow: [], deny: [] };
+    const selected = accessSelectedKeys();
+    const rolePermissions = state.access.rolePermissions || new Set();
+    const allow = Array.from(selected).filter(key => !rolePermissions.has(key)).sort();
+    const deny = Array.from(rolePermissions).filter(key => !selected.has(key)).sort();
+    return { allow, deny };
+  }
+
+  function scopePreviewText(scope) {
+    const data = scope || {};
+    const repCount = Number(data.allowed_count || 0);
+    const customerCount = Number(data.allowed_customer_count || 0);
+    const regionCount = Number(data.allowed_region_count || 0);
+    const supplierCount = Number(data.allowed_supplier_count || 0);
+    const mode = data.scope_mode || 'none';
+    if (mode === 'all') return 'All ERP users';
+    if (mode === 'none' && !customerCount && !regionCount && !supplierCount) return 'No explicit data scope';
+    const parts = [];
+    if (repCount) parts.push(`${repCount} sales rep${repCount === 1 ? '' : 's'}`);
+    if (customerCount) parts.push(`${customerCount} customer${customerCount === 1 ? '' : 's'}`);
+    if (regionCount) parts.push(`${regionCount} region${regionCount === 1 ? '' : 's'}`);
+    if (supplierCount) parts.push(`${supplierCount} supplier${supplierCount === 1 ? '' : 's'}`);
+    return parts.join(', ') || 'No explicit data scope';
+  }
+
+  function accessValidationWarnings(selected) {
+    const warnings = [];
+    const checks = [
+      ['Customers', 'page.customers.view', 'page.customers.drilldown.view', 'export.customers'],
+      ['Products', 'page.products.view', 'page.products.drilldown.view', 'export.products'],
+      ['Regions', 'page.regions.view', 'page.regions.drilldown.view', 'export.regions'],
+      ['Suppliers', 'page.suppliers.view', 'page.suppliers.drilldown.view', 'export.suppliers'],
+      ['Sales Reps', 'page.salesreps.view', 'page.salesreps.drilldown.view', 'export.salesreps'],
+    ];
+    checks.forEach(([label, pageKey, drillKey, exportKey]) => {
+      if (selected.has(drillKey) && !selected.has(pageKey)) warnings.push(`${label} drilldown is enabled without ${label} page access.`);
+      if (selected.has(exportKey) && !selected.has(pageKey)) warnings.push(`${label} export is enabled without ${label} page access.`);
+    });
+    if ((selected.has('data.margin.view') || selected.has('data.profit.view') || selected.has('data.price_recommendation.view') || selected.has('data.margin_risk.view') || selected.has('export.sensitive.unmasked')) && !selected.has('data.cost.view')) {
+      warnings.push('Cost visibility is hidden while other cost-derived finance permissions remain enabled.');
+    }
+    if (selected.has('feature.products.recommendations.view') && !selected.has('data.price_recommendation.view')) {
+      warnings.push('Products recommendations are enabled, but pricing recommendations are hidden.');
+    }
+    if (selected.has('feature.products.forecast.view') && !selected.has('page.products.drilldown.view')) {
+      warnings.push('Product forecast is enabled without product drilldown access.');
+    }
+    const topLevelPages = [
+      'page.overview.view',
+      'page.customers.view',
+      'page.products.view',
+      'page.regions.view',
+      'page.suppliers.view',
+      'page.salesreps.view',
+      'page.admin.view',
+      'page.notifications.view',
+    ].filter(key => selected.has(key));
+    if (selected.has('page.returns.view') && topLevelPages.length === 0) {
+      warnings.push('User currently has Returns-only access.');
+    }
+    return warnings;
+  }
+
+  function renderAccessModeState() {
+    if (!state.access) return;
+    const isRole = state.access.sourceMode === 'role';
+    if (accessModeRole) accessModeRole.checked = isRole;
+    if (accessModeCustom) accessModeCustom.checked = !isRole;
+    if (accessModeRoleCard) accessModeRoleCard.classList.toggle('active', isRole);
+    if (accessModeCustomCard) accessModeCustomCard.classList.toggle('active', !isRole);
+  }
+
+  function renderAccessStatusBar() {
+    if (!accessStatusBar || !state.access) return;
+    const dirty = accessDraftHasChanges();
+    const warnings = accessValidationWarnings(accessSelectedKeys());
+    accessStatusBar.classList.toggle('is-dirty', dirty);
+    accessStatusBar.innerHTML = `
+      <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center">
+        <div>
+          <div class="fw-semibold">${state.access.sourceMode === 'role' ? 'Role defaults active' : 'Custom overrides active'}</div>
+          <div class="text-muted">${state.access.sourceMode === 'role'
+            ? 'This user is currently inheriting the role preset. Editing a permission will switch into per-user overrides.'
+            : 'You are editing a per-user override draft. Required parent permissions are auto-enabled when needed.'}</div>
+        </div>
+        <div class="access-pill-row">
+          <span class="access-pill ${dirty ? 'allow' : 'inherited'}">${dirty ? 'Unsaved changes' : 'No pending changes'}</span>
+          <span class="access-pill">${warnings.length} warning${warnings.length === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAccessModeHint() {
+    if (!accessModeHint || !state.access) return;
+    const isRole = state.access.sourceMode === 'role';
+    const hasCustomDraft = !accessSetsEqual(new Set(Array.from(state.access.selected || [])), new Set(Array.from(state.access.rolePermissions || [])));
+    accessModeHint.classList.toggle('locked', isRole);
+    if (isRole) {
+      accessModeHint.innerHTML = `
+        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+          <div>
+            <div class="fw-semibold">Switch to per-user overrides to customize access.</div>
+            <div class="small text-muted">Role defaults remain visible, but page, feature, export, and cost edits are applied only in custom mode.</div>
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" id="accessUnlockBtn">Enable custom overrides</button>
+        </div>
+      `;
+      const unlockBtn = document.getElementById('accessUnlockBtn');
+      if (unlockBtn) {
+        unlockBtn.addEventListener('click', () => {
+          if (!state.access) return;
+          state.access.sourceMode = 'custom';
+          renderAccessAll();
+        });
+      }
+      return;
+    }
+    accessModeHint.innerHTML = `
+      <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+        <div>
+          <div class="fw-semibold">Per-user overrides are editable.</div>
+          <div class="small text-muted">Inherited permissions stay visible. Explicit allows and hides are saved for this user only.</div>
+        </div>
+        <span class="access-pill ${hasCustomDraft ? 'allow' : 'inherited'}">${hasCustomDraft ? 'Custom draft differs from role defaults' : 'Custom draft matches role defaults'}</span>
+      </div>
+    `;
+  }
+
+  function renderRoleDefaults(rolePermissions) {
+    if (!accessRoleDefaults) return;
+    if (!rolePermissions || !rolePermissions.length) {
+      accessRoleDefaults.innerHTML = '<span class="text-muted">No inherited role permissions.</span>';
+      return;
+    }
+    accessRoleDefaults.innerHTML = rolePermissions
+      .map(key => `<span class="access-pill inherited">${accessPermissionLabel(key)}</span>`)
+      .join('');
+  }
+
+  function renderAccessOverrideSummary() {
+    if (!accessOverrideSummary || !state.access) return;
+    if (state.access.sourceMode === 'role') {
+      const hasDraft = !accessSetsEqual(new Set(Array.from(state.access.selected || [])), new Set(Array.from(state.access.rolePermissions || [])));
+      accessOverrideSummary.innerHTML = hasDraft
+        ? '<span class="text-muted">Custom override draft is preserved but inactive while role defaults are selected.</span>'
+        : '<span class="text-muted">No user-specific overrides.</span>';
+      return;
+    }
+    const overrides = accessOverrideState();
+    const pills = [
+      ...overrides.allow.map(key => `<span class="access-pill allow">Allow: ${accessPermissionLabel(key)}</span>`),
+      ...overrides.deny.map(key => `<span class="access-pill deny">Hide: ${accessPermissionLabel(key)}</span>`),
+    ];
+    accessOverrideSummary.innerHTML = pills.join('') || '<span class="text-muted">No user-specific overrides.</span>';
+  }
+
+  function renderAccessPreview() {
+    if (!accessPreview || !state.access) return;
+    const selected = accessSelectedKeys();
+    const modules = accessModulesForEditor();
+    const accessibleModules = [];
+    const drilldowns = [];
+    const exports = [];
+    modules.forEach(module => {
+      (module.items || []).forEach(item => {
+        if (!selected.has(item.key)) return;
+        if (item.type === 'page' && module.id !== 'sensitive_data') accessibleModules.push(module.label);
+        if (item.type === 'drilldown') drilldowns.push(module.label);
+        if (item.type === 'export') exports.push(`${module.label}: ${item.label}`);
+      });
+    });
+    const sensitive = [
+      `Cost visibility: ${selected.has('data.cost.view') ? 'Visible' : 'Hidden'}`,
+      `Margin / Profit: ${(selected.has('data.margin.view') || selected.has('data.profit.view')) ? 'Visible' : 'Hidden'}`,
+      `Pricing recommendations: ${selected.has('data.price_recommendation.view') ? 'Visible' : 'Hidden'}`,
+      `Margin risk: ${selected.has('data.margin_risk.view') ? 'Visible' : 'Hidden'}`,
+      `Sensitive exports: ${selected.has('export.sensitive.unmasked') ? 'Unmasked' : 'Masked'}`,
+    ];
+    accessPreview.innerHTML = `
+      <ul class="access-summary-list">
+        <li>Access source: ${state.access.sourceMode === 'role' ? 'Inherited from role' : 'Custom per-user overrides'}</li>
+        <li>Accessible modules: ${accessibleModules.length ? accessibleModules.join(', ') : 'None'}</li>
+        <li>Accessible drilldowns: ${drilldowns.length ? drilldowns.join(', ') : 'Disabled'}</li>
+        <li>Export access: ${exports.length ? exports.join('; ') : 'None'}</li>
+        <li>Scope summary: ${scopePreviewText(state.access.user.scope)}</li>
+        <li>${sensitive.join(' | ')}</li>
+        <li>${selected.has('data.cost.view') ? 'Cost-driven tables, cards, charts, drilldowns, and exports are allowed.' : 'Cost-driven tables, cards, charts, drilldowns, and exports stay masked or hidden.'}</li>
+      </ul>
+    `;
+  }
+
+  function renderAccessWarnings() {
+    if (!accessWarnings || !state.access) return;
+    const warnings = accessValidationWarnings(accessSelectedKeys());
+    if (state.access.sourceMode === 'role') {
+      warnings.unshift('Saving in role-default mode clears any explicit per-user overrides for this user.');
+    }
+    accessWarnings.innerHTML = warnings.length
+      ? `<ul class="access-warning-list">${warnings.map(item => `<li>${item}</li>`).join('')}</ul>`
+      : '<span class="text-success">No access conflicts detected.</span>';
+  }
+
+  function renderAccessSourceSummary() {
+    if (!accessSourceSummary || !state.access) return;
+    const user = state.access.user || {};
+    const source = state.access.source || {};
+    accessSourceSummary.innerHTML = `
+      <div class="fw-semibold mb-1">Role preset: ${(source.role_preset || user.role || 'none')}</div>
+      <div class="text-muted">Mode: ${state.access.sourceMode === 'role' ? 'Inherited from role only' : 'Custom overrides enabled'}</div>
+      <div class="text-muted">Roles: ${(source.role_names || user.roles || []).join(', ') || 'None'}</div>
+      <div class="text-muted">Overrides: ${(source.allow_override_count || 0)} allow / ${(source.deny_override_count || 0)} hide</div>
+      <div class="text-muted">Current scope: ${scopePreviewText(user.scope)}</div>
+      <div class="text-muted">Current visibility summary: ${(user.visibility_count || 0)} visible ERP user(s)</div>
+    `;
+  }
+
+  function renderAccessUserSummary(user) {
+    if (!accessUserSummary) return;
+    const status = user.status || (user.is_active ? 'active' : 'disabled');
+    accessUserSummary.innerHTML = `
+      <div class="d-flex flex-wrap justify-content-between gap-3">
+        <div>
+          <div class="fw-semibold">${user.full_name || user.username || user.email || 'User'}</div>
+          <div class="text-muted">${user.email || 'No email'} | Role ${user.role || 'No role'} | ERP ${user.erp_user_id || 'Unlinked'}</div>
+          <div class="text-muted">Status ${status} | Scope mode ${(user.scope && user.scope.scope_mode) || 'none'} | ${scopePreviewText(user.scope)}</div>
+        </div>
+        <div class="access-pill-row">
+          <span class="access-pill">${user.is_active ? 'Enabled' : 'Disabled'}</span>
+          <span class="access-pill">${user.is_approved ? 'Approved' : 'Pending approval'}</span>
+          <span class="access-pill">${user.erp_user_id ? 'ERP linked' : 'ERP unlinked'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateAccessFooterStatus() {
+    if (!accessFooterStatus || !state.access) return;
+    const dirty = accessDraftHasChanges();
+    const savedBits = state.access.lastSavedLabel ? ` Last saved ${state.access.lastSavedLabel}.` : '';
+    accessFooterStatus.textContent = accessSavePending
+      ? 'Saving changes…'
+      : dirty
+        ? `Unsaved changes.${savedBits}`
+        : `No unsaved changes.${savedBits}`;
+    if (accessSaveBtn) accessSaveBtn.disabled = accessSavePending || !dirty;
+  }
+
+  function renderAccessAll() {
+    if (!state.access) return;
+    renderAccessModeState();
+    renderAccessStatusBar();
+    renderAccessModeHint();
+    renderAccessSourceSummary();
+    renderRoleDefaults(Array.from(state.access.rolePermissions || []).sort());
+    renderAccessOverrideSummary();
+    renderAccessQuickActions();
+    renderAccessEditor();
+    updateAccessFooterStatus();
+    syncAccessModalLayout();
+  }
+
+  function accessEnableCustomMode(reason = 'manual') {
+    if (!state.access || state.access.sourceMode === 'custom') return;
+    state.access.sourceMode = 'custom';
+    if (reason === 'edit' && !state.access.unlockHintShown) {
+      state.access.unlockHintShown = true;
+      notify('Switched to per-user overrides so you can edit access.', 'info');
+    }
+  }
+
+  function addAccessDependencies(selected, key) {
+    const deps = state.access && state.access.dependencyMap ? state.access.dependencyMap.get(key) : null;
+    if (!deps || !deps.size) return;
+    deps.forEach(dep => {
+      if (!selected.has(dep)) {
+        selected.add(dep);
+        addAccessDependencies(selected, dep);
+      }
+    });
+  }
+
+  function removeAccessDependents(selected, key) {
+    const dependents = state.access && state.access.dependentMap ? state.access.dependentMap.get(key) : null;
+    if (!dependents || !dependents.size) return;
+    dependents.forEach(dep => {
+      if (selected.has(dep)) {
+        selected.delete(dep);
+        removeAccessDependents(selected, dep);
+      }
+    });
+  }
+
+  function setAccessPermission(key, checked) {
+    if (!state.access) return;
+    setInlineAlert(accessResultBanner, '');
+    accessEnableCustomMode('edit');
+    const selected = new Set(Array.from(state.access.selected || state.access.rolePermissions || []));
+    if (checked) {
+      selected.add(key);
+      addAccessDependencies(selected, key);
+    } else {
+      selected.delete(key);
+      removeAccessDependents(selected, key);
+    }
+    state.access.selected = selected;
+    renderAccessAll();
+  }
+
+  function applyAccessBundle(bundleId) {
+    if (!state.access) return;
+    const bundle = (state.access.editor.bundles || []).find(item => item.id === bundleId);
+    if (!bundle) return;
+    setInlineAlert(accessResultBanner, '');
+    accessEnableCustomMode('manual');
+    const selected = new Set(Array.from(state.access.selected || state.access.rolePermissions || []));
+    const perms = new Set((bundle.permissions || []).map(key => String(key)));
+    if (bundle.mode === 'replace') {
+      state.access.selected = perms;
+    } else if (bundle.mode === 'remove') {
+      perms.forEach(key => {
+        selected.delete(key);
+        removeAccessDependents(selected, key);
+      });
+      state.access.selected = selected;
+    } else {
+      perms.forEach(key => selected.add(key));
+      state.access.selected = selected;
+    }
+    Array.from(state.access.selected || []).forEach(key => addAccessDependencies(state.access.selected, key));
+    renderAccessAll();
+  }
+
+  function applyAccessPreset(presetId) {
+    if (!state.access) return;
+    const preset = (state.access.editor.presets || []).find(item => item.id === presetId);
+    if (!preset) return;
+    setInlineAlert(accessResultBanner, '');
+    accessEnableCustomMode('manual');
+    state.access.selected = new Set((preset.permissions || []).map(key => String(key)));
+    Array.from(state.access.selected || []).forEach(key => addAccessDependencies(state.access.selected, key));
+    renderAccessAll();
+  }
+
+  function resetAccessEditorState({ toRoleDefaults = false } = {}) {
+    if (!state.access) return;
+    setInlineAlert(accessResultBanner, '');
+    if (toRoleDefaults) {
+      const confirmed = window.confirm('Resetting to role defaults will clear explicit per-user overrides on save. Continue?');
+      if (!confirmed) return;
+      state.access.sourceMode = 'role';
+      state.access.selected = new Set(Array.from(state.access.rolePermissions || []));
+    } else {
+      state.access.sourceMode = state.access.savedSourceMode || 'role';
+      state.access.selected = new Set(Array.from(state.access.savedSelected || []));
+    }
+    renderAccessAll();
+  }
+
+  function renderAccessQuickActions() {
+    if (!accessQuickActions || !state.access) return;
+    const roleLabel = ((state.access.source || {}).role_preset || (state.access.user || {}).role || 'role').toUpperCase();
+    const bundleButtons = (state.access.editor.bundles || []).map(bundle => `
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-access-bundle="${bundle.id}" title="${bundle.description || ''}">
+        ${bundle.label}
+      </button>
+    `).join('');
+    const presetButtons = (state.access.editor.presets || []).map(preset => `
+      <button type="button" class="btn btn-outline-primary btn-sm" data-access-preset="${preset.id}" title="${preset.description || ''}">
+        ${preset.label}
+      </button>
+    `).join('');
+    accessQuickActions.innerHTML = `
+      <div class="btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-primary btn-sm" data-access-role-preset="1">Select ${roleLabel} role preset</button>
+      </div>
+      <div class="btn-group btn-group-sm" role="group">${bundleButtons}</div>
+      <div class="btn-group btn-group-sm" role="group">${presetButtons}</div>
+      <div class="w-100 small text-muted">Bulk actions switch the editor into custom override mode automatically.</div>
+    `;
+    accessQuickActions.querySelectorAll('[data-access-bundle]').forEach(btn => {
+      btn.addEventListener('click', () => applyAccessBundle(btn.dataset.accessBundle));
+    });
+    accessQuickActions.querySelectorAll('[data-access-preset]').forEach(btn => {
+      btn.addEventListener('click', () => applyAccessPreset(btn.dataset.accessPreset));
+    });
+    accessQuickActions.querySelectorAll('[data-access-role-preset]').forEach(btn => {
+      btn.addEventListener('click', () => resetAccessEditorState({ toRoleDefaults: true }));
+    });
+  }
+
+  function applyModuleAction(moduleId, action) {
+    if (!state.access) return;
+    const module = accessModulesForEditor().find(item => item.id === moduleId);
+    if (!module) return;
+    setInlineAlert(accessResultBanner, '');
+    accessEnableCustomMode('manual');
+    const selected = new Set(Array.from(state.access.selected || state.access.rolePermissions || []));
+    const itemKeys = (module.items || []).map(item => String(item.key));
+    const pageKeys = (module.items || []).filter(item => item.type === 'page').map(item => String(item.key));
+    if (action === 'clear') {
+      itemKeys.forEach(key => {
+        selected.delete(key);
+        removeAccessDependents(selected, key);
+      });
+    } else if (action === 'page' && pageKeys.length) {
+      itemKeys.forEach(key => selected.delete(key));
+      pageKeys.forEach(key => {
+        selected.add(key);
+        addAccessDependencies(selected, key);
+      });
+    } else {
+      itemKeys.forEach(key => {
+        selected.add(key);
+        addAccessDependencies(selected, key);
+      });
+    }
+    state.access.selected = selected;
+    renderAccessAll();
+  }
+
+  function renderAccessEditor() {
+    if (!accessPermissionGrid || !state.access) return;
+    const selected = accessSelectedKeys();
+    const rolePermissions = state.access.rolePermissions || new Set();
+    const query = (accessSearch && accessSearch.value ? accessSearch.value : '').trim().toLowerCase();
+    const enabledOnly = !!(accessEnabledOnly && accessEnabledOnly.checked);
+    const modules = accessModulesForEditor();
+    const cards = modules.map(module => {
+      const items = (module.items || []).filter(item => {
+        const searchable = `${module.label} ${module.description || ''} ${item.label || ''} ${item.description || ''} ${item.key || ''}`.toLowerCase();
+        const enabled = selected.has(item.key);
+        if (query && !searchable.includes(query)) return false;
+        if (enabledOnly && !enabled) return false;
+        return true;
+      });
+      if (!items.length) return '';
+      const enabledCount = items.filter(item => selected.has(item.key)).length;
+      return `
+        <details class="access-module-card" open>
+          <summary>
+            <div>
+              <div class="fw-semibold">${module.label}</div>
+              <div class="access-module-meta">${module.description || ''}</div>
+            </div>
+            <div class="access-pill">${enabledCount}/${items.length} enabled</div>
+          </summary>
+          <div class="access-module-body">
+            <div class="access-module-actions">
+              <button type="button" class="btn btn-outline-primary btn-sm" data-module-action="enable" data-module-id="${module.id}">Enable all</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="clear" data-module-id="${module.id}">Clear</button>
+              ${module.id !== 'sensitive_data' ? `<button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="page" data-module-id="${module.id}">Page only</button>` : ''}
+            </div>
+            <div class="access-checklist">
+              ${items.map(item => {
+                const checked = selected.has(item.key);
+                const stateBadge = accessPermissionState(item.key, selected, rolePermissions);
+                const requires = (item.requires || []).map(dep => accessPermissionLabel(dep)).join(', ');
+                return `
+                  <label class="access-check">
+                    <input class="form-check-input access-permission-input" type="checkbox" value="${item.key}" ${checked ? 'checked' : ''}>
+                    <span>
+                      <span class="access-check-type">${item.type || 'permission'}</span>
+                      <span class="d-block fw-semibold">${item.label || item.key}</span>
+                      <small class="text-muted d-block">${item.description || item.key}</small>
+                      ${requires ? `<small class="text-muted d-block">Requires: ${requires}</small>` : ''}
+                    </span>
+                    <span class="access-check-state ${stateBadge.className}">${stateBadge.label}</span>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </details>
+      `;
+    }).join('');
+    accessPermissionGrid.innerHTML = cards || '<div class="access-empty-state">No permissions match the current filters.</div>';
+    accessPermissionGrid.querySelectorAll('[data-module-action]').forEach(btn => {
+      btn.addEventListener('click', () => applyModuleAction(btn.dataset.moduleId, btn.dataset.moduleAction));
+    });
+    accessPermissionGrid.querySelectorAll('.access-permission-input').forEach(input => {
+      input.addEventListener('change', (event) => {
+        setAccessPermission(event.target.value, event.target.checked);
+      });
+    });
+    renderAccessPreview();
+    renderAccessWarnings();
+  }
+
+  async function openAccessModal(userId) {
+    accessLoadSeq += 1;
+    const requestSeq = accessLoadSeq;
+    if (accessLoadController) {
+      try {
+        accessLoadController.abort();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    accessLoadController = new AbortController();
+    try {
+      const res = await api(`/api/_admin/users/${userId}/permissions`, { signal: accessLoadController.signal });
+      if (requestSeq !== accessLoadSeq) return;
+      state.access = buildAccessState(userId, res);
+      accessSavePending = false;
+      if (accessUserId) accessUserId.value = String(userId);
+      if (accessFlagNotice) accessFlagNotice.classList.toggle('d-none', !!adminPermissionsV2);
+      setInlineAlert(accessResultBanner, '');
+      if (accessSearch) accessSearch.value = '';
+      if (accessEnabledOnly) accessEnabledOnly.checked = false;
+      renderAccessUserSummary(state.access.user);
+      renderAccessAll();
+      ensureModals();
+      accessModal.show();
+      syncAccessModalLayout({ resetScroll: true });
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      if (requestSeq !== accessLoadSeq) return;
+      notify(err.message, 'danger');
+    } finally {
+      if (requestSeq === accessLoadSeq) {
+        accessLoadController = null;
+      }
+    }
+  }
+
+  async function autoFillCustomersFromReps(repIds, customerMap, selectedContainer, emptyText, options = {}) {
+    const force = !!(options && options.force);
+    const normalized = (repIds || []).map(v => String(v || '').trim()).filter(Boolean);
+    if (!normalized.length) return;
+    if (normalized.map(v => v.toLowerCase()).includes(ALL_SCOPE_TOKEN)) return;
+    if (customerMap.size && !force) return;
+    const params = new URLSearchParams();
+    normalized.forEach(id => params.append('rep_ids', id));
+    params.set('limit', '50');
+    try {
+      const res = await api(`/api/_admin/customers/suggest?${params.toString()}`);
+      const items = res.items || [];
+      if (!items.length) return;
+      if (force) customerMap.clear();
+      items.forEach(item => addSelection(customerMap, item));
+      renderSelected(selectedContainer, customerMap, emptyText);
+    } catch (_err) {
+      // Keep UI responsive even if auto-fill fails; manual customer selection remains available.
+    }
+  }
+
+  function createAutoRepIds() {
+    const fromVisibility = Array.from(state.newVisibility.keys());
+    if (fromVisibility.length) return fromVisibility;
+    const erpId = (newErpUserId && newErpUserId.value ? String(newErpUserId.value) : '').trim();
+    return erpId ? [erpId] : [];
+  }
+
+  function renderRow(user) {
+    state.cache.set(user.id, user);
+    const approveAction = user.is_approved
+      ? `<button class="btn btn-outline-warning" data-action="revoke" data-id="${user.id}">Revoke</button>`
+      : `<button class="btn btn-outline-success" data-action="approve" data-id="${user.id}">Approve</button>`;
+    const activeAction = user.is_active
+      ? `<button class="btn btn-outline-secondary" data-action="disable" data-id="${user.id}">Disable</button>`
+      : `<button class="btn btn-outline-success" data-action="enable" data-id="${user.id}">Enable</button>`;
+    return `
+      <tr data-user-row="${user.id}">
+        <td><input class="form-check-input" type="checkbox" data-select="${user.id}" ${state.selected.has(user.id) ? 'checked' : ''}></td>
+        <td>
+          <div class="fw-semibold">${user.email || '-'}</div>
+          <div class="text-muted small">${user.username || ''}</div>
+        </td>
+        <td>
+          <div class="fw-semibold">${formatName(user)}</div>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" data-role="${user.id}">
+            ${roles.map(r => `<option value="${r}" ${String(user.role || '').toLowerCase() === r ? 'selected' : ''}>${r}</option>`).join('')}
+          </select>
+        </td>
+        <td class="small">${formatErpId(user)}</td>
+        <td class="small">${formatVisibility(user)}</td>
+        <td>${boolBadge(user.is_approved, "Approved", "Unapproved")}</td>
+        <td>${boolBadge(user.is_active, "Enabled", "Disabled")}</td>
+        <td class="small">${formatDate(user.last_login_at)}</td>
+        <td class="small">${formatDate(user.updated_at)}</td>
+        <td class="text-end">
+          <div class="btn-group btn-group-sm">
+            ${approveAction}
+            ${activeAction}
+            <button class="btn btn-outline-success" data-action="permissions" data-id="${user.id}">Access</button>
+            <button class="btn btn-outline-primary" data-action="scope" data-id="${user.id}">Visibility</button>
+            <button class="btn btn-outline-info" data-action="preview" data-id="${user.id}">Preview</button>
+            <button class="btn btn-outline-dark" data-action="audit" data-id="${user.id}">Audit</button>
+            <button class="btn btn-outline-secondary" data-action="resend-invite" data-id="${user.id}">Resend Invite</button>
+            <button class="btn btn-outline-warning" data-action="reset" data-id="${user.id}">Reset PW</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  function refreshTable(users, stats = {}) {
+    tableBody.innerHTML = users.map(renderRow).join('') || '<tr><td colspan="11" class="text-center text-muted">No users found.</td></tr>';
+    document.querySelector('[data-stat="pending"]').textContent = stats.pending ?? users.filter(u => !u.is_approved).length;
+    document.querySelector('[data-stat="active"]').textContent = stats.active ?? users.filter(u => u.is_active && u.is_approved).length;
+    document.querySelector('[data-stat="disabled"]').textContent = stats.disabled ?? users.filter(u => !u.is_active && u.is_approved).length;
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) selectAll.checked = false;
+  }
+
+  async function loadUsers() {
+    usersLoadSeq += 1;
+    const requestSeq = usersLoadSeq;
+    if (usersLoadController) {
+      try {
+        usersLoadController.abort();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    usersLoadController = new AbortController();
+    summaryEl.textContent = 'Loading users...';
+    paginationEl.textContent = 'Loading...';
+    const params = new URLSearchParams({
+      page: state.page,
+      page_size: state.pageSize,
+      query: state.query,
+      role: state.role,
+      status: state.status
+    });
+    try {
+      const res = await api(`/api/_admin/users?${params.toString()}`, { signal: usersLoadController.signal });
+      if (requestSeq !== usersLoadSeq) return;
+      state.total = res.pagination.total;
+      refreshTable(res.users, res.stats || {});
+      const pages = Math.max(1, Math.ceil(res.pagination.total / res.pagination.page_size));
+      const statusLabel = state.status === 'all' ? 'users' : `${state.status} users`;
+      summaryEl.textContent = `${res.pagination.total} ${statusLabel} (page ${res.pagination.page})`;
+      paginationEl.textContent = `Page ${res.pagination.page} of ${pages}`;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      if (requestSeq !== usersLoadSeq) return;
+      notify(err.message, "danger");
+      summaryEl.textContent = 'Failed to load users.';
+      paginationEl.textContent = '';
+    } finally {
+      if (requestSeq === usersLoadSeq) {
+        usersLoadController = null;
+      }
+    }
+  }
+
+  document.getElementById('adminUsersFiltersForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    state.query = document.getElementById('filterQuery').value.trim();
+    state.role = document.getElementById('filterRole').value;
+    state.status = document.getElementById('filterStatus').value || 'active';
+    state.page = 1;
+    loadUsers();
+  });
+
+  document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = getCreateMode();
+    const existingId = existingUserId ? existingUserId.value.trim() : "";
+    const erpId = newErpUserId.value.trim();
+    const repIds = Array.from(state.newVisibility.keys());
+    const customerIds = Array.from(new Set([
+      ...Array.from(state.newCustomers.keys()),
+      ...csvTokens(newCustomerScope && newCustomerScope.value),
+    ]));
+    if (mode === "existing" && !existingId) {
+      notify('Select an existing user before assigning roles/scope.', 'warning');
+      return;
+    }
+    if (mode !== "existing" && !erpId) {
+      notify('Select an ERP user before creating the account.', 'warning');
+      return;
+    }
+    if (mode !== "existing" && !(newEmail && newEmail.value.trim())) {
+      notify('Email is required when creating a new user.', 'warning');
+      return;
+    }
+    setPendingButton(createUserSubmitBtn, true, mode === "existing" ? 'Assigning…' : 'Creating…');
+    const payload = {
+      email: newEmail ? newEmail.value.trim() : "",
+      first_name: newFirst ? newFirst.value.trim() : "",
+      last_name: newLast ? newLast.value.trim() : "",
+      role: document.getElementById('newRole').value,
+      approve: document.getElementById('newApprove').checked,
+      visibility: repIds,
+      scope: {
+        sales_rep_ids: repIds,
+        customer_ids: customerIds,
+        region_ids: csvTokens(newRegionScope && newRegionScope.value),
+        supplier_ids: csvTokens(newSupplierScope && newSupplierScope.value),
+      },
+    };
+    if (mode === "existing") {
+      payload.existing_user_id = Number(existingId);
+    } else {
+      payload.erp_user_id = erpId;
+    }
+    try {
+      const res = await api('/api/_admin/users', { method: 'POST', body: JSON.stringify(payload) });
+      const updatedExisting = (res && res.mode === "existing") || mode === "existing";
+      if (updatedExisting) {
+        notify('Existing user access updated.', 'success');
+      } else if (res && res.invite_sent) {
+        notify('User created and invite email sent.', 'success');
+      } else if (res && res.invite_error) {
+        notify(`User created. ${res.invite_error}`, 'warning');
+      } else {
+        notify('User created.', 'success');
+      }
+      e.target.reset();
+      clearNewErpSelection();
+      clearExistingUserSelection();
+      state.newVisibility.clear();
+      state.newCustomers.clear();
+      newVisibilityResults.innerHTML = '';
+      if (newCustomerResults) newCustomerResults.innerHTML = '';
+      renderSelected(newVisibilitySelected, state.newVisibility, 'No reps selected.');
+      renderSelected(newCustomerSelected, state.newCustomers, 'No customers selected.');
+      if (newCustomerScope) newCustomerScope.value = '';
+      if (newRegionScope) newRegionScope.value = '';
+      if (newSupplierScope) newSupplierScope.value = '';
+      if (adminUserSelectEnabled && createModeNew) {
+        createModeNew.checked = true;
+      }
+      await loadUsers();
+    } catch (err) {
+      notify(err.message, 'danger');
+    } finally {
+      setPendingButton(createUserSubmitBtn, false);
+      syncCreateModeUi();
+    }
+  });
+
+  tableBody.addEventListener('change', async (e) => {
+    const roleChange = e.target.closest('[data-role]');
+    const selectBox = e.target.closest('[data-select]');
+    if (roleChange) {
+      const userId = roleChange.dataset.role;
+      const role = roleChange.value;
+      const cachedUser = state.cache.get(Number(userId));
+      const previousRole = cachedUser ? String(cachedUser.role || '').toLowerCase() : '';
+      roleChange.disabled = true;
+      try {
+        await api(`/api/_admin/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
+        notify('Role updated.', 'success');
+        await loadUsers();
+      } catch (err) {
+        if (previousRole) roleChange.value = previousRole;
+        notify(err.message, 'danger');
+      } finally {
+        roleChange.disabled = false;
+      }
+    } else if (selectBox) {
+      const id = Number(selectBox.dataset.select);
+      if (selectBox.checked) state.selected.add(id); else state.selected.delete(id);
+    }
+  });
+
+  async function runRowAction(btn, { url, method = 'PATCH', body = null, successMessage, successVariant = 'success', confirmMessage = '', pendingLabel = 'Working…' }) {
+    if (!btn || btn.dataset.pending === '1') return;
+    if (!confirmAction(confirmMessage)) return;
+    btn.dataset.pending = '1';
+    setPendingButton(btn, true, pendingLabel);
+    try {
+      const options = { method };
+      if (body !== null) {
+        options.body = JSON.stringify(body);
+      }
+      await api(url, options);
+      notify(successMessage, successVariant);
+      await loadUsers();
+    } catch (err) {
+      notify(err.message, 'danger');
+    } finally {
+      delete btn.dataset.pending;
+      setPendingButton(btn, false);
+    }
+  }
+
+  tableBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    if (action === 'approve') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/activation`,
+        body: { action: 'approve' },
+        successMessage: 'User approved.',
+        pendingLabel: 'Approving…',
+      });
+    } else if (action === 'revoke') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/activation`,
+        body: { action: 'revoke' },
+        successMessage: 'Approval revoked and user disabled.',
+        successVariant: 'warning',
+        confirmMessage: 'Revoke approval and disable this user now?',
+        pendingLabel: 'Revoking…',
+      });
+    } else if (action === 'enable') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/activation`,
+        body: { action: 'enable' },
+        successMessage: 'User enabled.',
+        pendingLabel: 'Enabling…',
+      });
+    } else if (action === 'disable') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/activation`,
+        body: { action: 'disable' },
+        successMessage: 'User disabled.',
+        successVariant: 'secondary',
+        confirmMessage: 'Disable this user now? They will not be able to sign in.',
+        pendingLabel: 'Disabling…',
+      });
+    } else if (action === 'resend-invite') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/resend-invite`,
+        method: 'POST',
+        successMessage: 'Invite email sent.',
+        successVariant: 'info',
+        confirmMessage: 'Resend the invite email for this user now?',
+        pendingLabel: 'Sending…',
+      });
+    } else if (action === 'reset') {
+      await runRowAction(btn, {
+        url: `/api/_admin/users/${id}/reset-password`,
+        method: 'POST',
+        successMessage: 'Password reset email sent.',
+        successVariant: 'info',
+        confirmMessage: 'Send a password reset email for this user now?',
+        pendingLabel: 'Sending…',
+      });
+    } else if (action === 'permissions') {
+      openAccessModal(id);
+    } else if (action === 'scope') {
+      openScopeModal(id);
+    } else if (action === 'audit') {
+      loadAudit(id);
+    } else if (action === 'preview') {
+      loadPreview(id);
+    }
+    document.querySelectorAll('[data-user-row]').forEach(row => row.classList.remove('table-active'));
+    const row = btn.closest('tr');
+    if (row) row.classList.add('table-active');
+  });
+
+  document.querySelectorAll('[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.page === 'prev' && state.page > 1) {
+        state.page -= 1;
+      } else if (btn.dataset.page === 'next') {
+        state.page += 1;
+      }
+      loadUsers();
+    });
+  });
+
+  document.getElementById('selectAll').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('[data-select]').forEach(cb => {
+      cb.checked = checked;
+      const id = Number(cb.dataset.select);
+      if (checked) state.selected.add(id); else state.selected.delete(id);
+    });
+  });
+
+  function populateScopeForm(user) {
+    const vis = user.visibility || (user.scope && user.scope.allowed_erp_user_ids) || [];
+    const customers = (user.scope && user.scope.allowed_customer_ids) || [];
+    const regions = (user.scope && user.scope.allowed_region_ids) || [];
+    const suppliers = (user.scope && user.scope.allowed_supplier_ids) || [];
+    const allScope = !!(user.scope && user.scope.scope_mode === 'all');
+    state.scopeVisibility = new Map();
+    state.scopeCustomers = new Map();
+    if (allScope) {
+      state.scopeVisibility.set(ALL_SCOPE_TOKEN, 'All ERP Users (All Access)');
+    } else {
+      vis.forEach((id) => {
+        const label = getLabelFromCache(state.repCache, id) || getErpLabel(id);
+        state.scopeVisibility.set(String(id), label);
+      });
+    }
+    customers.forEach((id) => {
+      const label = getLabelFromCache(state.customerCache, id);
+      state.scopeCustomers.set(String(id), label);
+    });
+    document.getElementById('scopeUserId').value = user.id;
+    scopeVisibilitySearch.value = '';
+    scopeVisibilityResults.innerHTML = '';
+    if (scopeCustomerSearch) scopeCustomerSearch.value = '';
+    if (scopeCustomerResults) scopeCustomerResults.innerHTML = '';
+    renderSelected(scopeVisibilitySelected, state.scopeVisibility, 'No reps selected.');
+    renderSelected(scopeCustomerSelected, state.scopeCustomers, 'No customers selected.');
+    if (scopeCustomerIds) scopeCustomerIds.value = '';
+    if (scopeRegionIds) scopeRegionIds.value = regions.join(', ');
+    if (scopeSupplierIds) scopeSupplierIds.value = suppliers.join(', ');
+    if (!allScope && !state.scopeCustomers.size) {
+      autoFillCustomersFromReps(Array.from(state.scopeVisibility.keys()), state.scopeCustomers, scopeCustomerSelected, 'No customers selected.');
+    }
+  }
+
+  function openScopeModal(userId) {
+    const user = state.cache.get(Number(userId));
+    if (!user) return;
+    populateScopeForm(user);
+    ensureModals();
+    scopeModal.show();
+  }
+
+  document.getElementById('scopeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('scopeUserId').value;
+    const customerIds = Array.from(new Set([
+      ...Array.from(state.scopeCustomers.keys()),
+      ...csvTokens(scopeCustomerIds && scopeCustomerIds.value),
+    ]));
+    const regionIds = csvTokens(scopeRegionIds && scopeRegionIds.value);
+    const supplierIds = csvTokens(scopeSupplierIds && scopeSupplierIds.value);
+    const payload = {
+      visibility: Array.from(state.scopeVisibility.keys()),
+      scope: {
+        sales_rep_ids: Array.from(state.scopeVisibility.keys()),
+        customer_ids: customerIds,
+        region_ids: regionIds,
+        supplier_ids: supplierIds,
+      },
+    };
+    setPendingButton(scopeSaveBtn, true, 'Saving…');
+    try {
+      await api(`/api/_admin/users/${userId}/scope`, { method: 'PATCH', body: JSON.stringify(payload) });
+      notify('Scope updated.', 'success');
+      ensureModals();
+      scopeModal.hide();
+      await loadUsers();
+    } catch (err) {
+      notify(err.message, 'danger');
+    } finally {
+      setPendingButton(scopeSaveBtn, false);
+    }
+  });
+
+  document.getElementById('accessForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.access) return;
+    if (!accessDraftHasChanges()) {
+      notify('No access changes to save.', 'info');
+      return;
+    }
+    const requestedMode = state.access.sourceMode === 'role' ? 'role' : 'custom';
+    const requestedSelected = new Set(Array.from(accessSelectedKeys()));
+    accessSavePending = true;
+    setInlineAlert(accessResultBanner, '');
+    setPendingButton(accessSaveBtn, true, 'Saving...');
+    updateAccessFooterStatus();
+    try {
+      const res = await api(`/api/_admin/users/${state.access.userId}/permissions`, {
+        method: 'PATCH',
+        body: JSON.stringify(
+          requestedMode === 'role'
+            ? { reset_to_role_defaults: true }
+            : { selected_permissions: Array.from(requestedSelected).sort() }
+        ),
+      });
+      verifyAccessSaveResult(requestedMode, requestedSelected, res);
+      state.access = buildAccessState(state.access.userId, res);
+      state.access.lastSavedLabel = new Date().toLocaleTimeString();
+      renderAccessUserSummary(state.access.user);
+      renderAccessAll();
+      setInlineAlert(accessResultBanner, 'Access updated and audit logged.', 'success');
+      notify('Access updated.', 'success');
+      await loadUsers();
+    } catch (err) {
+      setInlineAlert(accessResultBanner, err.message, 'danger');
+      notify(err.message, 'danger');
+    } finally {
+      accessSavePending = false;
+      setPendingButton(accessSaveBtn, false);
+      updateAccessFooterStatus();
+    }
+  });
+
+  if (accessModeRole) {
+    accessModeRole.addEventListener('change', () => {
+      if (!state.access) return;
+      setInlineAlert(accessResultBanner, '');
+      if (!accessSetsEqual(new Set(Array.from(state.access.selected || [])), new Set(Array.from(state.access.rolePermissions || [])))) {
+        notify('Role defaults are active. Your custom draft is preserved until you switch back or save a reset to role defaults.', 'warning');
+      }
+      state.access.sourceMode = 'role';
+      renderAccessAll();
+    });
+  }
+
+  if (accessModeCustom) {
+    accessModeCustom.addEventListener('change', () => {
+      if (!state.access) return;
+      setInlineAlert(accessResultBanner, '');
+      state.access.sourceMode = 'custom';
+      renderAccessAll();
+    });
+  }
+
+  if (accessSearch) {
+    accessSearch.addEventListener('input', () => renderAccessEditor());
+  }
+
+  if (accessEnabledOnly) {
+    accessEnabledOnly.addEventListener('change', () => renderAccessEditor());
+  }
+
+  if (accessPreviewBtn) {
+    accessPreviewBtn.addEventListener('click', () => {
+      renderAccessPreview();
+      renderAccessWarnings();
+    });
+  }
+
+  if (accessResetBtn) {
+    accessResetBtn.addEventListener('click', () => resetAccessEditorState());
+  }
+
+  if (accessRoleResetBtn) {
+    accessRoleResetBtn.addEventListener('click', () => resetAccessEditorState({ toRoleDefaults: true }));
+  }
+
+  if (accessModalElement) {
+    accessModalElement.addEventListener('shown.bs.modal', () => syncAccessModalLayout({ resetScroll: true }));
+    accessModalElement.addEventListener('hidden.bs.modal', () => {
+      if (accessLoadController) {
+        try {
+          accessLoadController.abort();
+        } catch (err) {
+          /* ignore */
+        }
+        accessLoadController = null;
+      }
+      if (accessModalBody) accessModalBody.scrollTop = 0;
+    });
+  }
+
+  window.addEventListener('resize', () => {
+    if (accessModalElement && accessModalElement.classList.contains('show')) {
+      syncAccessModalLayout();
+    }
+  });
+
+  async function loadAudit(userId) {
+    auditLoadSeq += 1;
+    const requestSeq = auditLoadSeq;
+    if (auditLoadController) {
+      try {
+        auditLoadController.abort();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    auditLoadController = new AbortController();
+    try {
+      const action = auditFilter.value;
+      const url = action ? `/api/_admin/users/${userId}/audit?action=${encodeURIComponent(action)}` : `/api/_admin/users/${userId}/audit`;
+      const res = await api(url, { signal: auditLoadController.signal });
+      if (requestSeq !== auditLoadSeq) return;
+      const list = document.getElementById('auditList');
+      list.innerHTML = res.audit.map(entry => `
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <div class="fw-semibold">${entry.action}</div>
+            <div class="text-muted">${entry.created_at || ''}</div>
+          </div>
+          <div class="text-muted">Actor: ${entry.actor_user_id || entry.username || 'n/a'}  IP: ${entry.ip || 'n/a'}</div>
+          <div class="mt-1">
+            <code class="small">Before:</code>
+            <pre class="small bg-light p-2 border">${entry.before ? JSON.stringify(entry.before, null, 2) : '-'}</pre>
+            <code class="small">After:</code>
+            <pre class="small bg-light p-2 border">${entry.after ? JSON.stringify(entry.after, null, 2) : '-'}</pre>
+          </div>
+        </div>
+      `).join('') || '<div class="text-muted">No audit entries.</div>';
+      ensureModals();
+      auditModal.show();
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      if (requestSeq !== auditLoadSeq) return;
+      notify(err.message, 'danger');
+    } finally {
+      if (requestSeq === auditLoadSeq) {
+        auditLoadController = null;
+      }
+    }
+  }
+
+  auditReload.addEventListener('click', () => {
+    const selectedRow = document.querySelector('[data-user-row].table-active');
+    const userId = selectedRow ? selectedRow.dataset.userRow : null;
+    if (!userId) return;
+    loadAudit(userId);
+  });
+
+  async function loadPreview(userId) {
+    previewLoadSeq += 1;
+    const requestSeq = previewLoadSeq;
+    if (previewLoadController) {
+      try {
+        previewLoadController.abort();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    previewLoadController = new AbortController();
+    try {
+      const res = await api(`/api/_admin/users/${userId}/preview`, { signal: previewLoadController.signal });
+      if (requestSeq !== previewLoadSeq) return;
+      const preview = res.preview || {};
+      const metrics = res.metrics || {};
+      const scope = preview.scope || {};
+      const allowed = (scope.allowed_erp_user_ids || preview.visibility || []).map(String);
+      const customerAllowed = (scope.allowed_customer_ids || []).map(String);
+      const regionAllowed = (scope.allowed_region_ids || []).map(String);
+      const supplierAllowed = (scope.allowed_supplier_ids || []).map(String);
+      const scopeMode = scope.scope_mode || (isAdmin(preview) ? 'all' : (allowed.length ? 'list' : 'none'));
+      const scopeLabel = scopeMode === 'all'
+        ? 'All data'
+        : scopeMode === 'none'
+          ? 'No access configured'
+          : `${allowed.length} ERP user${allowed.length === 1 ? '' : 's'}`;
+      const sample = allowed.slice(0, 6).join(', ');
+      const more = allowed.length > 6 ? ` +${allowed.length - 6}` : '';
+      const html = `
+        <div class="mb-3">
+          <div class="fw-semibold">${preview.full_name || preview.username || preview.email}</div>
+          <div class="text-muted small">${preview.email || ''}</div>
+          <div class="badge bg-secondary">Role: ${preview.role}</div>
+          ${scopeMode === 'all' ? '<span class="badge bg-primary ms-1">All</span>' : ''}
+          ${scopeMode === 'none' ? '<span class="badge bg-warning text-dark ms-1">No access</span>' : ''}
+        </div>
+        <div class="mb-3">
+          <div class="small text-muted">ERP UserId</div>
+          <div>${preview.erp_user_id || '-'}</div>
+        </div>
+        <div class="mb-3">
+          <div class="small text-muted">Visibility</div>
+          <div>${scopeLabel}</div>
+          <div class="small text-muted">${sample ? `${sample}${more}` : ''}</div>
+          <div class="small text-muted mt-1">Customers: ${customerAllowed.length} | Regions: ${regionAllowed.length} | Suppliers: ${supplierAllowed.length}</div>
+        </div>
+        <div class="mb-3">
+          <div class="small text-muted">Metrics</div>
+          <ul class="mb-2">
+            <li>Orders (90d): ${metrics.orders_90d ?? 'n/a'}</li>
+            <li>Orders (max): ${metrics.orders_max ?? 'n/a'}</li>
+            <li>Revenue sum: ${metrics.revenue_sum ?? 0}</li>
+            <li>Cost coverage %: ${metrics.cost_coverage_pct ?? 0}</li>
+          </ul>
+          <div class="small text-muted">Top products</div>
+          <pre class="small bg-light p-2 border">${metrics.top_products ? JSON.stringify(metrics.top_products, null, 2) : '-'}</pre>
+          <div class="small text-muted">Top customers</div>
+          <pre class="small bg-light p-2 border">${metrics.top_customers ? JSON.stringify(metrics.top_customers, null, 2) : '-'}</pre>
+        </div>
+      `;
+      document.getElementById('previewContent').innerHTML = html;
+      ensureModals();
+      previewModal.show();
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      if (requestSeq !== previewLoadSeq) return;
+      notify(err.message, 'danger');
+    } finally {
+      if (requestSeq === previewLoadSeq) {
+        previewLoadController = null;
+      }
+    }
+  }
+
+  const auditModalElement = document.getElementById('auditModal');
+  if (auditModalElement) {
+    auditModalElement.addEventListener('hidden.bs.modal', () => {
+      if (auditLoadController) {
+        try {
+          auditLoadController.abort();
+        } catch (err) {
+          /* ignore */
+        }
+        auditLoadController = null;
+      }
+    });
+  }
+
+  const previewModalElement = document.getElementById('previewModal');
+  if (previewModalElement) {
+    previewModalElement.addEventListener('hidden.bs.modal', () => {
+      if (previewLoadController) {
+        try {
+          previewLoadController.abort();
+        } catch (err) {
+          /* ignore */
+        }
+        previewLoadController = null;
+      }
+    });
+  }
+
+  function syncBulkScopeAllUi() {
+    if (!bulkScopeAll || !bulkVisibilityIds) return;
+    const disabled = !!bulkScopeAll.checked;
+    bulkVisibilityIds.disabled = disabled;
+    if (disabled) {
+      bulkVisibilityIds.value = '';
+      bulkVisibilityIds.placeholder = 'All ERP users will be granted.';
+    } else {
+      bulkVisibilityIds.placeholder = 'ERP-1, ERP-2';
+    }
+  }
+
+  function openBulkModal(action) {
+    if (!state.selected.size) {
+      notify('Select at least one user first.', 'warning');
+      return;
+    }
+    const selectedUsers = Array.from(state.selected)
+      .map((id) => state.cache.get(Number(id)))
+      .filter(Boolean);
+    if (bulkActionInput) bulkActionInput.value = action;
+    if (bulkModalTitle) {
+      const titleByAction = {
+        approve: 'Bulk Approve',
+        disable: 'Bulk Disable',
+        assign_role: 'Bulk Role Update',
+        assign_scope: 'Bulk Scope Update',
+      };
+      bulkModalTitle.textContent = titleByAction[action] || 'Bulk Update';
+    }
+    if (bulkSelectionSummary) {
+      const preview = selectedUsers
+        .slice(0, 4)
+        .map((user) => user.email || formatName(user) || `User ${user.id}`)
+        .join(', ');
+      const extra = selectedUsers.length > 4 ? ` +${selectedUsers.length - 4} more` : '';
+      bulkSelectionSummary.textContent = `${selectedUsers.length} selected user${selectedUsers.length === 1 ? '' : 's'}: ${preview || 'selection loaded'}${extra}`;
+    }
+    if (bulkHelp) {
+      const helpByAction = {
+        approve: 'Approve and enable every selected user.',
+        disable: 'Disable every selected user without deleting their account.',
+        assign_role: 'Replace the primary role for every selected user.',
+        assign_scope: "Overwrite the selected users' scope and visibility lists.",
+      };
+      bulkHelp.textContent = helpByAction[action] || 'Review the change before applying it.';
+    }
+    if (bulkRoleBlock) bulkRoleBlock.classList.toggle('d-none', action !== 'assign_role');
+    if (bulkScopeBlock) bulkScopeBlock.classList.toggle('d-none', action !== 'assign_scope');
+    if (bulkRole) bulkRole.value = roles.includes('sales') ? 'sales' : roles[0];
+    if (bulkScopeAll) bulkScopeAll.checked = false;
+    if (bulkVisibilityIds) bulkVisibilityIds.value = '';
+    if (bulkCustomerIds) bulkCustomerIds.value = '';
+    if (bulkRegionIds) bulkRegionIds.value = '';
+    if (bulkSupplierIds) bulkSupplierIds.value = '';
+    if (bulkConfirm) bulkConfirm.checked = false;
+    syncBulkScopeAllUi();
+    ensureModals();
+    bulkModal.show();
+  }
+
+  document.querySelectorAll('[data-bulk]').forEach(btn => {
+    btn.addEventListener('click', () => openBulkModal(btn.dataset.bulk));
+  });
+
+  bulkForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const action = bulkActionInput ? bulkActionInput.value : '';
+    if (!action) return;
+    const payload = {
+      user_ids: Array.from(state.selected),
+      action,
+    };
+    if (action === 'assign_role') {
+      payload.role = bulkRole ? String(bulkRole.value || '').trim().toLowerCase() : '';
+    } else if (action === 'assign_scope') {
+      payload.scope = {
+        visibility: bulkScopeAll && bulkScopeAll.checked ? [ALL_SCOPE_TOKEN] : csvTokens(bulkVisibilityIds && bulkVisibilityIds.value),
+        customer_ids: csvTokens(bulkCustomerIds && bulkCustomerIds.value),
+        region_ids: csvTokens(bulkRegionIds && bulkRegionIds.value),
+        supplier_ids: csvTokens(bulkSupplierIds && bulkSupplierIds.value),
+      };
+    }
+    setPendingButton(bulkSubmitBtn, true, 'Applying…');
+    try {
+      await api('/api/_admin/users/bulk', { method: 'POST', body: JSON.stringify(payload) });
+      notify('Bulk action applied.', 'success');
+      state.selected.clear();
+      ensureModals();
+      bulkModal.hide();
+      await loadUsers();
+    } catch (err) {
+      notify(err.message, 'danger');
+    } finally {
+      setPendingButton(bulkSubmitBtn, false);
+    }
+  });
+
+  newErpSearch.addEventListener('input', () => {
+    if (state.newErpSelection) {
+      clearNewErpSelection();
+    }
+  });
+
+  setupSearch(newErpSearch, newErpResults, fetchErpUsers, (user) => {
+    cacheErpUser(user);
+    setNewErpSelection(user);
+  });
+
+  setupSearch(newVisibilitySearch, newVisibilityResults, fetchRepOptions, (item) => {
+    addSelection(state.newVisibility, item);
+    renderSelected(newVisibilitySelected, state.newVisibility, 'No reps selected.');
+    autoFillCustomersFromReps(createAutoRepIds(), state.newCustomers, newCustomerSelected, 'No customers selected.');
+  });
+
+  setupSearch(scopeVisibilitySearch, scopeVisibilityResults, fetchRepOptions, (item) => {
+    addSelection(state.scopeVisibility, item);
+    renderSelected(scopeVisibilitySelected, state.scopeVisibility, 'No reps selected.');
+    autoFillCustomersFromReps(Array.from(state.scopeVisibility.keys()), state.scopeCustomers, scopeCustomerSelected, 'No customers selected.');
+  });
+
+  if (newVisibilityAllBtn) {
+    newVisibilityAllBtn.addEventListener('click', () => {
+      addSelection(state.newVisibility, { id: ALL_SCOPE_TOKEN, label: 'All ERP Users (All Access)' });
+      renderSelected(newVisibilitySelected, state.newVisibility, 'No reps selected.');
+      if (newVisibilitySearch) newVisibilitySearch.value = '';
+      if (newVisibilityResults) newVisibilityResults.innerHTML = '';
+    });
+  }
+
+  if (scopeVisibilityAllBtn) {
+    scopeVisibilityAllBtn.addEventListener('click', () => {
+      addSelection(state.scopeVisibility, { id: ALL_SCOPE_TOKEN, label: 'All ERP Users (All Access)' });
+      renderSelected(scopeVisibilitySelected, state.scopeVisibility, 'No reps selected.');
+      if (scopeVisibilitySearch) scopeVisibilitySearch.value = '';
+      if (scopeVisibilityResults) scopeVisibilityResults.innerHTML = '';
+    });
+  }
+
+  if (bulkScopeAll) {
+    bulkScopeAll.addEventListener('change', syncBulkScopeAllUi);
+  }
+
+  setupSearch(newCustomerSearch, newCustomerResults, fetchCustomerOptions, (item) => {
+    addSelection(state.newCustomers, item);
+    renderSelected(newCustomerSelected, state.newCustomers, 'No customers selected.');
+  });
+
+  setupSearch(scopeCustomerSearch, scopeCustomerResults, fetchCustomerOptions, (item) => {
+    addSelection(state.scopeCustomers, item);
+    renderSelected(scopeCustomerSelected, state.scopeCustomers, 'No customers selected.');
+  });
+
+  if (adminUserSelectEnabled && existingUserSearch) {
+    if (createModeNew) createModeNew.addEventListener('change', syncCreateModeUi);
+    if (createModeExisting) createModeExisting.addEventListener('change', syncCreateModeUi);
+    existingUserSearch.addEventListener('input', () => {
+      if (state.existingUserSelection) {
+        clearExistingUserSelection();
+      }
+    });
+    setupSearch(existingUserSearch, existingUserResults, fetchExistingUsers, (item) => {
+      setExistingUserSelection(item);
+    });
+  }
+
+  bindRemove(newVisibilitySelected, state.newVisibility, 'No reps selected.');
+  bindRemove(scopeVisibilitySelected, state.scopeVisibility, 'No reps selected.');
+  bindRemove(newCustomerSelected, state.newCustomers, 'No customers selected.');
+  bindRemove(scopeCustomerSelected, state.scopeCustomers, 'No customers selected.');
+
+  renderSelected(newVisibilitySelected, state.newVisibility, 'No reps selected.');
+  renderSelected(scopeVisibilitySelected, state.scopeVisibility, 'No reps selected.');
+  renderSelected(newCustomerSelected, state.newCustomers, 'No customers selected.');
+  renderSelected(scopeCustomerSelected, state.scopeCustomers, 'No customers selected.');
+
+  window.addEventListener('DOMContentLoaded', () => {
+    ensureModals();
+    document.getElementById('filterQuery').value = state.query;
+    document.getElementById('filterRole').value = state.role;
+    document.getElementById('filterStatus').value = state.status;
+    syncCreateModeUi();
+    loadUsers();
+  });
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,2438 @@
+{% extends "base.html" %}
+{% set filters_handler = "ssr" %}
+{% block title %}Product Intelligence Workspace · {{ product_name }}{% endblock %}
+{% block head_extras %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/product_drilldown_v2.css', v='20260325-theme-refine') }}">
+{% endblock %}
+{% block content %}
+{% macro fmt_currency(value) -%}
+  {%- if value is not none and value == value -%}
+    {{ value|currency }}
+  {%- else -%}
+    <span class="text-muted">&mdash;</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro fmt_number(value, decimals=0) -%}
+  {%- if value is not none and value == value -%}
+    {%- if decimals == 0 -%}
+      {{ "{:,.0f}".format(value|float) }}
+    {%- else -%}
+      {{ ("{:,.%df}" % decimals).format(value|float) }}
+    {%- endif -%}
+  {%- else -%}
+    <span class="text-muted">&mdash;</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro fmt_percent(value, decimals=1) -%}
+  {%- if value is not none and value == value -%}
+    {{ ("%." ~ decimals ~ "f")|format(value|float) }}%
+  {%- else -%}
+    <span class="text-muted">&mdash;</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro tone_class(tone) -%}
+  {%- if tone == "good" -%}is-good
+  {%- elif tone == "risk" -%}is-risk
+  {%- elif tone == "warn" -%}is-warn
+  {%- else -%}is-accent
+  {%- endif -%}
+{%- endmacro %}
+{% macro metric_label(label, tip) -%}
+  <span>{{ label }}</span>
+  <i class="bi bi-info-circle ms-1 text-muted" data-bs-toggle="tooltip" title="{{ tip }}"></i>
+{%- endmacro %}
+{% macro section_context(title, body, next_step=None, tone='accent') -%}
+  <div class="product-v2-layer-context {{ tone_class(tone) }}">
+    <div class="product-v2-layer-context-title">{{ title }}</div>
+    <div class="small">{{ body }}</div>
+    {% if next_step %}
+      <div class="product-v2-layer-context-next"><strong>Next:</strong> {{ next_step }}</div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+{% set current_window = performance_story.get("current_window") or {} %}
+{% set prior_window = performance_story.get("prior_window") or {} %}
+{% set rolling_window_note = "Rolling 28-day diagnostics compare the latest 28 days against the immediately preceding 28 days." %}
+{% if current_window.get("start") and current_window.get("end") and prior_window.get("start") and prior_window.get("end") %}
+  {% set rolling_window_note = "Rolling 28-day diagnostics compare " ~ current_window.get("start") ~ " to " ~ current_window.get("end") ~ " against " ~ prior_window.get("start") ~ " to " ~ prior_window.get("end") ~ "." %}
+{% endif %}
+{% set hero_story = performance_story.get("narrative") or header_summary.get("primary_risk_detail") or "Use this workspace to separate commercial scale, weight importance, customer dependency, pricing quality, and planning confidence for the active filter window." %}
+{% set hero_next_move = header_summary.get("primary_opportunity_detail") or performance_story.get("recommended_action") or "Start with the scorecard, then inspect the customer, pricing, and basket sections to confirm the next move." %}
+{% set active_scope_note = "Current view honors the selected filter window and your current RBAC scope." %}
+{% if meta.get("window_start") and meta.get("window_end") %}
+  {% set active_scope_note = "Current scoped window: " ~ meta.get("window_start") ~ " to " ~ meta.get("window_end") ~ ". " ~ rolling_window_note %}
+{% endif %}
+
+<div class="container-fluid py-3 pb-4 product-drilldown-v2">
+  <section class="product-v2-hero card mb-3">
+    <div class="card-body">
+      <div class="product-v2-hero-grid">
+        <div class="product-v2-hero-main">
+          <div class="product-v2-eyebrow">Product Intelligence Workspace</div>
+          <div class="product-v2-hero-topbar">
+            <div class="product-v2-hero-copy">
+              <nav class="small text-muted mb-2" aria-label="Breadcrumb">
+                <a href="{{ url_for('products.index') }}" class="text-decoration-none">Products</a>
+                <span class="mx-1">/</span>
+                <span>{{ meta.get("sku") or product_id }}</span>
+              </nav>
+              <div class="product-v2-hero-identity-line">
+                <span class="product-v2-chip is-accent">SKU {{ meta.get("sku") or product_id }}</span>
+                <span class="product-v2-hero-display-label">{{ meta.get("product_display_label") or product_name }}</span>
+              </div>
+              <h1 class="mb-2 product-v2-hero-title">{{ meta.get("product_name") or product_name }}</h1>
+              <div class="product-v2-hero-summary">
+                {{ hero_story }}
+              </div>
+              <div class="small text-muted product-v2-hero-meta">
+                {{ active_scope_note }}
+                {% if meta.get("generated_at") %}
+                  &middot; Refreshed {{ meta.get("generated_at") }}
+                {% endif %}
+              </div>
+              {% if scope_info and not scope_info.get("is_admin") %}
+                <div class="small text-muted mt-1 product-v2-hero-meta">
+                  Scoped view: this product reflects only customers and orders allowed by your current RBAC scope.
+                </div>
+              {% endif %}
+            </div>
+            <div class="product-v2-hero-actions">
+              <a
+                id="productDrilldownBackButton"
+                href="{{ url_for('products.index') }}{{ ('?' ~ request_querystring) if request_querystring else querystring }}"
+                data-back-fallback="{{ url_for('products.index') }}{{ ('?' ~ request_querystring) if request_querystring else querystring }}"
+                class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Exit
+              </a>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <i class="bi bi-download"></i> Export
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item js-v2-export" data-kind="snapshot" data-format="xlsx" href="#">Full snapshot (XLSX)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="kpis" data-format="xlsx" href="#">Executive scorecard (XLSX)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="monthly_series" data-format="xlsx" href="#">Time series (XLSX)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="customers" data-format="xlsx" href="#">Customer diagnostics (XLSX)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="basket" data-format="xlsx" href="#">Basket diagnostics (XLSX)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="forecast" data-format="xlsx" href="#">Forecast (XLSX)</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="monthly_series" data-format="csv" href="#">Time series (CSV)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="customers" data-format="csv" href="#">Customer diagnostics (CSV)</a></li>
+                  <li><a class="dropdown-item js-v2-export" data-kind="seasonality" data-format="csv" href="#">Seasonality profile (CSV)</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="product-v2-chip-row mt-3">
+            <span class="product-v2-chip {{ tone_class('accent' if (header_summary.get('posture') or 'Stable') in ['Stable', 'Growing'] else 'warn') }}">Posture: {{ header_summary.get("posture") or "Stable" }}</span>
+            <span class="product-v2-chip {{ tone_class('accent' if (lifecycle_insights.get('stage') or lifecycle.get('stage')) not in ['Declining', 'Unstable'] else 'warn') }}">Lifecycle: {{ lifecycle_insights.get("stage") or lifecycle.get("stage") or "Unknown" }}</span>
+            <span class="product-v2-chip">Classification: {{ classification.get("abc_xyz") or classification.get("label") or "Unclassified" }}</span>
+            {% if family_context and family_context.get('protein_family') %}
+              <span class="product-v2-chip">Protein: {{ family_context.get("protein_family") }}</span>
+            {% endif %}
+            {% if family_context and family_context.get('product_category') and family_context.get('product_category') != family_context.get('protein_family') %}
+              <span class="product-v2-chip">Category: {{ family_context.get("product_category") }}</span>
+            {% endif %}
+            {% if show_costs and family_context %}
+              <span class="product-v2-chip {{ tone_class('risk' if family_context.get('status_key') == 'red' else ('warn' if family_context.get('status_key') in ['orange', 'yellow'] else 'good')) }}">
+                Target status: {{ family_context.get("target_status") or "Unknown" }}
+              </span>
+              <span class="product-v2-chip">
+                Gross margin gates: min {{ fmt_percent(family_context.get("minimum_margin_pct")) }} · target {{ fmt_percent(family_context.get("target_margin_pct")) }}
+              </span>
+              <span class="product-v2-chip">Meat Manager cost/lb: {{ fmt_currency(kpis.get("base_cost_per_lb")) }}</span>
+              <span class="product-v2-chip">Effective cost/lb: {{ fmt_currency(kpis.get("cost_per_lb")) }}</span>
+              <span class="product-v2-chip">Min price/lb: {{ fmt_currency(family_context.get("minimum_price_lb")) }}</span>
+              <span class="product-v2-chip">Target price/lb: {{ fmt_currency(family_context.get("target_price_lb")) }}</span>
+            {% endif %}
+            <span class="product-v2-chip">ASP/lb: {{ fmt_currency(kpis.get("asp_lb")) }}</span>
+            {% if (customers.get("top_rows") or []) %}
+              {% set lead_customer = (customers.get("top_rows") or [])[0] %}
+              <span class="product-v2-chip">Top customer: {{ lead_customer.get("name") or "Unknown" }} · {{ fmt_currency(lead_customer.get("revenue")) }}</span>
+            {% endif %}
+            {% if (regions.get("top_rows") or []) %}
+              {% set lead_region = (regions.get("top_rows") or [])[0] %}
+              <span class="product-v2-chip">Lead region: {{ lead_region.get("name") or "Unknown" }} · {{ fmt_currency(lead_region.get("revenue")) }}</span>
+            {% endif %}
+            {% if show_costs %}
+              <span class="product-v2-chip {{ tone_class('good' if (quality.get('cost_coverage_pct') or 0) >= 95 else 'warn') }}">Cost coverage: {{ fmt_percent(quality.get("cost_coverage_pct")) }}</span>
+            {% else %}
+              <span class="product-v2-chip is-accent">Margin visibility: restricted</span>
+            {% endif %}
+            <span class="product-v2-chip">Last sold: {{ kpis.get("last_sold") or "—" }}</span>
+            <span class="product-v2-chip {{ tone_class('good' if (header_summary.get('data_confidence_score') or 0) >= 75 else 'warn') }}">Data confidence: {{ header_summary.get("data_confidence_label") or "Watch" }}</span>
+          </div>
+          <div class="product-v2-story-grid mt-3">
+            {{ section_context("What is happening", hero_story, rolling_window_note, 'good' if performance_story.get('health') == 'Healthy' else ('warn' if performance_story.get('health') == 'Mixed' else 'risk')) }}
+            {{ section_context("Why it matters", header_summary.get("primary_risk_detail") or weight_analytics.get("demand_quality_note") or "This SKU affects revenue, weight planning, pricing quality, and customer dependency at the same time.", "Use the risk, pricing, and customer sections to confirm whether the issue is concentration, margin, or demand quality.", 'warn' if header_summary.get("primary_risk") else 'accent') }}
+            {{ section_context("What to do next", hero_next_move, "Click any action card, customer row, margin-risk row, basket row, or chart point to inspect context without leaving the page.", 'accent') }}
+          </div>
+          <div class="product-v2-summary-grid mt-3">
+            <div>
+              <div class="product-v2-summary-card">
+                <div class="product-v2-summary-label">Commercial outcome</div>
+                <div class="product-v2-summary-value">{{ fmt_currency(kpis.get("revenue")) }}</div>
+                <div class="small text-muted">Gross margin {{ fmt_percent(kpis.get("margin_pct")) if show_costs else "—" }} · Contribution {{ fmt_percent(kpis.get("contribution_share_pct")) }}</div>
+              </div>
+            </div>
+            <div>
+              <div class="product-v2-summary-card">
+                <div class="product-v2-summary-label">Weight & movement</div>
+                <div class="product-v2-summary-value">{{ fmt_number(kpis.get("weight_lb"), 0) }} lb</div>
+                <div class="small text-muted">Avg {{ fmt_number(kpis.get("avg_weight_per_order"), 1) }} lb/order · {{ fmt_number(kpis.get("velocity_weight_week"), 1) }} lb/wk</div>
+              </div>
+            </div>
+            <div>
+              <div
+                class="product-v2-summary-card product-v2-clickable-card js-v2-action-trigger"
+                role="button"
+                tabindex="0"
+                data-intel-eyebrow="Primary risk"
+                data-intel-title="{{ header_summary.get('primary_risk') or 'No material risk flagged' }}"
+                data-intel-summary="{{ header_summary.get('primary_risk_detail') or 'No elevated risk signal in the current scoped window.' }}"
+                data-intel-next="Review the supporting section that best matches this issue before changing price, coverage, or planning assumptions."
+                data-intel-link="#sec-pricing"
+                data-intel-link-label="Review supporting section"
+              >
+                <div class="product-v2-summary-label">Primary risk</div>
+                <div class="product-v2-summary-value-sm">{{ header_summary.get("primary_risk") or "No material risk flagged" }}</div>
+                <div class="small text-muted">{{ header_summary.get("primary_risk_detail") or "No elevated risk signal in the current scoped window." }}</div>
+              </div>
+            </div>
+            <div>
+              <div
+                class="product-v2-summary-card product-v2-clickable-card js-v2-action-trigger"
+                role="button"
+                tabindex="0"
+                data-intel-eyebrow="Best next move"
+                data-intel-title="{{ header_summary.get('primary_opportunity') or 'Monitor and hold' }}"
+                data-intel-summary="{{ header_summary.get('primary_opportunity_detail') or 'No high-confidence opportunity has risen above the current decision threshold.' }}"
+                data-intel-next="{{ hero_next_move }}"
+                data-intel-link="#sec-overview"
+                data-intel-link-label="Return to scorecard"
+              >
+                <div class="product-v2-summary-label">Best next move</div>
+                <div class="product-v2-summary-value-sm">{{ header_summary.get("primary_opportunity") or "Monitor and hold" }}</div>
+                <div class="small text-muted">{{ header_summary.get("primary_opportunity_detail") or "No high-confidence opportunity has risen above the current decision threshold." }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="product-v2-trust-panel">
+          <div class="product-v2-panel-label">Trust & Planning</div>
+          <div class="product-v2-health-row">
+            <div>
+              <div class="product-v2-health-score">{{ fmt_number(kpis.get("data_confidence_score"), 0) }}</div>
+              <div class="product-v2-health-copy">Data confidence score</div>
+            </div>
+            <span class="product-v2-status-pill {{ tone_class('good' if (kpis.get('data_confidence_score') or 0) >= 75 else 'warn') }}">{{ header_summary.get("data_confidence_label") or "Watch" }}</span>
+          </div>
+          <div class="product-v2-trust-grid">
+            <div>
+              <div class="product-v2-panel-label">Forecastability</div>
+              <div class="product-v2-panel-value">{{ fmt_number(kpis.get("forecastability_score"), 0) }}</div>
+            </div>
+            <div>
+              <div class="product-v2-panel-label">Lifecycle score</div>
+              <div class="product-v2-panel-value">{{ fmt_number(kpis.get("lifecycle_score"), 0) }}</div>
+            </div>
+            <div>
+              <div class="product-v2-panel-label">Demand stability</div>
+              <div class="product-v2-panel-value">{{ fmt_number(kpis.get("demand_stability_index"), 0) }}</div>
+            </div>
+            <div>
+              <div class="product-v2-panel-label">Dependency score</div>
+              <div class="product-v2-panel-value">{{ fmt_number(kpis.get("dependency_score"), 0) }}</div>
+            </div>
+          </div>
+          <div class="product-v2-trust-note">
+            {{ lifecycle_insights.get("summary") or "Lifecycle commentary appears when enough trend history is available." }}
+          </div>
+          {% if family_context and (family_context.get('protein_family') or family_context.get('peer_count')) %}
+            <div class="product-v2-trust-grid mt-3">
+              <div>
+                <div class="product-v2-panel-label">Protein family</div>
+                <div class="product-v2-panel-value">{{ family_context.get("protein_family") or "Unknown" }}</div>
+              </div>
+              <div>
+                <div class="product-v2-panel-label">Peer SKUs</div>
+                <div class="product-v2-panel-value">{{ fmt_number(family_context.get("peer_count"), 0) }}</div>
+              </div>
+              <div>
+                <div class="product-v2-panel-label">Peer ASP/lb</div>
+                <div class="product-v2-panel-value">{{ fmt_currency(family_context.get("peer_asp_lb")) }}</div>
+              </div>
+              <div>
+                <div class="product-v2-panel-label">Peer Margin %</div>
+                <div class="product-v2-panel-value">{{ fmt_percent(family_context.get("peer_margin_pct")) if show_costs else "—" }}</div>
+              </div>
+            </div>
+            <div class="product-v2-trust-note mt-3">
+              {% if family_context.get('top_peer_display') %}
+                Leading peer: {{ family_context.get('top_peer_display') }}.
+              {% endif %}
+              {% if family_context.get('asp_vs_peer_pct') is not none %}
+                This SKU is {{ fmt_percent(family_context.get('asp_vs_peer_pct')) }} vs its family ASP/lb benchmark.
+              {% endif %}
+              {% if show_costs and family_context.get('margin_vs_peer_pp') is not none %}
+                Margin gap vs family median: {{ fmt_number(family_context.get('margin_vs_peer_pp'), 1) }} pp.
+              {% endif %}
+            </div>
+          {% endif %}
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  {% if products_warning %}
+    <div class="alert alert-warning border shadow-sm mb-3" role="alert">{{ products_warning }}</div>
+  {% endif %}
+  {% if show_costs and quality.get("cost_coverage_pct") is not none and quality.get("cost_coverage_pct") < 95 %}
+    <div class="alert alert-warning border shadow-sm mb-3" role="alert">
+      Cost coverage is {{ fmt_percent(quality.get("cost_coverage_pct")) }}. Margin and profit readings may be understated where costs are missing.
+    </div>
+  {% endif %}
+
+  <nav class="product-v2-subnav mb-3" aria-label="Product section navigation">
+    <a class="product-v2-subnav-link" href="#sec-overview"><span>Overview</span><span class="product-v2-subnav-pill">{{ fmt_currency(kpis.get("revenue")) }}</span></a>
+    <a class="product-v2-subnav-link" href="#sec-trend"><span>Trend</span><span class="product-v2-subnav-pill">{{ lifecycle_insights.get("trend_direction") or "Stable" }}</span></a>
+    <a class="product-v2-subnav-link" href="#sec-weight"><span>Weight</span><span class="product-v2-subnav-pill">{{ fmt_number(kpis.get("weight_lb"), 0) }} lb</span></a>
+    <a class="product-v2-subnav-link" href="#sec-pricing"><span>Pricing</span><span class="product-v2-subnav-pill">{{ fmt_currency(kpis.get("asp_lb")) }}</span></a>
+    <a class="product-v2-subnav-link" href="#sec-customers"><span>Customers</span><span class="product-v2-subnav-pill">{{ fmt_number(kpis.get("customers")) }}</span></a>
+    <a class="product-v2-subnav-link" href="#sec-basket"><span>Basket</span><span class="product-v2-subnav-pill">{{ fmt_number((basket.get("rows") or [])|length) }}</span></a>
+    {% if forecast_feature_enabled %}
+      <a class="product-v2-subnav-link" href="#sec-forecast"><span>Forecast</span><span class="product-v2-subnav-pill">{{ (forecast.get("meta") or {}).get("confidence_label") or "Watch" }}</span></a>
+    {% endif %}
+  </nav>
+
+  <section class="product-v2-intel-shell mb-3 d-none" id="v2IntelPanelWrap" aria-live="polite">
+    <div class="card product-v2-intel-panel">
+      <div class="card-header product-v2-control-row">
+        <div>
+          <div class="product-v2-panel-label" id="v2IntelEyebrow">Interactive detail</div>
+          <h5 class="mb-1" id="v2IntelTitle">Context</h5>
+          <div class="small text-muted" id="v2IntelSummary">Click a card, row, or chart point to inspect what changed, why it matters, and where to go next.</div>
+        </div>
+        <div class="product-v2-control-actions">
+          <a href="#" class="btn btn-sm btn-outline-primary d-none" id="v2IntelOpenLink">Open detail</a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="v2IntelClose">Close</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="product-v2-intel-grid">
+          <div id="v2IntelMetrics" class="product-v2-intel-metrics"></div>
+          <div id="v2IntelActions" class="product-v2-intel-actions"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-overview" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Executive Scorecard</h4>
+        <p class="text-muted mb-0">Commercial outcome, demand movement, pricing quality, customer reach, and trust indicators for the active scoped window.</p>
+        <div class="product-v2-section-note">{{ rolling_window_note }} Use this layer to decide whether this SKU matters because of commercial scale, weight importance, pricing leakage, or customer dependency.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="kpis" data-format="xlsx" href="#">Export scorecard</a>
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-8">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="mb-1">Commercial Outcome</h5>
+                <div class="small text-muted">Revenue, gross margin, contribution, and recent movement.</div>
+              </div>
+              <div class="card-body">
+                <div class="product-v2-metric-list">
+                  <div class="product-v2-metric-row"><span>{{ metric_label("Revenue", "Revenue under current filters and scoped access.") }}</span><strong>{{ fmt_currency(kpis.get("revenue")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>{{ metric_label("Gross Margin $", "Revenue minus cost on cost-covered rows.") }}</span><strong>{{ fmt_currency(kpis.get("gross_margin_value")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>{{ metric_label("Margin %", "Gross margin percentage on current-window revenue.") }}</span><strong>{{ fmt_percent(kpis.get("margin_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>{{ metric_label("Contribution Share", "Product revenue divided by scoped total revenue.") }}</span><strong>{{ fmt_percent(kpis.get("contribution_share_pct")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>{{ metric_label("28D Revenue Δ", "Recent 28 days vs prior 28 days.") }}</span><strong>{{ fmt_currency((kpis.get("delta_28d") or {}).get("revenue_delta")) }} / {{ fmt_percent((kpis.get("delta_28d") or {}).get("revenue_delta_pct")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>{{ metric_label("28D Weight Δ", "Recent shipped lb vs prior 28 days.") }}</span><strong>{{ fmt_number((kpis.get("delta_28d") or {}).get("weight_delta"), 1) }} / {{ fmt_percent((kpis.get("delta_28d") or {}).get("weight_delta_pct")) }}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="mb-1">Demand & Movement</h5>
+                <div class="small text-muted">Units, shipped lb, cadence, movement efficiency, and stability.</div>
+              </div>
+              <div class="card-body">
+                <div class="product-v2-metric-list">
+                  <div class="product-v2-metric-row"><span>Orders</span><strong>{{ fmt_number(kpis.get("orders")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Customers</span><strong>{{ fmt_number(kpis.get("customers")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Units</span><strong>{{ fmt_number(kpis.get("units"), 1) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Shipped lb</span><strong>{{ fmt_number(kpis.get("weight_lb"), 1) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Avg units / order</span><strong>{{ fmt_number(kpis.get("avg_units_per_order"), 2) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Avg lb / order</span><strong>{{ fmt_number(kpis.get("avg_weight_per_order"), 2) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Avg lb / unit</span><strong>{{ fmt_number(kpis.get("avg_weight_per_unit"), 2) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Demand stability</span><strong>{{ fmt_number(kpis.get("demand_stability_index"), 0) }}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="mb-1">Pricing & Margin</h5>
+                <div class="small text-muted">ASP/lb-first pricing view with price dispersion and margin exposure.</div>
+              </div>
+              <div class="card-body">
+                <div class="product-v2-metric-list">
+                  <div class="product-v2-metric-row"><span>{{ metric_label("ASP/lb", "Revenue divided by shipped weight in pounds.") }}</span><strong>{{ fmt_currency(kpis.get("asp_lb")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Meat Manager cost / lb</span><strong>{{ fmt_currency(kpis.get("base_cost_per_lb")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Effective cost / lb</span><strong>{{ fmt_currency(kpis.get("cost_per_lb")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Minimum price / lb</span><strong>{{ fmt_currency(family_context.get("minimum_price_lb")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Target price / lb</span><strong>{{ fmt_currency(family_context.get("target_price_lb")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>ASP/lb gap to minimum</span><strong>{{ fmt_currency(family_context.get("asp_lb_gap_to_min")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>ASP/lb gap to target</span><strong>{{ fmt_currency(family_context.get("asp_lb_gap_to_target")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>ASP/unit</span><strong>{{ fmt_currency(kpis.get("asp")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Profit / lb</span><strong>{{ fmt_currency(kpis.get("profit_per_lb")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Current gross margin %</span><strong>{{ fmt_percent(kpis.get("margin_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Minimum gross margin %</span><strong>{{ fmt_percent(family_context.get("minimum_margin_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Target gross margin %</span><strong>{{ fmt_percent(family_context.get("target_margin_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Target achievement</span><strong>{{ fmt_percent(family_context.get("target_achievement_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Price P10 / P50 / P90</span><strong>{{ fmt_currency(kpis.get("price_p10")) }} / {{ fmt_currency(kpis.get("price_p50")) }} / {{ fmt_currency(kpis.get("price_p90")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Dispersion ratio</span><strong>{{ fmt_number(kpis.get("price_dispersion_ratio"), 2) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Margin-risk exposure</span><strong>{{ fmt_percent(kpis.get("margin_risk_exposure_pct")) if show_costs else "—" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Price-outlier revenue</span><strong>{{ fmt_percent(kpis.get("price_outlier_revenue_share_pct")) }}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-header">
+                <h5 class="mb-1">Customer Reach & Planning</h5>
+                <div class="small text-muted">Penetration, repeat quality, lifecycle status, and planning confidence.</div>
+              </div>
+              <div class="card-body">
+                <div class="product-v2-metric-list">
+                  <div class="product-v2-metric-row"><span>Repeat customer share</span><strong>{{ fmt_percent(kpis.get("repeat_customer_share_pct")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>New customer share</span><strong>{{ fmt_percent(kpis.get("new_customer_share_pct")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Recent repeat revenue share</span><strong>{{ fmt_percent(kpis.get("current_28d_repeat_revenue_share_pct")) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Customer cadence</span><strong>{{ fmt_number(kpis.get("cadence_days"), 1) }} d</strong></div>
+                  <div class="product-v2-metric-row"><span>Lifecycle stage</span><strong>{{ lifecycle_insights.get("stage") or lifecycle.get("stage") or "Unknown" }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Seasonality strength</span><strong>{{ fmt_number(kpis.get("seasonality_strength_score"), 0) }}</strong></div>
+                  <div class="product-v2-metric-row"><span>Forecastability</span><strong>{{ fmt_number(kpis.get("forecastability_score"), 0) }} · {{ kpis.get("forecast_confidence_label") or "Watch" }}</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 product-v2-detail-aside">
+        <div class="card h-100 mb-3">
+          <div class="card-header">
+            <h5 class="mb-1">Decision Layer</h5>
+            <div class="small text-muted">Immediate actions based on current risk, opportunity, and recent movement. Click a card to open the supporting context.</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-action-stack">
+              {% for action in decision_panel.get("actions") or [] %}
+                {% set action_detail = action.get("detail") or "" %}
+                {% set action_target = "#sec-overview" %}
+                {% if "basket" in action_detail|lower %}
+                  {% set action_target = "#sec-basket" %}
+                {% elif "customer" in action_detail|lower or "cadence" in action_detail|lower %}
+                  {% set action_target = "#sec-customers" %}
+                {% elif "lifecycle" in action_detail|lower %}
+                  {% set action_target = "#sec-trend" %}
+                {% elif "margin" in action_detail|lower or "price" in action_detail|lower %}
+                  {% set action_target = "#sec-pricing" %}
+                {% endif %}
+                <div
+                  class="product-v2-action-card product-v2-clickable-card js-v2-action-trigger {{ tone_class(action.get('tone')) }}"
+                  role="button"
+                  tabindex="0"
+                  data-intel-eyebrow="Decision action"
+                  data-intel-title="{{ action.get('title') }}"
+                  data-intel-summary="{{ action_detail }}"
+                  data-intel-next="Use the linked section to validate the signal before you change pricing, coverage, or planning assumptions."
+                  data-intel-link="{{ action_target }}"
+                  data-intel-link-label="Open supporting section"
+                >
+                  <div class="product-v2-action-title">{{ action.get("title") }}</div>
+                  <div class="small">{{ action.get("detail") }}</div>
+                </div>
+              {% endfor %}
+              {% if not (decision_panel.get("actions") or []) %}
+                <div class="text-muted small">No decision actions are available under the current filters.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Risk & Opportunity</h5>
+            <div class="small text-muted">Top enterprise signals across concentration, pricing, seasonality, lifecycle, and planning.</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-signal-group mb-3">
+              <div class="product-v2-panel-label">Primary risks</div>
+              {% for item in (risk_opportunity.get("risks") or [])[:3] %}
+                {% set item_detail = item.get("detail") or "" %}
+                {% set item_target = "#sec-overview" %}
+                {% if "season" in item_detail|lower or "lifecycle" in item_detail|lower %}
+                  {% set item_target = "#sec-trend" %}
+                {% elif "customer" in item_detail|lower or "weight" in item_detail|lower %}
+                  {% set item_target = "#sec-customers" %}
+                {% elif "margin" in item_detail|lower or "price" in item_detail|lower %}
+                  {% set item_target = "#sec-pricing" %}
+                {% endif %}
+                <div
+                  class="product-v2-signal-row product-v2-clickable-card js-v2-action-trigger"
+                  role="button"
+                  tabindex="0"
+                  data-intel-eyebrow="Primary risk"
+                  data-intel-title="{{ item.get('title') }}"
+                  data-intel-summary="{{ item_detail }}"
+                  data-intel-next="Use the linked section to quantify whether this issue needs pricing, customer, lifecycle, or planning intervention."
+                  data-intel-link="{{ item_target }}"
+                  data-intel-link-label="Open supporting section"
+                >
+                  <span class="badge {{ tone_class(item.get('tone')) }}">{{ item.get("title") }}</span>
+                  <div class="small text-muted">{{ item.get("detail") }}</div>
+                </div>
+              {% endfor %}
+              {% if not (risk_opportunity.get("risks") or []) %}
+                <div class="small text-muted">No elevated risk surfaced under the current scoped view.</div>
+              {% endif %}
+            </div>
+            <div class="product-v2-signal-group">
+              <div class="product-v2-panel-label">Top opportunities</div>
+              {% for item in (risk_opportunity.get("opportunities") or [])[:3] %}
+                {% set item_detail = item.get("detail") or "" %}
+                {% set item_target = "#sec-overview" %}
+                {% if "basket" in item_detail|lower or "pair" in item_detail|lower %}
+                  {% set item_target = "#sec-basket" %}
+                {% elif "customer" in item_detail|lower or "repeat" in item_detail|lower %}
+                  {% set item_target = "#sec-customers" %}
+                {% elif "weight" in item_detail|lower %}
+                  {% set item_target = "#sec-weight" %}
+                {% elif "margin" in item_detail|lower or "price" in item_detail|lower %}
+                  {% set item_target = "#sec-pricing" %}
+                {% endif %}
+                <div
+                  class="product-v2-signal-row product-v2-clickable-card js-v2-action-trigger"
+                  role="button"
+                  tabindex="0"
+                  data-intel-eyebrow="Opportunity"
+                  data-intel-title="{{ item.get('title') }}"
+                  data-intel-summary="{{ item_detail }}"
+                  data-intel-next="Open the linked section to confirm the commercial upside and the accounts or periods behind it."
+                  data-intel-link="{{ item_target }}"
+                  data-intel-link-label="Open supporting section"
+                >
+                  <span class="badge {{ tone_class(item.get('tone')) }}">{{ item.get("title") }}</span>
+                  <div class="small text-muted">{{ item.get("detail") }}</div>
+                </div>
+              {% endfor %}
+              {% if not (risk_opportunity.get("opportunities") or []) %}
+                <div class="small text-muted">No clear opportunity outranks the current hold threshold.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-3" aria-label="Performance story">
+      <div class="col-xl-8">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Performance Story</h5>
+            <div class="small text-muted">What changed in the last 28 days, which lever mattered most, and what to do next. {{ rolling_window_note }}</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-story-callout {{ tone_class('good' if performance_story.get('health') == 'Healthy' else ('warn' if performance_story.get('health') == 'Mixed' else 'risk')) }}">
+              <div class="product-v2-story-title">{{ performance_story.get("health") or "Watch" }}</div>
+              <p class="mb-2">{{ performance_story.get("narrative") or "No performance story available under this selection." }}</p>
+            <div class="small"><strong>Recommended action:</strong> {{ performance_story.get("recommended_action") or "No action recommendation is available." }}</div>
+          </div>
+          <div class="row g-2 mt-1">
+            <div class="col-md-4">
+              <div class="product-v2-stat-tile">
+                <div class="small text-muted">ASP/{{ (performance_story.get("decomposition") or {}).get("basis_label") or "lb" }} Effect</div>
+                <div class="fw-semibold">{{ fmt_currency((performance_story.get("decomposition") or {}).get("price_effect")) }}</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="product-v2-stat-tile">
+                <div class="small text-muted">{{ ((performance_story.get("decomposition") or {}).get("basis_label") or "lb")|upper }} Volume Effect</div>
+                <div class="fw-semibold">{{ fmt_currency((performance_story.get("decomposition") or {}).get("volume_effect")) }}</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="product-v2-stat-tile">
+                <div class="small text-muted">Mix / Interaction</div>
+                <div class="fw-semibold">{{ fmt_currency((performance_story.get("decomposition") or {}).get("mix_effect")) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-4 product-v2-detail-aside">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Movers</h5>
+            <div class="small text-muted">Largest 28-day revenue movers within this product’s customer base. Click a customer to inspect the change and open drilldown.</div>
+          </div>
+          <div class="card-body product-v2-list-panel">
+            <div class="small text-muted mb-2">Top gainers</div>
+            <ul class="list-unstyled small mb-3">
+              {% for row in (performance_story.get("top_gainers") or [])[:4] %}
+                {% set cid = row.get("customer_id") %}
+                {% set customer_link = url_for('customers.drilldown', customer_id=cid) if cid else None %}
+                {% if customer_link and querystring %}
+                  {% set customer_link = customer_link ~ querystring %}
+                {% endif %}
+                <li class="mb-2">
+                  <button
+                    type="button"
+                    class="product-v2-intel-list-btn js-v2-mover-trigger"
+                    data-mover-kind="Gainer"
+                    data-customer-id="{{ cid or '' }}"
+                    data-customer-name="{{ row.get('customer_name') or cid or 'Unknown' }}"
+                    data-delta-revenue="{{ row.get('delta_revenue') or '' }}"
+                    data-delta-pct="{{ row.get('delta_pct') or '' }}"
+                    data-revenue-current="{{ row.get('revenue_current') or '' }}"
+                    data-revenue-prior="{{ row.get('revenue_prior') or '' }}"
+                    data-intel-link="{{ customer_link or '' }}"
+                  >
+                    <span class="text-truncate product-v2-split-label">{{ row.get("customer_name") or row.get("customer_id") }}</span>
+                    <strong>{{ fmt_currency(row.get("delta_revenue")) }}</strong>
+                  </button>
+                </li>
+              {% endfor %}
+              {% if not (performance_story.get("top_gainers") or []) %}
+                <li class="text-muted">No gainers.</li>
+              {% endif %}
+            </ul>
+            <div class="small text-muted mb-2">Top decliners</div>
+            <ul class="list-unstyled small mb-0">
+              {% for row in (performance_story.get("top_decliners") or [])[:4] %}
+                {% set cid = row.get("customer_id") %}
+                {% set customer_link = url_for('customers.drilldown', customer_id=cid) if cid else None %}
+                {% if customer_link and querystring %}
+                  {% set customer_link = customer_link ~ querystring %}
+                {% endif %}
+                <li class="mb-2">
+                  <button
+                    type="button"
+                    class="product-v2-intel-list-btn js-v2-mover-trigger"
+                    data-mover-kind="Decliner"
+                    data-customer-id="{{ cid or '' }}"
+                    data-customer-name="{{ row.get('customer_name') or cid or 'Unknown' }}"
+                    data-delta-revenue="{{ row.get('delta_revenue') or '' }}"
+                    data-delta-pct="{{ row.get('delta_pct') or '' }}"
+                    data-revenue-current="{{ row.get('revenue_current') or '' }}"
+                    data-revenue-prior="{{ row.get('revenue_prior') or '' }}"
+                    data-intel-link="{{ customer_link or '' }}"
+                  >
+                    <span class="text-truncate product-v2-split-label">{{ row.get("customer_name") or row.get("customer_id") }}</span>
+                    <strong>{{ fmt_currency(row.get("delta_revenue")) }}</strong>
+                  </button>
+                </li>
+              {% endfor %}
+              {% if not (performance_story.get("top_decliners") or []) %}
+                <li class="text-muted">No decliners.</li>
+              {% endif %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-trend" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Trend, Lifecycle & Seasonality</h4>
+        <p class="text-muted mb-0">Revenue, profit, weight, ASP/lb, lifecycle stage, and seasonal demand shape with clearer planning context.</p>
+        <div class="product-v2-section-note">Use this layer to separate sustained demand shifts from seasonality. Monthly charts show the active scoped history; seasonality uses the full available pattern for this SKU.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="monthly_series" data-format="xlsx" href="#">Export time series</a>
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-8">
+        <div class="card h-100 product-v2-chart-card">
+          <div class="card-header">
+            <h5 class="mb-1">Revenue, Profit & Shipped lb Trend</h5>
+            <div class="small text-muted">Monthly commercial outcome with weight context and rolling revenue average.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2OutcomeTrendChart" class="v2-plot" aria-label="Outcome trend chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 product-v2-detail-aside">
+        <div class="card h-100 product-v2-chart-card product-v2-compact-panel">
+          <div class="card-header">
+            <h5 class="mb-1">Lifecycle & Price Quality</h5>
+            <div class="small text-muted">ASP/lb, margin quality, lifecycle stage, and planning confidence.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2PriceMarginTrendChart" class="v2-plot-sm mb-3" aria-label="ASP/lb and margin trend"></div>
+            <div class="product-v2-mini-grid">
+              <div class="product-v2-stat-tile"><div class="small text-muted">Lifecycle stage</div><div class="fw-semibold">{{ lifecycle_insights.get("stage") or lifecycle.get("stage") or "Unknown" }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Trend direction</div><div class="fw-semibold">{{ lifecycle_insights.get("trend_direction") or "Stable" }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Months active</div><div class="fw-semibold">{{ fmt_number(lifecycle_insights.get("months_active")) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Forecastability</div><div class="fw-semibold">{{ fmt_number(kpis.get("forecastability_score"), 0) }}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="card h-100 product-v2-chart-card">
+          <div class="card-header">
+            <h5 class="mb-1">Seasonality Heatmap</h5>
+            <div class="small text-muted">Year-over-year revenue intensity by month with shipped lb in hover context.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2SeasonalityChart" class="v2-plot" aria-label="Seasonality heatmap"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="card h-100 product-v2-chart-card product-v2-compact-panel">
+          <div class="card-header">
+            <h5 class="mb-1">Seasonality Profile</h5>
+            <div class="small text-muted">Strength, best months, worst months, and normalized seasonal shape.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2SeasonalityProfileChart" class="v2-plot-sm mb-3" aria-label="Seasonality profile"></div>
+            <div class="product-v2-metric-list">
+              <div class="product-v2-metric-row"><span>Seasonality strength</span><strong>{{ fmt_number((time_series.get("seasonality") or {}).get("strength_score"), 0) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Best months</span><strong>{{ ((time_series.get("seasonality") or {}).get("best_months") or [])|join(", ") or "—" }}</strong></div>
+              <div class="product-v2-metric-row"><span>Worst months</span><strong>{{ ((time_series.get("seasonality") or {}).get("worst_months") or [])|join(", ") or "—" }}</strong></div>
+            </div>
+            <div class="small text-muted mt-3">{{ (time_series.get("seasonality") or {}).get("confidence_note") or "Seasonality profile unavailable." }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-weight" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Weight Analytics</h4>
+        <p class="text-muted mb-0">Weight is treated as a first-class commercial and operational signal, not a secondary diagnostic.</p>
+        <div class="product-v2-section-note">Use this section when the SKU matters because of shipped lb, pack economics, or heavy-account exposure. Protect high-weight strategic items even when units alone look flat.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="monthly_series" data-format="csv" href="#">Export weight series</a>
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-8">
+        <div class="card h-100 product-v2-chart-card">
+          <div class="card-header">
+            <h5 class="mb-1">Weight, Revenue/lb & Profit/lb Trend</h5>
+            <div class="small text-muted">How shipped lb and per-lb economics are moving over time, with pack intensity kept in summary diagnostics.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2WeightTrendChart" class="v2-plot" aria-label="Weight analytics chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Weight Summary</h5>
+            <div class="small text-muted">Operational weight profile, order concentration, and signal quality.</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-metric-list">
+              <div class="product-v2-metric-row"><span>Revenue / lb</span><strong>{{ fmt_currency((weight_analytics.get("summary") or {}).get("revenue_per_lb")) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Profit / lb</span><strong>{{ fmt_currency((weight_analytics.get("summary") or {}).get("profit_per_lb")) if show_costs else "—" }}</strong></div>
+              <div class="product-v2-metric-row"><span>Avg lb / customer</span><strong>{{ fmt_number((weight_analytics.get("summary") or {}).get("avg_weight_per_customer"), 1) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Top heavy-order share</span><strong>{{ fmt_percent(weight_analytics.get("heavy_order_share_pct")) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Top-5 customer weight share</span><strong>{{ fmt_percent(weight_analytics.get("top_customer_weight_share_pct")) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Weight intensity change</span><strong>{{ fmt_percent(weight_analytics.get("intensity_change_pct")) }}</strong></div>
+              <div class="product-v2-metric-row"><span>Order weight P10 / P50 / P90</span><strong>{{ fmt_number((weight_analytics.get("order_weight_distribution") or {}).get("p10"), 1) }} / {{ fmt_number((weight_analytics.get("order_weight_distribution") or {}).get("p50"), 1) }} / {{ fmt_number((weight_analytics.get("order_weight_distribution") or {}).get("p90"), 1) }}</strong></div>
+            </div>
+            <div class="small text-muted mt-3">{{ weight_analytics.get("demand_quality_note") or "No weight quality commentary is available." }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-7">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center gap-2 product-v2-control-row">
+            <div>
+              <h5 class="mb-1">Top Customers by Weight</h5>
+              <div class="small text-muted">The accounts that matter most when the product is analyzed in shipped lb rather than units alone. Click a row to inspect dependence and open customer drilldown.</div>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="customers" data-format="xlsx" href="#">Export</a>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive product-v2-table-wrap">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Weight lb</th>
+                    <th class="text-end">Weight share</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">ASP/lb</th>
+                    <th class="text-end">Orders</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in (weight_analytics.get("top_customers") or [])[:10] %}
+                    {% set cid = row.get("customer_id") %}
+                    {% set customer_link = url_for('customers.drilldown', customer_id=cid) if cid else None %}
+                    {% if customer_link and querystring %}
+                      {% set customer_link = customer_link ~ querystring %}
+                    {% endif %}
+                    <tr
+                      class="product-v2-clickable-row js-v2-customer-row"
+                      role="button"
+                      tabindex="0"
+                      data-intel-group="Weight-ranked customer"
+                      data-customer-id="{{ cid or '' }}"
+                      data-customer-name="{{ row.get('customer_name') or cid or 'Unknown' }}"
+                      data-customer-revenue="{{ row.get('revenue') or '' }}"
+                      data-customer-weight="{{ row.get('weight_lb') or '' }}"
+                      data-customer-share="{{ row.get('weight_share_pct') or '' }}"
+                      data-customer-asp-lb="{{ row.get('asp_lb') or '' }}"
+                      data-customer-orders="{{ row.get('orders') or '' }}"
+                      data-customer-status="Active"
+                      data-intel-link="{{ customer_link or '' }}"
+                    >
+                      <td>{% if customer_link %}<a href="{{ customer_link }}" class="text-decoration-none fw-semibold">{{ row.get("customer_name") or cid }}</a>{% else %}{{ row.get("customer_name") or cid or "Unknown" }}{% endif %}</td>
+                      <td class="text-end">{{ fmt_number(row.get("weight_lb"), 1) }}</td>
+                      <td class="text-end">{{ fmt_percent(row.get("weight_share_pct")) }}</td>
+                      <td class="text-end">{{ fmt_currency(row.get("revenue")) }}</td>
+                      <td class="text-end">{{ fmt_currency(row.get("asp_lb")) }}</td>
+                      <td class="text-end">{{ fmt_number(row.get("orders")) }}</td>
+                    </tr>
+                  {% endfor %}
+                  {% if not (weight_analytics.get("top_customers") or []) %}
+                    <tr><td colspan="6" class="text-muted text-center py-3">No weight-ranked customer rows under current filters.</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Weight Relationship Diagnostics</h5>
+            <div class="small text-muted">How strongly weight ties to revenue, units, and pricing under this product’s order pattern.</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-mini-grid">
+              <div class="product-v2-stat-tile"><div class="small text-muted">Weight ↔ Revenue</div><div class="fw-semibold">{{ fmt_number((weight_analytics.get("correlations") or {}).get("weight_revenue"), 2) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Weight ↔ Units</div><div class="fw-semibold">{{ fmt_number((weight_analytics.get("correlations") or {}).get("weight_units"), 2) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">ASP/lb ↔ Weight</div><div class="fw-semibold">{{ fmt_number((weight_analytics.get("correlations") or {}).get("price_lb_weight"), 2) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Avg lb / order</div><div class="fw-semibold">{{ fmt_number((weight_analytics.get("summary") or {}).get("avg_weight_per_order"), 1) }}</div></div>
+            </div>
+            <div class="small text-muted mt-3">
+              Use these diagnostics to separate volume quality from simple unit movement. If weight and units diverge, pack mix or order composition is shifting.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-pricing" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Pricing, Margin & Elasticity</h4>
+        <p class="text-muted mb-0">ASP/lb-first diagnostics for distribution, demand response, margin risk, and recovery opportunity.</p>
+        <div class="product-v2-section-note">Use pricing diagnostics to separate broad price dispersion from specific below-target customers. Margin-risk rows rank recoverable uplift to the protein-specific target inside the current scoped window.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="customers" data-format="csv" href="#">Export pricing base</a>
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-6">
+        <div class="card h-100 product-v2-chart-card">
+          <div class="card-header">
+            <h5 class="mb-1">ASP/lb Distribution</h5>
+            <div class="small text-muted">Transaction-level ASP/lb with guardrails and price-outlier bounds.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2PriceDistributionChart" class="v2-plot" aria-label="ASP/lb distribution histogram"></div>
+            <div class="small text-muted mt-2">
+              Guardrails: P10 {{ fmt_currency((distributions.get("price") or {}).get("p10")) }}, P50 {{ fmt_currency((distributions.get("price") or {}).get("p50")) }}, P90 {{ fmt_currency((distributions.get("price") or {}).get("p90")) }}
+              &middot; Price-outlier revenue share {{ fmt_percent((distributions.get("price_outlier") or {}).get("revenue_share_pct")) }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="card h-100 product-v2-chart-card">
+          <div class="card-header">
+            <h5 class="mb-1">Price vs Demand Relationship</h5>
+            <div class="small text-muted">Directional elasticity proxy using ASP/lb against the relevant demand basis.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2PriceVolumeChart" class="v2-plot" aria-label="Price vs demand scatter"></div>
+            <div id="v2ElasticityMeta" class="small text-muted mt-2"></div>
+            {% if show_costs and quality.get("cost_coverage_pct") is not none and quality.get("cost_coverage_pct") < 95 %}
+              <div class="small text-muted mt-2">Margin color cues exclude rows where cost is missing; price-demand dots remain fully scoped.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center gap-2 product-v2-control-row">
+            <div>
+              <h5 class="mb-1">Margin at Risk by Customer</h5>
+              <div class="small text-muted">Below-target gross-margin accounts ranked by recoverable uplift and recency. Click a row to inspect the account and open customer drilldown.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <input type="search" id="v2MarginRiskSearch" class="form-control form-control-sm product-v2-search" placeholder="Filter customers">
+              <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="customers" data-format="xlsx" href="#">Export full customers</a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="row g-2 mb-3">
+              <div class="col-sm-4"><div class="product-v2-stat-tile"><div class="small text-muted">Below-target customers</div><div class="fw-semibold">{{ fmt_number((margin_risk.get("summary") or {}).get("row_count")) }}</div><div class="small text-muted">Target {{ fmt_percent(margin_risk.get("target_margin_pct")) }}</div></div></div>
+              <div class="col-sm-4"><div class="product-v2-stat-tile"><div class="small text-muted">Revenue at risk</div><div class="fw-semibold">{{ fmt_currency((margin_risk.get("summary") or {}).get("revenue_exposure")) if show_costs else "—" }}</div></div></div>
+              <div class="col-sm-4"><div class="product-v2-stat-tile"><div class="small text-muted">Margin uplift to target</div><div class="fw-semibold">{{ fmt_currency((margin_risk.get("summary") or {}).get("uplift_to_target")) if show_costs else "—" }}</div></div></div>
+            </div>
+            <div class="table-responsive product-v2-table-wrap">
+              <table class="table table-sm align-middle mb-0" id="v2MarginRiskTable">
+                <thead>
+                  <tr>
+                    <th data-sort="customer_name">Customer</th>
+                    <th class="text-end" data-sort="revenue">Revenue</th>
+                    <th class="text-end" data-sort="weight_lb">Weight lb</th>
+                    <th class="text-end" data-sort="profit">Profit</th>
+                    <th class="text-end" data-sort="margin_pct">Margin %</th>
+                    <th class="text-end" data-sort="target_gap_pp">Gap (pp)</th>
+                    <th class="text-end" data-sort="uplift_to_target">Uplift to Target</th>
+                    <th class="text-end" data-sort="orders">Orders</th>
+                    <th class="text-end" data-sort="cadence_days">Cadence (d)</th>
+                    <th data-sort="last_order_date">Last order</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-customers" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Customer Dependence & Reach</h4>
+        <p class="text-muted mb-0">Which customers drive the product, how concentrated the mix is, and where churn risk is emerging.</p>
+        <div class="product-v2-section-note">This layer shows whether the SKU is broadly adopted or overly dependent on a few accounts. Concentration risk matters even when topline revenue still looks healthy.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="customers" data-format="xlsx" href="#">Export customers</a>
+    </div>
+    <div class="row g-3">
+      <div class="col-xl-8">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center gap-2 product-v2-control-row">
+            <div>
+              <h5 class="mb-1">Top Customers</h5>
+              <div class="small text-muted">Revenue, weight, pricing, cadence, and profitability in one scanning-friendly table. Click a row to inspect dependence and open customer drilldown.</div>
+            </div>
+            <input type="search" id="v2CustomerSearch" class="form-control form-control-sm product-v2-search" placeholder="Search customer">
+          </div>
+          <div class="card-body">
+            <div class="table-responsive product-v2-table-wrap">
+              <table class="table table-sm align-middle mb-0" id="v2CustomerTable">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Weight lb</th>
+                    <th class="text-end">Profit</th>
+                    <th class="text-end">Margin %</th>
+                    <th class="text-end">ASP/lb</th>
+                    <th class="text-end">Orders</th>
+                    <th class="text-end">Cadence</th>
+                    <th>Last order</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in (customers.get("rows") or [])[:25] %}
+                    {% set cid = row.get("customer_id") %}
+                    {% set customer_link = url_for('customers.drilldown', customer_id=cid) if cid else None %}
+                    {% if customer_link and querystring %}
+                      {% set customer_link = customer_link ~ querystring %}
+                    {% endif %}
+                    <tr
+                      class="product-v2-clickable-row js-v2-customer-row"
+                      role="button"
+                      tabindex="0"
+                      data-intel-group="Customer dependence"
+                      data-customer-id="{{ cid or '' }}"
+                      data-customer-name="{{ row.get('customer_name') or cid or 'Unknown' }}"
+                      data-customer-revenue="{{ row.get('revenue') or '' }}"
+                      data-customer-weight="{{ row.get('weight_lb') or '' }}"
+                      data-customer-asp-lb="{{ row.get('asp_lb') or '' }}"
+                      data-customer-orders="{{ row.get('orders') or '' }}"
+                      data-customer-cadence="{{ row.get('cadence_days') or '' }}"
+                      data-customer-status="{{ row.get('risk_flag') or 'Active' }}"
+                      data-customer-margin="{{ row.get('margin_pct') or '' }}"
+                      data-intel-link="{{ customer_link or '' }}"
+                    >
+                      <td>
+                        {% if customer_link %}
+                          <a href="{{ customer_link }}" class="text-decoration-none fw-semibold">{{ row.get("customer_name") or cid }}</a>
+                        {% else %}
+                          {{ row.get("customer_name") or cid or "Unknown" }}
+                        {% endif %}
+                      </td>
+                      <td class="text-end">{{ fmt_currency(row.get("revenue")) }}</td>
+                      <td class="text-end">{{ fmt_number(row.get("weight_lb"), 1) }}</td>
+                      <td class="text-end">{{ fmt_currency(row.get("profit")) if show_costs else "—" }}</td>
+                      <td class="text-end">{{ fmt_percent(row.get("margin_pct")) if show_costs else "—" }}</td>
+                      <td class="text-end">{{ fmt_currency(row.get("asp_lb")) }}</td>
+                      <td class="text-end">{{ fmt_number(row.get("orders")) }}</td>
+                      <td class="text-end">{{ fmt_number(row.get("cadence_days"), 1) }} d</td>
+                      <td>{{ row.get("last_order_date") or "—" }}</td>
+                      <td><span class="badge {{ tone_class('warn' if row.get('risk_flag') == 'At risk' else 'good') }}">{{ row.get("risk_flag") or "Active" }}</span></td>
+                    </tr>
+                  {% endfor %}
+                  {% if not (customers.get("rows") or []) %}
+                    <tr><td colspan="10" class="text-muted text-center py-3">No customer rows under current filters.</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 product-v2-detail-aside">
+        <div class="card h-100 mb-3">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Concentration</h5>
+            <div class="small text-muted">Revenue, weight, and repeat structure for the current customer base.</div>
+          </div>
+          <div class="card-body">
+            <div class="product-v2-mini-grid">
+              <div class="product-v2-stat-tile"><div class="small text-muted">Top 1 revenue share</div><div class="fw-semibold">{{ fmt_percent(((customers.get("concentration") or {}).get("revenue") or {}).get("top1_share_pct")) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Top 5 revenue share</div><div class="fw-semibold">{{ fmt_percent(((customers.get("concentration") or {}).get("revenue") or {}).get("top5_share_pct")) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Top 5 weight share</div><div class="fw-semibold">{{ fmt_percent(((customers.get("concentration") or {}).get("weight") or {}).get("top5_share_pct")) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">HHI (0-10k)</div><div class="fw-semibold">{{ fmt_number((customers.get("concentration") or {}).get("hhi"), 0) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">Repeat customer share</div><div class="fw-semibold">{{ fmt_percent(customers.get("repeat_customer_share_pct")) }}</div></div>
+              <div class="product-v2-stat-tile"><div class="small text-muted">New customer share</div><div class="fw-semibold">{{ fmt_percent(customers.get("new_customer_share_pct")) }}</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card h-100 product-v2-chart-card product-v2-compact-panel">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Activity & Churn Risk</h5>
+            <div class="small text-muted">Active customer trend with at-risk accounts requiring follow-up.</div>
+          </div>
+          <div class="card-body">
+            <div id="v2CustomerActivityChart" class="v2-plot-sm mb-3" aria-label="Customer activity chart"></div>
+            <div class="product-v2-panel-label mb-2">At-risk customers</div>
+            <ul class="list-unstyled small mb-0">
+              {% for row in (customers.get("at_risk_rows") or [])[:5] %}
+                {% set cid = row.get("customer_id") %}
+                {% set customer_link = url_for('customers.drilldown', customer_id=cid) if cid else None %}
+                {% if customer_link and querystring %}
+                  {% set customer_link = customer_link ~ querystring %}
+                {% endif %}
+                <li class="mb-2">
+                  <button
+                    type="button"
+                    class="product-v2-intel-list-btn js-v2-customer-risk-trigger"
+                    data-customer-id="{{ cid or '' }}"
+                    data-customer-name="{{ row.get('customer_name') or cid or 'Unknown' }}"
+                    data-customer-revenue="{{ row.get('revenue') or '' }}"
+                    data-customer-days-since-last="{{ row.get('days_since_last') or '' }}"
+                    data-customer-status="At risk"
+                    data-customer-cadence="{{ row.get('cadence_days') or '' }}"
+                    data-intel-link="{{ customer_link or '' }}"
+                  >
+                    <span class="product-v2-split-label">{% if customer_link %}<span class="text-decoration-none fw-semibold">{{ row.get("customer_name") or cid }}</span>{% else %}{{ row.get("customer_name") or cid or "Unknown" }}{% endif %}</span>
+                    <strong>{{ fmt_currency(row.get("revenue")) }}</strong>
+                  </button>
+                  <span class="text-muted d-block">{{ fmt_number(row.get("days_since_last"), 0) }} days since last order</span>
+                </li>
+              {% endfor %}
+              {% if not (customers.get("at_risk_rows") or []) %}
+                <li class="text-muted">No at-risk customers detected under the current window logic.</li>
+              {% endif %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-basket" class="product-v2-section mb-3">
+    <div class="product-v2-section-head">
+      <div>
+        <h4 class="mb-1">Basket & Cross-Sell Intelligence</h4>
+        <p class="text-muted mb-0">Associated products, lift, support, confidence, and a lightweight suggestion workflow for commercial follow-up.</p>
+        <div class="product-v2-section-note">Basket metrics are evidence, not guarantees. Prioritize pairs with both lift and meaningful paired revenue, then inspect the SKU and account context before you push a bundle.</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="basket" data-format="xlsx" href="#">Export basket</a>
+    </div>
+      <div class="card product-v2-chart-card">
+        <div class="card-body">
+          {% if basket.get("insufficient_sample") %}
+            <div class="text-muted small">{{ basket.get("message") or "Insufficient sample for basket analysis." }}</div>
+        {% else %}
+          <div class="product-v2-basket-intro mb-3">
+            {{ section_context("How to use this", "Support is the share of scoped orders containing the pair. Confidence is the share of this SKU’s orders that also contain the paired item. Lift compares that confidence against the paired item’s usual prevalence.", "Select likely pairs, inspect the associated SKU, then build a commercial suggestion list for follow-up.", 'accent') }}
+          </div>
+          <div class="row g-3 product-v2-basket-layout">
+            <div class="col-xl-5 product-v2-basket-chart-pane">
+              <div id="v2BasketChart" class="v2-plot" aria-label="Basket lift chart"></div>
+              <div class="product-v2-basket-meta">
+                <div class="small text-muted">Base orders: {{ fmt_number(basket.get("base_orders")) }} · Total scoped orders: {{ fmt_number(basket.get("total_orders")) }}</div>
+                <div class="small text-muted">Support is the share of scoped orders containing the pair. Confidence is the share of this product’s orders that also contain the paired item. Lift compares that confidence against the paired item’s normal prevalence.</div>
+              </div>
+            </div>
+            <div class="col-xl-7 product-v2-basket-table-pane">
+              <div class="product-v2-basket-controls">
+                <input type="search" id="v2BasketSearch" class="form-control form-control-sm product-v2-search" placeholder="Search associated products">
+                <div class="product-v2-basket-actions">
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="v2BasketAddSelected">Add selected to suggestion list</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="v2BasketClearSelected">Clear list</button>
+                </div>
+              </div>
+              <div class="small product-v2-basket-suggestions" id="v2BasketSuggestionList" aria-live="polite"></div>
+              <div class="table-responsive product-v2-table-wrap product-v2-basket-table-wrap">
+                <table class="table table-sm align-middle mb-0" id="v2BasketTable">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>Associated product</th>
+                      <th class="text-end">Co-orders</th>
+                      <th class="text-end">Support</th>
+                      <th class="text-end">Confidence</th>
+                      <th class="text-end">Lift</th>
+                      <th class="text-end">Paired revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in (basket.get("rows") or [])[:30] %}
+                      {% set related_id = row.get("product_id") or row.get("sku") %}
+                      {% set related_link = url_for('products.drilldown', product_id=related_id) if related_id else None %}
+                      {% if related_link and querystring %}
+                        {% set related_link = related_link ~ querystring %}
+                      {% endif %}
+                      <tr
+                        class="product-v2-clickable-row js-v2-basket-row"
+                        role="button"
+                        tabindex="0"
+                        data-related-id="{{ related_id or '' }}"
+                        data-related-name="{{ row.get('display_name') or row.get('product_name') or row.get('sku') }}"
+                        data-co-orders="{{ row.get('co_orders') or '' }}"
+                        data-support="{{ row.get('support') or '' }}"
+                        data-confidence="{{ row.get('confidence') or '' }}"
+                        data-lift="{{ row.get('lift') or '' }}"
+                        data-paired-revenue="{{ row.get('paired_revenue') or '' }}"
+                        data-intel-link="{{ related_link or '' }}"
+                      >
+                        <td><input type="checkbox" class="form-check-input js-basket-select" value="{{ row.get('sku') or row.get('product_id') }}" data-name="{{ row.get('display_name') or row.get('product_name') }}"></td>
+                        <td>{% if related_link %}<a href="{{ related_link }}" class="text-decoration-none fw-semibold">{{ row.get("display_name") or row.get("product_name") or row.get("sku") }}</a>{% else %}{{ row.get("display_name") or row.get("product_name") or row.get("sku") }}{% endif %}</td>
+                        <td class="text-end">{{ fmt_number(row.get("co_orders")) }}</td>
+                        <td class="text-end">{{ fmt_percent((row.get("support") or 0) * 100, 2) }}</td>
+                        <td class="text-end">{{ fmt_percent((row.get("confidence") or 0) * 100, 2) }}</td>
+                        <td class="text-end">{{ fmt_number(row.get("lift"), 2) }}</td>
+                        <td class="text-end">{{ fmt_currency(row.get("paired_revenue")) }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% if forecast_feature_enabled %}
+    <section id="sec-forecast" class="product-v2-section mb-3">
+      <div class="product-v2-section-head">
+        <div>
+          <h4 class="mb-1">Forecast & Planning</h4>
+          <p class="text-muted mb-0">Planning view with method labeling, confidence framing, weight-aware forecast output, and sparse-history safeguards.</p>
+          <div class="product-v2-section-note">Forecast is advisory, not autopilot. Confidence depends on usable history, repeatability, and noise in the active scoped series.</div>
+        </div>
+        <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="forecast" data-format="xlsx" href="#">Export forecast</a>
+      </div>
+      <div class="card product-v2-chart-card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 product-v2-control-row">
+          <div>
+            <h5 class="mb-1">Revenue & Weight Forecast</h5>
+            <div class="small text-muted">{{ (forecast.get("meta") or {}).get("summary") or forecast_note or "Forecast ready." }}</div>
+          </div>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <label class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="v2ForecastToggle" {% if (forecast.get("forecast_series") or []) %}checked{% endif %}>
+              <span class="small ms-2">Show forecast</span>
+            </label>
+            <select class="form-select form-select-sm" id="v2ForecastFreq" aria-label="Forecast frequency">
+              <option value="month">Monthly (6)</option>
+              <option value="week">Weekly (12)</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-2 mb-3">
+            <div class="col-md-3"><div class="product-v2-stat-tile product-v2-clickable-card js-v2-forecast-trigger" role="button" tabindex="0" data-forecast-focus="Method" data-forecast-detail="{{ (forecast.get('meta') or {}).get('method') or 'Unknown' }}"><div class="small text-muted">Method</div><div class="fw-semibold">{{ (forecast.get("meta") or {}).get("method") or "—" }}</div></div></div>
+            <div class="col-md-3"><div class="product-v2-stat-tile product-v2-clickable-card js-v2-forecast-trigger" role="button" tabindex="0" data-forecast-focus="History points" data-forecast-detail="{{ (forecast.get('meta') or {}).get('history_points') or '' }}"><div class="small text-muted">History points</div><div class="fw-semibold">{{ fmt_number((forecast.get("meta") or {}).get("history_points")) }}</div></div></div>
+            <div class="col-md-3"><div class="product-v2-stat-tile product-v2-clickable-card js-v2-forecast-trigger" role="button" tabindex="0" data-forecast-focus="Forecastability" data-forecast-detail="{{ (forecast.get('meta') or {}).get('forecastability_score') or '' }}"><div class="small text-muted">Forecastability</div><div class="fw-semibold">{{ fmt_number((forecast.get("meta") or {}).get("forecastability_score"), 0) }}</div></div></div>
+            <div class="col-md-3"><div class="product-v2-stat-tile product-v2-clickable-card js-v2-forecast-trigger" role="button" tabindex="0" data-forecast-focus="Confidence" data-forecast-detail="{{ (forecast.get('meta') or {}).get('confidence_label') or 'Watch' }}"><div class="small text-muted">Confidence</div><div class="fw-semibold">{{ (forecast.get("meta") or {}).get("confidence_label") or "Watch" }}</div></div></div>
+          </div>
+          <div id="v2ForecastCallout" class="alert alert-secondary py-2 px-3 small d-none" role="status"></div>
+          <div id="v2ForecastChart" class="v2-plot d-none" aria-label="Forecast chart"></div>
+          <div id="v2ForecastMeta" class="small text-muted mt-2 d-none"></div>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+</div>
+
+<script>
+  const showCostsV2 = {{ "true" if show_costs else "false" }};
+  const metaV2 = {{ meta|tojson }};
+  const trendV2 = {{ trend|tojson }};
+  const seriesV2 = {{ time_series|tojson }};
+  const distributionsV2 = {{ distributions|tojson }};
+  const customersV2 = {{ customers|tojson }};
+  const basketV2 = {{ basket|tojson }};
+  const forecastFeatureEnabledV2 = {{ "true" if forecast_feature_enabled else "false" }};
+  const initialForecastV2 = {{ forecast|tojson }};
+  const priceVolumeV2 = {{ price_volume|tojson }};
+  const marginRiskV2 = {{ margin_risk|tojson }};
+  const weightAnalyticsV2 = {{ weight_analytics|tojson }};
+  const exportBaseV2 = "{{ url_for('products.export_product_drilldown_v2', product_id=product_id) }}";
+  const forecastApiBaseV2 = "{{ url_for('bundles.products_forecast', product_id=product_id) }}";
+  const requestQueryV2 = {{ (request_querystring or "")|tojson }};
+  const productsIndexBaseV2 = {{ url_for('products.index')|tojson }};
+  const customerDrilldownBaseV2 = {{ url_for('customers.drilldown', customer_id='__CID__')|tojson }};
+  const productDrilldownBaseV2 = {{ url_for('products.drilldown', product_id='__PID__')|tojson }};
+
+  function safeArray(value) { return Array.isArray(value) ? value : []; }
+  function asNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  function money(value) {
+    const n = asNumber(value);
+    return n === null ? "—" : `$${n.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
+  }
+  function num(value, digits = 1) {
+    const n = asNumber(value);
+    return n === null ? "—" : n.toLocaleString(undefined, {maximumFractionDigits: digits});
+  }
+  function pct(value, digits = 1) {
+    const n = asNumber(value);
+    return n === null ? "—" : `${n.toFixed(digits)}%`;
+  }
+  function pctFraction(value, digits = 1) {
+    const n = asNumber(value);
+    return n === null ? "—" : `${(n * 100).toFixed(digits)}%`;
+  }
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;",
+    }[ch] || ch));
+  }
+  function customerUrl(customerId) {
+    if (!customerId) return null;
+    let base = customerDrilldownBaseV2.replace("__CID__", encodeURIComponent(String(customerId)));
+    if (requestQueryV2) base += requestQueryV2.startsWith("?") ? requestQueryV2 : `?${requestQueryV2}`;
+    return base;
+  }
+  function productUrl(productId) {
+    if (!productId) return null;
+    let base = productDrilldownBaseV2.replace("__PID__", encodeURIComponent(String(productId)));
+    if (requestQueryV2) base += requestQueryV2.startsWith("?") ? requestQueryV2 : `?${requestQueryV2}`;
+    return base;
+  }
+  function productsExitUrl() {
+    if (!requestQueryV2) return productsIndexBaseV2;
+    return `${productsIndexBaseV2}${requestQueryV2.startsWith("?") ? requestQueryV2 : `?${requestQueryV2}`}`;
+  }
+  function shouldUseHistoryBackForProducts() {
+    if (!document.referrer || !window.history || window.history.length <= 1) return false;
+    try {
+      const ref = new URL(document.referrer, window.location.origin);
+      return ref.origin === window.location.origin && ref.pathname.startsWith("/products");
+    } catch (_err) {
+      return false;
+    }
+  }
+  function intelMetric(label, value) {
+    return `<div class="product-v2-intel-metric"><div class="product-v2-intel-metric-label">${escapeHtml(label)}</div><div class="product-v2-intel-metric-value">${escapeHtml(value)}</div></div>`;
+  }
+  function intelCopy(label, value) {
+    return `<div class="product-v2-intel-copy"><strong>${escapeHtml(label)}</strong><div>${escapeHtml(value)}</div></div>`;
+  }
+  function intelPanelEls() {
+    return {
+      wrap: document.getElementById("v2IntelPanelWrap"),
+      eyebrow: document.getElementById("v2IntelEyebrow"),
+      title: document.getElementById("v2IntelTitle"),
+      summary: document.getElementById("v2IntelSummary"),
+      metrics: document.getElementById("v2IntelMetrics"),
+      actions: document.getElementById("v2IntelActions"),
+      link: document.getElementById("v2IntelOpenLink"),
+      close: document.getElementById("v2IntelClose"),
+    };
+  }
+  function showIntelPanel(payload = {}) {
+    const els = intelPanelEls();
+    if (!els.wrap || !els.title || !els.summary || !els.metrics || !els.actions || !els.link) return;
+    const metrics = safeArray(payload.metrics).filter((item) => item && item.label);
+    const notes = safeArray(payload.notes).filter((item) => item && item.label);
+    els.wrap.classList.remove("d-none");
+    els.eyebrow.textContent = payload.eyebrow || "Interactive detail";
+    els.title.textContent = payload.title || "Context";
+    els.summary.textContent = payload.summary || "Inspect the selected signal, row, or chart point.";
+    els.metrics.innerHTML = metrics.length
+      ? metrics.map((item) => intelMetric(item.label, item.value)).join("")
+      : intelCopy("Selected context", "This signal is narrative-led. Use the guidance at right, then open the linked supporting section or drilldown.");
+    els.actions.innerHTML = notes.length ? notes.map((item) => intelCopy(item.label, item.value)).join("") : defaultIntelNotes().map((item) => intelCopy(item.label, item.value)).join("");
+    if (payload.linkHref) {
+      els.link.classList.remove("d-none");
+      els.link.href = payload.linkHref;
+      els.link.textContent = payload.linkLabel || "Open detail";
+    } else {
+      els.link.classList.add("d-none");
+      els.link.removeAttribute("href");
+      els.link.textContent = "Open detail";
+    }
+    els.wrap.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  function hideIntelPanel() {
+    const els = intelPanelEls();
+    if (!els.wrap) return;
+    els.wrap.classList.add("d-none");
+  }
+  function bindPanelClose() {
+    const els = intelPanelEls();
+    if (!els.close) return;
+    els.close.addEventListener("click", hideIntelPanel);
+  }
+  function defaultIntelNotes() {
+    return [
+      { label: "Why it matters", value: "Use the linked section or drilldown to verify whether the signal needs commercial, pricing, customer, or planning action." },
+    ];
+  }
+  function openCustomerIntel(data) {
+    const customerId = data.customerId || "";
+    const customerName = data.customerName || customerId || "Unknown customer";
+    const cadence = data.customerCadence ? `${num(data.customerCadence, 1)} days` : "Not enough repeat history";
+    const status = data.customerStatus || "Active";
+    const revenue = money(data.customerRevenue);
+    const weight = `${num(data.customerWeight, 1)} lb`;
+    const margin = showCostsV2 ? pct(data.customerMargin, 1) : "Restricted";
+    const group = data.intelGroup || "Customer context";
+    const summaryParts = [
+      `${customerName} is shown in the current scoped window as part of ${group.toLowerCase()}.`,
+      data.customerShare ? `This account represents ${pct(data.customerShare, 1)} of shipped lb for this SKU.` : null,
+      status === "At risk" ? "The account is flagged at risk and needs follow-up on timing, coverage, or competitive pressure." : null,
+    ].filter(Boolean);
+    showIntelPanel({
+      eyebrow: group,
+      title: customerName,
+      summary: summaryParts.join(" "),
+      metrics: [
+        { label: "Revenue", value: revenue },
+        { label: "Shipped lb", value: weight },
+        { label: "Orders", value: num(data.customerOrders, 0) },
+        { label: "ASP/lb", value: money(data.customerAspLb) },
+        { label: "Cadence", value: cadence },
+        { label: "Status", value: status },
+        { label: "Margin %", value: margin },
+      ],
+      notes: [
+        { label: "What to do next", value: status === "At risk" ? "Open the customer drilldown and confirm whether demand softened because of cadence, pricing, service, or basket mix." : "Open the customer drilldown to review price quality, order cadence, and adjacent basket opportunities for this SKU." },
+      ],
+      linkHref: data.intelLink || customerUrl(customerId),
+      linkLabel: "Open customer drilldown",
+    });
+  }
+  function openMoverIntel(data) {
+    const customerName = data.customerName || data.customerId || "Customer";
+    const moverKind = data.moverKind || "Mover";
+    const deltaRevenue = asNumber(data.deltaRevenue);
+    const direction = deltaRevenue !== null && deltaRevenue >= 0 ? "improved" : "softened";
+    const summary = `${customerName} ${direction} by ${money(Math.abs(deltaRevenue || 0))} in the latest rolling 28-day window versus the prior 28 days.`;
+    showIntelPanel({
+      eyebrow: `${moverKind} in rolling 28-day change`,
+      title: customerName,
+      summary,
+      metrics: [
+        { label: "Delta revenue", value: money(data.deltaRevenue) },
+        { label: "Delta %", value: pct(data.deltaPct, 1) },
+        { label: "Current 28D", value: money(data.revenueCurrent) },
+        { label: "Prior 28D", value: money(data.revenuePrior) },
+      ],
+      notes: [
+        { label: "Why it matters", value: "Use movers to isolate whether change is concentrated in a few accounts or reflects a broader product shift." },
+        { label: "What to do next", value: deltaRevenue !== null && deltaRevenue < 0 ? "Open the customer drilldown and verify cadence, price realization, and basket mix before the decline deepens." : "Open the customer drilldown and protect the gain by checking price discipline and adjacent cross-sell opportunity." },
+      ],
+      linkHref: data.intelLink || customerUrl(data.customerId),
+      linkLabel: "Open customer drilldown",
+    });
+  }
+  function openBasketIntel(data) {
+    const relatedName = data.relatedName || data.relatedId || "Associated product";
+    showIntelPanel({
+      eyebrow: "Basket opportunity",
+      title: relatedName,
+      summary: `${relatedName} appears frequently with this SKU in the current scoped order base. Use lift together with paired revenue before treating it as a real cross-sell play.`,
+      metrics: [
+        { label: "Co-orders", value: num(data.coOrders, 0) },
+        { label: "Support", value: pctFraction(data.support, 2) },
+        { label: "Confidence", value: pctFraction(data.confidence, 2) },
+        { label: "Lift", value: num(data.lift, 2) },
+        { label: "Paired revenue", value: money(data.pairedRevenue) },
+      ],
+      notes: [
+        { label: "How to interpret it", value: "High lift with low paired revenue can be interesting but not yet commercially material. High lift with strong paired revenue is a better execution candidate." },
+        { label: "What to do next", value: "Open the associated SKU, check who buys the pair, then decide whether to bundle, suggest, or use it in account planning." },
+      ],
+      linkHref: data.intelLink || productUrl(data.relatedId),
+      linkLabel: "Open associated product",
+    });
+  }
+  function openActionIntel(data) {
+    showIntelPanel({
+      eyebrow: data.intelEyebrow || "Action",
+      title: data.intelTitle || "Decision signal",
+      summary: data.intelSummary || "Review this signal in context before acting.",
+      metrics: [],
+      notes: [
+        { label: "What to do next", value: data.intelNext || "Open the linked section and confirm the underlying customer, pricing, or planning detail before acting." },
+      ],
+      linkHref: data.intelLink || null,
+      linkLabel: data.intelLinkLabel || "Open supporting section",
+    });
+  }
+  function openRiskCustomerIntel(data) {
+    const customerName = data.customerName || data.customerId || "Customer";
+    showIntelPanel({
+      eyebrow: "At-risk customer",
+      title: customerName,
+      summary: `${customerName} has drifted beyond expected reorder cadence for this SKU in the current scoped window.`,
+      metrics: [
+        { label: "Revenue", value: money(data.customerRevenue) },
+        { label: "Days since last order", value: num(data.customerDaysSinceLast, 0) },
+        { label: "Cadence", value: data.customerCadence ? `${num(data.customerCadence, 1)} days` : "Not enough history" },
+        { label: "Status", value: data.customerStatus || "At risk" },
+      ],
+      notes: [
+        { label: "What to do next", value: "Open the customer drilldown and verify whether service gaps, price movement, or substitution behavior explain the lapse." },
+      ],
+      linkHref: data.intelLink || customerUrl(data.customerId),
+      linkLabel: "Open customer drilldown",
+    });
+  }
+  function openMarginRiskIntel(data) {
+    const customerName = data.customerName || data.customerId || "Customer";
+    showIntelPanel({
+      eyebrow: "Margin recovery account",
+      title: customerName,
+      summary: `${customerName} is currently below the protein-specific target gross-margin threshold for this SKU in the active scoped window.`,
+      metrics: [
+        { label: "Revenue", value: money(data.customerRevenue) },
+        { label: "Shipped lb", value: `${num(data.customerWeight, 1)} lb` },
+        { label: "Margin %", value: showCostsV2 ? pct(data.customerMargin, 1) : "Restricted" },
+        { label: "Gap to target", value: `${num(data.customerGap, 1)} pp` },
+        { label: "Recoverable uplift", value: money(data.customerUplift) },
+        { label: "Cadence", value: data.customerCadence ? `${num(data.customerCadence, 1)} days` : "Not enough history" },
+      ],
+      notes: [
+        { label: "What to do next", value: "Open the customer drilldown and confirm whether the gap should be closed through price recovery, mix cleanup, freight/cost review, or a deliberate strategic exception." },
+      ],
+      linkHref: data.intelLink || customerUrl(data.customerId),
+      linkLabel: "Open customer drilldown",
+    });
+  }
+  function openForecastIntel(data) {
+    const meta = initialForecastV2 && typeof initialForecastV2 === "object" ? (initialForecastV2.meta || {}) : {};
+    showIntelPanel({
+      eyebrow: "Forecast context",
+      title: `${data.forecastFocus || "Forecast"} detail`,
+      summary: `${data.forecastFocus || "Forecast"} is shown for the current scoped history only. Forecast confidence is advisory and depends on usable history, repeatability, and volatility.`,
+      metrics: [
+        { label: "Selected detail", value: data.forecastDetail || "—" },
+        { label: "Method", value: meta.method || "—" },
+        { label: "History points", value: num(meta.history_points, 0) },
+        { label: "Forecastability", value: num(meta.forecastability_score, 0) },
+        { label: "Confidence", value: meta.confidence_label || "Watch" },
+      ],
+      notes: [
+        { label: "How to interpret it", value: meta.summary || "Use forecast as a planning aid, not a substitute for commercial judgment on sparse or noisy SKU history." },
+        { label: "What to do next", value: "Compare forecast confidence with lifecycle stability and recent customer concentration before using it for purchasing or production commitments." },
+      ],
+      linkHref: "#sec-forecast",
+      linkLabel: "Return to forecast section",
+    });
+  }
+  function openPricePointIntel(point) {
+    const period = point && point.text ? String(point.text) : "Selected point";
+    const revenue = point && point.customdata ? point.customdata[0] : null;
+    const margin = point && point.customdata ? point.customdata[1] : null;
+    showIntelPanel({
+      eyebrow: "Pricing point",
+      title: period,
+      summary: "This point helps separate realized price from demand movement in the current scoped order base.",
+      metrics: [
+        { label: priceVolumeV2.price_label || "ASP/lb", value: money(point ? point.x : null) },
+        { label: priceVolumeV2.demand_label || "Demand", value: num(point ? point.y : null, 1) },
+        { label: "Revenue", value: money(revenue) },
+        { label: "Margin %", value: showCostsV2 ? pct(margin, 1) : "Restricted" },
+      ],
+      notes: [
+        { label: "How to use it", value: "Use price-demand points to see whether softness comes from weak movement at normal price, higher price with stable demand, or erratic deal behavior." },
+      ],
+      linkHref: "#sec-pricing",
+      linkLabel: "Return to pricing section",
+    });
+  }
+  function bindInteractiveElement(selector, handler) {
+    document.querySelectorAll(selector).forEach((el) => {
+      const trigger = (event) => {
+        if (event.type === "click" && event.target && event.target.closest("a, input, label, select")) return;
+        if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+        if (event.type === "keydown") event.preventDefault();
+        handler(el);
+      };
+      el.addEventListener("click", trigger);
+      el.addEventListener("keydown", trigger);
+    });
+  }
+
+  const plotlyConfigV2 = { displayModeBar: false, responsive: true, scrollZoom: false };
+  const plotThemeV2 = {
+    paper: "rgba(0,0,0,0)",
+    plot: "#fbfdff",
+    grid: "rgba(148,163,184,0.22)",
+    axis: "#cbd5e1",
+    text: "#0f172a",
+    muted: "#64748b",
+    primary: "#2563eb",
+    primarySoft: "#60a5fa",
+    teal: "#0f766e",
+    tealSoft: "#14b8a6",
+    success: "#15803d",
+    successSoft: "#22c55e",
+    warning: "#c2410c",
+    amber: "#fb923c",
+    danger: "#b91c1c",
+    slate: "#94a3b8",
+  };
+  const trackedPlotIdsV2 = new Set();
+  let plotResizeTimerV2 = null;
+
+  function chartHeight(el, mode = "standard", rowCount = 0) {
+    const width = window.innerWidth || 1440;
+    const compact = mode === "compact" || (mode === "standard" && el.classList.contains("v2-plot-sm"));
+    let height = compact ? 260 : 360;
+    if (mode === "heatmap") height = Math.max(width < 768 ? 300 : 340, rowCount * 38 + 96);
+    if (mode === "bars") height = Math.max(width < 768 ? 300 : 320, rowCount * 30 + 120);
+    if (mode === "forecast") height = width < 768 ? 320 : 380;
+    if (width < 992 && mode === "standard") height = compact ? 236 : 320;
+    if (width < 576 && mode === "standard") height = compact ? 220 : 300;
+    return height;
+  }
+
+  function plotLayout(el, overrides = {}) {
+    const {
+      heightMode = "standard",
+      rowCount = 0,
+      legend,
+      margin,
+      xaxis,
+      yaxis,
+      yaxis2,
+      shapes,
+      coloraxis,
+      ...rest
+    } = overrides;
+    const hideLegend = legend === false;
+    const base = {
+      autosize: true,
+      height: chartHeight(el, heightMode, rowCount),
+      paper_bgcolor: plotThemeV2.paper,
+      plot_bgcolor: plotThemeV2.plot,
+      font: { color: plotThemeV2.text, size: 12 },
+      hoverlabel: {
+        bgcolor: "#ffffff",
+        bordercolor: "#dbe5f1",
+        font: { color: plotThemeV2.text, size: 12 },
+      },
+      margin: {
+        t: hideLegend ? 18 : 56,
+        r: 24,
+        b: 52,
+        l: 58,
+      },
+      xaxis: {
+        automargin: true,
+        showgrid: false,
+        zeroline: false,
+        tickfont: { color: plotThemeV2.muted, size: 11 },
+        titlefont: { color: plotThemeV2.muted, size: 12 },
+      },
+      yaxis: {
+        automargin: true,
+        gridcolor: plotThemeV2.grid,
+        linecolor: plotThemeV2.axis,
+        zeroline: false,
+        tickfont: { color: plotThemeV2.muted, size: 11 },
+        titlefont: { color: plotThemeV2.muted, size: 12 },
+      },
+      legend: {
+        orientation: "h",
+        x: 0,
+        xanchor: "left",
+        y: 1.12,
+        yanchor: "bottom",
+        font: { color: plotThemeV2.muted, size: 11 },
+        bgcolor: "rgba(255,255,255,0.78)",
+      },
+    };
+    const layout = {
+      ...base,
+      ...rest,
+      margin: { ...base.margin, ...(margin || {}) },
+      xaxis: { ...base.xaxis, ...(xaxis || {}) },
+      yaxis: { ...base.yaxis, ...(yaxis || {}) },
+    };
+    if (hideLegend) {
+      delete layout.legend;
+    } else if (legend && typeof legend === "object") {
+      layout.legend = { ...base.legend, ...legend };
+    }
+    if (yaxis2) {
+      layout.yaxis2 = {
+        showgrid: false,
+        linecolor: plotThemeV2.axis,
+        zeroline: false,
+        tickfont: { color: plotThemeV2.muted, size: 11 },
+        titlefont: { color: plotThemeV2.muted, size: 12 },
+        ...yaxis2,
+      };
+    }
+    if (shapes) layout.shapes = shapes;
+    if (coloraxis) layout.coloraxis = coloraxis;
+    return layout;
+  }
+
+  function renderPlotly(el, traces, overrides = {}) {
+    if (!el || typeof Plotly === "undefined") return;
+    el.dataset.heightMode = overrides.heightMode || "standard";
+    el.dataset.rowCount = String(overrides.rowCount || 0);
+    trackedPlotIdsV2.add(el.id);
+    return Plotly.react(el, traces, plotLayout(el, overrides), plotlyConfigV2);
+  }
+
+  function resizeTrackedPlots() {
+    if (typeof Plotly === "undefined") return;
+    trackedPlotIdsV2.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el || !el.data) return;
+      Plotly.relayout(el, {
+        height: chartHeight(el, el.dataset.heightMode || "standard", Number(el.dataset.rowCount || 0)),
+      });
+      if (Plotly.Plots && typeof Plotly.Plots.resize === "function") {
+        Plotly.Plots.resize(el);
+      }
+    });
+  }
+
+  function scheduleTrackedPlotResize() {
+    window.clearTimeout(plotResizeTimerV2);
+    plotResizeTimerV2 = window.setTimeout(resizeTrackedPlots, 120);
+  }
+
+  window.addEventListener("resize", scheduleTrackedPlotResize);
+
+  function exportUrl(kind, formatType) {
+    const params = new URLSearchParams(requestQueryV2 || "");
+    params.set("kind", kind);
+    params.set("format", formatType);
+    return `${exportBaseV2}?${params.toString()}`;
+  }
+  function bindExports() {
+    document.querySelectorAll(".js-v2-export").forEach((anchor) => {
+      const kind = anchor.getAttribute("data-kind") || "monthly_series";
+      const formatType = anchor.getAttribute("data-format") || "xlsx";
+      anchor.setAttribute("href", exportUrl(kind, formatType));
+    });
+  }
+
+  function plotOutcomeTrend() {
+    const el = document.getElementById("v2OutcomeTrendChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const labels = safeArray(trendV2.labels);
+    if (!labels.length) return;
+    const traces = [
+      {
+        type: "bar",
+        x: labels,
+        y: safeArray(trendV2.revenue).map(asNumber),
+        name: "Revenue",
+        marker: { color: plotThemeV2.primary },
+        hovertemplate: "%{x}<br>Revenue %{y:$,.0f}<extra></extra>",
+      },
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: labels,
+        y: safeArray(trendV2.revenue_ma3).map(asNumber),
+        name: "Revenue MA(3)",
+        line: { color: plotThemeV2.primarySoft, width: 2 },
+        hovertemplate: "%{x}<br>Revenue MA %{y:$,.0f}<extra></extra>",
+      },
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: labels,
+        y: safeArray(trendV2.weight_lb).map(asNumber),
+        name: "Shipped lb",
+        yaxis: "y2",
+        line: { color: plotThemeV2.teal, width: 2 },
+        hovertemplate: "%{x}<br>Shipped lb %{y:,.1f}<extra></extra>",
+      },
+    ];
+    if (showCostsV2) {
+      traces.push({
+        type: "scatter",
+        mode: "lines+markers",
+        x: labels,
+        y: safeArray(trendV2.profit).map(asNumber),
+        name: "Profit",
+        line: { color: plotThemeV2.success, width: 2 },
+        hovertemplate: "%{x}<br>Profit %{y:$,.0f}<extra></extra>",
+      });
+    }
+    renderPlotly(el, traces, {
+      margin: { r: 60, l: 55, b: labels.length > 10 ? 62 : 48 },
+      barmode: "group",
+      xaxis: { type: "category", tickangle: labels.length > 10 ? -32 : 0 },
+      yaxis: { title: "Revenue / Profit", tickformat: "$,.0f" },
+      yaxis2: { overlaying: "y", side: "right", title: "Shipped lb" },
+      hovermode: "x unified",
+    });
+  }
+
+  function plotPriceMarginTrend() {
+    const el = document.getElementById("v2PriceMarginTrendChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const labels = safeArray(trendV2.labels);
+    if (!labels.length) return;
+    const traces = [{
+      type: "scatter",
+      mode: "lines+markers",
+      x: labels,
+      y: safeArray(trendV2.asp_lb).map(asNumber),
+      name: "ASP/lb",
+      line: { color: plotThemeV2.primary, width: 2 },
+      hovertemplate: "%{x}<br>ASP/lb %{y:$,.2f}<extra></extra>",
+    }];
+    if (showCostsV2) {
+      traces.push({
+        type: "scatter",
+        mode: "lines+markers",
+        x: labels,
+        y: safeArray(trendV2.margin_pct).map(asNumber),
+        name: "Margin %",
+        yaxis: "y2",
+        line: { color: plotThemeV2.warning, width: 2 },
+        hovertemplate: "%{x}<br>Margin %{y:.1f}%<extra></extra>",
+      });
+    }
+    renderPlotly(el, traces, {
+      heightMode: "compact",
+      margin: { r: 50, l: 55, b: labels.length > 8 ? 56 : 42 },
+      xaxis: { type: "category", tickangle: labels.length > 8 ? -28 : 0 },
+      yaxis: { title: "ASP/lb", tickformat: "$,.2f" },
+      yaxis2: showCostsV2 ? { overlaying: "y", side: "right", title: "Margin %" } : undefined,
+      hovermode: "x unified",
+    });
+  }
+
+  function plotSeasonality() {
+    const el = document.getElementById("v2SeasonalityChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const seasonality = seriesV2.seasonality || {};
+    const years = safeArray(seasonality.years).map(String);
+    const months = safeArray(seasonality.months);
+    const matrix = safeArray(seasonality.matrix);
+    const weightMatrix = safeArray(seasonality.weight_matrix);
+    if (!years.length || !months.length || !matrix.length) return;
+    renderPlotly(el, [{
+      type: "heatmap",
+      x: months,
+      y: years,
+      z: matrix,
+      customdata: weightMatrix,
+      colorscale: [
+        [0, "#e2e8f0"],
+        [0.25, "#bfdbfe"],
+        [0.5, "#60a5fa"],
+        [0.75, "#2563eb"],
+        [1, "#0f172a"],
+      ],
+      hovertemplate: "%{y} %{x}<br>Revenue %{z:$,.0f}<br>Shipped lb %{customdata:,.1f}<extra></extra>",
+      colorbar: { title: "Revenue", tickprefix: "$" },
+    }], {
+      heightMode: "heatmap",
+      rowCount: years.length,
+      legend: false,
+      margin: { r: 20, l: 60, b: 48 },
+      xaxis: { type: "category" },
+      yaxis: { type: "category", automargin: true },
+    });
+  }
+
+  function plotSeasonalityProfile() {
+    const el = document.getElementById("v2SeasonalityProfileChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const profile = safeArray((seriesV2.seasonality || {}).profile);
+    if (!profile.length) return;
+    renderPlotly(el, [
+      {
+        type: "bar",
+        x: profile.map((row) => row.month_name),
+        y: profile.map((row) => asNumber(row.revenue_index)),
+        name: "Revenue index",
+        marker: { color: plotThemeV2.primary },
+        hovertemplate: "%{x}<br>Revenue index %{y:.0f}<extra></extra>",
+      },
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: profile.map((row) => row.month_name),
+        y: profile.map((row) => asNumber(row.weight_index)),
+        name: "Weight index",
+        line: { color: plotThemeV2.teal, width: 2 },
+        hovertemplate: "%{x}<br>Weight index %{y:.0f}<extra></extra>",
+      },
+    ], {
+      heightMode: "compact",
+      margin: { r: 20, l: 50, b: 42 },
+      xaxis: { type: "category" },
+      yaxis: { title: "Index (100 = avg)" },
+      hovermode: "x unified",
+    });
+  }
+
+  function plotWeightTrend() {
+    const el = document.getElementById("v2WeightTrendChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const rows = safeArray(weightAnalyticsV2.monthly);
+    if (!rows.length) return;
+    const labels = rows.map((row) => row.month_label || row.month);
+    const traces = [{
+      type: "bar",
+      x: labels,
+      y: rows.map((row) => asNumber(row.weight_lb)),
+      name: "Shipped lb",
+      marker: { color: plotThemeV2.teal },
+      hovertemplate: "%{x}<br>Shipped lb %{y:,.1f}<extra></extra>",
+    }, {
+      type: "scatter",
+      mode: "lines+markers",
+      x: labels,
+      y: rows.map((row) => asNumber(row.revenue_per_lb)),
+      name: "Revenue / lb",
+      yaxis: "y2",
+      line: { color: plotThemeV2.primary, width: 2 },
+      hovertemplate: "%{x}<br>Revenue / lb %{y:$,.2f}<extra></extra>",
+    }];
+    if (showCostsV2) {
+      traces.push({
+        type: "scatter",
+        mode: "lines+markers",
+        x: labels,
+        y: rows.map((row) => asNumber(row.profit_per_lb)),
+        name: "Profit / lb",
+        yaxis: "y2",
+        line: { color: plotThemeV2.success, width: 2, dash: "dot" },
+        hovertemplate: "%{x}<br>Profit / lb %{y:$,.2f}<extra></extra>",
+      });
+    }
+    renderPlotly(el, traces, {
+      margin: { r: 58, l: 52, b: labels.length > 10 ? 62 : 48 },
+      barmode: "group",
+      xaxis: { type: "category", tickangle: labels.length > 10 ? -32 : 0 },
+      yaxis: { title: "Shipped lb" },
+      yaxis2: { overlaying: "y", side: "right", title: "$ / lb", tickformat: "$,.2f" },
+      hovermode: "x unified",
+    });
+  }
+
+  function plotPriceDistribution() {
+    const el = document.getElementById("v2PriceDistributionChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const payload = distributionsV2.price || {};
+    const samples = safeArray(payload.samples).map(asNumber).filter((v) => v !== null);
+    if (!samples.length) return;
+    const shapes = [];
+    [["p10", plotThemeV2.slate], ["p50", plotThemeV2.primary], ["p90", plotThemeV2.slate]].forEach(([key, color]) => {
+      const value = asNumber(payload[key]);
+      if (value !== null) {
+        shapes.push({
+          type: "line",
+          x0: value,
+          x1: value,
+          y0: 0,
+          y1: 1,
+          xref: "x",
+          yref: "paper",
+          line: { color, dash: key === "p50" ? "solid" : "dot" },
+        });
+      }
+    });
+    const outlier = distributionsV2.price_outlier || {};
+    ["lower_bound", "upper_bound"].forEach((key) => {
+      const value = asNumber(outlier[key]);
+      if (value !== null) {
+        shapes.push({
+          type: "line",
+          x0: value,
+          x1: value,
+          y0: 0,
+          y1: 1,
+          xref: "x",
+          yref: "paper",
+          line: { color: plotThemeV2.warning, dash: "dash" },
+        });
+      }
+    });
+    renderPlotly(el, [{
+      type: "histogram",
+      x: samples,
+      nbinsx: 28,
+      marker: { color: plotThemeV2.primary },
+      hovertemplate: "ASP/lb %{x:$,.2f}<br>Count %{y}<extra></extra>",
+    }], {
+      legend: false,
+      margin: { r: 20, l: 52, b: 48 },
+      xaxis: { title: "ASP/lb" },
+      yaxis: { title: "Rows" },
+      shapes,
+    });
+  }
+
+  function plotPriceVolume() {
+    const el = document.getElementById("v2PriceVolumeChart");
+    const metaEl = document.getElementById("v2ElasticityMeta");
+    if (!el || typeof Plotly === "undefined") return;
+    const points = safeArray(priceVolumeV2.points);
+    if (!points.length) {
+      if (metaEl) metaEl.textContent = "Insufficient data for price-demand diagnostics.";
+      return;
+    }
+    const x = points.map((p) => asNumber(p.plot_price));
+    const y = points.map((p) => asNumber(p.demand));
+    const revenues = points.map((p) => asNumber(p.revenue) || 0);
+    const sizes = revenues.map((v) => Math.max(7, Math.min(26, v / 200)));
+    const hoverTemplate = [
+      `${priceVolumeV2.price_label || "ASP/lb"} %{x:$,.2f}`,
+      `${priceVolumeV2.demand_label || "Demand"} %{y:,.1f}`,
+      "Revenue %{customdata[0]:$,.0f}",
+      showCostsV2 ? "Margin %{customdata[1]:.1f}%" : null,
+    ].filter(Boolean).join("<br>") + "<extra></extra>";
+    const traces = [{
+      type: "scatter",
+      mode: "markers",
+      x,
+      y,
+      customdata: points.map((p) => [asNumber(p.revenue), asNumber(p.margin_pct)]),
+      marker: {
+        size: sizes,
+        color: showCostsV2 ? points.map((p) => asNumber(p.margin_pct)) : plotThemeV2.primary,
+        colorscale: showCostsV2 ? "RdYlGn" : undefined,
+        showscale: showCostsV2,
+        colorbar: showCostsV2 ? { title: "Margin %" } : undefined,
+        line: { color: "rgba(15,23,42,0.15)", width: 1 },
+      },
+      text: points.map((p) => p.period || ""),
+      hovertemplate: hoverTemplate,
+      name: "Orders",
+    }];
+
+    const elasticity = priceVolumeV2.elasticity || {};
+    if (elasticity.status === "ok") {
+      const slope = asNumber(elasticity.slope);
+      if (slope !== null) {
+        const valid = x.map((xVal, idx) => ({ x: xVal, y: y[idx] })).filter((p) => p.x !== null && p.y !== null);
+        if (valid.length) {
+          const meanX = valid.reduce((acc, p) => acc + p.x, 0) / valid.length;
+          const meanY = valid.reduce((acc, p) => acc + p.y, 0) / valid.length;
+          const intercept = meanY - slope * meanX;
+          const minX = Math.min(...valid.map((p) => p.x));
+          const maxX = Math.max(...valid.map((p) => p.x));
+          traces.push({
+            type: "scatter",
+            mode: "lines",
+            x: [minX, maxX],
+            y: [slope * minX + intercept, slope * maxX + intercept],
+            line: { color: plotThemeV2.warning, width: 2, dash: "dot" },
+            name: "Elasticity proxy",
+            hovertemplate: "Indicative trendline<extra></extra>",
+          });
+        }
+      }
+      if (metaEl) {
+        metaEl.textContent = `Elasticity proxy on ${priceVolumeV2.price_label || "price"} vs ${priceVolumeV2.demand_label || "demand"}: slope ${num(elasticity.slope, 4)}, correlation ${num(elasticity.correlation, 3)}. Indicative only.`;
+      }
+    } else if (metaEl) {
+      metaEl.textContent = "Insufficient variation to estimate a directional elasticity proxy.";
+    }
+
+    renderPlotly(el, traces, {
+      legend: false,
+      margin: { r: 24, l: 58, b: 48 },
+      xaxis: { title: priceVolumeV2.price_label || "ASP/lb" },
+      yaxis: { title: priceVolumeV2.demand_label || "Demand" },
+      hovermode: "closest",
+    });
+    if (!el.__intelBound) {
+      el.on("plotly_click", (event) => {
+        const point = event && event.points ? event.points[0] : null;
+        if (!point) return;
+        openPricePointIntel(point);
+      });
+      el.__intelBound = true;
+    }
+  }
+  const backButtonV2 = document.getElementById("productDrilldownBackButton");
+  if (backButtonV2) {
+    const fallbackHref = backButtonV2.getAttribute("data-back-fallback") || productsExitUrl();
+    backButtonV2.href = fallbackHref;
+  }
+
+  function plotCustomerActivity() {
+    const el = document.getElementById("v2CustomerActivityChart");
+    if (!el || typeof Plotly === "undefined") return;
+    const rows = safeArray(customersV2.monthly_active_customers);
+    if (!rows.length) return;
+    renderPlotly(el, [
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: rows.map((row) => row.month),
+        y: rows.map((row) => asNumber(row.customers)),
+        name: "Active customers",
+        line: { color: plotThemeV2.primary, width: 2 },
+        hovertemplate: "%{x}<br>Active customers %{y:,.0f}<extra></extra>",
+      },
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: rows.map((row) => row.month),
+        y: rows.map((row) => asNumber(row.revenue)),
+        name: "Revenue",
+        yaxis: "y2",
+        line: { color: plotThemeV2.teal, width: 2 },
+        hovertemplate: "%{x}<br>Revenue %{y:$,.0f}<extra></extra>",
+      },
+    ], {
+      heightMode: "compact",
+      margin: { r: 58, l: 48, b: rows.length > 9 ? 56 : 42 },
+      xaxis: { type: "category", tickangle: rows.length > 9 ? -28 : 0 },
+      yaxis: { title: "Customers" },
+      yaxis2: { overlaying: "y", side: "right", title: "Revenue", tickformat: "$,.0f" },
+      hovermode: "x unified",
+    });
+  }
+
+  function plotBasket() {
+    const el = document.getElementById("v2BasketChart");
+    if (!el || typeof Plotly === "undefined" || basketV2.insufficient_sample) return;
+    const rows = safeArray(basketV2.rows).slice(0, 10).filter((row) => asNumber(row.lift) !== null);
+    if (!rows.length) return;
+    const ordered = rows.slice().sort((a, b) => (asNumber(a.lift) || 0) - (asNumber(b.lift) || 0));
+    renderPlotly(el, [{
+      type: "bar",
+      orientation: "h",
+      y: ordered.map((row) => String(row.display_name_axis || row.display_name || row.sku || row.product_id)),
+      x: ordered.map((row) => asNumber(row.lift) || 0),
+      customdata: ordered.map((row) => [asNumber(row.support), asNumber(row.confidence), asNumber(row.paired_revenue)]),
+      marker: { color: plotThemeV2.primary },
+      hovertemplate: "%{y}<br>Lift %{x:.2f}<br>Support %{customdata[0]:.2%}<br>Confidence %{customdata[1]:.2%}<br>Paired revenue %{customdata[2]:$,.0f}<extra></extra>",
+    }], {
+      heightMode: "bars",
+      rowCount: ordered.length,
+      legend: false,
+      margin: { r: 22, l: 196, b: 36 },
+      xaxis: { title: "Lift" },
+      yaxis: { automargin: true, type: "category", tickfont: { size: 11, color: plotThemeV2.muted } },
+    });
+    el.__basketIntelRows = ordered;
+    if (!el.__intelBound) {
+      el.on("plotly_click", (event) => {
+        const point = event && event.points ? event.points[0] : null;
+        const row = point && el.__basketIntelRows ? el.__basketIntelRows[point.pointIndex] : null;
+        if (!row) return;
+        openBasketIntel({
+          relatedId: row.product_id || row.sku,
+          relatedName: row.display_name || row.product_name || row.sku,
+          coOrders: row.co_orders,
+          support: row.support,
+          confidence: row.confidence,
+          lift: row.lift,
+          pairedRevenue: row.paired_revenue,
+          intelLink: productUrl(row.product_id || row.sku),
+        });
+      });
+      el.__intelBound = true;
+    }
+  }
+
+  let marginRiskRowsV2 = safeArray(marginRiskV2.rows);
+  let marginRiskSortV2 = { key: "uplift_to_target", dir: "desc" };
+  let marginRiskQueryV2 = "";
+
+  function sortMarginRiskRows(key, dir) {
+    const factor = dir === "asc" ? 1 : -1;
+    marginRiskRowsV2 = marginRiskRowsV2.slice().sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      const an = asNumber(av);
+      const bn = asNumber(bv);
+      if (an !== null && bn !== null) return (an - bn) * factor;
+      return String(av || "").localeCompare(String(bv || "")) * factor;
+    });
+  }
+
+  function renderMarginRiskTable() {
+    const tbody = document.querySelector("#v2MarginRiskTable tbody");
+    if (!tbody) return;
+    if (!showCostsV2) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center py-3">Margin risk rows are hidden because cost visibility is restricted for your role.</td></tr>';
+      return;
+    }
+    if (!marginRiskRowsV2.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center py-3">No below-target gross-margin rows for this product.</td></tr>';
+      return;
+    }
+    sortMarginRiskRows(marginRiskSortV2.key, marginRiskSortV2.dir);
+    const rows = marginRiskRowsV2.filter((row) => {
+      if (!marginRiskQueryV2) return true;
+      const haystack = `${row.customer_name || ""} ${row.customer_id || ""}`.toLowerCase();
+      return haystack.includes(marginRiskQueryV2);
+    }).slice(0, 40);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted text-center py-3">No customers match the current filter.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((row) => {
+      const name = escapeHtml((row.customer_name || row.customer_id || "Unknown").toString());
+      const url = customerUrl(row.customer_id);
+      const linkedName = url ? `<a href="${escapeHtml(url)}" class="text-decoration-none fw-semibold">${name}</a>` : name;
+      return `<tr class="product-v2-clickable-row js-v2-margin-risk-row" role="button" tabindex="0"
+        data-customer-id="${escapeHtml(row.customer_id || "")}"
+        data-customer-name="${name}"
+        data-customer-revenue="${escapeHtml(row.revenue ?? "")}"
+        data-customer-weight="${escapeHtml(row.weight_lb ?? "")}"
+        data-customer-orders="${escapeHtml(row.orders ?? "")}"
+        data-customer-cadence="${escapeHtml(row.cadence_days ?? "")}"
+        data-customer-margin="${escapeHtml(row.margin_pct ?? "")}"
+        data-customer-gap="${escapeHtml(row.target_gap_pp ?? "")}"
+        data-customer-uplift="${escapeHtml(row.uplift_to_target ?? "")}"
+        data-customer-status="Below target"
+        data-customer-asp-lb="${escapeHtml(row.asp_lb ?? "")}"
+        data-intel-link="${escapeHtml(url || "")}">
+        <td>${linkedName}</td>
+        <td class="text-end">${money(row.revenue)}</td>
+        <td class="text-end">${num(row.weight_lb, 1)}</td>
+        <td class="text-end">${money(row.profit)}</td>
+        <td class="text-end">${pct(row.margin_pct, 1)}</td>
+        <td class="text-end">${num(row.target_gap_pp, 1)}</td>
+        <td class="text-end">${money(row.uplift_to_target)}</td>
+        <td class="text-end">${num(row.orders, 0)}</td>
+        <td class="text-end">${num(row.cadence_days, 1)}</td>
+        <td>${escapeHtml(row.last_order_date || "—")}</td>
+      </tr>`;
+    }).join("");
+    bindMarginRiskRowInteractions();
+  }
+
+  function bindMarginRiskSorting() {
+    document.querySelectorAll("#v2MarginRiskTable thead th[data-sort]").forEach((th) => {
+      th.setAttribute("role", "button");
+      th.tabIndex = 0;
+      const onSort = () => {
+        const key = th.getAttribute("data-sort");
+        if (!key) return;
+        if (marginRiskSortV2.key === key) {
+          marginRiskSortV2.dir = marginRiskSortV2.dir === "asc" ? "desc" : "asc";
+        } else {
+          marginRiskSortV2.key = key;
+          marginRiskSortV2.dir = "desc";
+        }
+        renderMarginRiskTable();
+      };
+      th.addEventListener("click", onSort);
+      th.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSort();
+        }
+      });
+    });
+  }
+
+  function bindTextFilter(inputId, tableId) {
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    if (!input || !table) return;
+    input.addEventListener("input", () => {
+      const query = String(input.value || "").trim().toLowerCase();
+      table.querySelectorAll("tbody tr").forEach((row) => {
+        row.classList.toggle("d-none", !!query && !row.textContent.toLowerCase().includes(query));
+      });
+    });
+  }
+
+  function bindMarginRiskSearch() {
+    const input = document.getElementById("v2MarginRiskSearch");
+    if (!input) return;
+    input.addEventListener("input", () => {
+      marginRiskQueryV2 = String(input.value || "").trim().toLowerCase();
+      renderMarginRiskTable();
+    });
+  }
+
+  function bindBasketSelection() {
+    const out = document.getElementById("v2BasketSuggestionList");
+    const addBtn = document.getElementById("v2BasketAddSelected");
+    const clearBtn = document.getElementById("v2BasketClearSelected");
+    if (!out || !addBtn || !clearBtn) return;
+    const renderList = () => {
+      const selected = Array.from(document.querySelectorAll(".js-basket-select:checked")).map((el) => `${el.value} — ${el.dataset.name || ""}`);
+      if (!selected.length) {
+        out.innerHTML = '<span class="text-muted">No associated products selected.</span>';
+        return;
+      }
+      out.innerHTML = `<strong>Suggestion list:</strong> ${selected.map(escapeHtml).join(", ")}`;
+    };
+    addBtn.addEventListener("click", renderList);
+    clearBtn.addEventListener("click", () => {
+      document.querySelectorAll(".js-basket-select:checked").forEach((el) => { el.checked = false; });
+      renderList();
+    });
+    renderList();
+  }
+
+  function forecastMetaText(meta) {
+    if (!meta || typeof meta !== "object") return "";
+    const parts = [];
+    if (meta.method) parts.push(`Method: ${meta.method}`);
+    if (meta.history_points !== undefined && meta.history_points !== null) parts.push(`History points: ${meta.history_points}`);
+    if (meta.smape !== undefined && meta.smape !== null) parts.push(`Revenue sMAPE: ${Number(meta.smape).toFixed(1)}%`);
+    if (meta.smape_weight !== undefined && meta.smape_weight !== null) parts.push(`Weight sMAPE: ${Number(meta.smape_weight).toFixed(1)}%`);
+    if (meta.forecastability_score !== undefined && meta.forecastability_score !== null) parts.push(`Forecastability: ${Number(meta.forecastability_score).toFixed(0)}`);
+    return parts.join(" · ");
+  }
+
+  function renderForecast(payload) {
+    const callout = document.getElementById("v2ForecastCallout");
+    const chart = document.getElementById("v2ForecastChart");
+    const metaEl = document.getElementById("v2ForecastMeta");
+    if (!callout || !chart || !metaEl) return;
+    if (!payload || typeof payload !== "object") {
+      callout.classList.remove("d-none");
+      chart.classList.add("d-none");
+      metaEl.classList.add("d-none");
+      callout.textContent = "Forecast data unavailable.";
+      return;
+    }
+
+    const actual = safeArray(payload.actual_series);
+    const fc = safeArray(payload.forecast_series);
+    const meta = payload.meta || {};
+    const warnings = safeArray(meta.warnings);
+    const hasSeries = actual.length > 0 && fc.length > 0;
+
+    if (!hasSeries) {
+      callout.classList.remove("d-none");
+      chart.classList.add("d-none");
+      metaEl.classList.remove("d-none");
+      callout.textContent = warnings[0] || "Forecast not available for this selection.";
+      metaEl.textContent = forecastMetaText(meta);
+      return;
+    }
+
+    const actualX = actual.map((row) => row.period);
+    const fcX = fc.map((row) => row.period);
+    const traces = [
+      { type: "scatter", mode: "lines+markers", x: actualX, y: actual.map((row) => asNumber(row.revenue)), name: "Actual Revenue", line: { color: plotThemeV2.primary, width: 2 } },
+      { type: "scatter", mode: "lines+markers", x: fcX, y: fc.map((row) => asNumber(row.revenue_yhat ?? row.yhat)), name: "Forecast Revenue", line: { color: plotThemeV2.warning, width: 2, dash: "dot" } },
+      { type: "scatter", mode: "lines+markers", x: actualX, y: actual.map((row) => asNumber(row.weight_lb)), name: "Actual Weight", yaxis: "y2", line: { color: plotThemeV2.teal, width: 2 } },
+      { type: "scatter", mode: "lines+markers", x: fcX, y: fc.map((row) => asNumber(row.weight_yhat)), name: "Forecast Weight", yaxis: "y2", line: { color: plotThemeV2.successSoft, width: 2, dash: "dot" } },
+    ];
+
+    const fcLo = fc.map((row) => asNumber(row.revenue_yhat_lower ?? row.yhat_lower));
+    const fcHi = fc.map((row) => asNumber(row.revenue_yhat_upper ?? row.yhat_upper));
+    if (fcLo.length && fcHi.length) {
+      traces.push({
+        type: "scatter",
+        x: fcX.concat([...fcX].reverse()),
+        y: fcHi.concat([...fcLo].reverse()),
+        fill: "toself",
+        fillcolor: "rgba(194,65,12,0.12)",
+        line: { color: "rgba(194,65,12,0)" },
+        hoverinfo: "skip",
+        showlegend: false,
+        name: "Revenue CI",
+      });
+    }
+
+    renderPlotly(chart, traces, {
+      heightMode: "forecast",
+      margin: { r: 58, l: 58, b: actualX.length + fcX.length > 12 ? 62 : 48 },
+      xaxis: { type: "category", tickangle: actualX.length + fcX.length > 12 ? -28 : 0 },
+      yaxis: { title: "Revenue", tickformat: "$,.0f" },
+      yaxis2: { title: "Shipped lb", overlaying: "y", side: "right" },
+      hovermode: "x unified",
+    });
+
+    chart.classList.remove("d-none");
+    metaEl.classList.remove("d-none");
+    metaEl.textContent = forecastMetaText(meta);
+    if (warnings.length) {
+      callout.classList.remove("d-none");
+      callout.textContent = warnings.join(" ");
+    } else {
+      callout.classList.add("d-none");
+      callout.textContent = "";
+    }
+  }
+
+  async function fetchForecast(freq) {
+    const params = new URLSearchParams(requestQueryV2 || "");
+    params.set("freq", freq);
+    params.set("horizon", freq === "week" ? "12" : "6");
+    const url = `${forecastApiBaseV2}?${params.toString()}`;
+    const response = await fetch(url, { credentials: "same-origin" });
+    if (!response.ok) throw new Error(`forecast_http_${response.status}`);
+    return response.json();
+  }
+
+  function bindForecastControls() {
+    if (!forecastFeatureEnabledV2) return;
+    const toggle = document.getElementById("v2ForecastToggle");
+    const freqSelect = document.getElementById("v2ForecastFreq");
+    const callout = document.getElementById("v2ForecastCallout");
+    const chart = document.getElementById("v2ForecastChart");
+    const metaEl = document.getElementById("v2ForecastMeta");
+    if (!toggle || !freqSelect || !callout || !chart || !metaEl) return;
+
+    let lastPayload = null;
+    if (initialForecastV2 && safeArray(initialForecastV2.forecast_series).length) {
+      lastPayload = initialForecastV2;
+      renderForecast(initialForecastV2);
+    }
+
+    const refresh = async (forceFetch = false) => {
+      if (!toggle.checked) {
+        chart.classList.add("d-none");
+        metaEl.classList.add("d-none");
+        callout.classList.add("d-none");
+        return;
+      }
+      const freq = String(freqSelect.value || "month");
+      if (!forceFetch && freq === "month" && lastPayload && safeArray(lastPayload.forecast_series).length) {
+        renderForecast(lastPayload);
+        return;
+      }
+      callout.classList.remove("d-none");
+      callout.textContent = "Loading forecast…";
+      try {
+        const payload = await fetchForecast(freq);
+        lastPayload = payload;
+        renderForecast(payload);
+      } catch (_err) {
+        callout.classList.remove("d-none");
+        chart.classList.add("d-none");
+        metaEl.classList.add("d-none");
+        callout.textContent = "Forecast request failed for this selection.";
+      }
+    };
+
+    toggle.addEventListener("change", () => { refresh(true); });
+    freqSelect.addEventListener("change", () => { refresh(true); });
+    refresh(false);
+  }
+
+  function bindMarginRiskRowInteractions() {
+    bindInteractiveElement(".js-v2-margin-risk-row", (el) => openMarginRiskIntel(el.dataset));
+  }
+
+  function bindIntelTriggers() {
+    bindInteractiveElement(".js-v2-customer-row", (el) => openCustomerIntel(el.dataset));
+    bindInteractiveElement(".js-v2-basket-row", (el) => openBasketIntel(el.dataset));
+    bindInteractiveElement(".js-v2-action-trigger", (el) => openActionIntel(el.dataset));
+    bindInteractiveElement(".js-v2-mover-trigger", (el) => openMoverIntel(el.dataset));
+    bindInteractiveElement(".js-v2-customer-risk-trigger", (el) => openRiskCustomerIntel(el.dataset));
+    bindInteractiveElement(".js-v2-forecast-trigger", (el) => openForecastIntel(el.dataset));
+  }
+
+  function bindSectionNav() {
+    const links = Array.from(document.querySelectorAll(".product-v2-subnav-link"));
+    const sections = links.map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
+    if (!("IntersectionObserver" in window) || !sections.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        links.forEach((link) => link.classList.toggle("is-active", link.getAttribute("href") === `#${entry.target.id}`));
+      });
+    }, { rootMargin: "-35% 0px -55% 0px", threshold: 0.1 });
+    sections.forEach((section) => observer.observe(section));
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    bindPanelClose();
+    bindExports();
+    plotOutcomeTrend();
+    plotPriceMarginTrend();
+    plotSeasonality();
+    plotSeasonalityProfile();
+    plotWeightTrend();
+    plotPriceDistribution();
+    plotPriceVolume();
+    plotCustomerActivity();
+    plotBasket();
+    bindBasketSelection();
+    bindMarginRiskSorting();
+    bindMarginRiskSearch();
+    renderMarginRiskTable();
+    bindTextFilter("v2CustomerSearch", "v2CustomerTable");
+    bindTextFilter("v2BasketSearch", "v2BasketTable");
+    bindForecastControls();
+    bindIntelTriggers();
+    bindSectionNav();
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+      if (window.bootstrap && window.bootstrap.Tooltip) {
+        new window.bootstrap.Tooltip(el);
+      }
+    });
+  });
+</script>
+{% endblock %}

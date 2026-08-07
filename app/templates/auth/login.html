@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-sm-11 col-md-7 col-lg-5 col-xl-4">
+    <section class="auth-panel">
+      <div class="auth-panel__eyebrow">Wholesale Analytics</div>
+      <h1 class="auth-panel__title">Login</h1>
+      <p class="auth-panel__subtitle">Sign in to open the analytics workspace and restore your saved scope.</p>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.username.label(class='form-label') }}
+        {{ form.username(class='form-control', autocomplete='username') }}
+      </div>
+      <div class="mb-3">
+        {{ form.password.label(class='form-label') }}
+        {{ form.password(class='form-control', autocomplete='current-password') }}
+      </div>
+      <div class="form-check mb-3">
+        {{ form.remember_me(class='form-check-input') }}
+        {{ form.remember_me.label(class='form-check-label') }}
+      </div>
+      <div class="d-grid">
+        {{ form.submit(class='btn btn-primary') }}
+      </div>
+    </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

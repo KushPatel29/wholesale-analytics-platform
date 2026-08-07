@@ -1,0 +1,65 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="returns-page py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Returns Settings</h1>
+      <p class="text-muted mb-0">Manage default workflow values and notification subject templates.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_admin.index') }}">Admin Home</a>
+      <a class="btn btn-outline-dark" href="{{ url_for('returns_admin.reasons') }}">Reasons</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <form method="post" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="default_return_type">Default Return Type</label>
+          <input class="form-control" id="default_return_type" name="default_return_type" value="{{ settings.defaults.return_type }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="default_follow_up_action">Default Follow-up Action</label>
+          <input class="form-control" id="default_follow_up_action" name="default_follow_up_action" value="{{ settings.defaults.follow_up_action }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="new_return_subject">New Return Subject</label>
+          <input class="form-control" id="new_return_subject" name="new_return_subject" value="{{ settings.email_templates.new_return_subject }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="wh_approval_subject">WH Approval Subject</label>
+          <input class="form-control" id="wh_approval_subject" name="wh_approval_subject" value="{{ settings.email_templates.wh_approval_subject }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="manager_approval_subject">Manager Approval Subject</label>
+          <input class="form-control" id="manager_approval_subject" name="manager_approval_subject" value="{{ settings.email_templates.manager_approval_subject }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="rejection_subject">Rejection Subject</label>
+          <input class="form-control" id="rejection_subject" name="rejection_subject" value="{{ settings.email_templates.rejection_subject }}">
+        </div>
+        <div class="col-12 mt-4">
+          <h2 class="h5 mb-1">Workflow Options</h2>
+          <p class="text-muted small">Comma-separated lists for dropdown menus.</p>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="follow_up_actions">Follow Up Actions</label>
+          <input class="form-control" id="follow_up_actions" name="follow_up_actions" value="{{ settings.workflow_options.follow_up_actions|join(', ') }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="warehouse_outcomes">Warehouse Outcomes</label>
+          <input class="form-control" id="warehouse_outcomes" name="warehouse_outcomes" value="{{ settings.workflow_options.warehouse_outcomes|join(', ') }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="companies">Companies</label>
+          <input class="form-control" id="companies" name="companies" value="{{ settings.workflow_options.companies|join(', ') }}">
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary" type="submit">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

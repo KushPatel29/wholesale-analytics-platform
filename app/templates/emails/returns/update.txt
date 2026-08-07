@@ -1,0 +1,6 @@
+Return #{{ rma.id }} for order {{ rma.order_id }}
+
+Status: {{ status_label }}
+{% if detail %}Detail: {{ detail }}
+{% endif %}
+View return: {{ return_url }}

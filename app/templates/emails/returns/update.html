@@ -1,0 +1,4 @@
+<p>Return <strong>#{{ rma.id }}</strong> for order <strong>{{ rma.order_id }}</strong>.</p>
+<p>Status: <strong>{{ status_label }}</strong></p>
+{% if detail %}<p>{{ detail }}</p>{% endif %}
+<p><a href="{{ return_url }}">View return details</a></p>

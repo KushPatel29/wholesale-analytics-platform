@@ -1,0 +1,123 @@
+{% macro _na() -%}
+  <span class="text-muted">—</span>
+{%- endmacro %}
+
+{% macro fmt_value(value, format='number', suffix=None) -%}
+  {% if value is none or value != value %}
+    {{ _na() }}
+  {% elif format == 'currency' %}
+    {{ value|currency }}
+  {% elif format == 'percent' %}
+    {{ ('%.1f'|format(value|float)) ~ '%' }}
+  {% elif format == 'weight' %}
+    {{ ('{:,.0f}'.format(value|float)) ~ ' lb' }}
+  {% elif format == 'score' %}
+    {{ '{:,.0f}'.format(value|float) }}
+  {% elif format == 'text' %}
+    {{ value }}
+  {% else %}
+    {% if value is number %}
+      {{ '{:,.1f}'.format(value|float) if (value|float) != (value|float)|round(0) else '{:,.0f}'.format(value|float) }}
+    {% else %}
+      {{ value }}
+    {% endif %}
+    {% if suffix %} {{ suffix }}{% endif %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro badge(label, tone='neutral') -%}
+  <span class="ciw-badge ciw-badge--{{ tone|default('neutral') }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro metric_card(metric, drilldown=None) -%}
+  <article class="ciw-metric-card ciw-tone--{{ metric.get('tone', 'neutral') }}{% if drilldown %} is-drillable{% endif %}"
+           {% if drilldown %}data-drilldown-payload="{{ drilldown|tojson|forceescape }}"{% endif %}>
+    {% if metric.get('scope') %}
+      <div class="ciw-metric-scope">{{ metric.get('scope') }}</div>
+    {% endif %}
+    <div class="ciw-metric-label">{{ metric.get('label') }}</div>
+    <div class="ciw-metric-value{% if metric.get('emphasize') %} is-emphasis{% endif %}">
+      {{ fmt_value(metric.get('value'), metric.get('format', 'number'), metric.get('suffix')) }}
+    </div>
+    {% if metric.get('detail') %}
+      <div class="ciw-metric-detail">{{ metric.get('detail') }}</div>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% macro score_chip(item) -%}
+  <article class="ciw-score-chip ciw-tone--{{ item.get('tone', 'neutral') }}">
+    <div class="ciw-score-head">
+      <span class="ciw-score-label">{{ item.get('label') }}</span>
+      <strong class="ciw-score-value">
+        {{ fmt_value(item.get('score'), 'score') }}
+      </strong>
+    </div>
+    <div class="ciw-score-band">{{ item.get('band') }}</div>
+    <p class="ciw-score-detail">{{ item.get('detail') }}</p>
+    {% if item.get('implication') %}
+      <p class="ciw-score-implication">{{ item.get('implication') }}</p>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% macro action_card(action, drilldown=None) -%}
+  <article class="ciw-action-card ciw-tone--{{ action.get('tone', 'neutral') }}{% if drilldown %} is-drillable{% endif %}"
+           {% if drilldown %}data-drilldown-payload="{{ drilldown|tojson|forceescape }}"{% endif %}>
+    <div class="ciw-action-topline">
+      <span class="ciw-action-type">{{ (action.get('type') or 'action')|replace('_', ' ')|title }}</span>
+      <span class="ciw-action-urgency">{{ action.get('urgency') or 'Monitor' }}</span>
+    </div>
+    <h4 class="ciw-action-title">{{ action.get('title') }}</h4>
+    <p class="ciw-action-why">{{ action.get('why') or action.get('detail') }}</p>
+    <dl class="ciw-action-meta">
+      {% if action.get('priority_score') is not none %}
+        <div><dt>Priority</dt><dd>{{ fmt_value(action.get('priority_score'), 'score') }}</dd></div>
+      {% endif %}
+      {% if action.get('confidence') is not none %}
+        <div><dt>Confidence</dt><dd>{{ fmt_value(action.get('confidence'), 'percent') }}</dd></div>
+      {% endif %}
+      {% if action.get('owner') %}
+        <div><dt>Owner</dt><dd>{{ action.get('owner') }}</dd></div>
+      {% endif %}
+      {% if action.get('revenue_upside') is not none %}
+        <div><dt>Revenue Upside</dt><dd>{{ fmt_value(action.get('revenue_upside'), 'currency') }}</dd></div>
+      {% endif %}
+      {% if action.get('profit_upside') is not none %}
+        <div><dt>Profit Upside</dt><dd>{{ fmt_value(action.get('profit_upside'), 'currency') }}</dd></div>
+      {% endif %}
+      {% if action.get('margin_upside_pp') is not none %}
+        <div><dt>Margin Upside</dt><dd>{{ fmt_value(action.get('margin_upside_pp'), 'percent') }}</dd></div>
+      {% endif %}
+      {% if action.get('scope_label') %}
+        <div><dt>Scope</dt><dd>{{ action.get('scope_label') }}</dd></div>
+      {% endif %}
+      {% if action.get('pathway_label') %}
+        <div><dt>Drill Path</dt><dd>{{ action.get('pathway_label') }}</dd></div>
+      {% endif %}
+    </dl>
+    {% if action.get('related_products') or action.get('related_categories') or action.get('related_families') %}
+      <div class="ciw-action-tags">
+        {% for label in action.get('related_products') or [] %}
+          <span class="ciw-pill">{{ label }}</span>
+        {% endfor %}
+        {% for label in action.get('related_families') or [] %}
+          <span class="ciw-pill ciw-pill--info">{{ label }}</span>
+        {% endfor %}
+        {% for label in action.get('related_categories') or [] %}
+          <span class="ciw-pill ciw-pill--soft">{{ label }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% macro key_value(label, value, format='text', detail=None) -%}
+  <div class="ciw-kv">
+    <div class="ciw-kv-label">{{ label }}</div>
+    <div class="ciw-kv-value">{{ fmt_value(value, format) }}</div>
+    {% if detail %}
+      <div class="ciw-kv-detail">{{ detail }}</div>
+    {% endif %}
+  </div>
+{%- endmacro %}

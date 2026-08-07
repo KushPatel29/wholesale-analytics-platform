@@ -1,0 +1,11 @@
+[Unit]
+Description=Wholesale Analytics Fact Refresh (Once)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/app/wholesale_analytics
+ExecStart=/opt/app/.venv/bin/python run.py refresh-fact --once
+
+[Install]
+WantedBy=multi-user.target

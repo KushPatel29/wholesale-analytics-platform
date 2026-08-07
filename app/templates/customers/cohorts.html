@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+<ul class="nav nav-tabs mb-3 cohort-tabs">
+  <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/customers/cohorts"><i class="bi bi-people me-1"></i>Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/clv"><i class="bi bi-currency-dollar me-1"></i>CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>Dashboard</a></li>
+</ul>
+
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="animation: fadeIn 0.5s ease-out;">
+      <div class="card-body">
+        <form method="post" class="row g-3 align-items-end">
+          {{ form.hidden_tag() }}
+          <div class="col-auto">
+            <label class="form-label fw-semibold" for="threshold"><i class="bi bi-clock-history me-1"></i>Churn Threshold</label>
+            <select id="threshold" name="threshold" class="form-select">
+              <option value="90" {% if threshold==90 %}selected{% endif %}>90 days</option>
+              <option value="180" {% if threshold==180 %}selected{% endif %}>180 days</option>
+              <option value="365" {% if threshold==365 %}selected{% endif %}>365 days</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-circle me-1"></i>Apply</button>
+          </div>
+          <div class="col-auto">
+            <a class="btn btn-outline-success" href="/customers/cohorts/download?threshold={{ threshold }}">
+              <i class="bi bi-download me-1"></i>Download Churned
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3 g-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInLeft 0.6s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Cohort Retention</span>
+          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="cohort_bar" title="Export to Excel">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </button>
+        </h5>
+        <div id="cohort_bar" style="height:340px;"></div>
+        <div id="cohort_empty" class="text-muted small text-center py-4" style="display:none;">
+          <i class="bi bi-info-circle me-1"></i>No cohort data available for the selected filters.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInRight 0.6s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-geo-alt-fill me-2 text-danger"></i>Churn by Region</span>
+          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="region_bar" title="Export to Excel">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </button>
+        </h5>
+        <div id="region_bar" style="height:340px;"></div>
+        <div id="region_empty" class="text-muted small text-center py-4" style="display:none;">
+          <i class="bi bi-info-circle me-1"></i>No regional churn data available.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInUp 0.7s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-graph-down me-2 text-warning"></i>Monthly Churn Trend</span>
+          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="churn_trend" title="Export to Excel">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </button>
+        </h5>
+        <div id="churn_trend" style="height:360px;"></div>
+        <div id="trend_empty" class="text-muted small text-center py-4" style="display:none;">
+          <i class="bi bi-info-circle me-1"></i>No churn trend data available.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Load SheetJS for Excel export #}
+<script>
+if (typeof XLSX === 'undefined') {
+  const s = document.createElement('script');
+  s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  s.crossOrigin = "anonymous";
+  document.head.appendChild(s);
+}
+</script>
+
+<script>
+  const cohort_labels = {{ cohort_labels|tojson }};
+  const cohort_ret = {{ cohort_retention|tojson }};
+  const region_labels = {{ region_labels|tojson }};
+  const region_churn = {{ region_churn|tojson }};
+  const trend_months = {{ trend_months|tojson }};
+  const trend_values = {{ trend_values|tojson }};
+
+  // Helper to check if data is valid
+  const hasData = (arr) => Array.isArray(arr) && arr.length > 0 && arr.some(v => v != null);
+
+  // Cohort Retention Chart
+  if (hasData(cohort_labels) && hasData(cohort_ret)) {
+    Plotly.newPlot('cohort_bar', [{
+      x: cohort_labels,
+      y: cohort_ret,
+      type: 'bar',
+      marker: {
+        color: cohort_ret,
+        colorscale: [[0, '#dc3545'], [0.5, '#ffc107'], [1, '#198754']],
+        showscale: true
+      },
+      hovertemplate: '%{x}<br>Retention: %{y:.1f}%<extra></extra>'
+    }], {
+      margin: {t:20, l:60, r:40, b:60},
+      xaxis: {title: 'Cohort Month', tickangle: -45},
+      yaxis: {title: 'Retention %', range: [0, 100]}
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    document.getElementById('cohort_bar').style.display = 'none';
+    document.getElementById('cohort_empty').style.display = 'block';
+  }
+
+  // Region Churn Chart
+  if (hasData(region_labels) && hasData(region_churn)) {
+    Plotly.newPlot('region_bar', [{
+      x: region_labels,
+      y: region_churn,
+      type: 'bar',
+      marker: {color: '#dc3545'},
+      hovertemplate: '%{x}<br>Churn: %{y:.1f}%<extra></extra>'
+    }], {
+      margin: {t:20, l:60, r:20, b:60},
+      xaxis: {title: 'Region'},
+      yaxis: {title: 'Churn %', range: [0, Math.max(...region_churn) * 1.1]}
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    document.getElementById('region_bar').style.display = 'none';
+    document.getElementById('region_empty').style.display = 'block';
+  }
+
+  // Monthly Churn Trend
+  if (hasData(trend_months) && hasData(trend_values)) {
+    Plotly.newPlot('churn_trend', [{
+      x: trend_months,
+      y: trend_values,
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Churned Customers',
+      line: {color: '#dc3545', width: 3},
+      marker: {size: 8, color: '#dc3545'},
+      hovertemplate: '%{x}<br>Churned: %{y}<extra></extra>'
+    }], {
+      margin: {t:20, l:60, r:20, b:60},
+      xaxis: {title: 'Month'},
+      yaxis: {title: 'Churned Customers'},
+      hovermode: 'x unified'
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    document.getElementById('churn_trend').style.display = 'none';
+    document.getElementById('trend_empty').style.display = 'block';
+  }
+
+  // Excel export helpers
+  function plotlyToAOA(gd) {
+    if (!gd || !gd.data || gd.data.length === 0) return [["No data"]];
+    const traces = gd.data;
+    const hasX = traces.some(t => Array.isArray(t.x));
+    const xRef = traces.find(t => Array.isArray(t.x))?.x;
+    const maxLen = Math.max(...traces.map(t => (t.x?.length || t.y?.length || 0)));
+    const header = [hasX ? 'X' : 'Index'];
+    traces.forEach((t, i) => header.push(t.name || `Trace ${i+1}`));
+    const rows = [header];
+    for (let i=0; i<maxLen; i++) {
+      const xVal = hasX ? (xRef?.[i] ?? (i+1)) : i+1;
+      const row = [xVal];
+      traces.forEach(t => {
+        let v = t.y?.[i] ?? '';
+        row.push(v != null ? v : '');
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function aoaToExcel(aoa, filename="chart.xlsx", sheetName="Sheet1") {
+    if (typeof XLSX === 'undefined') {
+      const csv = aoa.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename.replace(/\.xlsx$/i,'') + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+    XLSX.writeFile(wb, filename);
+  }
+
+  function exportPlotlyDiv(divId, fname, sheet) {
+    const gd = document.getElementById(divId);
+    if (!gd || gd.style.display === 'none') return;
+    const aoa = plotlyToAOA(gd);
+    const card = gd.closest('.card');
+    const titleEl = card?.querySelector('.card-title');
+    const title = titleEl?.textContent?.trim() || sheet || divId;
+    const filename = fname || title.replace(/[^\w\d\-]+/g,'_') + '.xlsx';
+    aoaToExcel(aoa, filename, title);
+  }
+
+  // Wire export buttons
+  document.querySelectorAll('.export-xlsx').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-export-target');
+      const card = btn.closest('.card');
+      const titleEl = card?.querySelector('.card-title');
+      const title = titleEl?.textContent?.trim() || id;
+      exportPlotlyDiv(id, title.replace(/[^\w\d\-]+/g,'_') + '.xlsx', title);
+    });
+  });
+</script>
+
+<style>
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cohort-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.cohort-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0,0,0,0.2) !important;
+}
+
+.cohort-tabs .nav-link {
+  transition: all 0.3s ease;
+  border-radius: 10px 10px 0 0;
+  font-weight: 600;
+}
+
+.cohort-tabs .nav-link:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  transform: translateY(-3px);
+}
+
+.cohort-tabs .nav-link.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+}
+
+.btn {
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.card {
+  transition: all 0.3s ease;
+}
+</style>
+
+{% endblock %}

@@ -1,0 +1,26 @@
+﻿name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt || true
+      - run: pip install .
+      - run: pip install pytest pytest-cov mypy ruff black bandit
+      - run: ruff .
+      - run: black --check .
+      - run: bandit -q -r .
+      - run: mypy .
+      - run: pytest

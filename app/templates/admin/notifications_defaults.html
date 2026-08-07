@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block filters_bar %}{% endblock %}
+
+{% block content %}
+<div class="container-xl py-4">
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <div class="text-uppercase small fw-semibold text-muted mb-2">Admin</div>
+      <h1 class="h4 mb-1">Notification Defaults</h1>
+      <div class="text-muted small">This staged view exposes the seeded catalog defaults used when users have not saved an override yet.</div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('notifications.index') }}">Back to Notifications</a>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Alert</th>
+            <th>Key</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in notification_types %}
+          <tr>
+            <td class="fw-semibold">{{ row.name }}</td>
+            <td><code>{{ row.key }}</code></td>
+            <td class="small text-muted">{{ row.description or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

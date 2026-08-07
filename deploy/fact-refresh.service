@@ -1,0 +1,13 @@
+[Unit]
+Description=Wholesale Analytics Fact Refresh (Loop)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/app/wholesale_analytics
+ExecStart=/opt/app/.venv/bin/python run.py refresh-fact --loop --interval 300
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+Hello {{ recipient_name or "there" }},
+
+{% if purpose == "invite" -%}
+Your Wholesale Analytics account is ready.
+{% else -%}
+A password reset was requested for your Wholesale Analytics account.
+{% endif %}
+
+Set your password:
+{{ set_password_link }}
+
+This link expires and can only be used once.
+If you were not expecting this email, contact your administrator.
+

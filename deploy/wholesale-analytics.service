@@ -1,0 +1,15 @@
+[Unit]
+Description=Gunicorn instance to serve wholesale-analytics
+After=network.target
+
+[Service]
+User=kush
+Group=www-data
+WorkingDirectory=/opt/wholesale-analytics
+Environment="PATH=/opt/wholesale-analytics/venv/bin"
+# Ensure you set the correct password here or in an env file
+Environment="DB_PASS=change_this_strong_password" 
+ExecStart=/opt/wholesale-analytics/venv/bin/gunicorn --workers 3 --bind unix:wholesale-analytics.sock -m 007 wsgi:app
+
+[Install]
+WantedBy=multi-user.target

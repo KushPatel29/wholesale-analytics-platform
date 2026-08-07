@@ -1,0 +1,376 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+<ul class="nav nav-tabs mb-3 clv-tabs">
+  <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
+  <li class="nav-item"><a class="nav-link" href="/customers/cohorts"><i class="bi bi-people me-1"></i>Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/customers/clv"><i class="bi bi-currency-dollar me-1"></i>CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house me-1"></i>Dashboard</a></li>
+  </ul>
+
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="card border-0 shadow-lg clv-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); animation: fadeInDown 0.6s ease-out;">
+      <div class="card-body text-white">
+        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-gem me-2"></i>Top 10 High-Value Customers by CLV</span>
+          <span class="badge bg-white bg-opacity-25 px-3 py-2">{{ top_rows|length }} Premium Customers</span>
+        </h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle clv-table">
+            <thead style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);">
+              <tr class="text-white">
+                <th><i class="bi bi-person-fill me-1"></i>Customer</th>
+                <th class="text-end"><i class="bi bi-wallet2 me-1"></i>AOV</th>
+                <th class="text-end"><i class="bi bi-cart-check me-1"></i>Orders/Year</th>
+                <th class="text-end"><i class="bi bi-star-fill me-1"></i>CLV</th>
+                {% if show_costs %}<th class="text-end"><i class="bi bi-graph-up me-1"></i>Gross Margin %</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody class="text-white">
+              {% for row in top_rows %}
+              <tr class="clv-customer-row" style="background: rgba(255,255,255,0.1); animation: fadeIn {{ 0.3 + loop.index * 0.05 }}s ease-out;">
+                <td><a href="/customers/drilldown/{{ row['CustomerId'] }}" class="clv-customer-link text-decoration-none fw-semibold">{{ row['CustomerName'] or row['CustomerId'] }}</a></td>
+                <td class="text-end fw-semibold">{{ row['AvgOrderValue']|currency }}</td>
+                <td class="text-end"><span class="badge bg-success">{{ '%.1f'|format(row['OrdersPerYear']) }}</span></td>
+                <td class="text-end"><span class="badge bg-warning text-dark fs-6 px-3">{{ row['CLV']|currency }}</span></td>
+                {% if show_costs %}<td class="text-end"><span class="badge bg-info">{{ '%.1f'|format(row.get('GrossMarginPct', 0)) }}%</span></td>{% endif %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-3">
+  <div class="col-lg-6 mb-3">
+    <div class="card border-0 shadow-lg clv-card" style="animation: fadeInLeft 0.7s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center">
+          <i class="bi bi-bar-chart-fill me-2 text-primary"></i>
+          {% if show_costs %}Gross Margin % by Customer{% else %}Top Customers by Revenue{% endif %}
+        </h5>
+        <div id="clv_bar" style="height:340px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6 mb-3">
+    <div class="card border-0 shadow-lg clv-card" style="animation: fadeInRight 0.7s ease-out;">
+      <div class="card-body">
+        <h5 class="card-title mb-3 d-flex align-items-center">
+          <i class="bi bi-bullseye me-2 text-success"></i>
+          Revenue vs Orders <span class="badge bg-primary-subtle text-primary ms-2">Bubble sized by CLV</span>
+        </h5>
+        <div id="clv_scatter" style="height:340px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Load SheetJS for Excel export if not already present #}
+<script>
+if (typeof XLSX === 'undefined') {
+  const s = document.createElement('script');
+  s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  s.crossOrigin = "anonymous";
+  document.head.appendChild(s);
+}
+</script>
+
+<script>
+  const barLabels = {{ bar_labels|tojson }};
+  const barValues = {{ bar_values|tojson }};
+  const sx = {{ scatter_x|tojson }};
+  const sy = {{ scatter_y|tojson }};
+  const ss = {{ scatter_size|tojson }};
+  const sc = {{ scatter_color|tojson }};
+  const st = {{ scatter_text|tojson }};
+  const showCosts = {{ 'true' if show_costs else 'false' }};
+
+  // Helper to check if data is valid
+  const hasData = (arr) => Array.isArray(arr) && arr.length > 0 && arr.some(v => v != null);
+
+  // Bar chart - Top Customers by Gross Margin % or Revenue
+  if (hasData(barLabels) && hasData(barValues)) {
+    const barTrace = {
+      x: barLabels,
+      y: barValues,
+      type: 'bar',
+      marker: {
+        color: '#667eea',
+        line: {color: '#764ba2', width: 1}
+      },
+      hovertemplate: '%{x}<br>%{y:,.2f}%<extra></extra>'
+    };
+    Plotly.newPlot('clv_bar', [barTrace], {
+      margin: {t:20, l:60, r:20, b:100},
+      xaxis: {automargin: true, tickangle: -45},
+      yaxis: {title: showCosts ? 'Gross Margin %' : 'Revenue'},
+      plot_bgcolor: '#f8f9fa'
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    const barDiv = document.getElementById('clv_bar');
+    if (barDiv) {
+      barDiv.innerHTML = '<div class="text-muted small text-center py-5"><i class="bi bi-info-circle me-2"></i>No data available for this chart.</div>';
+    }
+  }
+
+  // Scatter plot - Revenue vs Orders
+  if (hasData(sx) && hasData(sy) && hasData(ss) && hasData(st)) {
+    const scatterTrace = {
+      x: sx,
+      y: sy,
+      text: st,
+      type: 'scatter',
+      mode: 'markers',
+      marker: {
+        size: ss.map(v => Math.max(6, Math.sqrt(v)/10)),
+        color: sc,
+        colorscale: 'Blues',
+        sizemode: 'area',
+        sizeref: 2.0,
+        showscale: showCosts,
+        line: {color: '#fff', width: 1}
+      },
+      hovertemplate: '<b>%{text}</b><br>Revenue: %{x:$,.0f}<br>Orders: %{y}<extra></extra>'
+    };
+    Plotly.newPlot('clv_scatter', [scatterTrace], {
+      margin: {t:20, l:60, r:40, b:60},
+      xaxis: {title: 'Total Revenue', tickformat: '$,.0f'},
+      yaxis: {title: 'Total Orders'},
+      plot_bgcolor: '#f8f9fa',
+      hovermode: 'closest'
+    }, {displayModeBar: false, responsive: true});
+  } else {
+    const scatterDiv = document.getElementById('clv_scatter');
+    if (scatterDiv) {
+      scatterDiv.innerHTML = '<div class="text-muted small text-center py-5"><i class="bi bi-info-circle me-2"></i>No data available for this chart.</div>';
+    }
+  }
+
+  // Excel export helpers (matching drilldown.html pattern)
+  function plotlyToAOA(gd) {
+    if (!gd || !gd.data || gd.data.length === 0) return [["No data"]];
+    const traces = gd.data;
+    const type0 = (traces[0].type || "").toLowerCase();
+
+    // Scatter/bubble
+    if (type0.includes('scatter')) {
+      const header = ['X', 'Y'];
+      if (traces[0].text) header.push('Label');
+      const rows = [header];
+      const maxLen = Math.max(...traces.map(t => (t.x?.length || 0)));
+      for (let i=0; i<maxLen; i++) {
+        const row = [traces[0].x?.[i] ?? '', traces[0].y?.[i] ?? ''];
+        if (traces[0].text) row.push(traces[0].text?.[i] ?? '');
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    // Bar/line
+    const hasX = traces.some(t => Array.isArray(t.x));
+    const xRef = traces.find(t => Array.isArray(t.x))?.x;
+    const maxLen = Math.max(...traces.map(t => (t.x?.length || t.y?.length || 0)));
+    const header = [hasX ? 'X' : 'Index'];
+    traces.forEach((t, i) => header.push(t.name || `Trace ${i+1}`));
+    const rows = [header];
+    for (let i=0; i<maxLen; i++) {
+      const xVal = hasX ? (xRef?.[i] ?? (i+1)) : i+1;
+      const row = [xVal];
+      traces.forEach(t => {
+        let v = t.y?.[i] ?? '';
+        row.push(v != null ? v : '');
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function aoaToExcel(aoa, filename="chart.xlsx", sheetName="Sheet1") {
+    if (typeof XLSX === 'undefined') {
+      const csv = aoa.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename.replace(/\.xlsx$/i,'') + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+    XLSX.writeFile(wb, filename);
+  }
+
+  function exportPlotlyDiv(divId, fname, sheet) {
+    const gd = document.getElementById(divId);
+    if (!gd) return;
+    const aoa = plotlyToAOA(gd);
+    const card = gd.closest('.card');
+    const titleEl = card?.querySelector('.card-title');
+    const title = titleEl?.textContent?.trim() || sheet || divId;
+    const filename = fname || title.replace(/[^\w\d\-]+/g,'_') + '.xlsx';
+    aoaToExcel(aoa, filename, title);
+  }
+
+  // Add export buttons dynamically
+  const addExportButton = (chartId, cardSelector) => {
+    const card = document.querySelector(cardSelector);
+    if (!card) return;
+    const titleEl = card.querySelector('.card-title');
+    if (!titleEl) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-success ms-auto';
+    btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet"></i>';
+    btn.title = 'Export to Excel';
+    btn.onclick = () => {
+      const title = titleEl.textContent.trim();
+      exportPlotlyDiv(chartId, title.replace(/[^\w\d\-]+/g,'_') + '.xlsx', title);
+    };
+
+    // If title is wrapped in a flex container, append to it
+    if (titleEl.classList.contains('d-flex')) {
+      titleEl.appendChild(btn);
+    } else {
+      // Wrap title in flex container
+      titleEl.classList.add('d-flex', 'align-items-center', 'justify-content-between');
+      titleEl.appendChild(btn);
+    }
+  };
+
+  // Add export buttons to charts on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit for charts to render
+    setTimeout(() => {
+      const charts = [
+        {id: 'clv_bar', selector: '#clv_bar'},
+        {id: 'clv_scatter', selector: '#clv_scatter'}
+      ];
+      charts.forEach(chart => {
+        const el = document.getElementById(chart.id);
+        if (el && el.innerHTML && !el.innerHTML.includes('No data')) {
+          const card = el.closest('.card-body')?.closest('.card');
+          if (card) {
+            const titleEl = card.querySelector('.card-title');
+            if (titleEl && !titleEl.querySelector('.btn-outline-success')) {
+              addExportButton(chart.id, `#${chart.id}`);
+            }
+          }
+        }
+      });
+    }, 500);
+  });
+</script>
+
+<style>
+/* Fix white on white issue for customer links */
+.clv-customer-link {
+  color: #ffeb3b !important; /* Bright yellow for visibility */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* Add subtle shadow for readability */
+  transition: all 0.2s ease;
+}
+
+.clv-customer-link:hover {
+  color: #fff !important; /* White on hover */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  transform: translateX(3px);
+}
+
+.clv-customer-link:visited {
+  color: #ffd54f !important; /* Slightly darker yellow for visited links */
+}
+
+.clv-customer-row {
+  transition: all 0.3s ease;
+}
+
+.clv-customer-row:hover {
+  background: rgba(255,255,255,0.2) !important; /* Lighter on hover */
+  transform: scale(1.01);
+}
+
+/* CLV tabs styling */
+.clv-tabs .nav-link {
+  transition: all 0.3s ease;
+  border-radius: 10px 10px 0 0;
+  font-weight: 600;
+}
+
+.clv-tabs .nav-link:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  transform: translateY(-3px);
+}
+
+.clv-tabs .nav-link.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+}
+
+/* Card animations */
+.clv-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.clv-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0,0,0,0.2) !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Table styling improvements */
+.clv-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.clv-table tbody tr:last-child {
+  border-bottom: none;
+}
+</style>
+
+{% endblock %}

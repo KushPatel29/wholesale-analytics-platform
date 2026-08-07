@@ -1,0 +1,56 @@
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | node_modules
+  | cache
+  | logs
+  | backups
+  | instance
+  | playwright-report
+  | test-results
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    ".git",
+    ".venv",
+    "node_modules",
+    "cache",
+    "logs",
+    "backups",
+    "instance",
+    "playwright-report",
+    "test-results",
+]
+
+[tool.ruff.lint]
+select = ["I", "E", "F", "B", "UP", "C4", "ARG", "SIM", "PL"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "data"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_unused_ignores = true
+ignore_missing_imports = true
+exclude = "(^cache/|^logs/|^backups/|^node_modules/|^playwright-report/|^test-results/)"
+
+[tool.coverage.run]
+branch = true
+source = ["app", "data_loader.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.bandit]
+skips = ["B101"]

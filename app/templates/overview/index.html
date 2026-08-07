@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Business Performance{% endblock %}
+
+{% block content %}
+<style>
+  #overviewPageV2 {
+    border-radius: 14px;
+    padding: 1rem 1rem 1.25rem;
+    background: #f7f9fc;
+  }
+  #overviewPageV2 .section-title {
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5e6673;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+  #overviewPageV2 .status-chip {
+    border-radius: 999px;
+    border: 1px solid #dde4ef;
+    background: #ffffff;
+    color: #2f3b4b;
+    font-size: 0.78rem;
+    padding: 0.3rem 0.65rem;
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+  }
+  #overviewPageV2 .scorecard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPageV2 .scorecard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPageV2 .scorecard-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPageV2 .score-item {
+    border: 1px solid #e0e6ef;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.75rem 0.8rem;
+    min-height: 118px;
+  }
+  #overviewPageV2 .score-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #697586;
+  }
+  #overviewPageV2 .score-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.15rem;
+  }
+  #overviewPageV2 .score-delta {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPageV2 .chart-wrap {
+    min-height: 320px;
+    position: relative;
+  }
+  #overviewPageV2 .chart-wrap canvas {
+    width: 100% !important;
+    height: 320px !important;
+  }
+  #overviewPageV2 .table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+  }
+</style>
+
+<div id="overviewPageV2"
+     class="page-shell shadow-soft"
+     data-page="overview"
+     data-api="{{ url_for('overview_page.overview_context_v2') }}"
+     data-bundle-url="{{ url_for('overview_page.overview_bundle_v3') }}"
+     data-movers-api="{{ url_for('overview_page.overview_movers_fast') }}"
+     data-forecast-api="{{ url_for('overview_api.forecast') }}"
+     data-snapshot-export-url="{{ url_for('overview_page.overview_snapshot_export') }}"
+     data-trend-export-url="{{ url_for('overview_page.overview_trend_export') }}"
+     data-drilldown-base="/overview/api/drilldown"
+     data-last-refresh="{{ last_refresh }}"
+     data-version="{{ version }}"
+     data-overview-v2="1"
+     data-overview-forecast-v2="{{ 1 if overview_forecast_v2_enabled else 0 }}"
+     data-overview-movers-fast="{{ 1 if overview_movers_fast_enabled else 0 }}">
+
+  <section class="mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <h1 class="display-6 fw-bold text-primary mb-1">Business Performance</h1>
+        <p class="text-muted mb-1">What happened, why it happened, where risk sits, and what to do next.</p>
+        <div class="small text-muted">Filters applied: <span id="filterSummaryText">Loading...</span></div>
+      </div>
+      <div class="d-flex flex-column align-items-end gap-1">
+        <button id="downloadSnapshotBtn" class="btn btn-sm btn-primary" type="button" aria-label="Download snapshot">
+          <i class="bi bi-download me-1"></i>Download Snapshot
+        </button>
+        <div class="small text-muted">Last refresh <strong id="lastRefreshChip">{{ last_refresh or "unknown" }}</strong></div>
+        <div class="small text-muted">Window <strong id="dataWindowChip">Loading...</strong></div>
+      </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-2" aria-label="Overview status chips">
+      <span class="status-chip" id="rowsChip">Rows: -</span>
+      <span class="status-chip" id="ordersChip">Orders: -</span>
+      <span class="status-chip" id="customersChip">Customers: -</span>
+      <span class="status-chip" id="costCoverageChip">Cost coverage: -</span>
+      <span class="status-chip" id="packsCoverageChip">Packs coverage: -</span>
+      <span class="status-chip" id="missingMappingChip">Missing mapping: -</span>
+      <span class="status-chip" id="freshnessChip">Freshness SLA: -</span>
+      <a class="status-chip text-decoration-none" href="#dataHealthSection" id="dataHealthJump" aria-label="Jump to data health">Data Health</a>
+    </div>
+  </section>
+
+  <div id="overviewBanner" class="alert alert-warning d-none py-2 px-3 mb-3" role="alert"></div>
+
+  <section class="card shadow-soft mb-3" id="scorecardSection">
+    <div class="card-header">
+      <h5 class="mb-0">Executive Scorecard</h5>
+      <small class="text-muted">Single source of truth for KPI performance and period deltas.</small>
+    </div>
+    <div class="card-body">
+      <div class="scorecard-grid" id="scorecardGrid">
+        {% for m in [
+          ('revenue','Revenue','Revenue under current filters'),
+          ('profit','Profit','Profit = Revenue - Cost'),
+          ('margin_pct','Margin %','Margin % = Profit / Revenue'),
+          ('orders','Orders','Distinct order count'),
+          ('customers','Customers','Distinct customer count'),
+          ('qty','Units','Units or best available quantity'),
+          ('weight','Weight (lb)','Total billed weight'),
+          ('aov','AOV','Average order value'),
+          ('asp','ASP','Average selling price = Revenue / Units'),
+          ('profit_per_order','Profit / Order','Profit divided by orders'),
+          ('profit_per_lb','Profit / Lb','Profit divided by weight')
+        ] %}
+        <article class="score-item" data-metric="{{ m[0] }}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="score-label">{{ m[1] }}</div>
+            <i class="bi bi-info-circle text-muted" title="{{ m[2] }}" aria-label="{{ m[2] }}"></i>
+          </div>
+          <div class="score-value" data-value="{{ m[0] }}">-</div>
+          <div class="score-delta text-muted" data-mom="{{ m[0] }}">MoM: n/a</div>
+          <div class="score-delta text-muted" data-yoy="{{ m[0] }}">YoY: n/a</div>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="card shadow-soft mb-3" id="narrativeSection">
+    <div class="card-header">
+      <h5 class="mb-0">What Changed And What To Do Next</h5>
+      <small class="text-muted">Deterministic insights and immediate action links.</small>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div class="section-title">What Changed</div>
+          <ul id="whatChangedList" class="small mb-0 ps-3">
+            <li class="text-muted">Loading...</li>
+          </ul>
+        </div>
+        <div class="col-lg-4">
+          <div class="section-title">Key Watchouts</div>
+          <ul id="watchoutsList" class="small mb-0 ps-3">
+            <li class="text-muted">Loading...</li>
+          </ul>
+        </div>
+        <div class="col-lg-3">
+          <div class="section-title">Recommended Actions</div>
+          <ul id="actionsList" class="small mb-0 ps-3">
+            <li><a href="#" id="actionMarginRiskLink">View margin risk SKUs</a></li>
+            <li><a href="#" id="actionMoversLink">Review top decliners</a></li>
+            <li><a href="#dataHealthSection" id="actionDataHealthLink">Investigate coverage gaps</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card shadow-soft mb-3" id="trendSection">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="mb-0">Diagnostics: Trends</h5>
+        <small class="text-muted">Single trend view with metric and granularity controls.</small>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <label class="small text-muted mb-0" for="trendFreqSelect">Granularity</label>
+        <select id="trendFreqSelect" class="form-select form-select-sm w-auto" aria-label="Trend granularity">
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+        </select>
+        <label class="small text-muted mb-0" for="trendMetricSelect">Metric</label>
+        <select id="trendMetricSelect" class="form-select form-select-sm w-auto" aria-label="Trend metric">
+          <option value="revenue">Revenue</option>
+          <option value="profit">Profit</option>
+          <option value="margin_pct">Margin %</option>
+          <option value="units">Units</option>
+        </select>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input" type="checkbox" id="trendRollingToggle" checked>
+          <label class="form-check-label small" for="trendRollingToggle">Rolling avg</label>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" id="trendExportBtn" type="button" aria-label="Export trend data">Export</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="trendEmpty" class="text-muted small d-none">No trend data for selected filters.</div>
+      <div class="chart-wrap">
+        <canvas id="trendChart" width="420" height="320"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-soft h-100" id="driversSection">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-0">Drivers (MoM and YoY)</h5>
+            <small class="text-muted">Price, volume, and mix decomposition with reconciliation.</small>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" id="driversExportBtn" type="button">Export</button>
+        </div>
+        <div class="card-body">
+          <div id="driversMethodNote" class="small text-muted mb-2">Method: symmetric price/volume/mix decomposition.</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="section-title">MoM</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Driver</th><th class="text-end">Δ$</th><th class="text-end">Share</th></tr>
+                  </thead>
+                  <tbody id="driversMomRows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="section-title">YoY</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Driver</th><th class="text-end">Δ$</th><th class="text-end">Share</th></tr>
+                  </thead>
+                  <tbody id="driversYoyRows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-soft h-100" id="moversSection">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-0">Top Movers</h5>
+            <small class="text-muted">Gainers/decliners with low-base guardrails and full export.</small>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" id="moversExportBtn" type="button">Export Full</button>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2 mb-2" id="moversDimToggle" role="group" aria-label="Movers dimensions">
+            <button class="btn btn-sm btn-outline-secondary active" data-movers-dim="customer" type="button">Customers</button>
+            <button class="btn btn-sm btn-outline-secondary" data-movers-dim="product" type="button">Products</button>
+            <button class="btn btn-sm btn-outline-secondary" data-movers-dim="region" type="button">Regions</button>
+          </div>
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <select id="moversSortSelect" class="form-select form-select-sm w-auto" aria-label="Sort movers">
+              <option value="delta_abs">Sort by Δ$</option>
+              <option value="delta_pct">Sort by Δ%</option>
+            </select>
+            <label class="small text-muted mb-0" for="moversMinBaseline">Min baseline</label>
+            <input id="moversMinBaseline" type="number" class="form-control form-control-sm w-auto" min="0" step="50" value="500" aria-label="Minimum prior baseline">
+            <div class="form-check form-check-inline mb-0">
+              <input class="form-check-input" type="checkbox" id="moversExcludeLowBase" checked>
+              <label class="form-check-label small" for="moversExcludeLowBase">Exclude low base</label>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" id="moversApplyBtn" type="button">Apply</button>
+          </div>
+          <div id="moversMetaText" class="small text-muted mb-2"></div>
+          <div id="moversReconcileText" class="small text-muted mb-2"></div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div class="section-title">Gainers</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Name</th><th class="text-end">Current</th><th class="text-end">Δ$</th><th class="text-end">Δ%</th></tr>
+                  </thead>
+                  <tbody id="moversGainersBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="section-title">Decliners</div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Name</th><th class="text-end">Current</th><th class="text-end">Δ$</th><th class="text-end">Δ%</th></tr>
+                  </thead>
+                  <tbody id="moversDeclinersBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-3">
+    <div class="col-lg-7">
+      <div class="card shadow-soft h-100" id="riskSection">
+        <div class="card-header">
+          <h5 class="mb-0">Risk and Concentration</h5>
+          <small class="text-muted">Dependency and profitability distribution under current scope.</small>
+        </div>
+        <div class="card-body">
+          <div id="concentrationSummary" class="small mb-2"></div>
+          <div id="profitabilitySummary" class="small mb-2"></div>
+          <ul id="marginRiskList" class="small mb-0 ps-3"></ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card shadow-soft h-100" id="forecastPanel">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-0">Forecast</h5>
+            <small class="text-muted">Shown only when history depth is defensible.</small>
+          </div>
+          <div id="forecastControls" class="d-flex align-items-center gap-2 flex-wrap">
+            <select id="forecastMetricSelect" class="form-select form-select-sm w-auto" aria-label="Forecast metric">
+              <option value="revenue">Revenue</option>
+              <option value="profit">Profit</option>
+              <option value="margin">Margin %</option>
+            </select>
+            <select id="forecastHorizonSelect" class="form-select form-select-sm w-auto" aria-label="Forecast horizon">
+              <option value="3">3 mo</option>
+              <option value="6" selected>6 mo</option>
+              <option value="12">12 mo</option>
+            </select>
+            <select id="forecastGranularitySelect" class="form-select form-select-sm w-auto" aria-label="Forecast granularity">
+              <option value="monthly" selected>Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+            <button class="btn btn-sm btn-primary" id="forecastRunBtn" type="button">Run</button>
+            <button class="btn btn-sm btn-outline-secondary" id="forecastDownloadBtn" type="button" aria-label="Download forecast series csv">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="forecastGateMessage" class="small text-muted mb-2">Checking forecast eligibility...</div>
+          <div id="forecastModelCard" class="small text-muted mb-2">
+            <span id="forecastModelName">Model: -</span>
+            <span class="mx-2">|</span>
+            <span id="forecastQuality">Quality: -</span>
+            <span class="mx-2">|</span>
+            <span id="forecastHistory">History: -</span>
+            <span class="mx-2">|</span>
+            <span id="forecastConfidence">Confidence: -</span>
+          </div>
+          <div id="forecastMeta" class="small text-muted mb-2"></div>
+          <div class="chart-wrap">
+            <div id="forecastEmpty" class="text-muted small">Forecast not generated.</div>
+            <canvas id="forecastChart" width="380" height="280"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="dataHealthSection" class="card shadow-soft mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="mb-0">Data Health</h5>
+        <small class="text-muted">Single source of truth for coverage, freshness, and remediation.</small>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" id="exportDataHealthBtn" type="button">Download Data Issues</button>
+    </div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <span class="status-chip" id="healthCostBadge">Cost coverage: -</span>
+        <span class="status-chip" id="healthPacksBadge">Packs coverage: -</span>
+        <span class="status-chip" id="healthMappingBadge">Missing mapping: -</span>
+        <span class="status-chip" id="healthFreshnessBadge">Freshness SLA: -</span>
+      </div>
+      <ul id="dataHealthIssuesList" class="small ps-3 mb-2"></ul>
+      <ul class="small ps-3 mb-0 text-muted">
+        <li>Backfill missing cost values for profit-sensitive analysis.</li>
+        <li>Resolve pack mapping gaps to stabilize weight and ASP diagnostics.</li>
+        <li>Review unmapped products to keep movers and concentration accurate.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div id="overviewEmpty" class="alert alert-info d-none" role="alert">
+    <i class="bi bi-info-circle me-1"></i>No data for the selected window/filters.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview_v2.js') }}" defer></script>
+{% endblock %}

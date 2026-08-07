@@ -1,0 +1,542 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/regions_drilldown_v2.css') }}">
+
+<div id="RegionDrilldownV2Meta"
+     class="d-none"
+     data-page="region_drilldown_v2"
+     data-region-id="{{ region_name }}"
+     data-bundle-url="{{ url_for('bundles.regions_drilldown_bundle') }}"
+     data-export-base="{{ url_for('regions.export_region', region_name=region_name) }}"
+     data-churn-export="{{ url_for('regions.churn_download', region_name=region_name) }}"
+     data-initial='{{ payload|tojson }}'></div>
+
+<div class="container-fluid py-3 pb-4 region-drilldown-v2">
+  <section class="region-v2-hero card mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <div class="text-uppercase small text-muted fw-semibold">Regional Diagnostics Workspace</div>
+          <h2 class="mb-1" id="v2RegionTitle">{{ region_name }}</h2>
+          <div class="small text-muted mb-2">Revenue, customer retention, product mix, margin quality, and operating behavior for the active filtered region.</div>
+          <div class="small text-muted" id="v2WindowSummary">Computed using current filters and scope.</div>
+          <div class="small text-muted" id="v2ComparisonSummary">Prior-period comparison appears where history is available.</div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <span class="badge text-bg-light" id="badgeDataCoverage">Data coverage: —</span>
+            <span class="badge text-bg-light" id="badgeCostCoverage">Cost coverage: —</span>
+            <span class="badge text-bg-light" id="badgePacksCoverage">Packs coverage: —</span>
+            <span class="badge text-bg-light" id="badgeFreshness">Freshness: —</span>
+            <span class="badge text-bg-warning d-none" id="badgeHealthWarn">Customer health warning</span>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-start">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.index') }}">
+            <i class="bi bi-arrow-left"></i> Back
+          </a>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" type="button">
+              <i class="bi bi-download"></i> Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item js-region-export" data-dataset="summary" data-format="xlsx" href="#">Summary export (XLSX)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="customers" data-format="csv" href="#">Top customers (CSV)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="products" data-format="csv" href="#">Top products (CSV)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="churn" data-format="xlsx" href="#">Churn / at-risk (XLSX)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="trend" data-format="csv" href="#">Trend series (CSV)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="shipping" data-format="csv" href="#">Shipping mix (CSV)</a></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="suppliers" data-format="csv" href="#">Supplier mix (CSV)</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item js-region-export" data-dataset="full" data-format="xlsx" href="#">Full drilldown workbook (XLSX)</a></li>
+              <li><a class="dropdown-item" id="legacyChurnExport" href="{{ url_for('regions.churn_download', region_name=region_name) }}">Legacy churn export</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="region-v2-subnav mb-3" aria-label="Region section navigation">
+    <a class="region-v2-subnav-link" href="#sec-overview">Overview</a>
+    <a class="region-v2-subnav-link" href="#sec-trend">Trend</a>
+    <a class="region-v2-subnav-link" href="#sec-customers">Customer Mix</a>
+    <a class="region-v2-subnav-link" href="#sec-products">Product Mix</a>
+    <a class="region-v2-subnav-link" href="#sec-retention">Retention / Risk</a>
+    <a class="region-v2-subnav-link" href="#sec-operations">Operational Mix</a>
+    <a class="region-v2-subnav-link" href="#sec-insights">Insights</a>
+    <a class="region-v2-subnav-link" href="#sec-exports">Exports</a>
+  </nav>
+
+  <section id="sec-overview" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Overview</h4>
+      <p class="text-muted mb-0">Core commercial, concentration, retention, and data-quality signals for the current region.</p>
+    </div>
+    <div class="row g-2">
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Total Revenue</div><div class="fs-5 fw-semibold" id="kpiRevenue">—</div><div class="small text-muted" id="kpiRevenueMeta">—</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Profit</div><div class="fs-5 fw-semibold" id="kpiProfit">—</div><div class="small text-muted" id="kpiProfitMeta">—</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Margin %</div><div class="fs-5 fw-semibold" id="kpiMargin">—</div><div class="small text-muted" id="kpiMarginMeta">—</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Orders</div><div class="fs-5 fw-semibold" id="kpiOrders">—</div><div class="small text-muted" id="kpiOrdersMeta">Distinct order count</div></div></div>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Customers</div><div class="fs-5 fw-semibold" id="kpiCustomers">—</div><div class="small text-muted" id="kpiCustomersMeta">Active customers in window</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Avg Order Value</div><div class="fs-5 fw-semibold" id="kpiAov">—</div><div class="small text-muted" id="kpiAovMeta">Average revenue per order</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Revenue / Customer</div><div class="fs-5 fw-semibold" id="kpiRevenuePerCustomer">—</div><div class="small text-muted" id="kpiRevenuePerCustomerMeta">Revenue depth per customer</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Repeat Rate <span class="metric-help" data-bs-toggle="tooltip" title="Share of customers with two or more orders in the active window.">?</span></div><div class="fs-5 fw-semibold" id="kpiRepeat">—</div><div class="small text-muted" id="kpiRepeatMeta">Repeat customer share</div></div></div>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Churn % <span class="metric-help" data-bs-toggle="tooltip" title="Share of active customers whose last order is more than 90 days behind the region reference date.">?</span></div><div class="fs-5 fw-semibold" id="kpiChurn">—</div><div class="small text-muted" id="kpiChurnMeta">Current-window churn signal</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">New Customer Share</div><div class="fs-5 fw-semibold" id="kpiNewCustomerShare">—</div><div class="small text-muted" id="kpiNewCustomerShareMeta">Revenue mix from new customers</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">MoM Growth</div><div class="fs-5 fw-semibold" id="kpiMomGrowth">—</div><div class="small text-muted" id="kpiMomGrowthMeta">Last month vs prior month</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">YoY Growth</div><div class="fs-5 fw-semibold" id="kpiYoyGrowth">—</div><div class="small text-muted" id="kpiYoyGrowthMeta">Same window last year</div></div></div>
+      </div>
+
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Revenue Delta vs Prior</div><div class="fs-5 fw-semibold" id="kpiDeltaRevenue">—</div><div class="small text-muted" id="kpiDeltaRevenueMeta">Equivalent prior window</div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Top Customer Share <span class="metric-help" data-bs-toggle="tooltip" title="Top customer revenue share within the current region window.">?</span></div><div class="fs-5 fw-semibold" id="kpiTopCustomerShare">—</div><div class="small text-muted" id="kpiTopCustomerShareMeta">Top 5 <span id="kpiTopCustomerShareTop5">—</span></div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Top Product Share <span class="metric-help" data-bs-toggle="tooltip" title="Top product revenue share within the current region window.">?</span></div><div class="fs-5 fw-semibold" id="kpiTopProductShare">—</div><div class="small text-muted" id="kpiTopProductShareMeta">Top 5 <span id="kpiTopProductShareTop5">—</span></div></div></div>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card region-kpi-card h-100"><div class="card-body"><div class="text-muted small">Data Quality / Coverage</div><div class="fs-6 fw-semibold" id="kpiQualityFlag">—</div><div class="small text-muted" id="kpiQualityMeta">Coverage and missing-cost watch</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-trend" class="region-v2-section mb-3">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+        <div>
+          <h5 class="mb-1">Revenue & Profit Trend</h5>
+          <div class="small text-muted">Monthly revenue, profit, margin, and customer activity for the current region.</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <select id="trendMetricSelect" class="form-select form-select-sm">
+            <option value="revenue" selected>Revenue</option>
+            <option value="profit">Profit</option>
+            <option value="orders">Orders</option>
+            <option value="customers">Customers</option>
+          </select>
+          <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="trend" data-format="csv" href="#">Export</a>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-shell">
+          <div id="regionV2TrendChart" class="chart-host"></div>
+          <div id="regionV2TrendEmpty" class="chart-empty d-none">No monthly trend data is available for the selected window.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-customers" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Customer Mix</h4>
+      <p class="text-muted mb-0">Top customers, concentration, churn risk, and customer movers relative to the prior window.</p>
+    </div>
+    <div class="row g-2">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+              <h5 class="mb-1">Top Customers</h5>
+              <div class="small text-muted">Current revenue leaders with share, last-order timing, and delta context.</div>
+            </div>
+            <div class="d-flex gap-2">
+              <select id="customersTopN" class="form-select form-select-sm">
+                <option value="10">Top 10</option>
+                <option value="25" selected>Top 25</option>
+                <option value="50">Top 50</option>
+              </select>
+              <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="customers" data-format="csv" href="#">Export</a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-shell">
+              <div id="regionV2CustomersChart" class="chart-host chart-host-lg"></div>
+              <div id="regionV2CustomersEmpty" class="chart-empty d-none">No customer concentration is available for this region.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Concentration</h5>
+            <div class="small text-muted">HHI and top-share indicators for dependency risk.</div>
+          </div>
+          <div class="card-body">
+            <ul class="list-unstyled small mb-3" id="customerConcentrationSummary">
+              <li>Top 1 share: —</li>
+              <li>Top 5 share: —</li>
+              <li>HHI: —</li>
+              <li>Customers in scope: —</li>
+            </ul>
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Share</th>
+                    <th>Last Order</th>
+                    <th class="text-end">Orders</th>
+                  </tr>
+                </thead>
+                <tbody id="topCustomersTable"><tr><td colspan="5" class="text-center text-muted">No customer detail available.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mt-1">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Movers</h5>
+            <div class="small text-muted">Customers gaining or declining versus the immediately preceding equivalent window.</div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Current</th>
+                    <th class="text-end">Prior</th>
+                    <th class="text-end">Δ Revenue</th>
+                    <th>Label</th>
+                  </tr>
+                </thead>
+                <tbody id="customerMoversTable"><tr><td colspan="5" class="text-center text-muted">No customer mover data available.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">New vs Returning Customers</h5>
+            <div class="small text-muted">Mix of new, returning, and lost customers in the active window.</div>
+          </div>
+          <div class="card-body">
+            <div id="customerMixPills" class="d-flex flex-wrap gap-2 mb-3"></div>
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Prior</th>
+                    <th>Risk</th>
+                    <th class="text-end">Days Since</th>
+                  </tr>
+                </thead>
+                <tbody id="customerHealthTable"><tr><td colspan="5" class="text-center text-muted">No customer health detail available.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-products" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Product Mix</h4>
+      <p class="text-muted mb-0">Top products, profit leaders, product concentration, and margin-risk diagnostics for this region.</p>
+    </div>
+    <div class="row g-2">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+              <h5 class="mb-1">Top Products</h5>
+              <div class="small text-muted">Ranked by the selected metric and linked to product drilldowns.</div>
+            </div>
+            <div class="d-flex gap-2">
+              <select id="productsMetricSelect" class="form-select form-select-sm">
+                <option value="revenue" selected>Revenue</option>
+                <option value="profit">Profit</option>
+                <option value="orders">Orders</option>
+                <option value="qty">Units</option>
+              </select>
+              <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="products" data-format="csv" href="#">Export</a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-shell">
+              <div id="regionV2ProductsChart" class="chart-host chart-host-lg"></div>
+              <div id="regionV2ProductsEmpty" class="chart-empty d-none">No product mix is available for this region.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Product Concentration</h5>
+            <div class="small text-muted">Top-share, HHI, and margin-risk readout for product dependency.</div>
+          </div>
+          <div class="card-body">
+            <ul class="list-unstyled small mb-3" id="productConcentrationSummary">
+              <li>Top 1 share: —</li>
+              <li>Top 5 share: —</li>
+              <li>Top 10 share: —</li>
+              <li>HHI: —</li>
+            </ul>
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Product</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Margin %</th>
+                    <th class="text-end">Share</th>
+                    <th>Tag</th>
+                  </tr>
+                </thead>
+                <tbody id="topProductsTable"><tr><td colspan="5" class="text-center text-muted">No product detail available.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mt-1">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Product Movers</h5>
+            <div class="small text-muted">Fast-growing and declining SKUs relative to the prior window.</div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Product</th>
+                    <th class="text-end">Current</th>
+                    <th class="text-end">Prior</th>
+                    <th class="text-end">Δ Revenue</th>
+                    <th>Label</th>
+                  </tr>
+                </thead>
+                <tbody id="productMoversTable"><tr><td colspan="5" class="text-center text-muted">No product mover data available.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Margin Risk Products</h5>
+            <div class="small text-muted">Products with weak or missing cost-backed margin in the current region.</div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Product</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Margin %</th>
+                    <th>Tag</th>
+                  </tr>
+                </thead>
+                <tbody id="marginRiskTable"><tr><td colspan="4" class="text-center text-muted">No margin-risk products in the current window.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-retention" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Retention / Risk</h4>
+      <p class="text-muted mb-0">Customer inactivity buckets, churn / at-risk lists, and revenue exposure tied to customer health.</p>
+    </div>
+    <div class="row g-2">
+      <div class="col-lg-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Customer Health Buckets</h5>
+            <div class="small text-muted">Current customers split by recent ordering activity.</div>
+          </div>
+          <div class="card-body">
+            <div id="retentionBuckets" class="d-grid gap-2"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-8">
+        <div class="card h-100">
+          <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+              <h5 class="mb-1">Churned / At-Risk Customers</h5>
+              <div class="small text-muted">Searchable customer list with prior-window revenue and revenue share at risk.</div>
+            </div>
+            <div class="d-flex gap-2">
+              <input id="retentionSearch" type="search" class="form-control form-control-sm" placeholder="Search customers">
+              <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="churn" data-format="xlsx" href="#">Export</a>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Customer</th>
+                    <th class="text-end">Revenue</th>
+                    <th>Last Order</th>
+                    <th class="text-end">Days Since</th>
+                    <th class="text-end">Prior Revenue</th>
+                    <th>Risk</th>
+                    <th class="text-end">Share Lost</th>
+                  </tr>
+                </thead>
+                <tbody id="retentionTable"><tr><td colspan="7" class="text-center text-muted">No churn or at-risk customers in the selected window.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-operations" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Operational Mix</h4>
+      <p class="text-muted mb-0">Shipping methods, supplier mix, and weekday behavior across the active filtered region.</p>
+    </div>
+    <div class="row g-2">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-1">Shipping Method Mix</h5>
+            <div class="small text-muted">Revenue share by shipping method, with order depth and AOV context.</div>
+          </div>
+          <div class="card-body">
+            <div class="chart-shell">
+              <div id="regionV2ShippingChart" class="chart-host"></div>
+              <div id="regionV2ShippingEmpty" class="chart-empty d-none">Shipping method data is unavailable for this region.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+              <h5 class="mb-1">Weekday Revenue</h5>
+              <div class="small text-muted">Toggle between revenue, orders, and AOV to spot behavioral patterns.</div>
+            </div>
+            <select id="weekdayMetricSelect" class="form-select form-select-sm">
+              <option value="revenue" selected>Revenue</option>
+              <option value="orders">Orders</option>
+              <option value="aov">AOV</option>
+            </select>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-2" id="weekdaySummary"></div>
+            <div class="chart-shell">
+              <div id="regionV2WeekdayChart" class="chart-host"></div>
+              <div id="regionV2WeekdayEmpty" class="chart-empty d-none">Weekday data is unavailable for this region.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-2 mt-1">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-1">Supplier Mix</h5>
+            <div class="small text-muted">Supplier concentration and operating dependency within the region.</div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-scroll">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Supplier</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Profit</th>
+                    <th class="text-end">Share</th>
+                    <th class="text-end">Orders</th>
+                  </tr>
+                </thead>
+                <tbody id="supplierMixTable"><tr><td colspan="5" class="text-center text-muted">Supplier mix is unavailable for this region.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-insights" class="region-v2-section mb-3">
+    <div class="region-v2-section-head">
+      <h4 class="mb-1">Insights / Action Center</h4>
+      <p class="text-muted mb-0">Concise, data-backed guidance on what changed, what is risky, and where to act next.</p>
+    </div>
+    <div class="row g-2" id="insightCards">
+      <div class="col-lg-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">What changed</div><div class="fw-semibold">No insight yet.</div></div></div></div>
+      <div class="col-lg-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">What is risky</div><div class="fw-semibold">No insight yet.</div></div></div></div>
+      <div class="col-lg-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">What to do next</div><div class="fw-semibold">No insight yet.</div></div></div></div>
+    </div>
+  </section>
+
+  <section id="sec-exports" class="region-v2-section">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-1">Exports</h5>
+        <div class="small text-muted">All exports respect current filters and scope and return full filtered server-side datasets.</div>
+      </div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        <a class="btn btn-sm btn-outline-primary js-region-export" data-dataset="summary" data-format="xlsx" href="#">Summary XLSX</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="customers" data-format="csv" href="#">Customers CSV</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="products" data-format="csv" href="#">Products CSV</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="churn" data-format="xlsx" href="#">Churn XLSX</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="trend" data-format="csv" href="#">Trend CSV</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="shipping" data-format="csv" href="#">Shipping CSV</a>
+        <a class="btn btn-sm btn-outline-secondary js-region-export" data-dataset="suppliers" data-format="csv" href="#">Suppliers CSV</a>
+        <a class="btn btn-sm btn-primary js-region-export" data-dataset="full" data-format="xlsx" href="#">Full Workbook</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/regions_drilldown_v2.js') }}" defer></script>
+{% endblock %}

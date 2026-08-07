@@ -1,0 +1,88 @@
+<section class="overview-panel" id="moversPanel">
+  <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="panel-eyebrow">Top 10 customer movers</div>
+      <h2 class="panel-title">Customer-first movement panel</h2>
+      <div class="panel-subtitle">Customer gainers and decliners lead this workspace by default, while product and region movement remain available from the same governed table contract.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="btn-group btn-group-sm" role="group" id="moversDimToggle">
+        <button class="btn btn-outline-secondary active" data-movers-dim="customer">Customers</button>
+        <button class="btn btn-outline-secondary" data-movers-dim="product">Products</button>
+        <button class="btn btn-outline-secondary" data-movers-dim="region">Regions</button>
+      </div>
+      <select id="moversSortSelect" class="form-select form-select-sm w-auto" aria-label="Movers sort">
+        <option value="delta_abs">Sort: Delta $</option>
+        <option value="delta_pct">Sort: Delta %</option>
+      </select>
+      <button id="moversExportBtn" class="btn btn-sm btn-outline-secondary" type="button" aria-label="Export full movers list">
+        <i class="bi bi-download me-1"></i>Export
+      </button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="focus-summary-grid">
+      <article class="focus-summary-card">
+        <div class="focus-label">Lead customer gainer</div>
+        <div class="focus-title" id="focusLeadCustomerTitle">Loading…</div>
+        <div class="focus-value" id="focusLeadCustomerValue">-</div>
+        <div class="focus-detail" id="focusLeadCustomerDetail">Preparing strongest current-window customer expansion signal.</div>
+      </article>
+      <article class="focus-summary-card">
+        <div class="focus-label">Lead customer decliner</div>
+        <div class="focus-title" id="focusDecliningCustomerTitle">Loading…</div>
+        <div class="focus-value" id="focusDecliningCustomerValue">-</div>
+        <div class="focus-detail" id="focusDecliningCustomerDetail">Preparing highest-dollar current-window customer decline.</div>
+      </article>
+      <article class="focus-summary-card">
+        <div class="focus-label">Customer movement readout</div>
+        <div class="focus-title" id="focusCustomerMotionTitle">Customer breadth</div>
+        <div class="focus-value" id="focusCustomerMotionValue">-</div>
+        <div class="focus-detail" id="focusCustomerMotionDetail">Preparing the top-10 customer movement summary.</div>
+      </article>
+    </div>
+    <div class="section-meta-row">
+      <div class="summary" id="moversSummaryText">Comparing the current filtered window versus the prior comparable window.</div>
+      <div class="movers-legend">Labels use New, Lost, and Low base guardrails so unstable percentages do not overstate movement.</div>
+    </div>
+    <div id="topMoversEmpty" class="text-muted small d-none">No movement data for the selected window.</div>
+    <div class="row g-3">
+      <div class="col-xl-6">
+        <div class="movers-slab h-100">
+          <div class="movers-direction mb-2">Gainers</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col" class="text-end">Current</th>
+                  <th scope="col" class="text-end">Delta $</th>
+                  <th scope="col" class="text-end">Delta %</th>
+                </tr>
+              </thead>
+              <tbody id="moversGainersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="movers-slab h-100">
+          <div class="movers-direction mb-2">Decliners</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col" class="text-end">Current</th>
+                  <th scope="col" class="text-end">Delta $</th>
+                  <th scope="col" class="text-end">Delta %</th>
+                </tr>
+              </thead>
+              <tbody id="moversDeclinersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

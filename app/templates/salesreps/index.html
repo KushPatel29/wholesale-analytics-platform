@@ -1,0 +1,939 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Sales Reps Performance{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260411-v20') }}">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.3.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.3.2/dist/maplibre-gl.js" defer></script>
+{% endblock %}
+
+{% block content %}
+
+<div id="SalesRepsApp"
+     class="salesreps-v2"
+     data-page="salesreps"
+     data-theme-ready="true"
+     data-bundle-url="{{ url_for('bundles.salesreps_bundle') }}"
+     data-export-xlsx="{{ url_for('salesreps.export_xlsx') }}"
+     data-export-csv="{{ url_for('salesreps.export_csv') }}"
+     data-drilldown-template="{{ url_for('salesreps.rep_detail', rep_id='__ID__') }}"
+     data-units-label="{{ units_label }}"
+     data-asp-label="{{ asp_label }}"
+     data-asp-lb-label="{{ asp_lb_label }}">
+
+  <section class="sr-page-toolbar mb-3" aria-label="Sales reps workspace controls">
+    <button type="button" class="btn btn-outline-secondary btn-sm sr-filter-toggle" id="srFilterDrawerToggle">
+      Filters
+    </button>
+    <div class="sr-filter-breadcrumb-shell">
+      <div class="sr-filter-breadcrumb-label">Active Scope</div>
+      <div class="sr-filter-breadcrumb" id="srFilterBreadcrumb">All Time | All Regions | All Reps</div>
+    </div>
+  </section>
+
+  <section class="card shadow-sm border-0 sr-hero mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+        <div class="sr-hero-copy">
+          <p class="text-uppercase text-muted small mb-1">Sales Intelligence</p>
+          <h2 class="fw-bold mb-1">Sales Executive Dashboard</h2>
+          <p class="text-muted mb-2">
+            Revenue, profitability, account health, and territory performance — all under the current ownership lens.
+            Period comparisons reflect today’s rep structure for consistent, actionable attribution.
+          </p>
+          <div class="text-muted small" id="srWhatChanged">What changed: loading...</div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="badge text-bg-primary-subtle border" id="srModeChip">Mode: --</span>
+          <span class="badge text-bg-light border" id="srBridgeChip">Ownership bridge: --</span>
+          <span class="badge text-bg-light border" id="srActiveRepsChip">Visible reps: --</span>
+          <span class="badge text-bg-light border" id="srCoverageChip">Coverage: --</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm sr-health-btn" id="srSystemHealthBtn" data-bs-toggle="popover" data-bs-trigger="focus" data-bs-html="true" title="System Health">
+            System Health
+          </button>
+          <span class="text-muted small" id="srLastRefresh">Last refresh: --</span>
+          <div class="dropdown">
+            <button class="btn btn-primary btn-sm dropdown-toggle" type="button" id="salesrepsActionsMenu" data-bs-toggle="dropdown" aria-expanded="false">
+              Actions
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="salesrepsActionsMenu">
+              <li><a class="dropdown-item" id="salesrepsExportXlsx" href="{{ url_for('salesreps.export_xlsx') }}">Export XLSX</a></li>
+              <li><a class="dropdown-item" id="salesrepsExportCsv" href="{{ url_for('salesreps.export_csv') }}">Export CSV</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item" type="button" id="salesrepsActionCrm">Sync to CRM <span class="badge text-bg-light ms-2">Soon</span></button></li>
+              <li><button class="dropdown-item" type="button" id="salesrepsActionSlack">Notify Rep via Slack <span class="badge text-bg-light ms-2">Soon</span></button></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="sr-toolbar">
+        <div class="sr-toolbar-block">
+          <label for="srAttributionMode" class="small text-muted">Reporting View</label>
+          <select id="srAttributionMode" class="form-select form-select-sm" aria-label="Choose reporting view">
+            <option value="current_owner" selected>Current Owner Roll-Up</option>
+            <option value="historical_rep">Historical Rep View</option>
+          </select>
+        </div>
+        <div class="sr-toolbar-block" id="srFormerToggleWrap">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="srIncludeFormerReps">
+            <label class="form-check-label small" for="srIncludeFormerReps">Include former reps in historical view</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sr-alerts mt-3" id="srWarnings" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Leadership Summary</p>
+      <h3 class="mb-1">Executive Scorecard And Signal Strip</h3>
+      <p class="text-muted mb-0" id="srSectionLeadershipSubtitle">High-level performance, ownership mix, concentration risk, and the fastest leadership callouts in one scan.</p>
+    </div>
+  </section>
+
+  <section class="mb-3">
+    <div class="sr-summary-narrative sr-summary-narrative--loading" id="srSummaryNarrative" aria-live="polite"></div>
+  </section>
+
+  <section class="mb-4">
+    <div class="row g-3 scorecard-v2" id="srKpiGrid" aria-live="polite">
+      <!-- Primary: Revenue / Profit -->
+      <div class="col-12 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm scorecard-column primary-column">
+          <div class="card-header bg-primary text-white py-1 fw-bold small">PRIMARY: REVENUE / PROFIT</div>
+          <div class="card-body p-2">
+            <div class="row g-2">
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="revenue"><div class="label">Revenue <span id="statusRevenue" class="status-dot"></span></div><div class="value" id="kpiRevenue"><span class="skeleton"></span></div><div class="delta" id="kpiRevenueDelta"><span class="skeleton" style="width:40px"></span></div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="profit"><div class="label">Profit</div><div class="value" id="kpiProfit"><span class="skeleton"></span></div><div class="delta" id="kpiProfitDelta"><span class="skeleton" style="width:40px"></span></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Efficiency: Margin / ASP -->
+      <div class="col-12 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm scorecard-column efficiency-column">
+          <div class="card-header bg-success text-white py-1 fw-bold small">EFFICIENCY: MARGIN / ASP / ORDER</div>
+          <div class="card-body p-2">
+            <div class="row g-2">
+              <div class="col-12"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="margin_pct"><div class="label">Margin % <span id="statusMargin" class="status-dot"></span></div><div class="value" id="kpiMargin"><span class="skeleton"></span></div><div class="delta" id="kpiMarginDelta"><span class="skeleton" style="width:40px"></span></div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="aov"><div class="label">AOV <span title="Average Order Value = Revenue ÷ Order Count. T12M sparkline shown when trailing data is available." style="cursor:help;font-size:0.8em">ⓘ</span></div><div class="value" id="kpiAov"><span class="skeleton"></span></div><div class="delta" id="kpiAovDelta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="ppo"><div class="label">Profit / Order <span title="Total gross profit ÷ order count. Reveals rep efficiency. MoM (FMTD) delta shown below." style="cursor:help;font-size:0.8em">ⓘ</span></div><div class="value" id="kpiPpo"><span class="skeleton"></span></div><div class="delta" id="kpiPpoDelta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="asp"><div class="label" id="kpiAspLabel">ASP</div><div class="value" id="kpiAsp"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="asp_lb"><div class="label" id="kpiAspLbLabel">ASP / lb</div><div class="value" id="kpiAspLb"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Portfolio: Customers / Volume -->
+      <div class="col-12 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm scorecard-column portfolio-column">
+          <div class="card-header bg-info text-white py-1 fw-bold small">PORTFOLIO: CUSTOMERS / VOLUME</div>
+          <div class="card-body p-2">
+            <div class="row g-2">
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="customers"><div class="label">Customers</div><div class="value" id="kpiCustomers"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="orders"><div class="label">Orders</div><div class="value" id="kpiOrders"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="weight_lb"><div class="label">Weight (LB)</div><div class="value" id="kpiWeight"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+              <div class="col-6"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="units"><div class="label" id="kpiUnitsLabel">Units</div><div class="value" id="kpiUnits"><span class="skeleton"></span></div><div class="delta">&nbsp;</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Intelligence: Leakage / Churn -->
+      <div class="col-12 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm scorecard-column intelligence-column">
+          <div class="card-header bg-dark text-white py-1 fw-bold small">INTELLIGENCE: LEAKAGE / CHURN</div>
+          <div class="card-body p-2">
+            <div class="row g-2">
+              <div class="col-12"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="leakage_revenue"><div class="label">Margin Leakage <span id="statusLeakage" class="status-dot"></span></div><div class="value" id="kpiLeakage"><span class="skeleton"></span></div><div class="delta" id="kpiLeakageDelta">&nbsp;</div></div></div>
+              <div class="col-12"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="overdue_customers"><div class="label">Overdue Accounts</div><div class="value" id="kpiOverdue"><span class="skeleton"></span></div><div class="delta" id="kpiOverdueDelta">Predictive Churn</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live-Action Geospatial Map -->
+  <section class="mb-4" id="srMapSection">
+    <article class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-semibold">Live Account Map</div>
+          <div class="text-muted small">Customer locations sized by revenue. Pulsing red halo = silent &gt; 30 days. Click a territory bar or bubble to filter the dashboard.</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="sr-map-legend d-none d-lg-flex" id="srMapLegend"></div>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Map Mode">
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeBubbles" value="bubbles" checked autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModeBubbles" title="Standard point map">Customers</label>
+            
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeOpportunity" value="opportunity" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModeOpportunity" title="Weighted opportunity heatmap">Opportunity</label>
+
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeRisk" value="risk" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModeRisk" title="Risk concentration heatmap">Risk</label>
+
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeBeef" value="beef" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModeBeef" title="Beef penetration heatmap">Beef</label>
+
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModePoultry" value="poultry" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModePoultry" title="Poultry penetration heatmap">Poultry</label>
+
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModePork" value="pork" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModePork" title="Pork penetration heatmap">Pork</label>
+
+            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeHybrid" value="hybrid" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="srMapModeHybrid" title="Opportunity heatmap with customer bubbles">Hybrid</label>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" id="srMapResetBtn" title="Reset territory filter">Reset Filter</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div id="srLiveMap" class="sr-live-map" aria-label="Customer account geospatial map"></div>
+        <div id="srMapPlaceholder" class="sr-map-placeholder">
+          <div class="sr-map-placeholder-icon">&#127758;</div>
+          <div class="fw-semibold text-secondary">Map loading...</div>
+          <div class="text-muted small mt-1">Account locations will appear once data is ready.</div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Insight Strip</div>
+          <div class="text-muted small">Fast performance callouts, ownership context, and the strongest signals visible in the current slice.</div>
+        </div>
+        <div class="card-body">
+          <div class="sr-chip-row mb-3" id="srInsightChips" aria-live="polite"></div>
+          <div class="sr-insight-narrative mb-3" id="srInsightNarrative">Loading leadership signals...</div>
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <div class="sr-subpanel h-100">
+                <div class="sr-subpanel-title">Ownership Highlights</div>
+                <ul class="sr-insight-list" id="srOwnershipHighlights"></ul>
+              </div>
+            </div>
+            <div class="col-lg-6">
+              <div class="sr-subpanel h-100">
+                <div class="sr-subpanel-title">Risk Watch</div>
+                <ul class="sr-insight-list" id="srRiskFlags"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Book Composition</div>
+          <div class="text-muted small">Direct-owned versus inherited exposure, account-move counts, and concentration readouts.</div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="sr-highlight-card h-100" id="srDirectRevenueCard">
+                <div class="label">Direct Revenue</div>
+                <div class="value" id="srDirectRevenue">--</div>
+                <div class="delta" id="srDirectRevenueNote">--</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="sr-highlight-card h-100" id="srDirectCustomersCard">
+                <div class="label">Direct Customers</div>
+                <div class="value" id="srDirectCustomers">--</div>
+                <div class="delta" id="srDirectCustomersNote">--</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="sr-highlight-card h-100" id="srConcentrationCard">
+                <div class="label">Concentration Risk</div>
+                <div class="value" id="srConcentrationSummary">--</div>
+                <div class="delta" id="srConcentrationNote">--</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="sr-highlight-card h-100" id="srAccountMovesCard">
+                <div class="label">Largest Moves</div>
+                <div class="value" id="srAccountMovesSummary">--</div>
+                <div class="delta" id="srAccountMovesNote">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Ownership / Portfolio Intelligence</p>
+      <h3 class="mb-1">Current Owner Coverage, Territory Mix, And Transfer Context</h3>
+      <p class="text-muted mb-0" id="srSectionOwnershipSubtitle">Where the visible book sits today, which accounts were inherited, and where exceptions or mapping risk remain.</p>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Ownership &amp; Portfolio Summary</div>
+            <div class="text-muted small">Current owner context, inherited books, territories, and who replaced whom.</div>
+          </div>
+          <div class="text-muted small" id="srPortfolioFocus">Visible scope: --</div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 mb-3">
+            <div class="col-md-3">
+              <div class="sr-highlight-card">
+                <div class="label">Inherited Customers</div>
+                <div class="value" id="srInheritedCustomers">--</div>
+                <div class="delta" id="srInheritedCustomersNote">--</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="sr-highlight-card">
+                <div class="label">Territories In Scope</div>
+                <div class="value" id="srPortfolioTerritoryCount">--</div>
+                <div class="delta" id="srPortfolioTopTerritory">--</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="sr-highlight-card">
+                <div class="label">Replaced Reps</div>
+                <div class="value" id="srPortfolioReplacedCount">--</div>
+                <div class="delta" id="srPortfolioReplacedNames">--</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="sr-highlight-card">
+                <div class="label">Unassigned Customers</div>
+                <div class="value" id="srUnassignedCustomers">--</div>
+                <div class="delta" id="srUnassignedRevenueNote">--</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-lg-6">
+              <div class="sr-subpanel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="sr-subpanel-title mb-0">Top Territories</div>
+                </div>
+                <div class="sr-territory-workbench">
+                  <div class="sr-territory-chart-shell">
+                    <div id="srTerritorySummaryChips" class="d-flex flex-wrap gap-2 mb-2" style="font-size:0.75rem"></div>
+                    <div class="text-muted small mb-2">Fiscal revenue stacked by the top five territories in scope, with target overlays when prior-year history is missing.</div>
+                    <div class="sr-territory-stage">
+                      <canvas id="srTerritoryChart" style="width:100%;height:100%"></canvas>
+                    </div>
+                    <div id="srTerritoryMonthSummary" class="sr-territory-month-summary"></div>
+                  </div>
+                  <div class="sr-territory-spotlight" id="srTerritorySpotlight"></div>
+                </div>
+                <ul class="sr-list d-none" id="srTerritoryList"></ul>
+              </div>
+            </div>
+            <div class="col-lg-6">
+              <div class="sr-subpanel">
+                <div class="sr-subpanel-title">Replacement / Transfer Audit</div>
+                <ul class="sr-list" id="srReplacementPairs"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Coverage &amp; Exceptions</div>
+          <div class="text-muted small">Compact current-owner coverage review with visible fact fallback and exception buckets. Raw owner IDs are never shown here.</div>
+        </div>
+        <div class="card-body">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Bucket</th>
+                <th scope="col" class="text-end">Customers</th>
+                <th scope="col" class="text-end">Revenue</th>
+              </tr>
+            </thead>
+            <tbody id="srDataQualityBody">
+              <tr><td colspan="3" class="text-muted">Loading ownership review...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Trend Intelligence</p>
+      <h3 class="mb-1">Current Versus Prior Performance, Rep Momentum, And Transfer Flow</h3>
+      <p class="text-muted mb-0" id="srSectionTrendSubtitle">Aligned current-period trends, prior-year comparisons, transfer exposure, and rep-level performance movement.</p>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Current vs Prior-Year Trend</div>
+            <div class="text-muted small">Current-owner history appends to the active book so period-over-period comparisons stay meaningful.</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="position-relative">
+            <div style="height:320px" class="sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="monthlyCompareChart"></canvas></div>
+            <button id="btnMonthlyComparePng"
+                    class="btn btn-sm btn-outline-secondary sr-chart-dl-btn"
+                    title="Download chart as PNG"
+                    style="position:absolute;top:6px;right:6px;display:none;font-size:0.75rem;padding:2px 10px;border-radius:20px">
+              &#11015; PNG
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Transferred Revenue</div>
+            <div class="text-muted small">Transferred-in versus transferred-out revenue by current owner.</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="transferChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-7">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Revenue Trend by Rep</div>
+            <div class="text-muted small">Top current owners over time with current-period, prior-year, YoY, and focus-mode controls.</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">
+            <label for="srTrendMetric" class="small text-muted">Metric</label>
+            <select id="srTrendMetric" class="form-select form-select-sm" aria-label="Trend metric">
+              <option value="revenue" selected>Revenue</option>
+              <option value="profit">Profit</option>
+              <option value="margin_pct">Margin %</option>
+              <option value="customers">Customers</option>
+              <option value="weight_lb">Shipped LB</option>
+            </select>
+            <span class="small text-muted">Grain</span>
+            <!-- Phase 2: pill toggle syncs with hidden select -->
+            <div class="sr-grain-pills" id="srGrainPills" role="group" aria-label="Trend time grain">
+              <button type="button" class="sr-grain-pill active" data-grain="monthly">Monthly</button>
+              <button type="button" class="sr-grain-pill" data-grain="quarterly">Quarterly</button>
+              <button type="button" class="sr-grain-pill" data-grain="ttm">Trailing 12M</button>
+            </div>
+            <select id="srTrendGrain" class="form-select form-select-sm sr-chart-select" aria-label="Trend time grain" style="display:none">
+              <option value="monthly" selected>Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="ttm">Trailing 12M</option>
+            </select>
+            <label for="srTrendView" class="small text-muted">View</label>
+            <select id="srTrendView" class="form-select form-select-sm" aria-label="Trend comparison view">
+              <option value="absolute" selected>Value</option>
+              <option value="yoy_delta">YoY %</option>
+              <option value="index">Index 100</option>
+            </select>
+            <label for="srTopN" class="small text-muted">Top</label>
+            <select id="srTopN" class="form-select form-select-sm" aria-label="Rows shown in chart">
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="srTrendReset">Clear Focus</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="small text-muted mb-2" id="srTrendSelectionSummary">Showing the top visible reps under the current filter set.</div>
+          <div class="ratio ratio-16x9 sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="trendChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-5">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Rep Leaderboard</div>
+            <div class="text-muted small">Compare current owners on the metric leadership cares about right now.</div>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <label for="srMetricToggle" class="small text-muted">Metric</label>
+            <select id="srMetricToggle" class="form-select form-select-sm" aria-label="Choose chart metric">
+              <option value="revenue" selected>Revenue</option>
+              <option value="profit">Profit</option>
+              <option value="margin_pct">Margin %</option>
+              <option value="customers">Customers</option>
+              <option value="weight_lb">Shipped LB</option>
+            </select>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="srLeaderboardDirectOnly">
+              <label class="form-check-label small" for="srLeaderboardDirectOnly">Direct-only</label>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="topRepsChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Concentration Risk By Rep</div>
+          <div class="text-muted small">Top-customer and top-five exposure so leadership can spot fragile books quickly.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="concentrationChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Rep Efficiency</div>
+          <div class="text-muted small">Revenue versus customer count, with bubble size reflecting profit contribution.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="effChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Profit Versus Revenue</div>
+          <div class="text-muted small">Quadrant view of large books, high-profit books, and underperforming owner portfolios.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="profitRevenueChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Phase 3F: upgraded section header -->
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Customer Intelligence</p>
+      <h3 class="mb-1">All Accounts, Movers, And Owner Context</h3>
+      <p class="text-muted mb-0">
+        <span id="srCustSummaryLine">Customer-level contribution, movement, and owner accountability.</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <button id="btnExportFollowUpHeader"
+              onclick="openFollowUpDrawer()"
+              class="btn btn-sm"
+              style="background:#660000;color:#fff;border:none;border-radius:6px;font-size:0.82rem">
+        &#128203; Daily Priority Queue
+      </button>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-7">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Top Customers</div>
+            <div class="text-muted small">Revenue, profit, and YoY movement for the customers inside the visible current-owner portfolio.</div>
+          </div>
+        </div>
+        <div class="card-body sr-top-customers-card">
+          <div class="sr-gap-focus-panel d-none" id="srGapFocusPanel" aria-live="polite">
+            <div class="sr-gap-focus-head">
+              <div>
+                <div class="sr-gap-focus-kicker">Gap Analysis</div>
+                <div class="sr-gap-focus-title" id="srGapFocusTitle">Customer gap analysis</div>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="srGapFocusClear">Clear Focus</button>
+            </div>
+            <div class="sr-gap-focus-meta" id="srGapFocusMeta">Select a customer from the priority queue to open gap analysis details.</div>
+            <div class="sr-gap-focus-grid" id="srGapFocusGrid"></div>
+          </div>
+          <div class="sr-customer-toolbar" id="srCustomerToolbar">
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+              <input id="srCustomerSearch" type="text"
+                     class="form-control form-control-sm"
+                     placeholder="&#128269; Search customers, owners, or territories..."
+                     style="max-width:340px">
+              <button id="btnExportCustCSV"
+                      class="btn btn-sm btn-outline-secondary ms-auto">
+                &#11015; Export View
+              </button>
+              <button id="btnExportFollowUp"
+                      class="btn btn-sm"
+                      onclick="openFollowUpDrawer()"
+                      style="background:#660000;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:0.82rem">
+                &#128203; Daily Priority Queue
+              </button>
+            </div>
+            <div class="sr-owner-pills mb-2" id="srOwnerPills"></div>
+            <div id="srFollowUpToast" class="alert alert-success py-1 px-3 small mb-2" style="display:none"></div>
+            <div class="sr-customer-view-toggle mb-2" role="group" aria-label="Customer view">
+              <button class="sr-toggle-btn active" data-customer-view="all">All Accounts</button>
+              <button class="sr-toggle-btn" data-customer-view="best">&#9733; Top 10 Best</button>
+              <button class="sr-toggle-btn" data-customer-view="atrisk">&#9888; Top 10 At-Risk</button>
+            </div>
+          </div>
+          <div class="sr-top-customers-wrap" id="srTopCustomersWrap">
+            <table class="table table-sm align-middle mb-0" id="srTopCustomersTable">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="sortable" data-top-customers-sort="customer_name" tabindex="0">Customer</th>
+                  <th scope="col" class="sortable" data-top-customers-sort="_risk_score" tabindex="0">
+                    Risk <span title="Critical = Silent &gt; 30d and MoM revenue &lt; -20%" style="cursor:help">&#9432;</span>
+                  </th>
+                  <th scope="col" class="sortable" data-top-customers-sort="account_owner_name" tabindex="0">Owner</th>
+                  <th scope="col" class="sortable" data-top-customers-sort="territory_name" tabindex="0">Territory</th>
+                  <th scope="col" class="text-end sortable" data-top-customers-sort="revenue" tabindex="0">Revenue</th>
+                  <th scope="col" class="text-end sortable" data-top-customers-sort="profit" tabindex="0">Profit</th>
+                  <th scope="col" class="text-end sortable" data-top-customers-sort="yoy_delta_revenue" tabindex="0">YoY Delta</th>
+                  <th scope="col" class="text-end sortable" data-top-customers-sort="mom_revenue_pct" tabindex="0">MoM Velocity</th>
+                  <th scope="col" class="text-center">Gap Analysis</th>
+                  <th scope="col" class="text-end sortable" data-top-customers-sort="last_order_date" tabindex="0" title="Time since the last order">Silent <span style="cursor:help">&#9432;</span></th>
+                </tr>
+              </thead>
+              <tbody id="srTopCustomersBody">
+                <tr><td colspan="10" class="text-muted">Loading customers...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-5">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Customer Movers</div>
+          <div class="text-muted small">Side-by-side movement scan with momentum context for the biggest book changes. <span id="srMoversStatLine" class="ms-1"></span></div>
+        </div>
+        <div class="card-body sr-movers-body">
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <div class="sr-subpanel sr-movers-panel sr-movers-gained">
+                <div class="sr-movers-pane-header">
+                  <span class="sr-movers-pane-badge badge-gained">&#9650; Gained</span>
+                  <span class="text-muted small">New wins &amp; expanding accounts</span>
+                </div>
+                <ul class="sr-list" id="srCustomerMoversUp"></ul>
+              </div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <div class="sr-subpanel sr-movers-panel sr-movers-lost">
+                <div class="sr-movers-pane-header">
+                  <span class="sr-movers-pane-badge badge-lost">&#9660; Lost</span>
+                  <span class="text-muted small">Lost &amp; contracting accounts</span>
+                </div>
+                <ul class="sr-list" id="srCustomerMoversDown"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Lost Accounts Panel -->
+  <section class="mb-4" id="lostAccountsPanel" style="border-left:3px solid #C5A059;padding-left:0">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center"
+           style="cursor:pointer" onclick="srToggleLostPanel()" role="button" aria-expanded="false" aria-controls="lostAccountsBody">
+        <div class="fw-bold">Lost Accounts &#8212; Follow-Up Opportunities</div>
+        <div class="d-flex align-items-center gap-2">
+          <span id="lostAccountsBadge" class="badge bg-secondary">0</span>
+          <i id="lostPanelChevron" class="bi bi-chevron-down" style="transition:transform 0.2s;font-size:1rem"></i>
+        </div>
+      </div>
+      <div id="lostAccountsBody" class="card-body" style="display:none">
+        <p class="text-muted small">Loading...</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Protein / Product Intelligence</p>
+      <h3 class="mb-1">Protein Mix, Margin Performance, And Contribution Detail</h3>
+      <p class="text-muted mb-0" id="srSectionProteinSubtitle">Category performance, mix shifts, and protein-level details tied back to customers and owner portfolios.</p>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-5">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Protein / Category Mix</div>
+          <div class="text-muted small">Revenue, profit, margin, and YoY contribution shifts by protein.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="srProteinChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-7">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Protein Performance</div>
+          <div class="text-muted small">Gross profit and variance by protein family.</div>
+        </div>
+        <div class="card-body sr-scroll-card">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col" class="sortable" data-protein-sort="protein_family" tabindex="0">Protein</th>
+                <th scope="col" class="text-end sortable" data-protein-sort="revenue" tabindex="0">Revenue</th>
+                <th scope="col" class="text-end sortable" data-protein-sort="profit" tabindex="0">Profit</th>
+                <th scope="col" class="text-end sortable" data-protein-sort="margin_pct" tabindex="0">Margin %</th>
+                <th scope="col" class="text-end sortable" data-protein-sort="share_pct" tabindex="0">Share %</th>
+                <th scope="col" class="text-end sortable" data-protein-sort="yoy_delta_revenue" tabindex="0">YoY Δ $</th>
+              </tr>
+            </thead>
+            <tbody id="srProteinTableBody">
+              <tr><td colspan="6" class="text-muted">Loading protein performance...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sr-section-heading mb-3">
+    <div>
+      <p class="sr-section-kicker mb-1">Rep Ranking / Comparison</p>
+      <h3 class="mb-1">Share, Pricing Leadership, And Full Rep Comparison</h3>
+      <p class="text-muted mb-0" id="srSectionComparisonSubtitle">Pareto concentration, pricing leaders, and the detailed rep comparison grid leadership uses to examine owner performance.</p>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-7">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Revenue Share Concentration</div>
+          <div class="text-muted small">Top rep contribution and cumulative concentration under the selected metric.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-16x9 sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="revenueShareChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-5">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">ASP Leaders</div>
+          <div class="text-muted small">Top average selling price leaders across the visible owner book.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="aspChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="card shadow-sm border-0 mb-4" id="srTableSection">
+    <div class="card-header bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <span class="fw-semibold">Rep Comparison Table</span>
+        <div class="text-muted small">Current owner roll-up is the default; switch to historical view only when you need transaction-owner accountability.</div>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <!-- Phase 4D: column presets -->
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="srColumnPresetBtn" data-bs-toggle="dropdown" aria-expanded="false">
+            <span id="srColumnPresetLabel">Full View ▾</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" data-col-preset="Full View">Full View</button></li>
+            <li><button class="dropdown-item" data-col-preset="Executive">Executive</button></li>
+            <li><button class="dropdown-item" data-col-preset="Risk View">Risk View</button></li>
+            <li><button class="dropdown-item" data-col-preset="Scott's View">Scott's View</button></li>
+          </ul>
+        </div>
+        <div class="dropdown" data-bs-auto-close="outside">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="srColumnToggleMenu" data-bs-toggle="dropdown" aria-expanded="false">
+            Column Toggle
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-3 sr-column-menu" aria-labelledby="srColumnToggleMenu">
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="revenue" checked> Revenue</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="profit" checked> Profit</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="margin_pct" checked> Margin %</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="weight_lb" checked> Shipped LB</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="active_customers" checked> Active Cust.</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="current_owned_customers" checked> Current Owned</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="inherited_customers" checked> Inherited</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="transferred_in_revenue" checked> Transferred In</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="transferred_out_revenue" checked> Transferred Out</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="yoy_revenue_pct" checked> YoY Rev %</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="territory_count" checked> Territories</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="replaced_reps"> Replaced Reps</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="top_territory"> Top Territory</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="top_customer" checked> Top Customer</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="top_protein" checked> Top Protein</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="flags" checked> Flags</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="health" checked> Health Score</label>
+            <label class="sr-column-option"><input type="checkbox" data-col-toggle="quartile" checked> Smart Rank</label>
+          </div>
+        </div>
+        <label class="visually-hidden" for="srSearchInput">Search sales rep</label>
+        <input id="srSearchInput" class="form-control form-control-sm" type="search" placeholder="Search rep, customer, or territory" aria-label="Search by rep name">
+        <label class="small text-muted" for="srPageSize">Rows</label>
+        <select id="srPageSize" class="form-select form-select-sm" aria-label="Rows per page">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Rep Comparison Toolbar (appears when reps are selected) -->
+    <div id="srCompareToolbar" class="sr-compare-toolbar d-none" role="status" aria-live="polite">
+      <span id="srCompareCount">0 reps selected</span>
+      <button class="btn btn-primary btn-sm" id="srCompareBtn" disabled>Compare</button>
+      <button class="btn btn-outline-light btn-sm" id="srClearCompare">Clear</button>
+    </div>
+
+    <div class="table-responsive sr-table-wrap" id="srTableWrap">
+      <table class="table table-sm table-hover table-striped align-middle mb-0" id="srTable">
+        <thead class="table-light sticky-header">
+          <tr>
+            <th scope="col" class="col-select text-center"><input type="checkbox" id="srSelectAll" class="form-check-input" title="Select top 4 reps for comparison" aria-label="Select top 4 reps"></th>
+            <th scope="col" class="sticky-col sortable" tabindex="0" data-sort-key="rep_name">Rep</th>
+            <th scope="col" class="text-center sortable col-health" tabindex="0" data-sort-key="health_score" title="Health Index: % of customers who placed an order in the last 30 days. Green ≥ 80%, Yellow ≥ 60%, Red below.">Health (30d)</th>
+            <th scope="col" class="text-center sortable col-direct_ratio" tabindex="0" data-sort-key="inherited_revenue_share_pct" title="Direct versus inherited revenue mix">Direct / Inherited</th>
+            <th scope="col" class="text-center sortable col-quartile" tabindex="0" data-sort-key="revenue_quartile" title="Smart Rank: composite score weighted 60% Revenue + 40% Margin. #1 = strongest overall performer.">Smart Rank</th>
+            <th scope="col" class="text-end sortable col-revenue" tabindex="0" data-sort-key="revenue">Revenue</th>
+            <th scope="col" class="text-end sortable col-profit" tabindex="0" data-sort-key="profit">Profit</th>
+            <th scope="col" class="text-end sortable col-margin_pct" tabindex="0" data-sort-key="margin_pct">Margin %</th>
+            <th scope="col" class="text-end sortable col-silent_days" tabindex="0" data-sort-key="last_order_date">Silent (Days)</th>
+            <th scope="col" class="text-end sortable col-mom_revenue_delta" tabindex="0" data-sort-key="mom_revenue_pct">MoM Momentum</th>
+            <th scope="col" class="text-end sortable col-yoy_revenue_delta" tabindex="0" data-sort-key="yoy_revenue_delta">YoY Delta</th>
+            <th scope="col" class="text-end sortable col-weight_lb" tabindex="0" data-sort-key="weight_lb">Shipped LB</th>
+            <th scope="col" class="text-end sortable col-active_customers" tabindex="0" data-sort-key="active_customers">Active Cust.</th>
+            <th scope="col" class="text-end sortable col-current_owned_customers" tabindex="0" data-sort-key="current_owned_customers">Current Owned</th>
+            <th scope="col" class="text-end sortable col-inherited_customers" tabindex="0" data-sort-key="inherited_customers">Inherited</th>
+            <th scope="col" class="text-end sortable col-transferred_in_revenue" tabindex="0" data-sort-key="transferred_in_revenue">Transferred In</th>
+            <th scope="col" class="text-end sortable col-transferred_out_revenue" tabindex="0" data-sort-key="transferred_out_revenue">Transferred Out</th>
+            <th scope="col" class="text-end sortable col-yoy_revenue_pct" tabindex="0" data-sort-key="yoy_revenue_pct" title="Year-over-Year Revenue % — same fiscal month comparison based on the Period Financial Model (PFM). Compares current period against the identical fiscal-month window in the prior year.">YoY Rev % <span style="cursor:help;font-size:0.75em;opacity:0.7" aria-label="Same fiscal month comparison (PFM)">ⓘ</span></th>
+            <th scope="col" class="text-end sortable col-territory_count" tabindex="0" data-sort-key="territory_count">Territories</th>
+            <th scope="col" class="sortable col-replaced_reps" tabindex="0" data-sort-key="replaced_rep_count">Replaced Reps</th>
+            <th scope="col" class="col-top_territory">Top Territory</th>
+            <th scope="col" class="col-top_customer">Top Customer</th>
+            <th scope="col" class="col-top_protein" data-sort="top_protein_family">Top Protein</th>
+            <th scope="col" class="text-end col-leakage" data-sort="leakage_revenue" title="Revenue sold below minimum protein margin target">Leakage</th>
+            <th scope="col" class="col-protein_penetration" title="Species penetration across healthy customers">Protein Mix</th>
+            <th scope="col" class="text-end col-overdue_customers" data-sort="overdue_customers" title="Customers missing their historical order frequency pulse">Overdue</th>
+            <th scope="col" class="col-flags">Alerts</th>
+
+            <th scope="col" class="text-end">Open</th>
+          </tr>
+        </thead>
+        <tbody id="salesreps-table-body"></tbody>
+        <tfoot id="salesreps-table-foot"></tfoot>
+      </table>
+      <!-- Phase 6D: empty state shown when no reps match filters -->
+      <div id="srTableEmpty">
+        <div class="sr-empty-icon">&#128202;</div>
+        <div class="fw-semibold text-secondary">No reps match the current filters</div>
+        <div class="text-muted mt-1">Try widening the date range or clearing the search.</div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+      <div id="salesrepsPagerSummary" class="text-muted small"></div>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Pagination controls">
+        <button class="btn btn-outline-secondary" id="salesrepsPrev" type="button">Prev</button>
+        <button class="btn btn-outline-secondary" id="salesrepsNext" type="button">Next</button>
+      </div>
+    </div>
+    <div id="salesrepsPagerIndicator" class="text-muted small px-3 pb-2"></div>
+  </section>
+
+  <div id="srFilterDrawer" class="sr-filter-drawer" role="dialog" aria-modal="true" aria-label="Global filters" style="display:none">
+    <div class="sr-filter-drawer-backdrop" id="srFilterDrawerBackdrop"></div>
+    <div class="sr-filter-drawer-panel">
+      <div class="sr-filter-drawer-header">
+        <div>
+          <div class="fw-bold">Global Filters</div>
+          <div class="text-muted small">Refine the sales workspace without consuming page height.</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" id="srFilterDrawerClose" aria-label="Close filters"></button>
+      </div>
+      <div class="sr-filter-drawer-body">
+        <div id="srFilterDrawerMount"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Follow-Up Priority Queue Side Drawer -->
+  <div id="srFollowUpDrawer" class="sr-followup-drawer" role="dialog" aria-modal="true" aria-label="Daily Priority Queue" style="display:none">
+    <div class="sr-followup-drawer-backdrop" onclick="closeFollowUpDrawer()"></div>
+    <div class="sr-followup-drawer-panel">
+      <div class="sr-followup-drawer-header">
+        <div>
+          <div class="fw-bold">Daily Priority Queue</div>
+          <div class="text-muted small" id="srDrawerSubtitle">At-risk customers ranked by urgency</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-outline-secondary btn-sm" onclick="exportFollowUpList()">&#11015; Export CSV</button>
+          <button class="btn-close" onclick="closeFollowUpDrawer()" aria-label="Close drawer"></button>
+        </div>
+      </div>
+      <div class="sr-followup-drawer-body" id="srFollowUpDrawerBody">
+        <p class="text-muted">Loading priority queue...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rep Side-by-Side Comparison Modal -->
+  <div class="modal fade" id="srCompareModal" tabindex="-1" aria-labelledby="srCompareModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#1A0F0A;color:#FDFBF7;border-bottom:2px solid #660000">
+          <h5 class="modal-title" id="srCompareModalLabel">Rep Side-by-Side Comparison</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-0" id="srCompareModalBody">
+          <p class="text-muted p-3 mb-0">Select 2–4 reps from the table, then click Compare.</p>
+        </div>
+        <div class="modal-footer border-0" style="background:#F8FAFC;border-top:1px solid #E2E8F0">
+          <span class="text-muted small me-auto">Gold highlight = leader in that metric</span>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/salesreps.js', v='20260411-v21') }}" defer></script>
+{% endblock %}

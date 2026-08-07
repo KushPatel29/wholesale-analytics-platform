@@ -1,0 +1,243 @@
+.region-drilldown-v2 {
+  --region-surface: #f8fafc;
+  --region-border: rgba(15, 23, 42, 0.08);
+  --region-ink: #0f172a;
+  --region-muted: #64748b;
+  --region-accent: #0f766e;
+  --region-warn: #c2410c;
+}
+
+.region-drilldown-v2 .card {
+  border-color: var(--region-border);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.region-v2-hero {
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, var(--region-surface) 100%);
+}
+
+.region-v2-subnav {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border: 1px solid var(--region-border);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.region-v2-subnav-link {
+  color: var(--region-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+}
+
+.region-v2-subnav-link.active,
+.region-v2-subnav-link:hover {
+  color: var(--region-ink);
+  background: rgba(15, 118, 110, 0.1);
+}
+
+.region-v2-section-head {
+  margin-bottom: 0.75rem;
+}
+
+.region-kpi-card .card-body {
+  padding: 1rem;
+}
+
+.metric-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--region-muted);
+  font-size: 0.7rem;
+  cursor: help;
+}
+
+.chart-shell {
+  position: relative;
+  min-height: 280px;
+}
+
+.chart-host {
+  min-height: 280px;
+}
+
+.chart-host-lg {
+  min-height: 360px;
+}
+
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--region-muted);
+  font-size: 0.9rem;
+  border: 1px dashed rgba(100, 116, 139, 0.35);
+  border-radius: 0.85rem;
+  background: rgba(248, 250, 252, 0.7);
+  padding: 1rem;
+}
+
+.table-scroll {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.table-scroll .sticky-top {
+  top: 0;
+  z-index: 1;
+}
+
+.region-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--region-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.region-pill.is-warning {
+  background: rgba(194, 65, 12, 0.12);
+  color: var(--region-warn);
+}
+
+.region-pill.is-good {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--region-accent);
+}
+
+.region-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.region-risk-badge.is-high,
+.region-risk-badge.is-lost,
+.region-risk-badge.is-churned {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.region-risk-badge.is-medium,
+.region-risk-badge.is-at-risk,
+.region-risk-badge.is-warming {
+  color: var(--region-warn);
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.region-risk-badge.is-low,
+.region-risk-badge.is-new,
+.region-risk-badge.is-active {
+  color: var(--region-accent);
+  background: rgba(15, 118, 110, 0.14);
+}
+
+.region-metric-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.region-metric-stack-end {
+  align-items: flex-end;
+}
+
+.region-metric-sub {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.28rem;
+  font-size: 0.72rem;
+  color: var(--region-muted);
+}
+
+.region-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.46rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.region-status-pill.is-red {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(185, 28, 28, 0.16);
+}
+
+.region-status-pill.is-orange {
+  color: var(--region-warn);
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(194, 65, 12, 0.18);
+}
+
+.region-status-pill.is-yellow {
+  color: #8a5b00;
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(202, 138, 4, 0.2);
+}
+
+.region-status-pill.is-light-green {
+  color: #15803d;
+  background: rgba(134, 239, 172, 0.2);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+.region-status-pill.is-green {
+  color: var(--region-accent);
+  background: rgba(15, 118, 110, 0.14);
+  border-color: rgba(15, 118, 110, 0.16);
+}
+
+.region-status-pill.is-neutral {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(100, 116, 139, 0.18);
+}
+
+.insight-card.is-positive {
+  border-top: 3px solid var(--region-accent);
+}
+
+.insight-card.is-warning {
+  border-top: 3px solid var(--region-warn);
+}
+
+.insight-card.is-action {
+  border-top: 3px solid #1d4ed8;
+}
+
+@media (max-width: 991.98px) {
+  .region-v2-subnav {
+    top: 0.5rem;
+  }
+}

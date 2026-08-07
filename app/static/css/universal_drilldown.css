@@ -1,0 +1,114 @@
+/* 
+  Universal Drilldown Infrastructure 
+  Project-wide styling for data-drilldown-payload components. 
+*/
+
+:root {
+  --color-drill-primary: #1f5f9a;
+  --color-drill-subtle: #eff6ff;
+  --color-drill-border: rgba(31, 95, 154, 0.12);
+  --color-text-main: #1e293b;
+  --color-text-muted: #64748b;
+}
+
+/* 
+  Interactive indicator for elements with drilldown data. 
+  Used by universal_drilldown.js 
+*/
+[data-drilldown-payload] {
+  transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  position: relative;
+}
+
+[data-drilldown-payload].is-drillable {
+  cursor: pointer;
+}
+
+[data-drilldown-payload].is-drillable:hover,
+[data-drilldown-payload].is-drillable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(44, 111, 134, 0.18);
+}
+
+/* Global Drill Tag Removal — replaced with cursor and subtle hover background in salesreps_v2.css */
+[data-drilldown-payload].is-drillable::after {
+  display: none !important;
+}
+
+.udw-page {
+  padding-bottom: 2rem;
+}
+
+.udw-eyebrow,
+.udw-section-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-drill-primary);
+  opacity: 0.85;
+}
+
+.udw-headline {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text-main);
+}
+
+.udw-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-drill-subtle);
+  color: var(--color-drill-primary);
+  border: 1px solid var(--color-drill-border);
+}
+
+.udw-card {
+  border-radius: 0.85rem;
+  border: 1px solid var(--color-drill-border);
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.udw-table th {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-top: none;
+  background: #f8fafc;
+}
+
+.udw-table td {
+  font-size: 0.88rem;
+  color: var(--color-text-main);
+  padding: 0.75rem 0.5rem;
+}
+
+.udw-metric {
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-weight: 600;
+}
+
+.udw-chart-shell {
+  min-height: 300px;
+  position: relative;
+}
+
+.udw-chart-shell--loading::after {
+  content: "Loading...";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  z-index: 10;
+}

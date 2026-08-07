@@ -1,0 +1,574 @@
+{% extends "returns/base.html" %}
+{% set _returns_v2 = returns_v2_enabled if returns_v2_enabled is defined else false %}
+{% block content %}
+{% if _returns_v2 %}
+<section class="returns-page py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">New Return</h1>
+      <p class="text-muted mb-0">Excel-style intake form with order auto-fill, line-level credit calculation, and receiving fields in the same workflow.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.index') }}">Back to Tracker</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" id="returnsExcelForm" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="order_id" id="selectedOrderId" value="{{ order.order_id if order else order_id }}">
+    <input type="hidden" name="items_json" id="itemsJsonField" value='{{ order_items_json|e }}'>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <div class="text-uppercase text-muted small fw-semibold">Section 1</div>
+            <h2 class="h5 mb-1">To be completed by Sales Rep</h2>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            {% if returns_autofill_enabled %}
+            <button class="btn btn-outline-primary btn-sm" type="button" id="loadOrderButton">Load Order</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="selectSuggestedButton">Select all suggested</button>
+            {% endif %}
+            <button class="btn btn-outline-dark btn-sm" type="button" id="addManualLineButton">Add Manual Line</button>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-3">
+            <label class="form-label" for="rep_name">Rep Name</label>
+            <input class="form-control" id="rep_name" name="rep_name" value="{{ request.form.get('rep_name', current_user.full_name if current_user.is_authenticated and current_user.full_name else current_user.username if current_user.is_authenticated else '') }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="date_submitted">Date Submitted</label>
+            <input class="form-control" id="date_submitted" name="date_submitted" type="date" value="{{ default_date_submitted }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="orderLookupInput">Order #</label>
+            <input class="form-control" id="orderLookupInput" name="manual_order_id" value="{{ request.form.get('manual_order_id', order_id or '') }}" {% if not returns_autofill_enabled %}placeholder="Manual entry"{% endif %}>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="return_type">Return Type</label>
+            <select class="form-select" id="return_type" name="return_type">
+              {% set _default_return_type = request.form.get('return_type', returns_settings.defaults.return_type if returns_settings is defined else 'Sales Return') %}
+              <option value="Sales Return" {% if _default_return_type == 'Sales Return' %}selected{% endif %}>Sales Return</option>
+              <option value="Vendor Return" {% if _default_return_type == 'Vendor Return' %}selected{% endif %}>Vendor Return</option>
+              <option value="Production Return" {% if _default_return_type == 'Production Return' %}selected{% endif %}>Production Return</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="customer_name">Customer Name</label>
+            <input class="form-control" id="customer_name" name="customer_name" value="{{ request.form.get('customer_name', order.customer_name if order else '') }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="customer_id">Customer ID</label>
+            <input class="form-control" id="customer_id" name="customer_id" value="{{ request.form.get('customer_id', order.customer_id if order else '') }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="order_date">Order Date</label>
+            <input class="form-control" id="order_date" name="order_date" type="date" value="{{ request.form.get('order_date', order.order_date if order else '') }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="date_shipped">Date Shipped</label>
+            <input class="form-control" id="date_shipped" name="date_shipped" type="date" value="{{ request.form.get('date_shipped', order.date_shipped if order and order.date_shipped else order.order_date if order else '') }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="ship_to">Ship To</label>
+            <input class="form-control" id="ship_to" name="ship_to" value="{{ request.form.get('ship_to', order.ship_to if order else '') }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="advised_customer">Advised Customer</label>
+            <select class="form-select" id="advised_customer" name="advised_customer">
+              <option value="1" {% if request.form.get('advised_customer', '1') in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Yes</option>
+              <option value="0" {% if request.form.get('advised_customer') in ['0', 'false', 'no'] %}selected{% endif %}>No</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="advised_customer_note">Advised Customer Note</label>
+            <input class="form-control" id="advised_customer_note" name="advised_customer_note" value="{{ request.form.get('advised_customer_note', '') }}">
+          </div>
+        </div>
+
+        <div id="orderLookupStatus" class="small text-muted mb-3">
+          {% if lookup_error %}{{ lookup_error }}{% elif returns_autofill_enabled %}Enter an order and load it to pre-fill line items.{% else %}Auto-fill is disabled. Add manual lines below.{% endif %}
+        </div>
+        <div id="orderLookupAlert" class="alert alert-warning {% if not lookup_error %}d-none{% endif %}">{{ lookup_error or '' }}</div>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle" id="returnItemsTable">
+            <thead class="table-light">
+              <tr>
+                <th>Use</th>
+                <th>Product #</th>
+                <th>Description</th>
+                <th>Price/lb</th>
+                <th>Weight</th>
+                <th>Credit %</th>
+                <th>Credit</th>
+                <th>Product returning?</th>
+                <th>Pack Barcode #</th>
+                <th># of packs</th>
+                <th>Reason for return</th>
+                <th>Category</th>
+                <th>Follow up action</th>
+                <th>Supplier credit?</th>
+              </tr>
+            </thead>
+            <tbody id="returnItemsBody"></tbody>
+          </table>
+        </div>
+        <div class="returns-summary-row mt-3">
+          <div class="row g-3 small">
+            <div class="col-sm-6 col-lg-4">
+              <div class="text-muted">Total Weight (selected)</div>
+              <div id="lineTotalWeight" class="fw-semibold">0.000</div>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+              <div class="text-muted">Total Credit (selected)</div>
+              <div id="lineTotalCredit" class="fw-semibold">$0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-2">
+          <div class="col-md-8">
+            <label class="form-label" for="additional_notes">Additional Notes</label>
+            <textarea class="form-control" id="additional_notes" name="additional_notes" rows="3">{{ request.form.get('additional_notes', request.form.get('notes', '')) }}</textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="evidence">Attachments</label>
+            <input class="form-control" id="evidence" name="evidence" type="file" multiple>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+        <div class="text-uppercase text-muted small fw-semibold">Section 2</div>
+        <h2 class="h5 mb-3">To be completed by Receiving</h2>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label" for="rec_prod_signoff">Rec/Prod Sign Off</label>
+            <select class="form-select" id="rec_prod_signoff" name="rec_prod_signoff">
+              <option value="0" {% if request.form.get('rec_prod_signoff') not in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>No</option>
+              <option value="1" {% if request.form.get('rec_prod_signoff') in ['1', 'true', 'yes', 'on'] %}selected{% endif %}>Yes</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="rec_prod_signed_at">Signed At</label>
+            <input class="form-control" id="rec_prod_signed_at" name="rec_prod_signed_at" type="datetime-local" value="{{ request.form.get('rec_prod_signed_at', '') }}">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label" for="receiving_notes">Receiving Notes</label>
+            <textarea class="form-control" id="receiving_notes" name="receiving_notes" rows="2">{{ request.form.get('receiving_notes', '') }}</textarea>
+          </div>
+        </div>
+        <div class="form-text mt-2">Warehouse-only fields on each line can be updated here now or later in the approvals flow.</div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary btn-lg" type="submit">Create Return</button>
+      {% if can_permission('returns.approve.wh') or can_permission('returns.warehouse.receive') or can_permission('admin.returns.manage') %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.approvals') }}">Warehouse Actions</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<script id="returnsInitialLookup" type="application/json">{{ lookup_payload|tojson if lookup_payload else 'null' }}</script>
+<script id="returnsInitialItems" type="application/json">{{ (initial_item_rows if initial_item_rows is defined else [])|tojson }}</script>
+<script id="returnsReasonCodes" type="application/json">{{ reason_codes|tojson }}</script>
+<script id="returnsSettings" type="application/json">{{ returns_settings|tojson }}</script>
+{% else %}
+<section class="returns-page py-4">
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <h1 class="h4 mb-3">Create Return</h1>
+      <form method="post" enctype="multipart/form-data" class="row g-3" data-returns-legacy="1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-4">
+          <label class="form-label" for="manual_order_id">Order #</label>
+          <input class="form-control" id="manual_order_id" name="manual_order_id" value="{{ request.form.get('manual_order_id', order_id or '') }}">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button class="btn btn-outline-secondary" type="submit" name="lookup_order" value="1" id="legacyLoadOrderButton">Load Order</button>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="customer_id_legacy">Customer ID</label>
+          <input class="form-control" id="customer_id_legacy" name="customer_id" value="{{ request.form.get('customer_id', order.customer_id if order else '') }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="customer_name_legacy">Customer Name</label>
+          <input class="form-control" id="customer_name_legacy" name="customer_name" value="{{ request.form.get('customer_name', order.customer_name if order else '') }}">
+        </div>
+        <div class="col-12">
+          <div id="legacyOrderLookupStatus" class="small text-muted">
+            {% if lookup_error %}
+            {{ lookup_error }}
+            {% elif order %}
+            Order {{ order.order_id }} loaded. Review the pre-filled values and continue.
+            {% else %}
+            Enter an order and press Enter or use Load Order to pre-fill visible order details.
+            {% endif %}
+          </div>
+          <div id="legacyOrderLookupAlert" class="alert alert-warning mt-2 {% if not lookup_error %}d-none{% endif %}">{{ lookup_error or '' }}</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="product_code_legacy">Product Code</label>
+          <input class="form-control" id="product_code_legacy" name="product_code" value="{{ request.form.get('product_code', '') }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="weight_lb_legacy">Weight</label>
+          <input class="form-control" id="weight_lb_legacy" name="weight_lb" type="number" min="0" step="0.01" value="{{ request.form.get('weight_lb', '1') }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="price_per_lb_legacy">Price / lb</label>
+          <input class="form-control" id="price_per_lb_legacy" name="price_per_lb" type="number" min="0" step="0.01" value="{{ request.form.get('price_per_lb', '0') }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="credit_pct_legacy">Credit %</label>
+          <input class="form-control" id="credit_pct_legacy" name="credit_pct" type="number" min="0" max="100" step="0.01" value="{{ request.form.get('credit_pct', '100') }}">
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary" type="submit">Create Return</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+  (function () {
+    {% if _returns_v2 %}
+    const endpointTemplate = {{ (url_for('returns_portal.order_lookup_api', order_id='__ORDER_ID__') if returns_autofill_enabled else '')|tojson }};
+    const formEl = document.getElementById('returnsExcelForm');
+    if (!formEl) return;
+
+    const lookupEnabled = {{ (returns_autofill_enabled if returns_autofill_enabled is defined else false)|tojson }};
+    const lookupInput = document.getElementById('orderLookupInput');
+    const loadOrderButton = document.getElementById('loadOrderButton');
+    const selectSuggestedButton = document.getElementById('selectSuggestedButton');
+    const addManualLineButton = document.getElementById('addManualLineButton');
+    const statusEl = document.getElementById('orderLookupStatus');
+    const alertEl = document.getElementById('orderLookupAlert');
+    const bodyEl = document.getElementById('returnItemsBody');
+    const itemsJsonField = document.getElementById('itemsJsonField');
+    const selectedOrderIdField = document.getElementById('selectedOrderId');
+    const lineTotalWeight = document.getElementById('lineTotalWeight');
+    const lineTotalCredit = document.getElementById('lineTotalCredit');
+    const reasonCatalog = parseJson('returnsReasonCodes', []);
+    const settings = parseJson('returnsSettings', {});
+    const initialPayload = parseJson('returnsInitialLookup', null);
+    const initialRows = parseJson('returnsInitialItems', []);
+
+    let state = {
+      rows: [],
+      payload: null,
+    };
+
+    function parseJson(id, fallback) {
+      const el = document.getElementById(id);
+      if (!el) return fallback;
+      try {
+        return JSON.parse(el.textContent || '');
+      } catch (err) {
+        return fallback;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function parseDecimal(value, fallback) {
+      const raw = value == null ? '' : String(value).trim();
+      if (!raw) return fallback;
+      const parsed = Number(raw.replace(/,/g, ''));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function blankRow() {
+      return {
+        selected: true,
+        order_line_id: '',
+        product_code: '',
+        product_desc: '',
+        price_per_lb: 0,
+        weight_lb: 0,
+        credit_pct: 100,
+        credit_amount: 0,
+        product_returning: false,
+        pack_barcode: '',
+        packs_count: 0,
+        reason_code: reasonCatalog[0]?.reason_code || 'customer_return',
+        reason_for_return: reasonCatalog[0]?.reason_text || 'Customer Return',
+        category: categoryForReason(reasonCatalog[0]?.reason_code || 'customer_return'),
+        follow_up_action: settings?.defaults?.follow_up_action || 'Credit',
+        supplier_credit: false,
+        receiving_notes: '',
+        rationale: '',
+      };
+    }
+
+    function categoryForReason(reasonCode) {
+      const clean = String(reasonCode || '').trim().toLowerCase();
+      const match = reasonCatalog.find((row) => String(row.reason_code || '').trim().toLowerCase() === clean);
+      return String(match?.category || 'Other');
+    }
+
+    function syncItems() {
+      itemsJsonField.value = JSON.stringify(state.rows);
+    }
+
+    function setStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = 'small mb-3 ' + (kind === 'danger' ? 'text-danger' : kind === 'success' ? 'text-success' : 'text-muted');
+    }
+
+    function setAlert(message) {
+      if (!message) {
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+        return;
+      }
+      alertEl.classList.remove('d-none');
+      alertEl.textContent = message;
+    }
+
+    function recalcRow(row) {
+      row.price_per_lb = Math.max(parseDecimal(row.price_per_lb, 0), 0);
+      row.weight_lb = Math.max(parseDecimal(row.weight_lb, 0), 0);
+      row.credit_pct = Math.max(0, Math.min(100, parseDecimal(row.credit_pct, 100)));
+      row.credit_amount = Math.round(row.price_per_lb * row.weight_lb * (row.credit_pct / 100) * 100) / 100;
+      row.category = categoryForReason(row.reason_code);
+      row.reason_for_return = row.reason_for_return || row.reason_code;
+      row.packs_count = Math.max(parseInt(row.packs_count || 0, 10) || 0, 0);
+      return row;
+    }
+
+    function normalizeRowsFromPayload(payload) {
+      if (!payload || !Array.isArray(payload.items)) return [];
+      const suggestions = {};
+      (payload.suggestions || []).forEach((row) => {
+        suggestions[String(row.order_line_id || '')] = row;
+      });
+      return payload.items.map((item) => {
+        const suggestion = suggestions[String(item.order_line_id || '')] || {};
+        const row = {
+          selected: Boolean(suggestion.selected !== false),
+          order_line_id: item.order_line_id || '',
+          product_code: item.product_code || item.sku || '',
+          product_desc: item.product_desc || item.description || item.product_name || '',
+          price_per_lb: parseDecimal(item.price_per_lb ?? item.unit_price_per_lb ?? item.unit_price ?? item.price, 0),
+          weight_lb: parseDecimal(item.weight_lb ?? item.shipped_weight_lb ?? item.pack_weight_lb_sum, 0),
+          credit_pct: parseDecimal(item.credit_pct ?? suggestion.credit_pct, 100),
+          credit_amount: 0,
+          product_returning: Boolean(suggestion.selected !== false),
+          pack_barcode: '',
+          packs_count: 0,
+          reason_code: suggestion.suggested_reason || (reasonCatalog[0]?.reason_code || 'customer_return'),
+          reason_for_return: suggestion.suggested_reason || (reasonCatalog[0]?.reason_text || 'Customer Return'),
+          category: '',
+          follow_up_action: settings?.defaults?.follow_up_action || 'Credit',
+          supplier_credit: false,
+          receiving_notes: '',
+          rationale: [item.mapping_warning, suggestion.rationale].filter(Boolean).join(' '),
+        };
+        return recalcRow(row);
+      });
+    }
+
+    function refreshLineTotals() {
+      const selectedRows = state.rows.filter((row) => row.selected);
+      const totalWeight = selectedRows.reduce((acc, row) => acc + parseDecimal(row.weight_lb, 0), 0);
+      const totalCredit = selectedRows.reduce((acc, row) => acc + parseDecimal(row.credit_amount, 0), 0);
+      if (lineTotalWeight) {
+        lineTotalWeight.textContent = totalWeight.toFixed(3);
+      }
+      if (lineTotalCredit) {
+        lineTotalCredit.textContent = '$' + totalCredit.toFixed(2);
+      }
+    }
+
+    function renderRows() {
+      if (!state.rows.length) {
+        state.rows = [blankRow()];
+      }
+      bodyEl.innerHTML = state.rows.map((row, index) => {
+        const reasonOptions = reasonCatalog.map((reason) => {
+          const code = String(reason.reason_code || '');
+          const text = String(reason.reason_text || code);
+          const selected = String(row.reason_code || '') === code ? ' selected' : '';
+          return `<option value="${escapeHtml(code)}"${selected}>${escapeHtml(text)}</option>`;
+        }).join('');
+        return `
+          <tr data-row-index="${index}">
+            <td><input class="form-check-input item-selected" type="checkbox" ${row.selected ? 'checked' : ''}></td>
+            <td><input class="form-control form-control-sm item-product-code" value="${escapeHtml(row.product_code)}"></td>
+            <td><input class="form-control form-control-sm item-product-desc" value="${escapeHtml(row.product_desc)}"></td>
+            <td><input class="form-control form-control-sm item-price" type="number" min="0" step="0.01" value="${escapeHtml(row.price_per_lb)}"></td>
+            <td><input class="form-control form-control-sm item-weight" type="number" min="0" step="0.01" value="${escapeHtml(row.weight_lb)}"></td>
+            <td><input class="form-control form-control-sm item-credit-pct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(row.credit_pct)}"></td>
+            <td><input class="form-control form-control-sm item-credit" type="number" min="0" step="0.01" value="${escapeHtml(row.credit_amount)}" readonly></td>
+            <td><select class="form-select form-select-sm item-returning"><option value="1" ${row.product_returning ? 'selected' : ''}>Yes</option><option value="0" ${!row.product_returning ? 'selected' : ''}>No</option></select></td>
+            <td><input class="form-control form-control-sm item-pack-barcode" value="${escapeHtml(row.pack_barcode)}"></td>
+            <td><input class="form-control form-control-sm item-packs-count" type="number" min="0" step="1" value="${escapeHtml(row.packs_count)}"></td>
+            <td><select class="form-select form-select-sm item-reason">${reasonOptions}</select></td>
+            <td><input class="form-control form-control-sm item-category" value="${escapeHtml(row.category)}" readonly></td>
+            <td><input class="form-control form-control-sm item-follow-up" value="${escapeHtml(row.follow_up_action || '')}"></td>
+            <td><select class="form-select form-select-sm item-supplier-credit"><option value="0" ${!row.supplier_credit ? 'selected' : ''}>No</option><option value="1" ${row.supplier_credit ? 'selected' : ''}>Yes</option></select></td>
+          </tr>
+          <tr data-row-index="${index}">
+            <td></td>
+            <td colspan="7" class="small text-muted">${escapeHtml(row.rationale || 'Manual line')}</td>
+            <td colspan="6"><input class="form-control form-control-sm item-receiving-notes" value="${escapeHtml(row.receiving_notes || '')}" placeholder="Receiving notes"></td>
+          </tr>
+        `;
+      }).join('');
+      syncItems();
+      refreshLineTotals();
+    }
+
+    function applyLookup(payload) {
+      state.payload = payload;
+      state.rows = normalizeRowsFromPayload(payload);
+      selectedOrderIdField.value = payload?.order?.order_id || '';
+      document.getElementById('customer_id').value = payload?.order?.customer_id || '';
+      document.getElementById('customer_name').value = payload?.order?.customer_name || '';
+      document.getElementById('order_date').value = String(payload?.order?.order_date || '').slice(0, 10);
+      document.getElementById('date_shipped').value = String(payload?.order?.date_shipped || payload?.order?.order_date || '').slice(0, 10);
+      document.getElementById('ship_to').value = payload?.order?.ship_to || '';
+      renderRows();
+      setStatus(`Loaded ${state.rows.length} candidate line item${state.rows.length === 1 ? '' : 's'}.`, 'success');
+      setAlert('');
+    }
+
+    async function fetchOrder() {
+      if (!lookupEnabled) return;
+      const orderId = String(lookupInput.value || '').trim();
+      if (!orderId) {
+        setStatus('Enter an order to load matching lines.', 'muted');
+        return;
+      }
+      setStatus(`Loading ${orderId}...`, 'muted');
+      setAlert('');
+      try {
+        const response = await fetch(endpointTemplate.replace('__ORDER_ID__', encodeURIComponent(orderId)), {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          const message = payload?.message || 'Order lookup failed.';
+          setStatus(message, 'danger');
+          setAlert(message);
+          return;
+        }
+        applyLookup(payload);
+      } catch (err) {
+        setStatus('Order lookup failed. You can continue with manual lines.', 'danger');
+        setAlert('Order lookup failed. You can continue with manual lines.');
+      }
+    }
+
+    bodyEl.addEventListener('input', (event) => {
+      const target = event.target;
+      const rowEl = target.closest('[data-row-index]');
+      if (!rowEl) return;
+      const index = Number(rowEl.getAttribute('data-row-index'));
+      const row = state.rows[index];
+      if (!row) return;
+      if (target.classList.contains('item-product-code')) row.product_code = target.value;
+      if (target.classList.contains('item-product-desc')) row.product_desc = target.value;
+      if (target.classList.contains('item-price')) row.price_per_lb = target.value;
+      if (target.classList.contains('item-weight')) row.weight_lb = target.value;
+      if (target.classList.contains('item-credit-pct')) row.credit_pct = target.value;
+      if (target.classList.contains('item-pack-barcode')) row.pack_barcode = target.value;
+      if (target.classList.contains('item-packs-count')) row.packs_count = target.value;
+      if (target.classList.contains('item-follow-up')) row.follow_up_action = target.value;
+      if (target.classList.contains('item-receiving-notes')) row.receiving_notes = target.value;
+      recalcRow(row);
+      renderRows();
+    });
+
+    bodyEl.addEventListener('change', (event) => {
+      const target = event.target;
+      const rowEl = target.closest('[data-row-index]');
+      if (!rowEl) return;
+      const index = Number(rowEl.getAttribute('data-row-index'));
+      const row = state.rows[index];
+      if (!row) return;
+      if (target.classList.contains('item-selected')) row.selected = Boolean(target.checked);
+      if (target.classList.contains('item-returning')) row.product_returning = String(target.value) === '1';
+      if (target.classList.contains('item-reason')) row.reason_code = target.value;
+      if (target.classList.contains('item-supplier-credit')) row.supplier_credit = String(target.value) === '1';
+      recalcRow(row);
+      renderRows();
+    });
+
+    addManualLineButton?.addEventListener('click', () => {
+      state.rows.push(blankRow());
+      renderRows();
+    });
+
+    selectSuggestedButton?.addEventListener('click', () => {
+      state.rows.forEach((row) => {
+        row.selected = true;
+        row.product_returning = true;
+      });
+      renderRows();
+    });
+
+    loadOrderButton?.addEventListener('click', fetchOrder);
+    lookupInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        fetchOrder();
+      }
+    });
+
+    formEl.addEventListener('submit', (event) => {
+      const selectedRows = state.rows.filter((row) => row.selected);
+      if (!selectedRows.length) {
+        event.preventDefault();
+        setStatus('Select at least one line before submitting.', 'danger');
+        setAlert('Select at least one line before submitting.');
+        return;
+      }
+      syncItems();
+    });
+
+    if (initialPayload && initialPayload.order) {
+      applyLookup(initialPayload);
+      if (Array.isArray(initialRows) && initialRows.length) {
+        state.rows = initialRows.map((row) => recalcRow(row));
+        renderRows();
+      }
+    } else if (Array.isArray(initialRows) && initialRows.length) {
+      state.rows = initialRows.map((row) => recalcRow(row));
+      renderRows();
+    } else {
+      renderRows();
+    }
+    {% else %}
+    const lookupInput = document.getElementById('manual_order_id');
+    const lookupButton = document.getElementById('legacyLoadOrderButton');
+    if (!lookupInput || !lookupButton) return;
+    lookupInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        lookupButton.click();
+      }
+    });
+    {% endif %}
+  })();
+</script>
+{% endblock %}

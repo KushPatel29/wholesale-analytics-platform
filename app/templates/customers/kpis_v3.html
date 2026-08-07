@@ -1,0 +1,740 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+{% set summary = summary or {} %}
+{% set table = table or {} %}
+{% set rows = rows or [] %}
+{% set health_strip = health_strip or {} %}
+{% set definitions = definitions or {} %}
+{% set drivers = drivers or {} %}
+{% set charts = charts or {} %}
+{% set scorecard = executive_scorecard or summary.get('scorecard') or {} %}
+{% set churn_summary = churn_risk_summary or summary.get('churn_risk_summary') or {} %}
+
+{% macro fmt_currency(value) -%}
+  {% if value is not none and value == value %}
+    {{ value|currency }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_percent(value) -%}
+  {% if value is not none and value == value %}
+    {{ '%.1f'|format(value|float) }}%
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_int(value) -%}
+  {% if value is not none and value == value %}
+    {{ '{:,.0f}'.format(value|float) }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_date(value) -%}
+  {% if value %}
+    {{ value }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro delta_line(metric_key, metric_type='currency') -%}
+  {% set metric = scorecard.get(metric_key) or {} %}
+  {% set status = (metric.get('status') or 'na')|lower %}
+  {% set delta = metric.get('delta') %}
+  {% set delta_pct = metric.get('delta_pct') %}
+  {% if status == 'new' %}
+    <span class="badge text-bg-info">New</span>
+  {% elif status == 'low_base' %}
+    <span class="badge text-bg-secondary">Low base</span>
+    <span class="text-muted ms-1">{{ fmt_currency(delta) if metric_type != 'percent' else fmt_percent(delta) }}</span>
+  {% elif delta is none and delta_pct is none %}
+    <span class="text-muted">No prior baseline</span>
+  {% else %}
+    {% set delta_class = 'text-success' if (delta or 0) > 0 else ('text-danger' if (delta or 0) < 0 else 'text-muted') %}
+    <span class="{{ delta_class }} fw-semibold">
+      {% if metric_type == 'percent' %}
+        {{ fmt_percent(delta) }}
+      {% elif metric_type == 'int' %}
+        {{ fmt_int(delta) }}
+      {% else %}
+        {{ fmt_currency(delta) }}
+      {% endif %}
+    </span>
+    {% if delta_pct is not none %}
+      <span class="text-muted ms-1">({{ fmt_percent(delta_pct) }})</span>
+    {% endif %}
+  {% endif %}
+{%- endmacro %}
+
+<div id="CustomersMeta" data-page="customers" data-bundle-url="{{ url_for('bundles.customers_bundle') }}" class="d-none"></div>
+
+<ul class="nav nav-tabs mb-3" role="tablist" aria-label="Customers tabs">
+  <li class="nav-item"><a class="nav-link active" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.rfm') }}">RFM</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.clv') }}">CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+</ul>
+
+<section class="card border-0 shadow-sm mb-3" aria-labelledby="health-strip-title">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <h2 id="health-strip-title" class="h6 mb-0 me-2">Customer Health Bar</h2>
+      {% for chip in health_strip.get('chips', []) %}
+      <span class="badge rounded-pill text-bg-light border" title="{{ (definitions.get('kpis') or {}).get(chip.get('key')) or chip.get('label') }}">
+        <span class="text-muted me-1">{{ chip.get('label') }}:</span>
+        <span class="fw-semibold">
+          {% if chip.get('format') == 'currency' %}
+            {{ fmt_currency(chip.get('value')) }}
+          {% elif chip.get('format') == 'percent' %}
+            {{ fmt_percent(chip.get('value')) }}
+          {% else %}
+            {{ fmt_int(chip.get('value')) }}
+          {% endif %}
+        </span>
+      </span>
+      {% endfor %}
+    </div>
+    <div class="small text-muted mb-0">{{ health_strip.get('narrative') or summary.get('executive_narrative') or 'No health summary available.' }}</div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-labelledby="scorecard-title">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 id="scorecard-title" class="h6 mb-0">Executive Scorecard</h2>
+    <span class="small text-muted">Computed for {{ (summary.get('window') or {}).get('start') }} to {{ (summary.get('window') or {}).get('end') }}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Revenue <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Total revenue in current window."></i></div>
+          <div class="kpi-value">{{ fmt_currency(summary.get('total_revenue')) }}</div>
+          <div class="kpi-delta">{{ delta_line('revenue', 'currency') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Profit <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Revenue minus cost. May be understated when costs are missing."></i></div>
+          <div class="kpi-value">{{ fmt_currency(summary.get('total_profit')) }}</div>
+          <div class="kpi-delta">{{ delta_line('profit', 'currency') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Margin % <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Profit divided by revenue."></i></div>
+          <div class="kpi-value">{{ fmt_percent(summary.get('margin_pct')) }}</div>
+          <div class="kpi-delta">{{ delta_line('margin_pct', 'percent') }}</div>
+          <div class="small text-muted">
+            {% if summary.get('margin_target_pct') is not none or summary.get('target_margin_pct') is not none %}
+              Target {{ fmt_percent(summary.get('margin_target_pct') if summary.get('margin_target_pct') is not none else summary.get('target_margin_pct')) }}
+            {% else %}
+              Target n/a
+            {% endif %}
+            {% if summary.get('minimum_margin_pct') is not none %}
+              · Min {{ fmt_percent(summary.get('minimum_margin_pct')) }}
+            {% endif %}
+            {% if summary.get('margin_gap_pct') is not none %}
+              · {{ '%.1f'|format((summary.get('margin_pct') or 0) - ((summary.get('margin_target_pct') if summary.get('margin_target_pct') is not none else summary.get('target_margin_pct')) or 0)) }} pts vs target
+            {% elif summary.get('target_status') %}
+              · {{ summary.get('target_status') }}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Orders</div>
+          <div class="kpi-value">{{ fmt_int(summary.get('total_orders')) }}</div>
+          <div class="kpi-delta">{{ delta_line('orders', 'int') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Active customers</div>
+          <div class="kpi-value">{{ fmt_int(summary.get('total_customers')) }}</div>
+          <div class="kpi-delta">{{ delta_line('active_customers', 'int') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">AOV</div>
+          <div class="kpi-value">{{ fmt_currency(summary.get('avg_order_value')) }}</div>
+          <div class="kpi-delta">{{ delta_line('avg_order_value', 'currency') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Repeat rate</div>
+          <div class="kpi-value">{{ fmt_percent(summary.get('repeat_rate_avg')) }}</div>
+          <div class="kpi-delta">{{ delta_line('repeat_rate', 'percent') }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-shell">
+          <div class="kpi-label">Revenue at risk</div>
+          <div class="kpi-value">{{ fmt_currency(summary.get('revenue_at_risk')) }}</div>
+          <div class="kpi-delta">{{ delta_line('revenue_at_risk', 'currency') }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3 p-2 bg-light border rounded small text-muted">{{ summary.get('executive_narrative') or executive_narrative }}</div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="Growth and retention metrics">
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">NRR</div><div class="h5 mb-0">{{ fmt_percent((summary.get('nrr') or 0) * 100 if summary.get('nrr') is not none else none) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">GRR</div><div class="h5 mb-0">{{ fmt_percent((summary.get('grr') or 0) * 100 if summary.get('grr') is not none else none) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">New rev share</div><div class="h5 mb-0">{{ fmt_percent(summary.get('new_customer_revenue_share_pct')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Returning rev share</div><div class="h5 mb-0">{{ fmt_percent(summary.get('returning_customer_revenue_share_pct')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Reactivation rate</div><div class="h5 mb-0">{{ fmt_percent(summary.get('reactivation_rate_pct')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Concentration</div><div class="small">Top 1: <span class="fw-semibold">{{ fmt_percent(summary.get('top1_share_pct')) }}</span></div><div class="small">HHI: <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div></div></div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-labelledby="drivers-title">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 id="drivers-title" class="h6 mb-0">Drivers &amp; Actions</h2>
+    <a class="btn btn-sm btn-outline-primary" id="exportMoversBtn" href="#">Export Movers</a>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-xl-5">
+        <h3 class="h6 mb-2">Top Movers</h3>
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <div class="small fw-semibold mb-1">Gainers</div>
+            <ul class="list-group list-group-flush small">
+              {% for row in (drivers.get('top_gainers') or [])[:5] %}
+              <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.get('customer_name') or row.get('customer_id') }}</span><span>{{ fmt_currency(row.get('delta_revenue')) }}</span></li>
+              {% else %}
+              <li class="list-group-item px-0 text-muted">No gainers.</li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="small fw-semibold mb-1">Decliners</div>
+            <ul class="list-group list-group-flush small">
+              {% for row in (drivers.get('top_decliners') or [])[:5] %}
+              <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.get('customer_name') or row.get('customer_id') }}</span><span>{{ fmt_currency(row.get('delta_revenue')) }}</span></li>
+              {% else %}
+              <li class="list-group-item px-0 text-muted">No decliners.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-4">
+        <h3 class="h6 mb-2">Segment Mix Change</h3>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 align-middle">
+            <thead><tr><th>Segment</th><th class="text-end">Cust</th><th class="text-end">Share</th></tr></thead>
+            <tbody>
+              {% for row in drivers.get('segment_mix_change') or [] %}
+              <tr>
+                <td>{{ row.get('segment') }}</td>
+                <td class="text-end">{{ fmt_int(row.get('customers_current')) }}</td>
+                <td class="text-end">{{ fmt_percent(row.get('revenue_share_current_pct')) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="text-muted">No mix data.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="col-12 col-xl-3">
+        <h3 class="h6 mb-2">Recommended Actions</h3>
+        <ul class="small ps-3 mb-2">
+          {% for action in drivers.get('recommended_actions') or [] %}
+          <li>{{ action }}</li>
+          {% else %}
+          <li class="text-muted">No actions available.</li>
+          {% endfor %}
+        </ul>
+        <a class="small" href="?{{ request.query_string.decode('utf-8') }}&quick_filter=at_risk">Top 10 at-risk customers list</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="Supporting visuals">
+  <div class="col-12 col-lg-6 customer-stable-chart-col">
+    <div class="card border-0 shadow-sm h-100 customer-stable-chart-card">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong>Customer Lifecycle Funnel</strong>
+        <a id="exportLifecycleBtn" class="btn btn-sm btn-outline-secondary" href="#">Export</a>
+      </div>
+      <div class="card-body customer-stable-chart-card__body">
+        <div class="customer-stable-chart-frame">
+          <canvas id="lifecycleFunnelChart" aria-label="Customer lifecycle funnel"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6 customer-stable-chart-col">
+    <div class="card border-0 shadow-sm h-100 customer-stable-chart-card">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong>Revenue Composition by Segment</strong>
+        <a id="exportCompositionBtn" class="btn btn-sm btn-outline-secondary" href="#">Export</a>
+      </div>
+      <div class="card-body customer-stable-chart-card__body">
+        <div class="customer-stable-chart-frame">
+          <canvas id="revenueCompositionChart" aria-label="Revenue composition by segment"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-labelledby="risk-card-title">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 id="risk-card-title" class="h6 mb-0">Churn Risk Clarity</h2>
+    <span class="small text-muted">{{ churn_summary.get('model') or 'Recency risk (rule-based)' }}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="small text-muted">At-risk customers</div>
+        <div class="h5 mb-2">{{ fmt_int(summary.get('at_risk_90')) }}</div>
+        <div class="small text-muted">Revenue at risk</div>
+        <div class="h6 mb-0">{{ fmt_currency(summary.get('revenue_at_risk')) }}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="small text-muted mb-2">Risk distribution</div>
+        {% for row in churn_summary.get('distribution') or charts.get('churn_risk_distribution') or [] %}
+        <div class="d-flex justify-content-between small mb-1"><span>{{ row.get('band') }}</span><span>{{ fmt_int(row.get('customers')) }}</span></div>
+        {% else %}
+        <div class="small text-muted">No risk distribution available.</div>
+        {% endfor %}
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="small text-muted mb-2">Top at-risk accounts</div>
+        <ul class="list-unstyled small mb-0">
+          {% for row in (churn_summary.get('top_at_risk_customers') or [])[:5] %}
+          <li class="d-flex justify-content-between"><span>{{ row.get('customer_name') or row.get('customer_id') }}</span><span>{{ fmt_currency(row.get('revenue_prior_window')) }}</span></li>
+          {% else %}
+          <li class="text-muted">No at-risk customers.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm">
+  <div class="card-header bg-white">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="tableSearch" class="form-label small mb-1">Search</label>
+        <input id="tableSearch" type="search" class="form-control form-control-sm" value="{{ search or '' }}" aria-label="Search customers">
+      </div>
+      <div class="col-6 col-md-2">
+        <label for="quickFilter" class="form-label small mb-1">Segment</label>
+        <select id="quickFilter" class="form-select form-select-sm" aria-label="Quick segment filter">
+          <option value="all" {% if quick_filter|lower == 'all' %}selected{% endif %}>All</option>
+          <option value="new" {% if quick_filter|lower == 'new' %}selected{% endif %}>New</option>
+          <option value="growing" {% if quick_filter|lower == 'growing' %}selected{% endif %}>Growing</option>
+          <option value="stable" {% if quick_filter|lower == 'stable' %}selected{% endif %}>Stable</option>
+          <option value="reactivated" {% if quick_filter|lower == 'reactivated' %}selected{% endif %}>Reactivated</option>
+          <option value="at_risk" {% if quick_filter|lower in ['at_risk', 'at risk'] %}selected{% endif %}>At Risk</option>
+          <option value="churned" {% if quick_filter|lower == 'churned' %}selected{% endif %}>Churned</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label for="sortBy" class="form-label small mb-1">Sort by</label>
+        <select id="sortBy" class="form-select form-select-sm" aria-label="Sort customers">
+          <option value="revenue" {% if sort_by == 'revenue' %}selected{% endif %}>Revenue</option>
+          <option value="profit" {% if sort_by == 'profit' %}selected{% endif %}>Profit</option>
+          <option value="margin_pct" {% if sort_by == 'margin_pct' %}selected{% endif %}>Margin %</option>
+          <option value="days_since_last_order" {% if sort_by in ['days_since_last_order','days_since_last'] %}selected{% endif %}>Days since last</option>
+          <option value="delta_revenue" {% if sort_by == 'delta_revenue' %}selected{% endif %}>Delta revenue</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="sortDir" class="form-label small mb-1">Dir</label>
+        <select id="sortDir" class="form-select form-select-sm" aria-label="Sort direction">
+          <option value="desc" {% if sort_dir|lower == 'desc' %}selected{% endif %}>Desc</option>
+          <option value="asc" {% if sort_dir|lower == 'asc' %}selected{% endif %}>Asc</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="perPage" class="form-label small mb-1">Rows</label>
+        <select id="perPage" class="form-select form-select-sm" aria-label="Page size">
+          {% for n in [25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="topN" class="form-label small mb-1">Top N</label>
+        <input id="topN" type="number" min="1" class="form-control form-control-sm" value="{{ request.args.get('top_n') or request.args.get('topN') or '' }}" aria-label="Top N customers">
+      </div>
+      <div class="col-6 col-md-2 d-flex gap-1">
+        <button id="applyFiltersBtn" class="btn btn-sm btn-primary w-100" type="button">Apply</button>
+        <button id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary w-100" type="button">Reset</button>
+      </div>
+      <div class="col-12 d-flex flex-wrap gap-2 pt-2">
+        <button id="saveViewBtn" class="btn btn-sm btn-outline-secondary" type="button">Save View</button>
+        <select id="savedViewSelect" class="form-select form-select-sm" style="max-width: 240px;" aria-label="Saved views"><option value="">Saved Views</option></select>
+        <a id="exportXlsxBtn" class="btn btn-sm btn-success" href="#">Export XLSX (all rows)</a>
+        <a id="exportCsvBtn" class="btn btn-sm btn-outline-success" href="#">Export CSV (all rows)</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0 customer-table" id="customerCommandTable">
+      <thead class="table-light position-sticky top-0">
+        <tr>
+          <th scope="col">Customer</th>
+          <th scope="col">First order</th>
+          <th scope="col">Last order</th>
+          <th scope="col" class="text-end">Days since</th>
+          <th scope="col" class="text-end">Revenue</th>
+          <th scope="col" class="text-end">Revenue prior</th>
+          <th scope="col" class="text-end">Δ Revenue $</th>
+          <th scope="col" class="text-end">Δ Revenue %</th>
+          {% if show_costs %}
+          <th scope="col" class="text-end">Profit</th>
+          <th scope="col" class="text-end">Profit prior</th>
+          <th scope="col" class="text-end">Δ Profit $</th>
+          <th scope="col" class="text-end">Margin %</th>
+          <th scope="col" class="text-end">Margin prior</th>
+          <th scope="col" class="text-end">Δ Margin pp</th>
+          {% endif %}
+          <th scope="col" class="text-end">Orders</th>
+          <th scope="col" class="text-end">Orders prior</th>
+          <th scope="col" class="text-end">Δ Orders</th>
+          <th scope="col" class="text-end">Orders 90d</th>
+          <th scope="col" class="text-end">AOV</th>
+          <th scope="col" class="text-end">ASP</th>
+          <th scope="col">Risk</th>
+          <th scope="col">Segment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% set risk = row.get('ChurnRisk') %}
+        {% set delta_status = (row.get('DeltaRevenueStatus') or 'normal')|lower %}
+        <tr class="table-row-click" tabindex="0" role="button" data-href="{{ url_for('customers.drilldown', customer_id=row['CustomerId']) }}">
+          <td>
+            <div class="fw-semibold">{{ row.get('CustomerName') or row.get('CustomerId') }}</div>
+            <div class="small text-muted">{{ row.get('CustomerId') }}</div>
+          </td>
+          <td>{{ fmt_date(row.get('FirstOrder')) }}</td>
+          <td>{{ fmt_date(row.get('LastOrder')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('DaysSinceLastOrder')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('TotalRevenue')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('RevenuePriorWindow')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('DeltaRevenue')) }}</td>
+          <td class="text-end">
+            {% if delta_status == 'new' %}
+              <span class="badge text-bg-info">New</span>
+            {% elif delta_status == 'low_base' %}
+              <span class="badge text-bg-secondary">Low base</span>
+            {% else %}
+              {{ fmt_percent(row.get('DeltaRevenuePct')) }}
+            {% endif %}
+          </td>
+          {% if show_costs %}
+          <td class="text-end">{{ fmt_currency(row.get('Profit')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('ProfitPriorWindow')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('DeltaProfit')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('ProfitMarginPct')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('MarginPriorPct')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('DeltaMarginPct')) }}</td>
+          {% endif %}
+          <td class="text-end">{{ fmt_int(row.get('TotalOrders')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('OrdersPriorWindow')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('DeltaOrders')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('OrdersLast90')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('AvgOrderValue')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('ASP')) }}</td>
+          <td>
+            <span class="badge {% if risk == 'High' %}text-bg-danger{% elif risk == 'Medium' %}text-bg-warning text-dark{% else %}text-bg-success{% endif %}">{{ risk or 'Low' }}</span>
+          </td>
+          <td><span class="badge text-bg-light border">{{ row.get('SegmentLabel') or 'Stable' }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="24" class="text-center text-muted py-4">No customers match the current filters.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr>
+          <th colspan="4" class="text-end">Page totals</th>
+          <th class="text-end">{{ fmt_currency(page_totals.get('revenue')) }}</th>
+          <th colspan="2"></th>
+          <th></th>
+          {% if show_costs %}
+          <th class="text-end">{{ fmt_currency(page_totals.get('profit')) }}</th>
+          <th colspan="5"></th>
+          {% endif %}
+          <th class="text-end">{{ fmt_int(page_totals.get('orders')) }}</th>
+          <th colspan="8"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="small text-muted">Page {{ page }} of {{ total_pages }} ({{ total_rows }} rows)</div>
+    <div class="btn-group btn-group-sm">
+      <button id="prevPageBtn" class="btn btn-outline-secondary" type="button" {% if page <= 1 %}disabled{% endif %}>Prev</button>
+      <button id="nextPageBtn" class="btn btn-outline-secondary" type="button" {% if page >= total_pages %}disabled{% endif %}>Next</button>
+    </div>
+  </div>
+</section>
+
+{% if summary.get('cost_coverage_pct') is not none and summary.get('cost_coverage_pct') < 100 %}
+<div class="alert alert-warning mt-3 mb-0" role="status">
+  Cost coverage is {{ fmt_percent(summary.get('cost_coverage_pct')) }}; profit and margin metrics may be understated where cost is missing.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const init = () => {
+  const q = new URLSearchParams(window.location.search);
+  const lifecycleData = {{ ((charts or {}).get('lifecycle_funnel') or []) | tojson }};
+  const compositionData = {{ ((charts or {}).get('revenue_composition') or []) | tojson }};
+  const page = {{ page|int }};
+  const totalPages = {{ total_pages|int }};
+
+  const normalize = (value) => (value || '').toString().trim();
+  const setParam = (key, value) => {
+    const v = normalize(value);
+    if (!v || v.toLowerCase() === 'all') q.delete(key);
+    else q.set(key, v);
+  };
+
+  const applyControls = (reset = false) => {
+    if (reset) {
+      ['search', 'q', 'quick_filter', 'quick_filters', 'sort', 'sort_by', 'sort_dir', 'dir', 'page_size', 'per_page', 'top_n', 'topN'].forEach((k) => q.delete(k));
+      q.set('page', '1');
+      window.location.search = q.toString();
+      return;
+    }
+    setParam('search', document.getElementById('tableSearch')?.value);
+    setParam('quick_filter', document.getElementById('quickFilter')?.value);
+    setParam('sort', document.getElementById('sortBy')?.value);
+    setParam('sort_dir', document.getElementById('sortDir')?.value);
+    setParam('page_size', document.getElementById('perPage')?.value);
+    setParam('top_n', document.getElementById('topN')?.value);
+    q.set('page', '1');
+    window.location.search = q.toString();
+  };
+
+  document.getElementById('applyFiltersBtn')?.addEventListener('click', () => applyControls(false));
+  document.getElementById('resetFiltersBtn')?.addEventListener('click', () => applyControls(true));
+
+  document.getElementById('prevPageBtn')?.addEventListener('click', () => {
+    q.set('page', String(Math.max(1, page - 1)));
+    window.location.search = q.toString();
+  });
+  document.getElementById('nextPageBtn')?.addEventListener('click', () => {
+    q.set('page', String(Math.min(totalPages, page + 1)));
+    window.location.search = q.toString();
+  });
+
+  const buildExportUrl = (dataset, format) => {
+    const p = new URLSearchParams(window.location.search);
+    p.set('page', 'kpis');
+    p.set('dataset', dataset);
+    p.set('format', format);
+    return "{{ url_for('customers.export') }}?" + p.toString();
+  };
+  const exportXlsxBtn = document.getElementById('exportXlsxBtn');
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
+  const exportMoversBtn = document.getElementById('exportMoversBtn');
+  const exportLifecycleBtn = document.getElementById('exportLifecycleBtn');
+  const exportCompositionBtn = document.getElementById('exportCompositionBtn');
+  if (exportXlsxBtn) exportXlsxBtn.href = buildExportUrl('table', 'xlsx');
+  if (exportCsvBtn) exportCsvBtn.href = buildExportUrl('table', 'csv');
+  if (exportMoversBtn) exportMoversBtn.href = buildExportUrl('movers', 'xlsx');
+  if (exportLifecycleBtn) exportLifecycleBtn.href = buildExportUrl('lifecycle_funnel', 'xlsx');
+  if (exportCompositionBtn) exportCompositionBtn.href = buildExportUrl('revenue_composition', 'xlsx');
+
+  document.querySelectorAll('.table-row-click').forEach((row) => {
+    const href = row.dataset.href;
+    if (!href) return;
+    row.addEventListener('click', () => { window.location.href = href; });
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.location.href = href;
+      }
+    });
+  });
+
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.forEach((el) => new bootstrap.Tooltip(el));
+
+  const ChartCtor = window.Chart;
+  const buildStableChartOptions = (options = {}) => {
+    const plugins = options.plugins || {};
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 160,
+      animation: false,
+      ...options,
+      plugins: {
+        ...plugins,
+        legend: { display: false, ...(plugins.legend || {}) },
+      },
+    };
+  };
+  const renderStableChart = (canvas, config, attempt = 0) => {
+    if (typeof ChartCtor !== 'function' || !canvas) return null;
+    const frame = canvas.closest('.customer-stable-chart-frame');
+    if (frame && frame.clientWidth === 0 && attempt < 4) {
+      window.requestAnimationFrame(() => renderStableChart(canvas, config, attempt + 1));
+      return null;
+    }
+    return new ChartCtor(canvas, {
+      ...config,
+      options: buildStableChartOptions(config.options || {}),
+    });
+  };
+  const lifecycleCanvas = document.getElementById('lifecycleFunnelChart');
+  if (typeof ChartCtor === 'function' && lifecycleCanvas && Array.isArray(lifecycleData) && lifecycleData.length) {
+    renderStableChart(lifecycleCanvas, {
+      type: 'bar',
+      data: {
+        labels: lifecycleData.map((d) => d.stage || 'Unknown'),
+        datasets: [{
+          label: 'Customers',
+          data: lifecycleData.map((d) => Number(d.customers || 0)),
+          backgroundColor: ['#0d6efd', '#198754', '#fd7e14', '#dc3545']
+        }],
+      },
+      options: {
+        scales: {
+          x: { ticks: { autoSkip: false, maxRotation: 0, minRotation: 0 } },
+        },
+      },
+    });
+  }
+
+  const compositionCanvas = document.getElementById('revenueCompositionChart');
+  if (typeof ChartCtor === 'function' && compositionCanvas && Array.isArray(compositionData) && compositionData.length) {
+    renderStableChart(compositionCanvas, {
+      type: 'bar',
+      data: {
+        labels: compositionData.map((d) => d.segment || 'Unknown'),
+        datasets: [{ label: 'Revenue', data: compositionData.map((d) => Number(d.revenue || 0)), backgroundColor: '#0a58ca' }],
+      },
+      options: {
+        scales: {
+          x: { ticks: { maxRotation: 0, minRotation: 0 } },
+          y: { ticks: { callback: (value) => '$' + Number(value).toLocaleString() } },
+        },
+      },
+    });
+  }
+
+  const STORAGE_KEY = 'customers_kpis_saved_views_v3';
+  const readViews = () => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+  };
+  const writeViews = (views) => localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
+  const selector = document.getElementById('savedViewSelect');
+  const hydrateSavedViews = () => {
+    if (!selector) return;
+    const views = readViews();
+    selector.innerHTML = '<option value="">Saved Views</option>';
+    Object.keys(views).sort().forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      selector.appendChild(opt);
+    });
+  };
+
+  document.getElementById('saveViewBtn')?.addEventListener('click', () => {
+    const name = window.prompt('Saved view name');
+    if (!name) return;
+    const views = readViews();
+    views[name] = {
+      search: document.getElementById('tableSearch')?.value || '',
+      quick_filter: document.getElementById('quickFilter')?.value || 'all',
+      sort: document.getElementById('sortBy')?.value || 'revenue',
+      sort_dir: document.getElementById('sortDir')?.value || 'desc',
+      page_size: document.getElementById('perPage')?.value || '25',
+      top_n: document.getElementById('topN')?.value || '',
+    };
+    writeViews(views);
+    hydrateSavedViews();
+    if (selector) selector.value = name;
+  });
+
+  selector?.addEventListener('change', () => {
+    const name = selector.value;
+    if (!name) return;
+    const view = readViews()[name];
+    if (!view) return;
+    document.getElementById('tableSearch').value = view.search || '';
+    document.getElementById('quickFilter').value = view.quick_filter || 'all';
+    document.getElementById('sortBy').value = view.sort || 'revenue';
+    document.getElementById('sortDir').value = view.sort_dir || 'desc';
+    document.getElementById('perPage').value = view.page_size || '25';
+    document.getElementById('topN').value = view.top_n || '';
+    applyControls(false);
+  });
+  hydrateSavedViews();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+})();
+</script>
+<style>
+.kpi-shell {
+  border: 1px solid #dee2e6;
+  border-radius: 0.65rem;
+  background: #ffffff;
+  padding: 0.75rem 0.9rem;
+  height: 100%;
+}
+.kpi-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #5f6b7a;
+  letter-spacing: 0.04em;
+}
+.kpi-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+.kpi-delta {
+  font-size: 0.82rem;
+}
+.customer-table thead th { z-index: 5; }
+.customer-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+.table-row-click:focus { outline: 2px solid #0d6efd; outline-offset: -2px; }
+</style>
+{% endblock %}

@@ -1,0 +1,894 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+{% set rfm = rfm or {} %}
+{% set settings = rfm.get('settings') or {} %}
+{% set filters = rfm.get('filters') or {} %}
+{% set insights = rfm.get('insights') or {} %}
+{% set risk_opportunity = rfm.get('risk_opportunity') or {} %}
+{% set matrix = rfm.get('matrix') or {} %}
+{% set matrix_rows = matrix.get('rows') or [] %}
+{% set selected_cell = matrix.get('selected_cell') or {} %}
+{% set segment_leaderboard = rfm.get('segment_leaderboard') or rfm.get('segment_summary') or [] %}
+{% set segment_table = rfm.get('segment_table') or {} %}
+{% set customers_table = rfm.get('customers_table') or {} %}
+{% set histograms = rfm.get('histograms') or {} %}
+{% set scatter_v2 = rfm.get('scatter_v2') or {} %}
+{% set donut = rfm.get('donut') or [] %}
+{% set segment_playbooks = rfm.get('segment_playbooks') or [] %}
+{% set rfm_defs = (definitions.get('rfm') or {}) if definitions else {} %}
+
+{% macro fmt_currency(value) -%}
+  {% if value is not none and value == value %}
+    {{ value|currency }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_percent(value) -%}
+  {% if value is not none and value == value %}
+    {{ '%.1f'|format(value|float) }}%
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro fmt_int(value) -%}
+  {% if value is not none and value == value %}
+    {{ '{:,.0f}'.format(value|float) }}
+  {% else %}
+    <span class="text-muted">&mdash;</span>
+  {% endif %}
+{%- endmacro %}
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
+  <li class="nav-item"><a class="nav-link active" href="{{ url_for('customers.rfm') }}">RFM</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
+  <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.clv') }}">CLV</a></li>
+  <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+</ul>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="RFM explained">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">RFM Explained</h2>
+    <span class="small text-muted">{{ settings.get('computed_window_note') or ('Computed using last ' ~ (settings.get('lookback_months') or 12) ~ ' months ending on ' ~ (settings.get('lookback_end') or 'n/a') ~ '.') }}</span>
+  </div>
+  <div class="card-body py-3">
+    <div class="row g-3 small">
+      <div class="col-12 col-lg-6">
+        <div><strong>Recency</strong>: {{ rfm_defs.get('recency') or 'Recency = days since last order (lower is better).' }}</div>
+        <div><strong>Frequency</strong>: {{ rfm_defs.get('frequency') or 'Frequency = number of orders in lookback.' }}</div>
+        <div><strong>Monetary</strong>: {{ rfm_defs.get('monetary') or 'Monetary = revenue/profit in lookback.' }}</div>
+        <div><strong>Score scale</strong>: {{ rfm_defs.get('score_scale') or 'R/F/M each score from 1 to 5 (5 is best).' }}</div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div><strong>Scoring method</strong>: {% if settings.get('scoring_method') == 'fixed' %}{{ rfm_defs.get('score_method_fixed') }}{% else %}{{ rfm_defs.get('score_method_quantile') }}{% endif %}</div>
+        <div><strong>Segments</strong>: {{ rfm_defs.get('segments') }}</div>
+        <div><strong>No activity policy</strong>: Customers with no lookback activity are currently <strong>{{ settings.get('no_activity_policy') or 'excluded' }}</strong>.</div>
+        {% if settings.get('monetary_caveat') %}
+        <div class="text-warning"><strong>Cost caveat</strong>: {{ settings.get('monetary_caveat') }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="RFM settings">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">RFM Settings</h2>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#rfmSettingsPanel" aria-expanded="false" aria-controls="rfmSettingsPanel">Configure</button>
+  </div>
+  <div id="rfmSettingsPanel" class="collapse">
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-12 col-md-2">
+          <label for="rfmLookback" class="form-label form-label-sm mb-1">Lookback (months)</label>
+          <select id="rfmLookback" class="form-select form-select-sm" aria-label="RFM lookback months">
+            {% for m in [6, 12, 24, 36] %}
+            <option value="{{ m }}" {% if settings.get('lookback_months') == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="rfmMethod" class="form-label form-label-sm mb-1">Scoring method</label>
+          <select id="rfmMethod" class="form-select form-select-sm" aria-label="RFM scoring method">
+            <option value="quantile" {% if settings.get('scoring_method') == 'quantile' %}selected{% endif %}>Quantiles</option>
+            <option value="fixed" {% if settings.get('scoring_method') == 'fixed' %}selected{% endif %}>Fixed thresholds</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="rfmMonetaryMetric" class="form-label form-label-sm mb-1">Monetary metric</label>
+          <select id="rfmMonetaryMetric" class="form-select form-select-sm" aria-label="RFM monetary metric">
+            <option value="revenue" {% if settings.get('requested_monetary_metric') == 'revenue' %}selected{% endif %}>Revenue</option>
+            <option value="profit" {% if settings.get('requested_monetary_metric') == 'profit' %}selected{% endif %}>Profit</option>
+            <option value="gross_profit" {% if settings.get('requested_monetary_metric') == 'gross_profit' %}selected{% endif %}>Gross profit</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="rfmRecencyThresholds" class="form-label form-label-sm mb-1">R thresholds</label>
+          <input id="rfmRecencyThresholds" class="form-control form-control-sm" value="{{ (settings.get('recency_thresholds') or [])|join(',') }}" aria-label="Recency fixed thresholds">
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="rfmFrequencyThresholds" class="form-label form-label-sm mb-1">F thresholds</label>
+          <input id="rfmFrequencyThresholds" class="form-control form-control-sm" value="{{ (settings.get('frequency_thresholds') or [])|join(',') }}" aria-label="Frequency fixed thresholds">
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="rfmMonetaryThresholds" class="form-label form-label-sm mb-1">M thresholds</label>
+          <input id="rfmMonetaryThresholds" class="form-control form-control-sm" value="{{ (settings.get('monetary_thresholds') or [])|join(',') }}" aria-label="Monetary fixed thresholds">
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button id="rfmComputeBtn" class="btn btn-sm btn-primary" type="button">Apply</button>
+        <button id="rfmResetBtn" class="btn btn-sm btn-outline-secondary" type="button">Reset RFM Filters</button>
+      </div>
+      <div class="small text-muted mt-2">
+        Lookback: {{ settings.get('lookback_start') }} to {{ settings.get('lookback_end') }}. Prior window: {{ settings.get('prior_start') }} to {{ settings.get('prior_end') }}.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="Risk and opportunity cards">
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">At-Risk Customers</div><div class="h4 mb-0">{{ fmt_int(risk_opportunity.get('at_risk_customers')) }}</div><div class="small text-muted">Revenue at stake: {{ fmt_currency(risk_opportunity.get('at_risk_revenue_stake')) }}</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">Can't Lose Them</div><div class="h4 mb-0">{{ fmt_int(risk_opportunity.get('cant_lose_customers')) }}</div><div class="small text-muted">High historical value, low recency</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">New Customers</div><div class="h4 mb-0">{{ fmt_int(risk_opportunity.get('new_customers')) }}</div><div class="small text-muted">Recent and low-frequency accounts</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-3">
+    <div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="small text-muted text-uppercase">Reactivated</div><div class="h4 mb-0">{{ fmt_int(risk_opportunity.get('reactivated_customers')) }}</div><div class="small text-muted">Recent purchase after inactivity</div></div></div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Segment leaderboard">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">Segment Leaderboard</h2>
+    <div class="d-flex gap-2">
+      <a id="rfmExportSegmentsBtn" class="btn btn-sm btn-outline-primary" href="#">Export Leaderboard</a>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#donutPanel" aria-expanded="false" aria-controls="donutPanel">View as donut</button>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table id="segmentLeaderboardTable" class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="segment" aria-label="Sort leaderboard by segment">Segment</button></th>
+          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="customers" aria-label="Sort leaderboard by customers">Customers</button></th>
+          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue" aria-label="Sort leaderboard by revenue">Revenue</button></th>
+          {% if show_costs %}<th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="profit" aria-label="Sort leaderboard by profit">Profit</button></th>{% endif %}
+          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="avg_orders" aria-label="Sort leaderboard by average orders">Avg orders</button></th>
+          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="median_recency_days" aria-label="Sort leaderboard by median recency">Median recency</button></th>
+          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue_share_pct" aria-label="Sort leaderboard by share">Share %</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in segment_leaderboard %}
+        {% if (row.get('customers') or 0) > 0 %}
+        <tr
+          data-segment="{{ row.get('segment') or '' }}"
+          data-customers="{{ row.get('customers') or 0 }}"
+          data-revenue="{{ row.get('revenue') or 0 }}"
+          data-profit="{{ row.get('profit') or 0 }}"
+          data-avg_orders="{{ row.get('avg_orders') or 0 }}"
+          data-median_recency_days="{{ row.get('median_recency_days') or 0 }}"
+          data-revenue_share_pct="{{ row.get('revenue_share_pct') or 0 }}"
+        >
+          <td class="fw-semibold">{{ row.get('segment') }}</td>
+          <td class="text-end">{{ fmt_int(row.get('customers')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('revenue')) }}</td>
+          {% if show_costs %}<td class="text-end">{{ fmt_currency(row.get('profit')) }}</td>{% endif %}
+          <td class="text-end">{{ '%.2f'|format(row.get('avg_orders') or 0) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('median_recency_days')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('revenue_share_pct')) }}</td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No segment rows available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div id="donutPanel" class="collapse border-top">
+    <div class="p-3">
+      <div class="small text-muted mb-2">Optional quick-share view only.</div>
+      <canvas id="rfmDonutChart" height="160" aria-label="RFM segment donut"></canvas>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3">
+  <div class="col-12 col-xl-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0">R x F Segmentation Matrix (5x5)</h2>
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted">Selected: {% if selected_cell.get('r_score') and selected_cell.get('f_score') %}R{{ selected_cell.get('r_score') }} / F{{ selected_cell.get('f_score') }}{% else %}All{% endif %}</span>
+          <button id="clearHeatFilterBtn" class="btn btn-sm btn-outline-secondary" type="button">Clear cell filter</button>
+          <a id="rfmExportHeatCustomersBtn" class="btn btn-sm btn-outline-primary" href="#">Export cell customers</a>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 rfm-matrix-table" aria-label="RFM matrix">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">R \ F</th>
+                {% for f_score in [1, 2, 3, 4, 5] %}
+                <th scope="col" class="text-center">F{{ f_score }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in matrix_rows %}
+              <tr>
+                <th scope="row" class="text-center">R{{ row.get('r_score') }}</th>
+                {% for cell in row.get('cells') or [] %}
+                {% set intensity = (cell.get('revenue_share_pct') or 0)|float %}
+                <td class="text-center p-1">
+                  <button
+                    type="button"
+                    class="btn btn-sm w-100 heat-cell {% if cell.get('active') %}active{% endif %}"
+                    data-r="{{ cell.get('r_score') }}"
+                    data-f="{{ cell.get('f_score') }}"
+                    aria-label="Filter to R{{ cell.get('r_score') }} F{{ cell.get('f_score') }}"
+                    style="background-color: rgba(13, 110, 253, {{ [0.08, (0.08 + intensity / 140.0)]|max }});"
+                  >
+                    <div class="fw-semibold">{{ fmt_int(cell.get('customers')) }}</div>
+                    <div class="small text-muted">{{ fmt_percent(cell.get('revenue_share_pct')) }}</div>
+                  </button>
+                </td>
+                {% endfor %}
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-center text-muted py-4">No RFM matrix data available.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">Lookback Summary</h2></div>
+      <div class="card-body small">
+        <div class="mb-2"><strong>Customers:</strong> {{ fmt_int(insights.get('customers_lookback')) }}</div>
+        <div class="mb-2"><strong>Revenue:</strong> {{ fmt_currency(insights.get('revenue_lookback')) }}</div>
+        <div class="mb-2"><strong>Repeat rate:</strong> {{ fmt_percent(insights.get('repeat_rate_lookback')) }}</div>
+        <div class="mb-2"><strong>Top segment by revenue:</strong> {{ insights.get('top_segment_by_revenue') or '—' }}</div>
+        <div class="mb-2"><strong>Top segment by growth:</strong> {{ insights.get('top_segment_by_growth') or '—' }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3 mb-3" aria-label="RFM distributions">
+  <div class="col-12 col-lg-6 customer-stable-chart-col">
+    <div class="card border-0 shadow-sm h-100 customer-stable-chart-card">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">Recency Distribution (Customers)</h2></div>
+      <div class="card-body customer-stable-chart-card__body">
+        <div class="customer-stable-chart-frame">
+          <canvas id="rfmRecencyHistogram" aria-label="Recency histogram"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6 customer-stable-chart-col">
+    <div class="card border-0 shadow-sm h-100 customer-stable-chart-card">
+      <div class="card-header bg-white"><h2 class="h6 mb-0">Monetary Distribution (Revenue Weighted)</h2></div>
+      <div class="card-body customer-stable-chart-card__body">
+        <div class="customer-stable-chart-frame">
+          <canvas id="rfmMonetaryHistogram" aria-label="Monetary histogram"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Customers in selection">
+  <div class="card-header bg-white">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label for="rfmSearch" class="form-label small mb-1">Search customer</label>
+        <input id="rfmSearch" class="form-control form-control-sm" value="{{ filters.get('search') or '' }}" aria-label="Search customers in RFM table">
+      </div>
+      <div class="col-12 col-md-3">
+        <label for="rfmSegmentFilter" class="form-label small mb-1">Segments</label>
+        <select id="rfmSegmentFilter" class="form-select form-select-sm" multiple aria-label="RFM segment filter">
+          {% for row in segment_leaderboard %}
+          {% set seg_name = row.get('segment') %}
+          {% if seg_name %}
+          <option value="{{ seg_name }}" {% if seg_name in (filters.get('segments') or []) %}selected{% endif %}>{{ seg_name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="rMin" class="form-label small mb-1">R min</label>
+        <input id="rMin" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('r_min') or 1 }}">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="rMax" class="form-label small mb-1">R max</label>
+        <input id="rMax" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('r_max') or 5 }}">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="fMin" class="form-label small mb-1">F min</label>
+        <input id="fMin" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('f_min') or 1 }}">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="fMax" class="form-label small mb-1">F max</label>
+        <input id="fMax" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('f_max') or 5 }}">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="mMin" class="form-label small mb-1">M min</label>
+        <input id="mMin" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('m_min') or 1 }}">
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="mMax" class="form-label small mb-1">M max</label>
+        <input id="mMax" class="form-control form-control-sm" type="number" min="1" max="5" value="{{ filters.get('m_max') or 5 }}">
+      </div>
+      <div class="col-12 col-md-2">
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" id="rfmAtRiskOnly" {% if filters.get('at_risk_only') %}checked{% endif %}>
+          <label class="form-check-label small" for="rfmAtRiskOnly">At risk only</label>
+        </div>
+      </div>
+      <div class="col-12 col-md-2">
+        <label for="rfmTopMode" class="form-label small mb-1">Top list mode</label>
+        <select id="rfmTopMode" class="form-select form-select-sm">
+          <option value="rfm_score" {% if segment_table.get('mode') == 'rfm_score' %}selected{% endif %}>Top by RFM score</option>
+          <option value="monetary" {% if segment_table.get('mode') == 'monetary' %}selected{% endif %}>Top by monetary</option>
+          <option value="at_risk" {% if segment_table.get('mode') == 'at_risk' %}selected{% endif %}>At-risk prioritized</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <label for="rfmTopN" class="form-label small mb-1">Top N</label>
+        <input id="rfmTopN" class="form-control form-control-sm" type="number" min="1" max="1000" value="{{ segment_table.get('top_n') or 25 }}">
+      </div>
+      <div class="col-12 col-md-3">
+        <label for="rfmScatterMode" class="form-label small mb-1">Scatter mode</label>
+        <select id="rfmScatterMode" class="form-select form-select-sm">
+          <option value="frequency_monetary" {% if scatter_v2.get('mode') == 'frequency_monetary' %}selected{% endif %}>Frequency vs Monetary</option>
+          <option value="recency_monetary" {% if scatter_v2.get('mode') == 'recency_monetary' %}selected{% endif %}>Recency vs Monetary</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label for="rfmSortBy" class="form-label small mb-1">Table sort</label>
+        <select id="rfmSortBy" class="form-select form-select-sm">
+          <option value="rfm_score" {% if customers_table.get('sort_by') == 'rfm_score' %}selected{% endif %}>RFM score</option>
+          <option value="monetary" {% if customers_table.get('sort_by') == 'monetary_value' %}selected{% endif %}>Monetary</option>
+          <option value="revenue" {% if customers_table.get('sort_by') == 'revenue' %}selected{% endif %}>Revenue</option>
+          <option value="profit" {% if customers_table.get('sort_by') == 'profit' %}selected{% endif %}>Profit</option>
+          <option value="frequency" {% if customers_table.get('sort_by') == 'frequency' %}selected{% endif %}>Frequency</option>
+          <option value="recency" {% if customers_table.get('sort_by') == 'recency_days' %}selected{% endif %}>Recency</option>
+          <option value="delta_revenue" {% if customers_table.get('sort_by') == 'delta_revenue' %}selected{% endif %}>Delta revenue</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="rfmSortDir" class="form-label small mb-1">Dir</label>
+        <select id="rfmSortDir" class="form-select form-select-sm">
+          <option value="desc" {% if customers_table.get('sort_dir') != 'asc' %}selected{% endif %}>Desc</option>
+          <option value="asc" {% if customers_table.get('sort_dir') == 'asc' %}selected{% endif %}>Asc</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label for="rfmPageSize" class="form-label small mb-1">Rows</label>
+        <select id="rfmPageSize" class="form-select form-select-sm">
+          {% for n in [25, 50, 100] %}
+          <option value="{{ n }}" {% if customers_table.get('page_size') == n %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-6 d-flex gap-2 flex-wrap">
+        <button id="rfmApplyBtn" class="btn btn-sm btn-primary" type="button">Apply</button>
+        <a id="rfmExportCustomersXlsxBtn" class="btn btn-sm btn-success" href="#">Export XLSX</a>
+        <a id="rfmExportCustomersCsvBtn" class="btn btn-sm btn-outline-success" href="#">Export CSV</a>
+        <a id="rfmExportTopBtn" class="btn btn-sm btn-outline-primary" href="#">Export Top List</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Top customers">
+  <div class="card-header bg-white"><h2 class="h6 mb-0">Top Customers</h2></div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th title="Customer name and ID">Customer</th>
+          <th title="RFM segment assignment">Segment</th>
+          <th class="text-center" title="Recency score">R</th>
+          <th class="text-center" title="Frequency score">F</th>
+          <th class="text-center" title="Monetary score">M</th>
+          <th class="text-center" title="R+F+M">RFM</th>
+          <th class="text-end" title="Monetary value in lookback">Monetary</th>
+          <th class="text-end" title="Orders in lookback">Orders</th>
+          <th class="text-end" title="Days since last order">Days since last</th>
+          <th class="text-end">Last order</th>
+          <th class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in segment_table.get('rows') or [] %}
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+          <td>
+            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="small text-muted">{{ row.get('customer_id') }}</div>
+          </td>
+          <td>{{ row.get('segment') }}</td>
+          <td class="text-center">{{ row.get('r_score') }}</td>
+          <td class="text-center">{{ row.get('f_score') }}</td>
+          <td class="text-center">{{ row.get('m_score') }}</td>
+          <td class="text-center fw-semibold">{{ row.get('rfm_score') }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('monetary')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('frequency')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('recency_days')) }}</td>
+          <td class="text-end">{{ row.get('last_order_date') or '—' }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('delta_revenue')) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="text-center text-muted py-4">No top customers found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Customers in selection table">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">Customers in Selection</h2>
+    <div class="small text-muted">Rows: {{ fmt_int(customers_table.get('total_rows')) }}</div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0 full-rfm-table">
+      <thead class="table-light position-sticky top-0">
+        <tr>
+          <th title="Customer name and ID">Customer</th>
+          <th title="RFM segment assignment">Segment</th>
+          <th class="text-center" title="Recency score">R</th>
+          <th class="text-center" title="Frequency score">F</th>
+          <th class="text-center" title="Monetary score">M</th>
+          <th class="text-center" title="R+F+M">RFM total</th>
+          <th class="text-end" title="Monetary value in lookback">Monetary</th>
+          <th class="text-end" title="Revenue in lookback">Revenue</th>
+          {% if show_costs %}<th class="text-end" title="Profit in lookback">Profit</th>{% endif %}
+          <th class="text-end" title="Orders in lookback">Orders</th>
+          <th class="text-end" title="Days since last order">Days since last</th>
+          <th class="text-end">Last order</th>
+          <th class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
+          <th class="text-end" title="Percent change versus prior window">Δ Revenue %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in customers_table.get('rows') or [] %}
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+          <td>
+            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="small text-muted">{{ row.get('customer_id') }}</div>
+          </td>
+          <td>{{ row.get('segment') }}</td>
+          <td class="text-center">{{ row.get('r_score') }}</td>
+          <td class="text-center">{{ row.get('f_score') }}</td>
+          <td class="text-center">{{ row.get('m_score') }}</td>
+          <td class="text-center fw-semibold">{{ row.get('rfm_score') }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('monetary')) }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('revenue')) }}</td>
+          {% if show_costs %}<td class="text-end">{{ fmt_currency(row.get('profit')) }}</td>{% endif %}
+          <td class="text-end">{{ fmt_int(row.get('frequency')) }}</td>
+          <td class="text-end">{{ fmt_int(row.get('recency_days')) }}</td>
+          <td class="text-end">{{ row.get('last_order_date') or '—' }}</td>
+          <td class="text-end">{{ fmt_currency(row.get('delta_revenue')) }}</td>
+          <td class="text-end">{{ fmt_percent(row.get('delta_revenue_pct')) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="14" class="text-center text-muted py-4">No customers match current RFM filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="small text-muted">Page {{ customers_table.get('page') or 1 }} of {{ customers_table.get('total_pages') or 1 }}</div>
+    <div class="btn-group btn-group-sm">
+      <button id="rfmPrevPageBtn" class="btn btn-outline-secondary" type="button" {% if (customers_table.get('page') or 1) <= 1 %}disabled{% endif %}>Prev</button>
+      <button id="rfmNextPageBtn" class="btn btn-outline-secondary" type="button" {% if (customers_table.get('page') or 1) >= (customers_table.get('total_pages') or 1) %}disabled{% endif %}>Next</button>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-3" aria-label="Segment playbooks">
+  <div class="card-header bg-white"><h2 class="h6 mb-0">Segment Playbooks</h2></div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for play in segment_playbooks %}
+      <div class="col-12 col-xl-6">
+        <div class="border rounded p-3 h-100">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="fw-semibold">{{ play.get('segment') }}</div>
+              <div class="small text-muted">Goal: {{ play.get('goal') }}</div>
+            </div>
+            <div class="small text-muted">{{ fmt_int(play.get('customers')) }} customers</div>
+          </div>
+          <ul class="small mb-2">
+            {% for action in play.get('actions') or [] %}
+            <li>{{ action }}</li>
+            {% endfor %}
+          </ul>
+          <div class="small text-muted mb-1">Key accounts</div>
+          <div class="small">
+            {% for account in play.get('key_accounts') or [] %}
+              {% if account.get('url') %}<a href="{{ account.get('url') }}">{{ account.get('customer_name') or account.get('customer_id') }}</a>{% else %}{{ account.get('customer_name') or account.get('customer_id') }}{% endif %}
+              <span class="text-muted">({{ fmt_currency(account.get('revenue')) }})</span>{% if not loop.last %}, {% endif %}
+            {% else %}
+              <span class="text-muted">No key accounts in selection.</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12"><div class="text-muted small">No segment playbooks available for current filters.</div></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 shadow-sm">
+  <div class="card-header bg-white">
+    <h2 class="h6 mb-0">Scatter Analysis</h2>
+    <div class="small text-muted">Quadrant lines are set at the selected population medians. Click any point to open customer drilldown.</div>
+  </div>
+  <div class="card-body">
+    <canvas id="rfmScatterChart" height="180" aria-label="RFM scatter plot"></canvas>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.addEventListener("load", () => {
+  const q = new URLSearchParams(window.location.search);
+  const recencyHist = {{ (((rfm.get('histograms') or {}).get('recency') or []) | tojson) }};
+  const monetaryHist = {{ (((rfm.get('histograms') or {}).get('monetary') or []) | tojson) }};
+  const donutRows = {{ ((rfm.get('donut') or []) | tojson) }};
+  const scatterPayload = {{ ((rfm.get('scatter_v2') or {}) | tojson) }};
+  const fullTable = {{ (((rfm.get('customers_table') or {}) | tojson)) }};
+  const pageNum = Number(fullTable.page || 1);
+  const totalPages = Number(fullTable.total_pages || 1);
+
+  const setParam = (key, value) => {
+    const text = (value ?? "").toString().trim();
+    if (!text) q.delete(key);
+    else q.set(key, text);
+  };
+
+  const getSelectedSegments = () => {
+    const sel = document.getElementById("rfmSegmentFilter");
+    if (!sel) return "";
+    const values = Array.from(sel.selectedOptions || []).map((o) => o.value).filter(Boolean);
+    return values.join(",");
+  };
+
+  const applyControls = ({ reset = false, keepPage = false } = {}) => {
+    const keys = [
+      "rfm_lookback_months", "rfm_scoring_method", "rfm_monetary_metric",
+      "rfm_recency_thresholds", "rfm_frequency_thresholds", "rfm_monetary_thresholds",
+      "rfm_search", "rfm_segments", "rfm_at_risk_only", "heat_r", "heat_f",
+      "r_min", "r_max", "f_min", "f_max", "m_min", "m_max",
+      "rfm_top_mode", "rfm_top_n", "rfm_scatter_mode",
+      "rfm_sort_by", "rfm_sort_dir", "rfm_page_size", "rfm_page"
+    ];
+    if (reset) keys.forEach((k) => q.delete(k));
+    if (!reset) {
+      setParam("rfm_lookback_months", document.getElementById("rfmLookback")?.value);
+      setParam("rfm_scoring_method", document.getElementById("rfmMethod")?.value);
+      setParam("rfm_monetary_metric", document.getElementById("rfmMonetaryMetric")?.value);
+      setParam("rfm_recency_thresholds", document.getElementById("rfmRecencyThresholds")?.value);
+      setParam("rfm_frequency_thresholds", document.getElementById("rfmFrequencyThresholds")?.value);
+      setParam("rfm_monetary_thresholds", document.getElementById("rfmMonetaryThresholds")?.value);
+      setParam("rfm_search", document.getElementById("rfmSearch")?.value);
+      setParam("rfm_segments", getSelectedSegments());
+      setParam("rfm_top_mode", document.getElementById("rfmTopMode")?.value);
+      setParam("rfm_top_n", document.getElementById("rfmTopN")?.value);
+      setParam("rfm_scatter_mode", document.getElementById("rfmScatterMode")?.value);
+      setParam("rfm_sort_by", document.getElementById("rfmSortBy")?.value);
+      setParam("rfm_sort_dir", document.getElementById("rfmSortDir")?.value);
+      setParam("rfm_page_size", document.getElementById("rfmPageSize")?.value);
+      setParam("r_min", document.getElementById("rMin")?.value);
+      setParam("r_max", document.getElementById("rMax")?.value);
+      setParam("f_min", document.getElementById("fMin")?.value);
+      setParam("f_max", document.getElementById("fMax")?.value);
+      setParam("m_min", document.getElementById("mMin")?.value);
+      setParam("m_max", document.getElementById("mMax")?.value);
+      if (document.getElementById("rfmAtRiskOnly")?.checked) q.set("rfm_at_risk_only", "1");
+      else q.delete("rfm_at_risk_only");
+    }
+    if (!keepPage) q.set("rfm_page", "1");
+    window.location.search = q.toString();
+  };
+
+  document.getElementById("rfmComputeBtn")?.addEventListener("click", () => applyControls({ reset: false }));
+  document.getElementById("rfmApplyBtn")?.addEventListener("click", () => applyControls({ reset: false }));
+  document.getElementById("rfmResetBtn")?.addEventListener("click", () => applyControls({ reset: true }));
+  document.getElementById("clearHeatFilterBtn")?.addEventListener("click", () => {
+    q.delete("heat_r");
+    q.delete("heat_f");
+    q.set("rfm_page", "1");
+    window.location.search = q.toString();
+  });
+
+  document.querySelectorAll(".heat-cell").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const r = btn.getAttribute("data-r");
+      const f = btn.getAttribute("data-f");
+      if (!r || !f) return;
+      q.set("heat_r", r);
+      q.set("heat_f", f);
+      q.set("rfm_page", "1");
+      window.location.search = q.toString();
+    });
+  });
+
+  document.getElementById("rfmPrevPageBtn")?.addEventListener("click", () => {
+    const next = Math.max(1, pageNum - 1);
+    q.set("rfm_page", String(next));
+    window.location.search = q.toString();
+  });
+  document.getElementById("rfmNextPageBtn")?.addEventListener("click", () => {
+    const next = Math.min(totalPages, pageNum + 1);
+    q.set("rfm_page", String(next));
+    window.location.search = q.toString();
+  });
+
+  const buildAliasExportUrl = (type, format) => {
+    const p = new URLSearchParams(window.location.search);
+    p.set("type", type);
+    p.set("format", format);
+    return "{{ url_for('customers.rfm_export_alias') }}?" + p.toString();
+  };
+  const eCustomersXlsx = document.getElementById("rfmExportCustomersXlsxBtn");
+  const eCustomersCsv = document.getElementById("rfmExportCustomersCsvBtn");
+  const eTop = document.getElementById("rfmExportTopBtn");
+  const eSegments = document.getElementById("rfmExportSegmentsBtn");
+  const eHeatCustomers = document.getElementById("rfmExportHeatCustomersBtn");
+  if (eCustomersXlsx) eCustomersXlsx.href = buildAliasExportUrl("customers", "xlsx");
+  if (eCustomersCsv) eCustomersCsv.href = buildAliasExportUrl("customers", "csv");
+  if (eTop) eTop.href = buildAliasExportUrl("top", "xlsx");
+  if (eSegments) eSegments.href = buildAliasExportUrl("segments", "xlsx");
+  if (eHeatCustomers) eHeatCustomers.href = buildAliasExportUrl("heatmap", "xlsx");
+
+  document.querySelectorAll(".table-row-click").forEach((row) => {
+    const href = row.getAttribute("data-href");
+    if (!href) return;
+    row.addEventListener("click", () => (window.location.href = href));
+    row.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        window.location.href = href;
+      }
+    });
+  });
+
+  const leaderboard = document.getElementById("segmentLeaderboardTable");
+  const leaderboardBody = leaderboard?.querySelector("tbody");
+  let leaderboardSort = { key: "revenue", dir: "desc" };
+  const parseSortValue = (row, key) => {
+    if (key === "segment") return (row.dataset.segment || "").toLowerCase();
+    return Number(row.dataset[key] || 0);
+  };
+  const sortLeaderboard = (key) => {
+    if (!leaderboardBody) return;
+    if (leaderboardSort.key === key) leaderboardSort.dir = leaderboardSort.dir === "asc" ? "desc" : "asc";
+    else leaderboardSort = { key, dir: key === "segment" ? "asc" : "desc" };
+    const rows = Array.from(leaderboardBody.querySelectorAll("tr")).filter((r) => r.dataset && Object.keys(r.dataset).length);
+    rows.sort((a, b) => {
+      const va = parseSortValue(a, key);
+      const vb = parseSortValue(b, key);
+      if (typeof va === "string" || typeof vb === "string") {
+        return leaderboardSort.dir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      }
+      return leaderboardSort.dir === "asc" ? va - vb : vb - va;
+    });
+    rows.forEach((row) => leaderboardBody.appendChild(row));
+  };
+  document.querySelectorAll(".leaderboard-sort").forEach((btn) => {
+    btn.addEventListener("click", () => sortLeaderboard(btn.getAttribute("data-sort") || "revenue"));
+  });
+
+  if (typeof Chart === "undefined") return;
+  const buildStableChartOptions = (options = {}) => {
+    const plugins = options.plugins || {};
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 160,
+      animation: false,
+      ...options,
+      plugins: {
+        ...plugins,
+        legend: { display: false, ...(plugins.legend || {}) },
+      },
+    };
+  };
+  const renderStableChart = (canvas, config, attempt = 0) => {
+    if (!canvas) return null;
+    const frame = canvas.closest(".customer-stable-chart-frame");
+    if (frame && frame.clientWidth === 0 && attempt < 4) {
+      window.requestAnimationFrame(() => renderStableChart(canvas, config, attempt + 1));
+      return null;
+    }
+    return new Chart(canvas, {
+      ...config,
+      options: buildStableChartOptions(config.options || {}),
+    });
+  };
+
+  const recencyCanvas = document.getElementById("rfmRecencyHistogram");
+  if (recencyCanvas && Array.isArray(recencyHist) && recencyHist.length) {
+    renderStableChart(recencyCanvas, {
+      type: "bar",
+      data: {
+        labels: recencyHist.map((d) => `${Math.round(Number(d.bin_start || 0))}-${Math.round(Number(d.bin_end || 0))}`),
+        datasets: [{ label: "Customers", data: recencyHist.map((d) => Number(d.count || 0)), backgroundColor: "#1f77b4" }]
+      },
+      options: {
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0, minRotation: 0 } },
+        },
+      }
+    });
+  }
+
+  const monetaryCanvas = document.getElementById("rfmMonetaryHistogram");
+  if (monetaryCanvas && Array.isArray(monetaryHist) && monetaryHist.length) {
+    renderStableChart(monetaryCanvas, {
+      type: "bar",
+      data: {
+        labels: monetaryHist.map((d) => `${Math.round(Number(d.bin_start || 0)).toLocaleString()}-${Math.round(Number(d.bin_end || 0)).toLocaleString()}`),
+        datasets: [{ label: "Revenue", data: monetaryHist.map((d) => Number(d.weight || 0)), backgroundColor: "#2ca02c" }]
+      },
+      options: {
+        scales: {
+          x: { ticks: { maxTicksLimit: 6, maxRotation: 0, minRotation: 0 } },
+          y: { ticks: { callback: (v) => "$" + Number(v).toLocaleString() } },
+        }
+      }
+    });
+  }
+
+  const donutCanvas = document.getElementById("rfmDonutChart");
+  if (donutCanvas && Array.isArray(donutRows) && donutRows.length) {
+    new Chart(donutCanvas, {
+      type: "doughnut",
+      data: {
+        labels: donutRows.map((d) => d.segment || "Unknown"),
+        datasets: [{ data: donutRows.map((d) => Number(d.count || 0)) }]
+      },
+      options: { responsive: true }
+    });
+  }
+
+  const scatterCanvas = document.getElementById("rfmScatterChart");
+  if (scatterCanvas && Array.isArray(scatterPayload.points) && scatterPayload.points.length) {
+    const mode = document.getElementById("rfmScatterMode")?.value || scatterPayload.mode || "frequency_monetary";
+    const med = scatterPayload.quadrants || {};
+    const xKey = mode === "recency_monetary" ? "recency_days" : "frequency";
+    const xLabel = mode === "recency_monetary" ? "Recency (days)" : "Frequency";
+    const xMedian = Number(mode === "recency_monetary" ? med.recency_median : med.frequency_median) || 0;
+    const yMedian = Number(med.monetary_median || 0);
+    const points = scatterPayload.points.map((p) => ({
+      x: Number(p[xKey] || 0),
+      y: Number(p.monetary || 0),
+      customer_name: p.customer_name,
+      customer_id: p.customer_id,
+      segment: p.segment,
+      r_score: p.r_score,
+      f_score: p.f_score,
+      m_score: p.m_score,
+      rfm_score: p.rfm_score,
+      revenue: p.revenue,
+      orders: p.orders,
+      recency_days: p.recency_days,
+      last_order_date: p.last_order_date,
+      url: p.url
+    }));
+
+    const segmentColor = (segment) => {
+      const palette = {
+        "Champions": "#1f77b4",
+        "Loyal": "#17becf",
+        "Big Spenders": "#2ca02c",
+        "Potential Loyalists": "#8c564b",
+        "New Customers": "#9467bd",
+        "Promising": "#bcbd22",
+        "Needs Attention": "#ff7f0e",
+        "About to Sleep": "#d62728",
+        "At Risk": "#e15759",
+        "Can't Lose Them": "#b07aa1",
+        "Hibernating": "#7f7f7f",
+        "Lost": "#4e4e4e"
+      };
+      return palette[segment] || "#6c757d";
+    };
+
+    const quadrantPlugin = {
+      id: "rfmQuadrants",
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales?.x || !scales?.y) return;
+        const xPixel = scales.x.getPixelForValue(xMedian);
+        const yPixel = scales.y.getPixelForValue(yMedian);
+        ctx.save();
+        ctx.strokeStyle = "rgba(108,117,125,0.7)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xPixel, chartArea.top);
+        ctx.lineTo(xPixel, chartArea.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPixel);
+        ctx.lineTo(chartArea.right, yPixel);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+
+    new Chart(scatterCanvas, {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: "Customers",
+            data: points,
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            pointBackgroundColor: points.map((p) => segmentColor(p.segment)),
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        parsing: false,
+        scales: {
+          x: { title: { display: true, text: xLabel } },
+          y: { title: { display: true, text: "Monetary" }, ticks: { callback: (v) => "$" + Number(v).toLocaleString() } }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const p = context.raw || {};
+                return `${p.customer_name || p.customer_id} | ${p.segment} | R${p.r_score} F${p.f_score} M${p.m_score} | Rev ${Number(p.revenue || 0).toLocaleString()} | Orders ${p.orders || 0} | Days ${p.recency_days || 0} | Last ${p.last_order_date || "—"}`;
+              }
+            }
+          },
+          legend: { display: false }
+        },
+        onClick(_evt, elements, chart) {
+          if (!elements || !elements.length) return;
+          const idx = elements[0].index;
+          const point = chart.data.datasets[0].data[idx];
+          if (point && point.url) window.location.href = point.url;
+        }
+      },
+      plugins: [quadrantPlugin]
+    });
+
+    document.getElementById("rfmScatterMode")?.addEventListener("change", () => {
+      applyControls({ reset: false });
+    });
+  }
+});
+</script>
+<style>
+.rfm-matrix-table .heat-cell { min-height: 56px; border: 1px solid rgba(0, 0, 0, 0.08); }
+.rfm-matrix-table .heat-cell.active { outline: 2px solid #0d6efd; }
+.full-rfm-table tbody tr:nth-child(even) { background-color: #fafbfd; }
+.table-row-click:focus { outline: 2px solid #0d6efd; outline-offset: -2px; }
+.leaderboard-sort { text-decoration: none; }
+</style>
+{% endblock %}

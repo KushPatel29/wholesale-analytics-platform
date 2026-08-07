@@ -1,0 +1,116 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Returns Approvals</h1>
+      {% if config.get('RETURNS_FINAL_V1') %}
+      <p class="text-muted mb-0">Warehouse sees Pending items. Managers see WH Approved items. Admin sees both.</p>
+      {% else %}
+      <p class="text-muted mb-0">Queue view for warehouse and manager approvals.</p>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.index') }}">Back To List</a>
+      {% if can_permission('returns.create') or can_permission('admin.returns.manage') %}
+      <a class="btn btn-primary" href="{{ url_for('returns_portal.create') }}">New Return</a>
+      {% endif %}
+      {% if not config.get('RETURNS_FINAL_V1') and (can_permission('returns.warehouse.scan') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
+      <a class="btn btn-outline-dark" href="{{ url_for('returns_warehouse.scan') }}">Warehouse Scan</a>
+      {% endif %}
+      {% if (config.get('RETURNS_ANALYTICS') or config.get('RETURNS_FINAL_V1')) and (can_permission('page.returns.analytics.view') or can_permission('admin.returns.manage')) %}
+      <a class="btn btn-outline-success" href="{{ url_for('returns_portal.analytics') }}">Analytics</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if config.get('RETURNS_FINAL_V1') and (can_permission('returns.warehouse.scan') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <details>
+        <summary class="fw-semibold" style="cursor: pointer;">Scan RMA / Barcode</summary>
+        <p class="text-muted mt-3 mb-3">Scanning remains available for warehouse intake, but approvals is the primary queue.</p>
+        <form method="post" action="{{ url_for('returns_warehouse.scan') }}" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-4">
+            <label class="form-label" for="scanRmaId">RMA ID</label>
+            <input class="form-control" id="scanRmaId" name="rma_id" inputmode="numeric" pattern="[0-9]*" placeholder="Enter RMA ID">
+          </div>
+          <div class="col-md-3">
+            <button class="btn btn-outline-dark w-100" type="submit">Open Scan Flow</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Return</th>
+            <th>Status</th>
+            <th>Order</th>
+            <th>Customer</th>
+            <th>Submitted</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rmas %}
+          {% set waiting_warehouse = row.status == 'pending' %}
+          {% set waiting_manager = row.status == 'wh_approved' %}
+          <tr>
+            <td class="fw-semibold">#{{ row.id }}</td>
+            <td>
+              {% if waiting_warehouse %}
+              <span class="badge text-bg-warning">Waiting Warehouse</span>
+              {% elif waiting_manager %}
+              <span class="badge text-bg-info">Waiting Manager</span>
+              {% elif row.status in ['approved', 'approved_refund', 'completed'] %}
+              <span class="badge text-bg-success">Approved</span>
+              {% else %}
+              <span class="badge text-bg-danger">Rejected</span>
+              {% endif %}
+            </td>
+            <td>{{ row.order_id }}</td>
+            <td>{{ row.customer_name or row.customer_id }}</td>
+            <td>{{ row.date_submitted or row.created_at }}</td>
+            <td>
+              <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('returns_portal.detail', rma_id=row.id) }}">View</a>
+                {% if waiting_warehouse and (can_permission('returns.approve.wh') or can_permission('returns.warehouse.receive') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
+                <form method="post" action="{{ url_for('returns_portal.approve_wh', rma_id=row.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-success" type="submit">Warehouse Approve</button>
+                </form>
+                {% endif %}
+                {% if waiting_manager and (can_permission('returns.approve.mgr') or can_permission('returns.ops.approve') or can_permission('returns.approve') or can_permission('admin.returns.manage')) %}
+                <form method="post" action="{{ url_for('returns_portal.approve_mgr', rma_id=row.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-success" type="submit">Manager Approve</button>
+                </form>
+                {% endif %}
+                {% if can_permission('returns.reject') or can_permission('returns.ops.deny') or can_permission('returns.deny') or can_permission('returns.warehouse.receive') or can_permission('admin.returns.manage') %}
+                <form method="post" action="{{ url_for('returns_portal.reject', rma_id=row.id) }}" class="d-flex gap-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input class="form-control form-control-sm" name="reject_reason" placeholder="Reject reason">
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td class="text-muted" colspan="6">No returns are waiting for approval.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

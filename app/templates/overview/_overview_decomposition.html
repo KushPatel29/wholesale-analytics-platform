@@ -1,0 +1,78 @@
+<section class="overview-panel" id="driversSection">
+  <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <div class="panel-eyebrow">Drivers</div>
+      <h2 class="panel-title" id="driversTitle">Revenue drivers and decomposition</h2>
+      <div class="panel-subtitle">Price, volume, and mix are translated into business-driver language so leaders can separate pricing moves from real demand or mix shifts without misreading partial periods.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="btn-group btn-group-sm" role="group" id="driversMetricToggle" aria-label="Driver metric toggle">
+        <button type="button" class="btn btn-outline-secondary active" data-driver-metric="revenue">Revenue</button>
+        <button type="button" class="btn btn-outline-secondary" data-driver-metric="profit">Profit</button>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" id="driversExportBtn" type="button">Export</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="section-meta-row">
+      <div class="summary" id="driversCoverage">Decomposition coverage details will appear with active data.</div>
+      <div class="d-flex align-items-center gap-3 flex-wrap small">
+        <a href="#moversPanel" id="driversMoversLink" class="text-decoration-none">Open customer movers</a>
+        <a href="#moversPanel" id="driversSkuMixLink" class="text-decoration-none">Open product movers</a>
+      </div>
+    </div>
+    <div id="driversEmpty" class="text-muted small d-none">Not enough history to compute drivers.</div>
+    <div class="row g-3" id="driversPeriods">
+      <div class="col-xl-6">
+        <div class="drivers-period-card h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="driversMomTitle">Primary comparison</h6>
+            <span class="badge rounded-pill text-bg-light border" id="driversMomDeltaPct">n/a</span>
+          </div>
+          <div id="driversMomContext" class="text-muted small mb-2">Comparison context unavailable.</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Driver</th>
+                  <th scope="col" class="text-end">Δ $</th>
+                  <th scope="col" class="text-end">Share of Δ</th>
+                  <th scope="col" class="text-end">Direction</th>
+                </tr>
+              </thead>
+              <tbody id="driversMomRows"></tbody>
+            </table>
+          </div>
+          <div id="driversMomInsight" class="drivers-insight text-muted small"></div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="drivers-period-card h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="driversYoyTitle">Same period last year</h6>
+            <span class="badge rounded-pill text-bg-light border" id="driversYoyDeltaPct">n/a</span>
+          </div>
+          <div id="driversYoyContext" class="text-muted small mb-2">Year-over-year context unavailable.</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Driver</th>
+                  <th scope="col" class="text-end">Δ $</th>
+                  <th scope="col" class="text-end">Share of Δ</th>
+                  <th scope="col" class="text-end">Direction</th>
+                </tr>
+              </thead>
+              <tbody id="driversYoyRows"></tbody>
+            </table>
+          </div>
+          <div id="driversYoyInsight" class="drivers-insight text-muted small"></div>
+        </div>
+      </div>
+    </div>
+    <details id="driversDetailsPanel" class="drivers-details mt-3">
+      <summary class="fw-semibold">Formulas, reconciliation, and top contributor detail</summary>
+      <div id="driversDetailsContent" class="pt-2 small"></div>
+    </details>
+  </div>
+</section>

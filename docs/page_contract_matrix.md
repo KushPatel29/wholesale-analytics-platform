@@ -1,0 +1,18 @@
+# Page Contract Matrix (baseline 2026-01-13)
+
+Snapshot of the current bundle/filter/drilldown wiring for the main analytics pages. Use this to verify contracts and spot gaps while standardizing bundles.
+
+| Page | Template | Page JS | Bundle endpoint | Required DOM containers (primary) | Expected bundle keys (primary) | Drilldown routes/links |
+| --- | --- | --- | --- | --- | --- | --- |
+| overview | app/templates/overview/index.html | app/static/js/overview.js | /overview/api/bundle (data-api attr) | kpiGrid, trendChart, mixChart, paretoChart, topMoversBody, forecastChart, healthList, healthBadges | kpis, series, mix, pareto, top, health, meta (+forecast via /api/overview/forecast) | Links from tables/charts to /customers/drilldown/\<id> and /products/drilldown/\<id> where present |
+| customers (KPIs) | app/templates/customers/kpis_unified.html | (server-rendered; no dedicated bundle JS) | /api/customers/bundle (bundle_service) | table body rows rendered server-side; kpi cards (total_revenue, total_orders, avg_order_value, repeat_rate, etc.) | kpis: revenue, qty, cost, profit, margin_pct, rows; table.rows with key/label, revenue/qty/cost/profit/margin_pct | Drilldown links to /customers/drilldown/\<CustomerId> |
+| products | app/templates/products/index.html | app/static/js/products.js | /api/products/bundle (data-bundle-url) | kpiRevenue, kpiQty, kpiMargin, kpiUnique, kpiCustomers, productTbody, priceBubbleChart, velocity sections | kpis: revenue/qty/cost/profit/margin_pct/rows/customers; table.rows; trend payload via other endpoints | Drilldown links via data-drilldown-template to /products/\<id>/drilldown (filters appended) |
+| regions | app/templates/regions/index.html | inline JS in template | /api/regions/bundle (bundle_service) | KPI cards (total_revenue, regions_count, avg_aov, yoy_growth), chart container #regionsChart, table #regionsTable | kpis: total_revenue, regions_count, avg_aov, yoy_growth; charts/table use aggregated rows | Drilldown links to /regions/drilldown/\<RegionName> |
+| suppliers | app/templates/suppliers/index.html | inline JS in template | /api/suppliers/bundle (bundle_service) | KPI cards kpiRevenue/kpiSuppliers/kpiAOV/… , chart containers (trendChart, mixChart), table #suppliersTable | kpis: revenue/qty/cost/profit/margin_pct/orders/customers; table.rows; trend/mix payloads expected | Drilldown links to /suppliers/drilldown/\<SupplierId> |
+| salesreps | app/templates/salesreps/index.html | app/static/js/salesreps.js | /api/salesreps/bundle | salesrepsRevenue, salesrepsQty, salesrepsMargin, table #salesreps-table-body | kpis: revenue/qty/profit/margin_pct; table.rows with key/label/revenue/qty/profit/margin_pct | Drilldown links to /salesreps/rep/<id> (data-drilldown-template) |
+| drilldowns (product/customer/supplier/salesrep/region) | respective templates under app/templates/**/drilldown.html | salesrep_drilldown.js for salesrep; others inline | Target endpoints: /api/<entity>/drilldown/bundle (not fully unified) | Entity header, KPI cards, trend chart container, related tables | bundle should return header/meta, kpis, trend, related entities, detail table | Entry via links from parent tables/charts with filter querystring preserved |
+
+Notes:
+- Global filters live in app/templates/_filters.html and should be included on every page extending base.html (authenticated users).
+- data attributes for filters/scripts: data-page and data-bundle-url should be present on the main page root where possible to keep the JS helper consistent.
+- Bundle responses should be JSON-serializable (no Decimal/np types) and include meta.{dataset_version, cache_hit, duckdb_query_count, serialize_ms, payload_bytes} once standardized.

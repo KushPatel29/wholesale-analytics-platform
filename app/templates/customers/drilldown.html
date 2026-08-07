@@ -1,0 +1,1070 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+<div id="CustomerDrilldownMeta"
+     class="d-none"
+     data-page="customer_drilldown"
+     data-entity-id="{{ customer_id }}"
+     data-bundle-url="{{ url_for('bundles.customers_drilldown_bundle') }}"></div>
+
+{% macro fmt_currency(value) %}
+  {% if value is not none and value == value %}
+    {{ value|currency }}
+  {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+{% endmacro %}
+
+{% macro fmt_number(value, decimals=0) %}
+  {% if value is not none and value == value %}
+    {% if decimals == 0 %}
+      {{ '{:,.0f}'.format(value|float) }}
+    {% else %}
+      {{ ('{:,.%df}' % decimals).format(value|float) }}
+    {% endif %}
+  {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+{% endmacro %}
+
+{% macro fmt_percent(value, decimals=1) %}
+  {% if value is not none and value == value %}
+    {{ ('%.' ~ decimals ~ 'f')|format(value|float) }}%
+  {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+{% endmacro %}
+
+{% macro fmt_days(value) %}
+  {% if value is not none and value == value %}
+    {{ value }} day{% if value != 1 %}s{% endif %}
+  {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+{% endmacro %}
+
+{% macro trend_badge(value) %}
+  {% if value is not none and value == value %}
+    {% set cls = 'bg-success-subtle text-success-emphasis' if value >= 0 else 'bg-danger-subtle text-danger-emphasis' %}
+    <span class="badge {{ cls }}">{{ '%+.1f'|format(value|float) }}%</span>
+  {% else %}
+    <span class="badge bg-secondary-subtle text-secondary-emphasis">n/a</span>
+  {% endif %}
+{% endmacro %}
+
+{% set show_costs = show_costs if show_costs is defined else False %}
+<div class="row mb-3">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2 class="mb-0">Customer {{ customer_name }} <span class="text-muted">(ID: {{ customer_id }})</span></h2>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('customers.kpis') }}">Back to Customers</a>
+  </div>
+</div>
+
+<!-- ======= CUSTOMER SNAPSHOT ======= -->
+<div class="row g-3 mb-3">
+  <div class="col-12 col-xl-3">
+    <div class="card shadow-sm h-100 border-0 bg-primary-subtle text-primary-emphasis">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Lifetime value</div>
+        <div class="display-6 fw-bold">{{ fmt_currency(kpis.get('total_revenue')) }}</div>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>Orders {{ fmt_number(kpis.get('total_orders')) }}</span>
+          <span>AOV {{ fmt_currency(kpis.get('aov')) }}</span>
+        </div>
+        <div class="text-muted small mt-2">
+          Revenue / month {{ fmt_currency(kpis.get('revenue_per_month')) }} &bull;
+          Orders / month {{ fmt_number(kpis.get('orders_per_month'), 1) }}
+        </div>
+        {% if show_costs %}
+        <div class="mt-3 d-flex flex-wrap gap-2">
+          <span class="badge bg-primary text-white">Profit {{ fmt_currency(kpis.get('profit')) }}</span>
+          <span class="badge bg-primary text-white">Margin {{ fmt_percent(kpis.get('margin_pct')) }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-3">
+    <div class="card shadow-sm h-100 border-0 bg-success-subtle text-success-emphasis">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Recent momentum</div>
+        <div class="display-6 fw-bold">{{ fmt_currency(kpis.get('revenue_last_90')) }}</div>
+        <div class="d-flex justify-content-between align-items-center text-muted small">
+          <span>Last 30d {{ fmt_currency(kpis.get('revenue_last_30')) }}</span>
+          {{ trend_badge(kpis.get('revenue_trend_90')) }}
+        </div>
+        <div class="mt-2 text-muted small">
+          Orders 90d {{ fmt_number(kpis.get('orders_last_90')) }}
+          {% if kpis.get('orders_trend_90') is not none %}
+            {% set ot = kpis.get('orders_trend_90') %}
+            <span class="{% if ot >= 0 %}text-success{% else %}text-danger{% endif %} fw-semibold ms-1">
+              {% if ot >= 0 %}+{% endif %}{{ ot }}
+            </span>
+            <span class="text-muted">vs prior 90d</span>
+          {% endif %}
+        </div>
+        <div class="mt-2 text-muted small">
+          Avg ticket {{ fmt_currency(kpis.get('avg_ticket_last_90')) }}
+          {% if show_costs %}
+            &bull; Profit {{ fmt_currency(kpis.get('profit_last_90')) }}
+            {% if kpis.get('margin_last_90') is not none %}
+              ({{ fmt_percent(kpis.get('margin_last_90')) }})
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-3">
+    <div class="card shadow-sm h-100 border-0 bg-warning-subtle text-warning-emphasis">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Customer health</div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="text-muted small">Churn risk</div>
+            <div class="h4 fw-bold mb-0">{{ kpis.get('churn_risk') or 'Unknown' }}</div>
+          </div>
+          <div class="text-end">
+            <!-- Gauge Container -->
+            <div id="churn_gauge" style="width: 100px; height: 60px; margin-top: -10px;"></div>
+          </div>
+        </div>
+        <div class="text-muted small">Days since last order {{ fmt_days(kpis.get('days_since_last_order')) }}</div>
+        <div class="text-muted small mt-1">
+          Cadence avg {{ fmt_number(kpis.get('cadence_avg_days'), 1) }}d &bull;
+          median {{ fmt_number(kpis.get('cadence_median_days'), 1) }}d
+        </div>
+        <div class="text-muted small mt-1">
+          Range {{ fmt_number(kpis.get('cadence_min_days'), 1) }}d  -  {{ fmt_number(kpis.get('cadence_max_days'), 1) }}d
+        </div>
+        <div class="text-muted small mt-1">
+          Best weekday <span class="fw-semibold">{{ kpis.get('best_weekday') or '&mdash;' }}</span>
+          ({{ fmt_currency(kpis.get('best_weekday_revenue')) }})
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Account profile</div>
+        <div class="mb-1 text-muted small">
+          Segment <span class="fw-semibold text-body">{{ kpis.get('segment') or '&mdash;' }}</span>
+        </div>
+        <div class="text-muted small mb-2">{{ kpis.get('segment_reason') }}</div>
+        <div class="d-flex justify-content-between text-muted small">
+          <div>
+            <div class="fw-semibold text-body">First order</div>
+            <div>{{ kpis.first_order or '&mdash;' }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-semibold text-body">Last order</div>
+            <div>{{ kpis.last_order or '&mdash;' }}</div>
+          </div>
+        </div>
+        <div class="text-muted small mt-2">
+          Months active {{ fmt_number(kpis.get('months_active')) }} &bull;
+          Span {{ fmt_number(kpis.get('days_span')) }} days
+        </div>
+        <div class="text-muted small mt-2">
+          Primary region <span class="fw-semibold text-body">{{ kpis.get('primary_region') or '&mdash;' }}</span>
+        </div>
+        <div class="text-muted small mt-1">
+          Ship method <span class="fw-semibold text-body">{{ kpis.get('primary_shipping') or '&mdash;' }}</span>
+        </div>
+        <div class="text-muted small mt-1">Unique products {{ fmt_number(kpis.get('unique_products')) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= ACTION HIGHLIGHTS ======= -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Opportunity highlights</div>
+        <ul class="list-group list-group-flush small">
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-truncate" style="max-width: 220px;" title="{{ kpis.get('top_product_label') }}">
+              Top product
+              {% if kpis.get('top_product_label') %}
+                <span class="d-block fw-semibold text-body">{{ kpis.get('top_product_label') }}</span>
+              {% endif %}
+            </span>
+            <span class="fw-semibold">{{ fmt_currency(kpis.get('top_product_revenue')) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-truncate" style="max-width: 220px;" title="{{ kpis.get('top_weight_product') }}">
+              Top weight mover
+              {% if kpis.get('top_weight_product') %}
+                <span class="d-block fw-semibold text-body">{{ kpis.get('top_weight_product') }}</span>
+              {% endif %}
+            </span>
+            <span class="fw-semibold">{{ fmt_number(kpis.get('top_weight_lb'), 2) }} {{ kpis.get('top_weight_unit') or 'lb' }}</span>
+          </li>
+          {% if show_costs %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-truncate" style="max-width: 220px;" title="{{ kpis.get('top_profit_product') }}">
+              Top profit product
+              {% if kpis.get('top_profit_product') %}
+                <span class="d-block fw-semibold text-body">{{ kpis.get('top_profit_product') }}</span>
+              {% endif %}
+            </span>
+            <span class="fw-semibold">
+              {{ fmt_currency(kpis.get('top_profit_value')) }}
+              {% if kpis.get('top_profit_margin') is not none %}
+                <span class="text-muted small ms-1">({{ fmt_percent(kpis.get('top_profit_margin')) }})</span>
+              {% endif %}
+            </span>
+          </li>
+          {% endif %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Pricing spread
+            <span class="fw-semibold">
+              {{ fmt_currency(kpis.get('price_delta_min')) }} / {{ fmt_currency(kpis.get('price_delta_max')) }}
+            </span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Cross-sell ideas
+            <span class="badge bg-primary-subtle text-primary-emphasis">{{ kpis.get('cross_sell_count') }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Action center</div>
+        <ul class="list-group list-group-flush small">
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Orders last 30d
+            <span class="fw-semibold">{{ fmt_number(kpis.get('orders_last_30')) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Orders last 90d
+            <span class="fw-semibold">{{ fmt_number(kpis.get('orders_last_90')) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Days since last order
+            <span class="fw-semibold">{{ fmt_number(kpis.get('days_since_last_order')) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Cadence range
+            <span class="fw-semibold">{{ fmt_number(kpis.get('cadence_min_days'), 1) }} - {{ fmt_number(kpis.get('cadence_max_days'), 1) }} d</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    {% if show_costs %}
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Profit snapshot</div>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>Lifetime profit</span>
+          <span class="fw-semibold">{{ fmt_currency(kpis.get('profit')) }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted small mt-1">
+          <span>Margin</span>
+          <span class="fw-semibold">{{ fmt_percent(kpis.get('margin_pct')) }}</span>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>90d profit</span>
+          <span class="fw-semibold">{{ fmt_currency(kpis.get('profit_last_90')) }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted small mt-1">
+          <span>90d margin</span>
+          <span class="fw-semibold">{{ fmt_percent(kpis.get('margin_last_90')) }}</span>
+        </div>
+        <div class="text-muted small mt-2">Use profit trends to prioritize outreach and pricing adjustments.</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-uppercase small fw-semibold mb-2">Engagement signals</div>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>Revenue / month</span>
+          <span class="fw-semibold">{{ fmt_currency(kpis.get('revenue_per_month')) }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted small mt-1">
+          <span>Orders / month</span>
+          <span class="fw-semibold">{{ fmt_number(kpis.get('orders_per_month'), 1) }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted small mt-1">
+          <span>Unique products</span>
+          <span class="fw-semibold">{{ fmt_number(kpis.get('unique_products')) }}</span>
+        </div>
+        <div class="text-muted small mt-2">Keep momentum by targeting the top product mix and best-performing weekday.</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if show_costs %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <div>
+          <h5 class="card-title mb-0">Monthly profit & margin</h5>
+          <div class="text-muted small">Track contribution by month</div>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="profit_margin_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="profit_margin_chart" style="height:360px;"></div>
+        <div id="profit_margin_empty" class="text-muted small" style="display:none;">Profit data unavailable for this customer.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Top profit mix</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="profit_mix_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="profit_mix_chart" style="height:360px;"></div>
+        <div id="profit_mix_empty" class="text-muted small" style="display:none;">No profit data yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header d-flex align-items-center justify-content-between py-2">
+    <div>
+      <h5 class="card-title mb-0">Product profitability table</h5>
+      <div class="text-muted small">Revenue, cost, profit, and margin (top 25 products)</div>
+    </div>
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-success" id="exportProfitXlsx">Excel</button>
+      <button class="btn btn-outline-secondary" id="exportProfitCsv">CSV</button>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle" id="productProfitTable">
+        <thead class="table-light">
+          <tr>
+            <th>Product</th>
+            <th class="text-end">Revenue</th>
+            <th class="text-end">Cost</th>
+            <th class="text-end">Profit</th>
+            <th class="text-end">Margin %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in product_profit_rows %}
+          <tr>
+            <td class="text-truncate" style="max-width: 320px;" title="{{ row.product }}">{{ row.product }}</td>
+            <td class="text-end">{{ fmt_currency(row.revenue) }}</td>
+            <td class="text-end">{{ fmt_currency(row.cost) }}</td>
+            <td class="text-end">{{ fmt_currency(row.profit) }}</td>
+            <td class="text-end">{{ fmt_percent(row.margin_pct) }}</td>
+          </tr>
+          {% endfor %}
+          {% if product_profit_rows|length == 0 %}
+          <tr><td colspan="5" class="text-muted small text-center py-3">No cost data available for this customer.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+<!-- ======= TIMELINES ======= -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-12">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Monthly Revenue & Orders</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="cust_rev_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="cust_rev_chart" style="height:380px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= MIXES & SEASONALITY ======= -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Top Products (Spend)</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="top_spend_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="top_spend_chart" style="height:380px;"></div>
+        <div id="spend_empty" class="text-muted small" style="display:none; text-align: center; padding-top: 150px;">
+            <i class="bi bi-bar-chart text-secondary fs-3 mb-2"></i><br>
+            No spend data.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Top Products (Weight)</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="top_weight_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="top_weight_chart" style="height:380px;"></div>
+        <div id="weight_empty" class="text-muted small" style="display:none; text-align: center; padding-top: 150px;">
+            <i class="bi bi-bar-chart text-secondary fs-3 mb-2"></i><br>
+            No weight data.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Revenue by Weekday</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="weekday_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="weekday_chart" style="height:320px;"></div>
+        <div id="weekday_empty" class="text-muted small" style="display:none;">No weekday revenue yet.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <h5 class="card-title mb-0">Buying Cadence (days between orders)</h5>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="cadence_chart">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="cadence_chart" style="height:320px;"></div>
+        <div id="cadence_empty" class="text-muted small" style="display:none;">Not enough orders to compute cadence.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= YOY HEATMAP & BASKET ======= -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <div>
+          <h5 class="card-title mb-0">Seasonality Heatmap (YoY by Month)</h5>
+          <div class="text-muted small">Sum of monthly revenue</div>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success export-xlsx" data-export-target="yoy_heatmap">Excel</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="yoy_heatmap" style="height:420px;"></div>
+        <div id="yoy_empty" class="text-muted small" style="display:none;">Not enough monthly history to plot.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Average Basket</h5>
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Orders analyzed
+            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill">{{ fmt_number(basket_stats.get('orders')|default(0)) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Avg lines / order
+            <span class="fw-semibold">{{ fmt_number(basket_stats.get('avg_lines_per_order'), 1) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Avg weight (lb) / order
+            <span class="fw-semibold">{{ fmt_number(basket_stats.get('avg_weight_lb'), 2) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Avg items / order
+            <span class="fw-semibold">{{ fmt_number(basket_stats.get('avg_items'), 1) }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            Avg ticket
+            <span class="fw-semibold">{{ fmt_currency(kpis.get('aov')) }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= PRICE INTELLIGENCE ======= -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between py-2">
+        <div>
+          <h5 class="card-title mb-0">Price Intelligence (vs peer median)</h5>
+          <div class="text-muted small">Region-aware where available</div>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-success" id="exportPriceXlsx">Excel</button>
+          <button class="btn btn-outline-secondary" id="exportPriceCsv">CSV</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive mt-2">
+                    <table class="table table-sm align-middle" id="priceTable">
+            <thead class="table-light">
+              <tr>
+                <th>Product</th>
+                <th class="text-end">Customer Unit</th>
+                <th class="text-end">Peer Median</th>
+                <th class="text-end">&Delta; vs Peer</th>
+                <th class="text-end">Suggested</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in price_table %}
+              <tr>
+                <td class="text-truncate" style="max-width: 340px;" title="{{ row.product }}">{{ row.product }}</td>
+                <td class="text-end">{{ fmt_currency(row.cust_unit_price) }}</td>
+                <td class="text-end">{{ fmt_currency(row.peer_median) }}</td>
+                <td class="text-end">
+                  {% if row.delta_pct is not none %}
+                    {% set cls = 'bg-success' if row.delta_pct <= 0 else 'bg-danger' %}
+                    <span class="badge {{ cls }}">{{ (row.delta_pct)|round(1) }}%</span>
+                  {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                </td>
+                <td class="text-end">{{ fmt_currency(row.suggest_price) }}</td>
+              </tr>
+              {% endfor %}
+              {% if price_table|length == 0 %}
+              <tr>
+                  <td colspan="5" class="text-center py-5">
+                      <div class="text-muted">
+                          <i class="bi bi-search fs-3 mb-2"></i><br>
+                          <span class="small">Not enough comparable data to benchmark prices.</span>
+                      </div>
+                  </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-2">Suggestion is the peer median realized unit price. Adjust with margin guardrails as needed.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title mb-2">Cross-sell Suggestions</h5>
+        {% if cross_sell|length > 0 %}
+        <ul class="list-group list-group-flush">
+          {% for cs in cross_sell %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-truncate" title="{{ cs.product }}" style="max-width: 260px;">{{ cs.product }}</span>
+            <span class="badge bg-secondary">{{ cs.region or 'All Regions' }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="d-flex align-items-center justify-content-center h-75 text-center text-muted">
+            <div>
+                <i class="bi bi-lightbulb-off fs-3 mb-2"></i><br>
+                <span class="small">No strong suggestions found.</span>
+            </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= EXPORT + CHART SCRIPTS ======= -->
+{# Load SheetJS if not already present (vendor locally if your CSP blocks CDNs) #}
+<script>
+if (typeof XLSX === 'undefined') {
+  const s = document.createElement('script');
+  s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  s.crossOrigin = "anonymous";
+  s.crossOrigin = "anonymous";
+  document.head.appendChild(s);
+}
+</script>
+
+<script>
+  // Chart data from server
+  const showCosts      = {{ 'true' if show_costs else 'false' }};
+  const months         = {{ months|tojson }};
+  const monthlyRevenue = {{ monthly_revenue|tojson }};
+  const monthlyOrders  = {{ monthly_orders|tojson }};
+  const monthlyCost    = {{ monthly_cost|tojson }};
+  const monthlyProfit  = {{ monthly_profit|tojson }};
+  const monthlyMargin  = {{ monthly_margin|tojson }};
+  const monthlyPreviousYear = {{ monthly_previous_year|tojson }};
+  const topSpend       = {{ product_spend_top|tojson }};
+  const topWeight      = {{ product_weight_top|tojson }};
+  const productProfitChart = {{ product_profit_chart|tojson }};
+  const weekdayLabels  = {{ weekday_labels|tojson }};
+  const weekdayRevenue = {{ weekday_revenue|tojson }};
+  const cadenceDays    = {{ cadence_days|tojson }};
+  const yoyMonths      = {{ yoy_months|tojson }};
+  const yoyMatrix      = {{ yoy_matrix|tojson }};
+
+  // Helpers
+  const _isFiniteNum = v => typeof v === 'number' && isFinite(v);
+  const _hasData = arr => Array.isArray(arr) && arr.length > 0;
+
+  // ---------- Robust Plotly + Excel (AOA) ----------
+  function plotlyToAOA(gd) {
+    if (!gd || !gd.data || gd.data.length === 0) return [["No data"]];
+    const traces = gd.data;
+    const type0 = (traces[0].type || "").toLowerCase();
+
+    // Heatmap + matrix with headers
+    if (type0.includes('heatmap')) {
+      const z = traces[0].z || [];
+      const x = (traces[0].x || []).map(String);
+      const y = (traces[0].y || []).map(String);
+      const header = [''].concat(x);
+      const rows = [header];
+      for (let i=0; i<z.length; i++) {
+        const r = [(y[i] != null ? y[i] : String(i+1))];
+        const row = z[i] || [];
+        for (let j=0; j<x.length; j++) r.push((row[j] != null ? row[j] : ''));
+        rows.push(r);
+      }
+      return rows;
+    }
+
+    // Pie / donut
+    if (type0.includes('pie')) {
+      const labels = traces[0].labels || [];
+      const values = traces[0].values || [];
+      const rows = [["Label","Value"]];
+      for (let i=0;i<labels.length;i++) rows.push([labels[i], values[i]]);
+      return rows;
+    }
+
+    // Histogram + export raw values and a frequency table
+    if (type0.includes('histogram')) {
+      const x = traces[0].x || [];
+      const rows = [["Raw Values"], ...x.map(v => [v])];
+      return rows;
+    }
+
+    // Cartesian (bar/line/scatter)
+    const hasX = traces.some(t => Array.isArray(t.x));
+    const _xRefObj = traces.find(t => Array.isArray(t.x));
+    const xRef = _xRefObj ? _xRefObj.x : undefined;
+    const maxLen = Math.max(...traces.map(t => ((t.x && t.x.length) || (t.y && t.y.length) || (t.labels && t.labels.length) || 0)));
+    const header = [hasX ? 'X' : 'Index'];
+    traces.forEach((t, i) => header.push(t.name || t.legendgroup || `Trace ${i+1}`));
+    const rows = [header];
+    for (let i=0; i<maxLen; i++) {
+      const xVal = hasX ? ((xRef && xRef[i] != null ? xRef[i] : (i+1))) : i+1;
+      const row = [xVal];
+      traces.forEach(t => {
+        let v = Array.isArray(t.y) ? t.y[i] : (Array.isArray(t.values) ? t.values[i] : '');
+        row.push(v != null ? v : '');
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function aoaToExcel(aoa, filename="chart.xlsx", sheetName="Sheet1") {
+    if (typeof XLSX === 'undefined') {
+      // Graceful CSV fallback with correct extension
+      const csv = aoa.map(r => r.map(v => `"${String((v != null ? v : '')).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename.replace(/\.xlsx$/i,'') + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+    XLSX.writeFile(wb, filename);
+  }
+
+  function exportPlotlyDiv(divId, fname, sheet) {
+    const gd = document.getElementById(divId);
+    if (!gd) return console.warn('Plotly div not found:', divId);
+    const aoa = plotlyToAOA(gd);
+    const _card = gd.closest('.card');
+    const _titleEl = _card ? _card.querySelector('.card-title') : null;
+    const title = ((_titleEl && _titleEl.textContent) || sheet || divId).trim();
+    const filename = (fname || title.replace(/[^\w\d\-]+/g,'_') + '.xlsx');
+    aoaToExcel(aoa, filename, title);
+  }
+
+  // ---------- Build Charts ----------
+  // Monthly Revenue + Orders + YoY
+  if (_hasData(months)) {
+    const traces = [
+      {x: months, y: monthlyRevenue, type: 'scatter', mode: 'lines+markers', name: 'Revenue', hovertemplate:'%{y:$,.0f}<extra></extra>'},
+      {x: months, y: monthlyOrders,  type: 'bar', name: 'Orders', yaxis: 'y2', hovertemplate:'%{y:,d} orders<extra></extra>'}
+    ];
+    
+    // YoY Trend Line
+    if (_hasData(monthlyPreviousYear)) {
+        traces.push({
+            x: months,
+            y: monthlyPreviousYear,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Prev Year',
+            line: { dash: 'dot', width: 2, color: '#adb5bd' },
+            hovertemplate: 'Prev: %{y:$,.0f}<extra></extra>'
+        });
+    }
+
+    Plotly.newPlot('cust_rev_chart', traces, {
+      margin: {t:10, r:40, l:60},
+      hovermode:'x unified',
+      yaxis: {title:'Revenue', tickformat:'$,.0f'},
+      yaxis2: {overlaying:'y', side:'right', title:'Orders'},
+      legend: {orientation: 'h', y: 1.1},
+      showlegend:true
+    }, {displayModeBar:false, responsive:true});
+  }
+
+  // Churn Risk Gauge
+  (function(){
+      const gaugeDiv = document.getElementById('churn_gauge');
+      if (gaugeDiv) {
+          // Parse probability (e.g. 85.5 from "85.5%") or use the raw variable if available
+          // We have {{ kpis.get('churn_probability_pct') }} which is a number
+          const prob = {{ kpis.get('churn_probability_pct') if kpis.get('churn_probability_pct') is not none else 'null' }};
+          
+          if (prob !== null) {
+              const color = prob < 40 ? '#198754' : (prob < 70 ? '#ffc107' : '#dc3545');
+              
+              Plotly.newPlot(gaugeDiv, [{
+                  type: "indicator",
+                  mode: "gauge",
+                  value: prob,
+                  number: { suffix: "%", font: { size: 14 } },
+                  gauge: {
+                      axis: { range: [null, 100], tickwidth: 1, tickcolor: "#999" },
+                      bar: { color: color },
+                      bgcolor: "white",
+                      borderwidth: 0,
+                      bordercolor: "gray",
+                  }
+              }], {
+                  margin: { t: 0, b: 0, l: 20, r: 20 },
+                  height: 60
+              }, { displayModeBar: false, staticPlot: true });
+          }
+      }
+  })();
+
+  if (showCosts && _hasData(monthlyProfit)) {
+    const profitTraces = [{
+      x: months,
+      y: monthlyProfit,
+      type: 'bar',
+      name: 'Profit',
+      marker: {color: '#198754'},
+      hovertemplate: '%{y:$,.0f}<extra></extra>'
+    }];
+    if (_hasData(monthlyCost)) {
+      profitTraces.push({
+        x: months,
+        y: monthlyCost,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Cost',
+        line: {color: '#6c757d', dash: 'dot'},
+        hovertemplate: '%{y:$,.0f}<extra></extra>'
+      });
+    }
+    profitTraces.push({
+      x: months,
+      y: monthlyMargin.map(v => (_isFiniteNum(v) ? v : null)),
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Margin %',
+      yaxis: 'y2',
+      line: {color: '#0d6efd'},
+      hovertemplate: '%{y:.1f}%<extra></extra>'
+    });
+    Plotly.newPlot('profit_margin_chart', profitTraces, {
+      margin: {t:10, r:40, l:60},
+      hovermode: 'x unified',
+      barmode: 'group',
+      yaxis: {title: 'Profit', tickformat: '$,.0f'},
+      yaxis2: {overlaying: 'y', side: 'right', title: 'Margin %'},
+      showlegend: true
+    }, {displayModeBar:false, responsive:true});
+  } else {
+    const emptyProfit = document.getElementById('profit_margin_empty');
+    if (emptyProfit) emptyProfit.style.display = 'block';
+  }
+
+  if (showCosts && productProfitChart && Array.isArray(productProfitChart.labels) && productProfitChart.labels.length) {
+    Plotly.newPlot('profit_mix_chart', [{
+      x: (productProfitChart.profit || []).map(v => (_isFiniteNum(v) ? v : null)),
+      y: productProfitChart.labels,
+      type: 'bar',
+      orientation: 'h',
+      name: 'Profit',
+      marker: {color: '#dc3545'},
+      hovertemplate: '%{y}<br>%{x:$,.0f}<extra></extra>'
+    }, {
+      x: (productProfitChart.margin || []).map(v => (_isFiniteNum(v) ? v : null)),
+      y: productProfitChart.labels,
+      type: 'scatter',
+      mode: 'markers',
+      name: 'Margin %',
+      xaxis: 'x2',
+      hovertemplate: '%{y}<br>%{x:.1f}%<extra></extra>',
+      marker: {symbol: 'diamond', size: 10, color: '#0d6efd'}
+    }], {
+      margin: {t:10, l:120, r:10},
+      xaxis: {title: 'Profit', tickformat: '$,.0f'},
+      xaxis2: {overlaying: 'x', side: 'top', title: 'Margin %'},
+      yaxis: {automargin: true},
+      showlegend: true
+    }, {displayModeBar:false, responsive:true});
+  } else {
+    const emptyMix = document.getElementById('profit_mix_empty');
+    if (emptyMix) emptyMix.style.display = 'block';
+  }
+
+  // Top Products by Spend
+  (function(){
+    const clean = (topSpend || []).filter(d => d && d.label && _isFiniteNum(d.revenue));
+    if (!clean.length) { document.getElementById('spend_empty').style.display = 'block'; return; }
+    
+    // Reverse to show top item at the top of the chart
+    clean.reverse();
+    
+    const labels = clean.map(d => d.label);
+    const values = clean.map(d => d.revenue);
+    const textLabels = values.map(v => '$' + v.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+    
+    Plotly.newPlot('top_spend_chart', [{
+      x: values, 
+      y: labels, 
+      type:'bar', 
+      orientation:'h',
+      marker: { 
+          color: '#E67E22', // Solid Enterprise Orange
+          width: 1
+      },
+      text: textLabels,
+      textposition: 'auto',
+      textfont: { color: 'white', size: 11 },
+      hovertemplate: '<b>%{y}</b><br>Revenue: %{x:$,.2f}<extra></extra>'
+    }], {
+      margin:{t:30, l:220, r:40, b:40},
+      xaxis:{
+          title:'Revenue', 
+          tickformat:'$,.0s', 
+          gridcolor: '#e9ecef',
+          zerolinecolor: '#d6d6d6'
+      },
+      yaxis:{
+          type: 'category', // Critical: Force categorical axis
+          automargin: false, 
+          tickfont: { size: 13, family: "Arial, sans-serif" },
+          ticksuffix: "  ",
+          showgrid: false // Clean look
+      },
+      bargap: 0.15, // Thicker bars
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      paper_bgcolor: 'rgba(0,0,0,0)'
+    }, {displayModeBar:false, responsive:true});
+  })();
+
+  // Top Products by Weight
+  (function(){
+    const clean = (topWeight || []).filter(d => d && d.label && _isFiniteNum(d.weight_lb));
+    if (!clean.length) { document.getElementById('weight_empty').style.display = 'block'; return; }
+    
+    // Reverse to show top item at the top of the chart
+    clean.reverse();
+    
+    const labels = clean.map(d => d.label);
+    const values = clean.map(d => d.weight_lb);
+    const textLabels = values.map(v => v.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' lb');
+    
+    Plotly.newPlot('top_weight_chart', [{
+      x: values, 
+      y: labels, 
+      type:'bar', 
+      orientation:'h',
+      marker: { 
+          color: '#2980B9', // Solid Enterprise Blue
+          width: 1
+      },
+      text: textLabels,
+      textposition: 'auto',
+      textfont: { color: 'white', size: 11 },
+      hovertemplate: '<b>%{y}</b><br>Weight: %{x:,.2f} lb<extra></extra>'
+    }], {
+      margin:{t:30, l:220, r:40, b:40},
+      xaxis:{
+          title:'Weight (lb)', 
+          tickformat:',.0s',
+          gridcolor: '#e9ecef',
+          zerolinecolor: '#d6d6d6'
+      },
+      yaxis:{
+          type: 'category', // Critical: Force categorical axis
+          automargin: false,
+          tickfont: { size: 13, family: "Arial, sans-serif" },
+          ticksuffix: "  ",
+          showgrid: false
+      },
+      bargap: 0.15,
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      paper_bgcolor: 'rgba(0,0,0,0)'
+    }, {displayModeBar:false, responsive:true});
+  })();
+
+  // Weekday revenue
+  (function(){
+    const clean = (weekdayLabels || []).map((d, i) => ({label:d, val: (weekdayRevenue ? weekdayRevenue[i] : undefined)}))
+      .filter(d => d.label && _isFiniteNum(d.val));
+    if (!clean.length) { document.getElementById('weekday_empty').style.display = 'block'; return; }
+    Plotly.newPlot('weekday_chart', [{
+      x: clean.map(d => d.label), y: clean.map(d => d.val), type:'bar',
+      hovertemplate:'%{x}: %{y:$,.0f}<extra></extra>'
+    }], {
+      margin:{t:10, l:60},
+      xaxis:{tickangle:-15},
+      yaxis:{title:'Revenue', tickformat:'$,.0f'}
+    }, {displayModeBar:false, responsive:true});
+  })();
+
+  // Cadence histogram
+  (function(){
+    const vals = (cadenceDays || []).filter(_isFiniteNum);
+    if (!vals.length) { document.getElementById('cadence_empty').style.display = 'block'; return; }
+    Plotly.newPlot('cadence_chart', [{ x: vals, type:'histogram', nbinsx: 20 }], {
+      margin:{t:10, l:60},
+      xaxis:{title:'Days between orders'},
+      yaxis:{title:'Count'}
+    }, {displayModeBar:false, responsive:true});
+  })();
+
+  // YoY heatmap
+  (function(){
+    const matrix = yoyMatrix || [];
+    if (!matrix.length) { document.getElementById('yoy_empty').style.display = 'block'; return; }
+    let yearLabels = [];
+    if (months && months.length) {
+      const firstYear = new Date(months[0] + '-01').getFullYear();
+      for (let i = 0; i < matrix.length; i++) yearLabels.push(String(firstYear + i));
+    } else {
+      for (let i = 0; i < matrix.length; i++) yearLabels.push('');
+    }
+    Plotly.newPlot('yoy_heatmap', [{
+      z: matrix, x: yoyMonths, y: yearLabels,
+      type:'heatmap', colorscale:'Blues', hoverongaps:false,
+      hovertemplate:'%{y} %{x}: %{z:$,.0f}<extra></extra>'
+    }], {
+      margin:{t:10, l:60, r:10},
+      xaxis:{title:'Month'},
+      yaxis:{title:'Year', automargin:true}
+    }, {displayModeBar:false, responsive:true});
+  })();
+
+  // Wire Excel export for charts
+  document.querySelectorAll('.export-xlsx').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-export-target');
+      var _c = btn.closest('.card');
+      var _tEl = _c ? _c.querySelector('.card-title') : null;
+      var _t = _tEl ? _tEl.textContent : '';
+      const title = (_t && _t.trim()) || id;
+      exportPlotlyDiv(id, title.replace(/[^\w\d\-]+/g,'_') + '.xlsx', title);
+    });
+  });
+
+  // -------- Price table exports --------
+  function tableToAOA(tbl) {
+    const header = Array.from(tbl.tHead.rows[0].cells).map(th => th.textContent.trim());
+    const rows = [header];
+    Array.from(tbl.tBodies[0].rows).forEach(tr => {
+      rows.push(Array.from(tr.cells).map(td => td.innerText.trim()));
+    });
+    return rows;
+  }
+  function downloadCSV(aoa, filename) {
+    const csv = aoa.map(r => r.map(v => `"${String((v != null ? v : '')).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function downloadXLSX(aoa, filename, sheetName) {
+    if (typeof XLSX === 'undefined') { downloadCSV(aoa, filename.replace(/\.xlsx$/i,'') + '.csv'); return; }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, (sheetName||'Sheet1').slice(0,31));
+    XLSX.writeFile(wb, filename);
+  }
+  (function(){
+    var btnX = document.getElementById('exportPriceXlsx');
+    if (btnX) btnX.addEventListener('click', function() {
+      const aoa = tableToAOA(document.getElementById('priceTable'));
+      downloadXLSX(aoa, `Price_Intelligence_{{ customer_id }}.xlsx`, 'Price');
+    });
+  })();
+  (function(){
+    var btnC = document.getElementById('exportPriceCsv');
+    if (btnC) btnC.addEventListener('click', function() {
+      const aoa = tableToAOA(document.getElementById('priceTable'));
+      downloadCSV(aoa, `Price_Intelligence_{{ customer_id }}.csv`);
+    });
+  })();
+  (function(){
+    var btnPX = document.getElementById('exportProfitXlsx');
+    if (btnPX) btnPX.addEventListener('click', function() {
+      const table = document.getElementById('productProfitTable');
+      if (!table) return;
+      const aoa = tableToAOA(table);
+      downloadXLSX(aoa, `Product_Profitability_{{ customer_id }}.xlsx`, 'Product Profit');
+    });
+  })();
+  (function(){
+    var btnPC = document.getElementById('exportProfitCsv');
+    if (btnPC) btnPC.addEventListener('click', function() {
+      const table = document.getElementById('productProfitTable');
+      if (!table) return;
+      const aoa = tableToAOA(table);
+      downloadCSV(aoa, `Product_Profitability_{{ customer_id }}.csv`);
+    });
+  })();
+</script>
+
+<style>
+  .card-header .btn-group .btn { height: 30px; }
+  .table-responsive { overflow: auto; }
+  #priceTable th.text-end, #priceTable td.text-end { text-align: right; }
+  .card-title { line-height: 1.2; }
+</style>
+{% endblock %}

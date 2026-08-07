@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>{{ document_title }}</title>
+    <style>
+      @page {
+        size: letter;
+        margin: 18mm 14mm;
+      }
+      :root {
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --line: #d1d5db;
+        --line-soft: #e5e7eb;
+        --brand: #965951;
+        --brand-soft: #f7efec;
+      }
+      body {
+        margin: 0;
+        font-family: "Helvetica", "Arial", sans-serif;
+        color: var(--ink);
+        font-size: 11px;
+      }
+      .header {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #ffffff 0%, var(--brand-soft) 100%);
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+      .header-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .header-table td {
+        vertical-align: top;
+      }
+      .logo {
+        width: 118px;
+        height: auto;
+      }
+      .title {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        color: var(--brand);
+        margin-bottom: 3px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .meta {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+      }
+      .meta th,
+      .meta td {
+        border: 1px solid var(--line-soft);
+        padding: 6px 7px;
+        vertical-align: top;
+        text-align: left;
+      }
+      .meta th {
+        width: 15%;
+        background: #f9fafb;
+        font-weight: 700;
+      }
+      .items {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+      }
+      .items th,
+      .items td {
+        border: 1px solid var(--line-soft);
+        padding: 5px 6px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .items th {
+        background: #f3f4f6;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+      }
+      .num {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .center {
+        text-align: center;
+      }
+      .totals {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+      }
+      .totals td {
+        border: 1px solid var(--line-soft);
+        padding: 6px 7px;
+      }
+      .totals .label {
+        background: #f9fafb;
+        width: 20%;
+        font-weight: 700;
+      }
+      .totals .value {
+        width: 30%;
+      }
+      .signatures {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .signatures td {
+        border: 1px solid var(--line-soft);
+        padding: 10px 8px 24px;
+        width: 50%;
+        vertical-align: bottom;
+      }
+      .sign-label {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <table class="header-table">
+        <tr>
+          <td style="width: 130px;">
+            {% if logo_uri %}
+            <img src="{{ logo_uri }}" class="logo" alt="{{ company_header }}">
+            {% endif %}
+          </td>
+          <td>
+            <div class="title">{{ company_header }} - Credit PO / Return</div>
+            <div class="subtitle">{{ document_title }}</div>
+          </td>
+          <td style="width: 220px;">
+            <table class="meta" style="margin-bottom: 0;">
+              <tr><th>Return ID</th><td class="nowrap">{{ r.rma_number or ('RMA-' ~ r.id) }}</td></tr>
+              <tr><th>Status</th><td>{{ r.status_label or r.status or '-' }}</td></tr>
+              <tr><th>Generated</th><td>{{ generated_at }}</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <table class="meta">
+      <tbody>
+        <tr>
+          <th>Order #</th>
+          <td>{{ r.order_id or '-' }}</td>
+          <th>Customer</th>
+          <td>{{ r.customer_name or r.customer_id or '-' }}</td>
+          <th>Rep</th>
+          <td>{{ r.rep_name or '-' }}</td>
+        </tr>
+        <tr>
+          <th>Order Date</th>
+          <td>{{ r.order_date or '-' }}</td>
+          <th>Shipped</th>
+          <td>{{ r.date_shipped or '-' }}</td>
+          <th>Submitted</th>
+          <td>{{ r.date_submitted or r.created_at or '-' }}</td>
+        </tr>
+        <tr>
+          <th>Return Type</th>
+          <td>{{ r.return_type or '-' }}</td>
+          <th>Advised Customer</th>
+          <td>{{ r.metadata.advised_customer_note if r.metadata and r.metadata.advised_customer_note else ('Yes' if r.advised_customer else 'No') }}</td>
+          <th>Notes</th>
+          <td>{{ r.additional_notes or r.decision_summary or '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="items">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Description</th>
+          <th class="num">Orig Wgt</th>
+          <th class="num">Adj Wgt</th>
+          <th class="num">Unit Price</th>
+          <th class="num">Credit %</th>
+          <th class="num">Credit Amount</th>
+          <th class="center">Returning?</th>
+          <th>Outcome</th>
+          <th>Follow-up</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.product_code or item.sku or '-' }}</td>
+          <td>{{ item.product_desc or item.product_name or '-' }}</td>
+          <td class="num">{{ '%.3f'|format(item.weight_lb or 0) }}</td>
+          <td class="num">{{ '%.3f'|format(item.received_weight_lb) if item.received_weight_lb is not none else '-' }}</td>
+          <td class="num">{{ '%.2f'|format(item.price_per_lb or 0) }}</td>
+          <td class="num">{{ '%.2f'|format(item.credit_pct or 100) }}</td>
+          <td class="num">{{ '%.2f'|format(item.credit_amount or 0) }}</td>
+          <td class="center">{{ 'Yes' if item.product_returning else 'No' }}</td>
+          <td><span class="small">{{ item.warehouse_outcome or '-' }}</span></td>
+          <td>{{ item.follow_up_action or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="muted">No line items.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <table class="totals">
+      <tr>
+        <td class="label">Total Weight</td>
+        <td class="value">{{ '%.3f'|format(r.total_weight_lb or 0) }} lb</td>
+        <td class="label">Total Credit</td>
+        <td class="value">${{ '%.2f'|format(r.total_credit_amount or 0) }}</td>
+      </tr>
+    </table>
+
+    <table class="signatures">
+      <tr>
+        <td>
+          <span class="sign-label">Warehouse Reviewed By</span>
+          <div style="margin-top: 5px;">{{ r.metadata.wh_reviewer_name or '-' }}</div>
+        </td>
+        <td>
+          <span class="sign-label">Manager Digitally Approved By</span>
+          <div style="margin-top: 5px;">
+            {% if r.status in ['approved', 'awaiting_finance', 'completed'] %}
+              <strong>{{ r.approval_target or 'Authorized Manager' }}</strong>
+              <div class="muted" style="font-size: 9px;">Approved via Wholesale Analytics Dashboard</div>
+            {% else %}
+              -
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+    </table>
+    
+    <div style="margin-top: 20px; font-size: 9px; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 10px;">
+      Enterprise Audit ID: {{ r.id }}-{{ r.last_updated|replace(':', '')|replace('-', '')|replace(' ', '') }} | 
+      Generated for {{ r.company or 'the distributor' }} Finance Review
+    </div>
+  </body>
+</html>

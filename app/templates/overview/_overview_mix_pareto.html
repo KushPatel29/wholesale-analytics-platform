@@ -1,0 +1,37 @@
+<section class="overview-panel" id="commercialShapeCard">
+  <div class="panel-header">
+    <div class="panel-eyebrow">Commercial shape</div>
+    <h2 class="panel-title">Mix and Pareto concentration</h2>
+    <div class="panel-subtitle">Mix share and Pareto concentration stay visible as a control surface, not as a hidden appendix behind the main KPI story.</div>
+  </div>
+  <div class="panel-body">
+    <div class="row g-3">
+      <div class="col-xl-6">
+        <div class="risk-summary-card h-100">
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Mix (Top 10)</h6>
+            <div class="btn-group btn-group-sm" role="group" id="dimToggle">
+              <button class="btn btn-outline-secondary active" data-dim="customer">Customers</button>
+              <button class="btn btn-outline-secondary" data-dim="product">Products</button>
+              <button class="btn btn-outline-secondary" data-dim="region">Regions</button>
+            </div>
+          </div>
+          <div class="chart-placeholder mt-3" aria-label="Mix chart">
+            <canvas id="mixChart" width="400" height="320"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="risk-summary-card h-100">
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Pareto (Revenue share)</h6>
+            <small class="text-muted">Top 30 by selected dimension</small>
+          </div>
+          <div class="chart-placeholder mt-3" aria-label="Pareto chart">
+            <canvas id="paretoChart" width="400" height="320"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

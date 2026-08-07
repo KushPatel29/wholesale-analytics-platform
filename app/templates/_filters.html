@@ -1,0 +1,666 @@
+{# Shared enterprise global filters shell #}
+{% set _form = form if form is defined else None %}
+{% set _filters = filters if filters is defined else {} %}
+{% set _summary = g.global_filters_summary if g.global_filters_summary is defined else {} %}
+{% set _summary_payload = _summary.get('payload', {}) if _summary else {} %}
+{% set _saved_views_ui = g.saved_views_ui | default([]) %}
+{% set _active_saved_view = g.active_saved_view if g.active_saved_view is defined else None %}
+{% set _show_sales_reps = show_sales_reps if show_sales_reps is defined else False %}
+{% set _filters_v2 = filters_canonical_v2 if filters_canonical_v2 is defined else false %}
+{% set _next_target = request.full_path if request.full_path else request.path %}
+{% if _next_target.endswith('?') %}{% set _next_target = _next_target[:-1] %}{% endif %}
+{% set _current_preset = _summary_payload.get('date_preset') or request.args.get('date_preset') or request.args.get('preset') or '' %}
+{% set _fiscal_presets = ['current_fy', 'previous_fy', 'current_fq', 'previous_fq', 'current_fm', 'previous_fm', 'fytd_comparison'] %}
+{% set _current_date_type = _summary_payload.get('date_type') or request.args.get('date_type') or ('fiscal' if _current_preset in _fiscal_presets else '') %}
+{% set _filter_keys = [
+  'start','start_date','end','end_date','date_preset','preset','range_preset','date_type',
+  'statuses','regions','methods','shipping_methods','customers','suppliers','products','sales_reps',
+  'protein_groups', 'yield_min', 'yield_max',
+  '_gf','_gf_reset'
+] %}
+{% set _schema_url = filter_api.schema_url if filter_api is defined else '/api/filters/schema' %}
+{% set _options_url = filter_api.options_url if filter_api is defined else '/api/filters/options' %}
+{% set _apply_url = filter_api.apply_url if filter_api is defined else '/filters/apply' %}
+{% set _reset_url = filter_api.reset_url if filter_api is defined else '/filters/reset' %}
+{% set _api_apply_url = filter_api.api_apply_url if filter_api is defined else '/api/filters/apply' %}
+{% set _api_reset_url = filter_api.api_reset_url if filter_api is defined else '/api/filters/reset' %}
+{% set _dataset_version = filter_api.dataset_version if filter_api is defined else '' %}
+{% set _scope_bootstrap = access_scope.as_dict(include_allowed=False) if access_scope is defined and access_scope else {} %}
+{% set _inline_options_bootstrap = filter_options_bootstrap if filter_options_bootstrap is defined else None %}
+{% set _filters_bootstrap = {
+  'defaults': _summary_payload,
+  'dataset_version': _dataset_version,
+  'scope': _scope_bootstrap,
+  'meta': {
+    'filters_notice': g.effective_filters_meta.notice if g.effective_filters_meta is defined else ''
+  },
+  'options_payload': _inline_options_bootstrap,
+} %}
+
+<div class="page-card filters-shell shadow-soft mb-4" id="GlobalFilters"
+     data-schema-endpoint="{{ _schema_url }}"
+     data-options-endpoint="{{ _options_url }}"
+     data-api-apply-endpoint="{{ _api_apply_url }}"
+     data-api-reset-endpoint="{{ _api_reset_url }}"
+     data-dataset-version="{{ _dataset_version }}"
+     data-active-saved-view-id="{{ g.active_saved_view_id if g.active_saved_view_id is defined and g.active_saved_view_id is not none else '' }}"
+     data-current-filters-hash="{{ g.global_filters_hash | default('') }}"
+     data-last-applied="{{ session.get('global_filters_last_applied_at', '') }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="filters-shell__header">
+    <div class="filters-shell__headline">
+      <div class="filters-shell__eyebrow">Shared analytics context</div>
+      <div class="filters-shell__title-row">
+        <div>
+          <h2 class="filters-shell__title">Global Filters</h2>
+          <div class="filters-shell__meta">
+            <span class="filters-shell__date" id="filtersDateSummary">{{ _summary.get('date_label', 'All Time') }}</span>
+            <span class="filters-shell__meta-sep" aria-hidden="true"></span>
+            <span id="filtersLastAppliedLabel">
+              {% if g.filters_last_applied_at is defined and g.filters_last_applied_at %}
+                Last applied {{ g.filters_last_applied_at }}
+              {% else %}
+                Last applied not recorded
+              {% endif %}
+            </span>
+          </div>
+        </div>
+        <div class="filters-shell__badges">
+          <span class="filters-status-badge" id="filtersActiveCount">{{ _summary.get('active_count', 1) }} active</span>
+          <span class="filters-status-badge {% if g.saved_view_dirty | default(false) %}is-warning{% else %}is-neutral{% endif %}" id="filtersSavedViewBadge">
+            {% if _active_saved_view %}
+              {% if g.saved_view_dirty | default(false) %}
+                Differs from {{ _active_saved_view.get('name') }}
+              {% else %}
+                Synced to {{ _active_saved_view.get('name') }}
+              {% endif %}
+            {% else %}
+              No saved view linked
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="filters-shell__tools">
+      <div class="filters-header-chips" id="filtersHeaderChips">
+        {% for chip in _summary.get('dimension_chips', [])[:2] %}
+          <span class="filter-chip filter-chip--muted">{{ chip.label }}: {{ chip.summary }}</span>
+        {% endfor %}
+        {% if _summary.get('dimension_count', 0) > 2 %}
+          <span class="filter-chip filter-chip--muted">+{{ _summary.get('dimension_count', 0) - 2 }} more</span>
+        {% endif %}
+      </div>
+      <button class="btn filters-collapse-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtersBody" aria-expanded="true" aria-controls="filtersBody">
+        <span id="filtersCollapseLabel">Collapse</span>
+        <i class="bi bi-chevron-up" id="filtersToggleIcon" aria-hidden="true"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="alert alert-danger d-none rounded-0 mb-0" id="filtersErrorBanner" role="alert"></div>
+  <div class="d-flex justify-content-end bg-white px-4 pt-2 pb-0 d-none" id="filtersRetryWrap">
+    <button class="btn btn-outline-danger btn-sm" type="button" id="filtersRetryBtn">
+      <i class="bi bi-arrow-clockwise me-1"></i>Retry filters
+    </button>
+  </div>
+  <div class="alert alert-warning rounded-0 mb-0 {% if not (g.effective_filters_meta.notice if g.effective_filters_meta is defined else None) %}d-none{% endif %}" id="filtersNoticeBanner" role="status" aria-live="polite">
+    {{ g.effective_filters_meta.notice if g.effective_filters_meta is defined else '' }}
+  </div>
+
+  <div class="collapse show" id="filtersBody">
+    <div class="filters-shell__body">
+      <div class="filters-context-strip d-none" id="packsCoveragePanel" role="status" aria-live="polite">
+        <div>
+          <div class="filters-context-strip__label">Packs Coverage</div>
+          <div class="filters-context-strip__value" id="packsCoverageCounts">Loading...</div>
+        </div>
+        <span class="filters-context-strip__badge" id="packsCoveragePct">--%</span>
+      </div>
+
+      <form method="{{ 'post' if _filters_v2 else 'get' }}"
+            action="{{ _apply_url if _filters_v2 else request.path }}"
+            class="filters-form"
+            id="filtersForm"
+            data-prg="{{ '1' if _filters_v2 else '0' }}"
+            novalidate>
+        {% if _form %}{{ _form.hidden_tag() }}{% endif %}
+        {% if _filters_v2 %}
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="next" value="{{ _next_target }}" />
+        {% else %}
+          <input type="hidden" name="_gf" value="1" />
+        {% endif %}
+        <input type="hidden" id="filtersCsrf" value="{{ csrf_token() }}" />
+        <input type="hidden" name="date_preset" id="fDatePreset" value="{{ _current_preset }}" />
+        <input type="hidden" name="date_type" id="fDateType" value="{{ _current_date_type }}" />
+        {% for key, values in request.args.lists() if key not in _filter_keys %}
+          {% for v in values %}
+            <input type="hidden" name="{{ key }}" value="{{ v }}">
+          {% endfor %}
+        {% endfor %}
+
+        <section class="filters-section filters-section--date" aria-labelledby="filtersDateHeading">
+          <div class="filters-section__header">
+            <div>
+              <div class="filters-section__eyebrow">Date Window</div>
+              <h3 class="filters-section__title" id="filtersDateHeading">Choose the reporting window first</h3>
+            </div>
+            <div class="filters-section__support" id="filtersDateWindowLabel">{{ _summary.get('date_label', 'All Time') }}</div>
+          </div>
+
+          <div class="filters-date-layout">
+            <div class="filters-date-fields">
+              <div class="filters-date-card">
+                <label for="fStart" class="form-label">Start date</label>
+                {% if _form and _form.start_date %}
+                  {{ _form.start_date(class='form-control form-control-lg', id='fStart', type='date', placeholder='YYYY-MM-DD', aria_label='Start date', autocomplete='off') }}
+                {% else %}
+                  <input class="form-control form-control-lg" id="fStart" name="start" type="date" aria-label="Start date" autocomplete="off" value="{{ _summary_payload.get('start_date') | default(request.args.get('start',''), true) }}">
+                {% endif %}
+              </div>
+              <div class="filters-date-card">
+                <label for="fEnd" class="form-label">End date</label>
+                {% if _form and _form.end_date %}
+                  {{ _form.end_date(class='form-control form-control-lg', id='fEnd', type='date', placeholder='YYYY-MM-DD', aria_label='End date', autocomplete='off') }}
+                {% else %}
+                  <input class="form-control form-control-lg" id="fEnd" name="end" type="date" aria-label="End date" autocomplete="off" value="{{ _summary_payload.get('end_date') | default(request.args.get('end',''), true) }}">
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="filters-quick-range-panel">
+              <div class="filters-quick-range-panel__label">Fiscal periods</div>
+              <div class="filters-quick-ranges" role="toolbar" aria-label="Fiscal date ranges">
+                <button class="filter-range-pill" type="button" data-range="current_fy">Current FY</button>
+                <button class="filter-range-pill" type="button" data-range="fy2025">FY 2025</button>
+                <button class="filter-range-pill" type="button" data-range="fy2024">FY 2024</button>
+                <button class="filter-range-pill" type="button" data-range="fytd_comparison">FYTD Comparison</button>
+                <button class="filter-range-pill" type="button" data-range="previous_fy">Previous FY</button>
+                <button class="filter-range-pill" type="button" data-range="current_fq">Current FQ</button>
+                <button class="filter-range-pill" type="button" data-range="previous_fq">Previous FQ</button>
+                <button class="filter-range-pill" type="button" data-range="current_fm">Current FM</button>
+                <button class="filter-range-pill" type="button" data-range="previous_fm">Previous FM</button>
+                <button class="filter-range-pill" type="button" data-range="all">All Time</button>
+              </div>
+              <select class="visually-hidden" id="date-range-preset-picker" tabindex="-1" aria-hidden="true">
+                <option value="">Select a range...</option>
+                <option value="current_fy" {% if _current_preset == 'current_fy' %}selected{% endif %}>Current FY</option>
+                <option value="fy2025" {% if _current_preset == 'fy2025' %}selected{% endif %}>FY 2025 (Apr-Mar)</option>
+                <option value="fy2024" {% if _current_preset == 'fy2024' %}selected{% endif %}>FY 2024 (Apr-Mar)</option>
+                <option value="fytd_comparison" {% if _current_preset == 'fytd_comparison' %}selected{% endif %}>FYTD Comparison</option>
+                <option value="previous_fy" {% if _current_preset == 'previous_fy' %}selected{% endif %}>Previous FY</option>
+                <option value="current_fq" {% if _current_preset == 'current_fq' %}selected{% endif %}>Current FQ</option>
+                <option value="previous_fq" {% if _current_preset == 'previous_fq' %}selected{% endif %}>Previous FQ</option>
+                <option value="current_fm" {% if _current_preset == 'current_fm' %}selected{% endif %}>Current FM</option>
+                <option value="previous_fm" {% if _current_preset == 'previous_fm' %}selected{% endif %}>Previous FM</option>
+                <option value="custom" {% if _current_preset == 'custom' %}selected{% endif %}>Custom</option>
+                <option value="all" {% if _current_preset == 'all' %}selected{% endif %}>All time</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="filters-section" aria-labelledby="filtersDimensionsHeading">
+          <div class="filters-section__header">
+            <div>
+              <div class="filters-section__eyebrow">Dimensions</div>
+              <h3 class="filters-section__title" id="filtersDimensionsHeading">Open one selector at a time and keep the rest compact</h3>
+            </div>
+            <div class="filters-section__support">Tile summaries stay visible while the active picker opens in a shared workspace below.</div>
+          </div>
+
+          <div class="filters-selector-bar" id="filtersDimensionGrid" role="group" aria-label="Filter dimensions">
+            <button class="filter-tile" type="button" id="filterTileStatuses" data-filter-key="statuses" data-filter-panel="filterPanelStatuses" aria-expanded="false" aria-controls="filterPanelStatuses">
+              <span class="filter-tile__eyebrow">Statuses</span>
+              <span class="filter-tile__summary" data-summary-for="fStatuses">All statuses</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="statusesCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileRegions" data-filter-key="regions" data-filter-panel="filterPanelRegions" aria-expanded="false" aria-controls="filterPanelRegions">
+              <span class="filter-tile__eyebrow">Regions</span>
+              <span class="filter-tile__summary" data-summary-for="fRegions">All regions</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="regionsCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileMethods" data-filter-key="methods" data-filter-panel="filterPanelMethods" aria-expanded="false" aria-controls="filterPanelMethods">
+              <span class="filter-tile__eyebrow">Shipping Methods</span>
+              <span class="filter-tile__summary" data-summary-for="fMethods">All methods</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="methodsCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileCustomers" data-filter-key="customers" data-filter-panel="filterPanelCustomers" aria-expanded="false" aria-controls="filterPanelCustomers">
+              <span class="filter-tile__eyebrow">Customers</span>
+              <span class="filter-tile__summary" data-summary-for="fCustomers">All customers</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="customersCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            {% if _show_sales_reps %}
+              <button class="filter-tile" type="button" id="filterTileSalesReps" data-filter-key="sales_reps" data-filter-panel="filterPanelSalesReps" aria-expanded="false" aria-controls="filterPanelSalesReps">
+                <span class="filter-tile__eyebrow">Sales Reps</span>
+                <span class="filter-tile__summary" data-summary-for="fSalesReps">All sales reps</span>
+                <span class="filter-tile__meta">
+                  <span class="filter-tile__count" id="salesRepsCount">All</span>
+                  <span class="filter-tile__hint">Open selector</span>
+                </span>
+              </button>
+            {% endif %}
+
+            <button class="filter-tile" type="button" id="filterTileSuppliers" data-filter-key="suppliers" data-filter-panel="filterPanelSuppliers" aria-expanded="false" aria-controls="filterPanelSuppliers">
+              <span class="filter-tile__eyebrow">Suppliers</span>
+              <span class="filter-tile__summary" data-summary-for="fSuppliers">All suppliers</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="suppliersCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileProducts" data-filter-key="products" data-filter-panel="filterPanelProducts" aria-expanded="false" aria-controls="filterPanelProducts">
+              <span class="filter-tile__eyebrow">Products</span>
+              <span class="filter-tile__summary" data-summary-for="fProducts">All products</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="productsCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileProtein" data-filter-key="protein_groups" data-filter-panel="filterPanelProtein" aria-expanded="false" aria-controls="filterPanelProtein">
+              <span class="filter-tile__eyebrow">Protein Groups</span>
+              <span class="filter-tile__summary" data-summary-for="fProteinGroups">All species</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count" id="proteinGroupsCount">All</span>
+                <span class="filter-tile__hint">Open selector</span>
+              </span>
+            </button>
+
+            <button class="filter-tile" type="button" id="filterTileYield" data-filter-key="yield_range" data-filter-panel="filterPanelYield" aria-expanded="false" aria-controls="filterPanelYield" disabled title="Yield data is currently unavailable in the dataset.">
+              <span class="filter-tile__eyebrow">Yield Performance</span>
+              <span class="filter-tile__summary">Data pending</span>
+              <span class="filter-tile__meta">
+                <span class="filter-tile__count">N/A</span>
+                <span class="filter-tile__hint">Future data</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="filters-workspace-empty" id="filtersWorkspaceEmpty">
+            Choose a dimension tile to search, compare, and refine the current scope.
+          </div>
+
+          <div class="filters-dimension-workspace" id="filtersDimensionWorkspace">
+            <section class="filter-workspace" id="filterPanelStatuses" data-filter-key="statuses" aria-labelledby="filterTileStatuses" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Statuses</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fStatuses">All statuses</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fStatuses">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every status.</p>
+              {% if _form and _form.statuses %}
+                {{ _form.statuses(class='form-select', id='fStatuses', multiple=True, size=8, aria_label='Statuses', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fStatuses" name="statuses" multiple size="8" aria-label="Statuses" data-msx="1">
+                  {% for v in _summary_payload.get('statuses', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fStatuses"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelRegions" data-filter-key="regions" aria-labelledby="filterTileRegions" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Regions</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fRegions">All regions</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fRegions">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every region.</p>
+              {% if _form and _form.regions %}
+                {{ _form.regions(class='form-select', id='fRegions', multiple=True, size=8, aria_label='Regions', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fRegions" name="regions" multiple size="8" aria-label="Regions" data-msx="1">
+                  {% for v in _summary_payload.get('regions', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fRegions"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelMethods" data-filter-key="methods" aria-labelledby="filterTileMethods" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Shipping Methods</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fMethods">All methods</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fMethods">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every shipping method.</p>
+              {% if _form and _form.shipping_methods %}
+                {{ _form.shipping_methods(class='form-select', id='fMethods', multiple=True, size=8, aria_label='Shipping methods', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fMethods" name="methods" multiple size="8" aria-label="Shipping methods" data-msx="1">
+                  {% for v in _summary_payload.get('shipping_methods', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fMethods"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelCustomers" data-filter-key="customers" aria-labelledby="filterTileCustomers" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Customers</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fCustomers">All customers</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fCustomers">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every customer.</p>
+              {% if _form and _form.customers %}
+                {{ _form.customers(class='form-select', id='fCustomers', multiple=True, size=8, aria_label='Customers', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fCustomers" name="customers" multiple size="8" aria-label="Customers" data-msx="1">
+                  {% for v in _summary_payload.get('customers', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fCustomers"></div>
+            </section>
+
+            {% if _show_sales_reps %}
+              <section class="filter-workspace" id="filterPanelSalesReps" data-filter-key="sales_reps" aria-labelledby="filterTileSalesReps" hidden>
+                <div class="filter-workspace__header">
+                  <div>
+                    <div class="filter-workspace__eyebrow">Dimension selector</div>
+                    <h4 class="filter-workspace__title">Sales Reps</h4>
+                  </div>
+                  <div class="filter-workspace__selection">
+                    <span class="filter-workspace__selection-text" data-workspace-summary-for="fSalesReps">All sales reps</span>
+                    <span class="filter-workspace__selection-count" data-workspace-count-for="fSalesReps">All</span>
+                  </div>
+                </div>
+                <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every sales rep in scope.</p>
+                {% if _form and _form.sales_reps %}
+                  {{ _form.sales_reps(class='form-select', id='fSalesReps', multiple=True, size=8, aria_label='Sales representatives', **{'data-msx':'1'}) }}
+                {% else %}
+                  <select class="form-select" id="fSalesReps" name="sales_reps" multiple size="8" aria-label="Sales representatives" data-msx="1">
+                    {% for v in _summary_payload.get('sales_reps', []) %}
+                      <option selected>{{ v }}</option>
+                    {% endfor %}
+                  </select>
+                {% endif %}
+                <div class="msx d-none" data-enhance="fSalesReps"></div>
+              </section>
+            {% endif %}
+
+            <section class="filter-workspace" id="filterPanelSuppliers" data-filter-key="suppliers" aria-labelledby="filterTileSuppliers" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Suppliers</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fSuppliers">All suppliers</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fSuppliers">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every supplier.</p>
+              {% if _form and _form.suppliers %}
+                {{ _form.suppliers(class='form-select', id='fSuppliers', multiple=True, size=8, aria_label='Suppliers', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fSuppliers" name="suppliers" multiple size="8" aria-label="Suppliers" data-msx="1">
+                  {% for v in _summary_payload.get('suppliers', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fSuppliers"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelProducts" data-filter-key="products" aria-labelledby="filterTileProducts" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Products</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fProducts">All products</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fProducts">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Search the current scope. Leave the selector empty to include every product.</p>
+              {% if _form and _form.products %}
+                {{ _form.products(class='form-select', id='fProducts', multiple=True, size=8, aria_label='Products', **{'data-msx':'1'}) }}
+              {% else %}
+                <select class="form-select" id="fProducts" name="products" multiple size="8" aria-label="Products" data-msx="1">
+                  {% for v in _summary_payload.get('products', []) %}
+                    <option selected>{{ v }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <div class="msx d-none" data-enhance="fProducts"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelProtein" data-filter-key="protein_groups" aria-labelledby="filterTileProtein" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Dimension selector</div>
+                  <h4 class="filter-workspace__title">Protein Groups</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fProteinGroups">All species</span>
+                  <span class="filter-workspace__selection-count" data-workspace-count-for="fProteinGroups">All</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Benchmark specific meat categories (Beef, Pork, etc.).</p>
+              <select class="form-select" id="fProteinGroups" name="protein_groups" multiple size="8" aria-label="Protein groups" data-msx="1">
+                {% for v in _summary_payload.get('protein_groups', []) %}
+                  <option selected>{{ v }}</option>
+                {% endfor %}
+              </select>
+              <div class="msx d-none" data-enhance="fProteinGroups"></div>
+            </section>
+
+            <section class="filter-workspace" id="filterPanelYield" data-filter-key="yield_range" aria-labelledby="filterTileYield" hidden>
+              <div class="filter-workspace__header">
+                <div>
+                  <div class="filter-workspace__eyebrow">Metric selector</div>
+                  <h4 class="filter-workspace__title">Yield Performance</h4>
+                </div>
+                <div class="filter-workspace__selection">
+                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fYieldRange">All yields</span>
+                </div>
+              </div>
+              <p class="filter-workspace__help">Filter by processing recovery percentage.</p>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="fYieldMin" class="form-label">Minimum Yield %</label>
+                  <input type="number" step="0.1" class="form-control" id="fYieldMin" name="yield_min" value="{{ _summary_payload.get('yield_min') | default('', true) }}" placeholder="e.g. 95.0">
+                </div>
+                <div class="col-md-6">
+                  <label for="fYieldMax" class="form-label">Maximum Yield %</label>
+                  <input type="number" step="0.1" class="form-control" id="fYieldMax" name="yield_max" value="{{ _summary_payload.get('yield_max') | default('', true) }}" placeholder="e.g. 100.0">
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="filters-section filters-section--summary" aria-labelledby="filtersSummaryHeading">
+          <div class="filters-section__header">
+            <div>
+              <div class="filters-section__eyebrow">Applied Summary</div>
+              <h3 class="filters-section__title" id="filtersSummaryHeading">Current filter context</h3>
+            </div>
+            <div class="filters-section__support">Clear any filter directly from the summary bar.</div>
+          </div>
+
+          <div class="filters-chip-row" id="filtersAppliedChips">
+            {% for chip in _summary.get('chips', []) %}
+              <button class="filter-chip filter-chip--removable {% if chip.key == 'date' %}is-date{% endif %}" type="button" data-clear-filter="{{ chip.key }}">
+                <span class="filter-chip__label">{{ chip.label }}</span>
+                <span class="filter-chip__value">{{ chip.summary }}</span>
+                <span class="filter-chip__remove" aria-hidden="true"><i class="bi bi-x-lg"></i></span>
+              </button>
+            {% endfor %}
+          </div>
+          <div class="filters-empty-state {% if _summary.get('chips') %}d-none{% endif %}" id="filtersSummaryEmpty">
+            No filters applied yet.
+          </div>
+        </section>
+
+        <div class="filters-actions" id="filtersActions">
+          <div class="filters-actions__status">
+            <div class="filters-actions__state" id="filtersPendingState">Ready to apply</div>
+            <div class="filters-actions__support" id="filtersViewStateText">
+              {% if _active_saved_view %}
+                {{ 'Current filters differ from the active saved view.' if g.saved_view_dirty | default(false) else 'Current filters match the active saved view.' }}
+              {% else %}
+                Save a view to reuse this filter state later.
+              {% endif %}
+            </div>
+          </div>
+          <div class="filters-actions__buttons">
+            <button class="btn btn-outline-secondary" type="button" id="clearDimensionFiltersBtn">Clear dimensions</button>
+            <button class="btn btn-outline-secondary" type="button" id="resetFiltersBtn" title="Reset all filters to default">Reset</button>
+            <button class="btn btn-outline-primary" type="button" id="openSaveViewBtn">Save View</button>
+            <button class="btn btn-outline-primary" type="button" id="updateSavedViewBtn" disabled>Update View</button>
+            <button class="btn btn-primary d-flex align-items-center" type="submit" id="filtersApply">
+              <span class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true" id="filtersApplySpinner"></span>
+              <i class="bi bi-check2-circle me-1" id="filtersApplyIcon"></i>
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <section class="filters-section filters-section--saved" id="savedViewsSection" aria-labelledby="savedViewsHeading">
+        <div class="filters-section__header">
+          <div>
+            <div class="filters-section__eyebrow">Saved Views</div>
+            <h3 class="filters-section__title" id="savedViewsHeading">Private saved views built into the main workflow</h3>
+          </div>
+          <div class="filters-section__support">Load, update, or remove your own saved view without losing the current page or analytical scope.</div>
+        </div>
+
+        <div class="saved-view-hub">
+          <div class="saved-view-hub__topline">
+            <form method="post" action="/views/save" class="saved-view-form" id="saveViewForm">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="next" value="{{ _next_target }}">
+              <label class="form-label" for="save_view_name">Save the current filter state as a private view</label>
+              <div class="saved-view-form__row">
+                <input class="form-control" id="save_view_name" name="name" placeholder="Leadership MTD, West region, key accounts" required maxlength="120" autocomplete="off">
+                <button class="btn btn-primary" type="submit">Save</button>
+              </div>
+              <p class="saved-view-form__help">Pending filter edits are included when you save. Views stay private to your account.</p>
+            </form>
+
+            <div class="saved-view-hub__controls">
+              <div>
+                <div class="saved-view-library__title">Available views</div>
+                <div class="saved-view-library__meta" id="savedViewsSelectionSummary">
+                  {% if _active_saved_view %}
+                    Active view: {{ _active_saved_view.get('name') }}
+                  {% elif _saved_views_ui %}
+                    Select a saved view to load or update it.
+                  {% else %}
+                    No saved views yet.
+                  {% endif %}
+                </div>
+              </div>
+              <div class="saved-view-library__buttons">
+                <button class="btn btn-outline-primary btn-sm" type="button" id="loadViewBtn" {% if not _saved_views_ui %}disabled{% endif %}>Load</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" id="deleteViewBtn" {% if not _saved_views_ui %}disabled{% endif %}>Delete</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="saved-view-list" id="savedViewsList">
+            {% if _saved_views_ui %}
+              {% for view in _saved_views_ui %}
+                <button class="saved-view-card {% if view.active %}is-active{% endif %}" type="button" data-view-id="{{ view.id }}">
+                  <span class="saved-view-card__topline">
+                    <span class="saved-view-card__name">{{ view.name }}</span>
+                    {% if view.active %}
+                      <span class="saved-view-card__badge">Active</span>
+                    {% elif view.sanitized %}
+                      <span class="saved-view-card__badge">Adjusted</span>
+                    {% endif %}
+                  </span>
+                  <span class="saved-view-card__summary">{{ view.summary.get('compact_label') or view.summary.get('date_label') }}</span>
+                  <span class="saved-view-card__meta">
+                    <span>{{ view.visibility | default('private') | title }}</span>
+                    <span>{{ view.summary.get('date_label') }}</span>
+                    <span>{{ view.summary.get('dimension_count', 0) }} dimensions</span>
+                    {% if view.created_at %}
+                      <span>{{ view.created_at[:10] }}</span>
+                    {% endif %}
+                  </span>
+                </button>
+              {% endfor %}
+            {% else %}
+              <div class="filters-empty-state">
+                Save a view once and it will appear here for one-click reuse.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <input type="hidden" id="savedViewSelect" value="{{ _active_saved_view.get('id') if _active_saved_view else '' }}">
+        <input type="hidden" id="svNext" value="{{ _next_target }}">
+        <input type="hidden" id="svCsrf" value="{{ csrf_token() }}">
+        <script type="application/json" id="filtersBootstrapData">{{ _filters_bootstrap | tojson }}</script>
+        <script type="application/json" id="filtersSavedViewsData">{{ _saved_views_ui | tojson }}</script>
+      </section>
+
+      {% if _filters_v2 %}
+        <form method="post" action="{{ _reset_url }}" id="filtersResetForm" class="d-none">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="next" value="{{ _next_target }}" />
+          {% for key, values in request.args.lists() if key not in _filter_keys %}
+            {% for v in values %}
+              <input type="hidden" name="{{ key }}" value="{{ v }}">
+            {% endfor %}
+          {% endfor %}
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="filters-loading-overlay d-none" id="filtersLoadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="mt-2 fw-semibold">Loading filters...</div>
+  </div>
+</div>

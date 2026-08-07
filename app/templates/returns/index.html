@@ -1,0 +1,218 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">All Returns</h1>
+      <p class="text-muted mb-0">Returns Tracker with scoped filters, full-row exports, and the Excel replacement column set.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% if can_permission('returns.create') or can_permission('page.returns.customer_portal') or can_permission('admin.returns.manage') %}
+      <a class="btn btn-primary" href="{{ url_for('returns_portal.create') }}">New Return</a>
+      {% endif %}
+      {% if can_permission('returns.approvals.view') or can_permission('returns.warehouse.receive') or can_permission('returns.ops.queue.view') or can_permission('admin.returns.manage') %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.approvals') }}">Approvals</a>
+      {% endif %}
+      {% if not config.get('RETURNS_FINAL_V1') and (can_permission('returns.warehouse.scan') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
+      <a class="btn btn-outline-dark" href="{{ url_for('returns_warehouse.scan') }}">Warehouse</a>
+      {% endif %}
+      {% if (config.get('RETURNS_ANALYTICS') or config.get('RETURNS_FINAL_V1')) and (can_permission('page.returns.analytics.view') or can_permission('admin.returns.manage')) %}
+      <a class="btn btn-outline-success" href="{{ url_for('returns_portal.analytics') }}">Analytics</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label" for="statusFilter">Status</label>
+          <select class="form-select" id="statusFilter" name="status">
+            <option value="all" {% if filters.status == 'all' %}selected{% endif %}>All</option>
+            <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="wh_approved" {% if filters.status == 'wh_approved' %}selected{% endif %}>WH Approved</option>
+            <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>Rejected</option>
+            <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Completed</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="repFilter">Rep</label>
+          <input class="form-control" id="repFilter" name="rep" value="{{ filters.rep }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="categoryFilter">Category</label>
+          <select class="form-select" id="categoryFilter" name="category">
+            <option value="" {% if not filters.category %}selected{% endif %}>All</option>
+            <option value="Production" {% if filters.category == 'Production' %}selected{% endif %}>Production</option>
+            <option value="Warehouse" {% if filters.category == 'Warehouse' %}selected{% endif %}>Warehouse</option>
+            <option value="Sales" {% if filters.category == 'Sales' %}selected{% endif %}>Sales</option>
+            <option value="Other" {% if filters.category == 'Other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="reasonFilter">Reason</label>
+          <input class="form-control" id="reasonFilter" name="reason" value="{{ filters.reason }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="companyFilter">Company</label>
+          <select class="form-select" id="companyFilter" name="company">
+            <option value="">All</option>
+            <option value="the distributor Meats" {% if filters.company == 'the distributor Meats' %}selected{% endif %}>the distributor</option>
+            <option value="Black Forest" {% if filters.company == 'Black Forest' %}selected{% endif %}>Black Forest</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="approverFilter">Approver</label>
+          <select class="form-select" id="approverFilter" name="approver">
+            <option value="">All</option>
+            <option value="Scott" {% if filters.approver == 'Scott' %}selected{% endif %}>Scott</option>
+            <option value="Brian" {% if filters.approver == 'Brian' %}selected{% endif %}>Brian</option>
+            <option value="Kyle" {% if filters.approver == 'Kyle' %}selected{% endif %}>Kyle</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="customerFilter">Customer</label>
+          <input class="form-control" id="customerFilter" name="customer" value="{{ filters.customer }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="orderFilter">Order #</label>
+          <input class="form-control" id="orderFilter" name="order_id" value="{{ filters.order_id }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="fromDate">From</label>
+          <input class="form-control" id="fromDate" name="from" type="date" value="{{ filters.from }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label" for="toDate">To</label>
+          <input class="form-control" id="toDate" name="to" type="date" value="{{ filters.to }}">
+        </div>
+        <div class="col-md-8 d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit">Apply</button>
+          <button class="btn btn-outline-success" type="submit" name="export" value="xlsx">Export XLSX</button>
+          <button class="btn btn-outline-secondary" type="submit" name="export" value="csv">Export CSV</button>
+          <a class="btn btn-outline-light border" href="{{ url_for('returns_portal.index') }}">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3">
+        {# ... existing filters ... #}
+      </form>
+      <div id="bulkActionsRow" class="mt-3 d-none">
+        <div class="d-flex align-items-center gap-3 p-2 bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded">
+          <span class="fw-bold text-primary small"><span id="selectedCount">0</span> returns selected</span>
+          <div class="vr"></div>
+          <button class="btn btn-sm btn-outline-primary" type="button" id="bulkExportSage">Batch Sage Export</button>
+          {% if can_finance or can_mgr_approve %}
+          <button class="btn btn-sm btn-outline-success" type="button" id="bulkMarkComplete">Batch Close</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="returnsTable">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
+            <th>RMA #</th>
+            <th>Company</th>
+            <th>Customer</th>
+            <th>Order #</th>
+            <th>Rep</th>
+            <th>Status</th>
+            <th>Total Credit</th>
+            <th>Approver</th>
+            <th>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rmas %}
+          <tr data-rma-id="{{ row.id }}">
+            <td><input type="checkbox" class="form-check-input row-select" value="{{ row.id }}"></td>
+            <td class="fw-semibold"><a class="link-dark text-decoration-none" href="{{ url_for('returns_portal.detail', rma_id=row.id) }}">{{ row.rma_number }}</a></td>
+            <td><span class="small text-muted">{{ row.company or '-' }}</span></td>
+            <td>{{ row.customer_name or row.customer_id }}</td>
+            <td>{{ row.order_id }}</td>
+            <td>{{ row.rep_name or '-' }}</td>
+            <td><span class="badge text-bg-light border">{{ row.status_label }}</span></td>
+            <td>{{ row.total_credit_amount|currency }}</td>
+            <td><span class="small">{{ row.approval_target or '-' }}</span></td>
+            <td>{{ row.last_updated or row.updated_at or row.created_at }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td class="text-muted" colspan="10">No returns match the current filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const selectAll = document.getElementById('selectAll');
+  const rowSelects = document.querySelectorAll('.row-select');
+  const bulkRow = document.getElementById('bulkActionsRow');
+  const selectedCount = document.getElementById('selectedCount');
+  
+  function updateBulkRow() {
+    const selected = Array.from(rowSelects).filter(cb => cb.checked);
+    if (selected.length > 0) {
+      bulkRow.classList.remove('d-none');
+      selectedCount.textContent = selected.length;
+    } else {
+      bulkRow.classList.add('d-none');
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      rowSelects.forEach(cb => cb.checked = selectAll.checked);
+      updateBulkRow();
+    });
+  }
+
+  rowSelects.forEach(cb => {
+    cb.addEventListener('change', updateBulkRow);
+  });
+
+  document.getElementById('bulkExportSage')?.addEventListener('click', function() {
+    const ids = Array.from(rowSelects).filter(cb => cb.checked).map(cb => cb.value);
+    if (ids.length === 0) return;
+    window.location.href = "{{ url_for('returns_portal.export_sage_csv_batch') }}?ids=" + ids.join(',');
+  });
+
+  document.getElementById('bulkMarkComplete')?.addEventListener('click', async function() {
+    const ids = Array.from(rowSelects).filter(cb => cb.checked).map(cb => cb.value);
+    if (!ids.length || !confirm('Mark ' + ids.length + ' returns as completed?')) return;
+    
+    const formData = new FormData();
+    formData.append('csrf_token', '{{ csrf_token() }}');
+    ids.forEach(id => formData.append('ids', id));
+    
+    try {
+      const response = await fetch("{{ url_for('returns_portal.batch_complete') }}", {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        window.location.reload();
+      } else {
+        alert('Bulk update failed. Check logs.');
+      }
+    } catch (err) {
+      alert('Error during bulk update.');
+    }
+  });
+});
+</script>
+{% endblock %}

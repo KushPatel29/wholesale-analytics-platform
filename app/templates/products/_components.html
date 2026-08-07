@@ -1,0 +1,26 @@
+{% macro info_tooltip(text, tone='muted', extra_class='') -%}
+  <button
+    type="button"
+    class="btn btn-link btn-sm p-0 border-0 align-baseline text-{{ tone }} {{ extra_class }}"
+    data-bs-toggle="tooltip"
+    data-bs-placement="top"
+    title="{{ text }}"
+    aria-label="What this means"
+  >
+    <i class="bi bi-info-circle"></i>
+  </button>
+{%- endmacro %}
+
+{% macro section_heading(title, subtitle='', tooltip='') -%}
+  <div class="products-section-heading">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <h5 class="card-title mb-0">{{ title }}</h5>
+      {% if tooltip %}
+        {{ info_tooltip(tooltip) }}
+      {% endif %}
+    </div>
+    {% if subtitle %}
+      <div class="text-muted small">{{ subtitle }}</div>
+    {% endif %}
+  </div>
+{%- endmacro %}

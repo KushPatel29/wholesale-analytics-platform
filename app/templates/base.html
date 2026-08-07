@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Wholesale Analytics{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_T_netflix_style.png') }}?v=11">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260409-theme-system-2') }}">
+    {% if request.blueprint == 'overview_page' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
+    {% endif %}
+    {% if current_user.is_authenticated %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/universal_drilldown.css') }}">
+    {% endif %}
+    <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}" defer></script>
+    {% block head_extras %}{% endblock %}
+    <script>
+      window.__WA_DISABLE_SSE__ = {{ 'false' if config.get('ENABLE_SSE') else 'true' }};
+      window.__FILTER_CTX__ = window.__FILTER_CTX__ || {};
+      try {
+        window.__FILTER_CTX__.user_id = "{{ current_user.get_id() if current_user and current_user.is_authenticated else '' }}";
+      } catch (e) {
+        window.__FILTER_CTX__.user_id = "";
+      }
+    </script>
+    <script>
+      window.__APP_DEBUG__ = {{ 'true' if config.get('DEBUG') else 'false' }};
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  </head>
+  {% set _blueprint_name = request.blueprint or '' %}
+  {% set _page_tone = 'overview' %}
+  {% if request.endpoint and request.endpoint.startswith('customers.') %}
+    {% set _page_tone = 'customers' %}
+  {% elif request.endpoint and request.endpoint.startswith('products.') %}
+    {% set _page_tone = 'products' %}
+  {% elif request.endpoint and request.endpoint.startswith('regions.') %}
+    {% set _page_tone = 'regions' %}
+  {% elif request.endpoint and request.endpoint.startswith('suppliers.') %}
+    {% set _page_tone = 'suppliers' %}
+  {% elif request.endpoint and request.endpoint.startswith('labor.') %}
+    {% set _page_tone = 'labor' %}
+  {% elif request.endpoint and request.endpoint.startswith('salesreps.') %}
+    {% set _page_tone = 'salesreps' %}
+  {% elif request.endpoint and request.endpoint.startswith('assistant.') %}
+    {% set _page_tone = 'assistant' %}
+  {% elif request.endpoint and request.endpoint.startswith('returns_') %}
+    {% set _page_tone = 'returns' %}
+  {% elif request.endpoint and request.endpoint.startswith('admin.') %}
+    {% set _page_tone = 'operations' %}
+  {% endif %}
+  {% set _hide_global_filters = hide_global_filters if hide_global_filters is defined else (disable_global_filters if disable_global_filters is defined else (request.blueprint == 'admin' or _blueprint_name.startswith('returns_'))) %}
+  <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}">
+    {% set branding = config.get('BRANDING', {}) %}
+    <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
+      <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
+          <img src="{{ url_for('static', filename='img/wa-logo-badge.png') }}"
+               alt="the distributor Meats"
+               height="40"
+               class="navbar-brand-img">
+          <span class="fw-semibold small text-uppercase navbar-brand-copy">Analytics</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          {% set _has_salesreps = has_salesreps if has_salesreps is defined else False %}
+          {% if current_user.is_authenticated %}
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-2">
+            {% if can_permission('page.overview.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ url_for('overview_page.overview_landing') }}">Overview</a></li>
+            {% endif %}
+            {% if can_permission('page.overview.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ url_for('stakeholder_report.index') }}">Market Pulse</a></li>
+            {% endif %}
+            {% if can_permission('page.customers.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ url_for('customers.index') }}">Customers</a></li>
+            {% endif %}
+            {% if can_permission('page.products.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ url_for('products.index') }}">Products</a></li>
+            {% endif %}
+            {% if can_permission('page.regions.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ url_for('regions.index') }}">Regions</a></li>
+            {% endif %}
+            {% if can_permission('page.suppliers.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('suppliers.') %}active{% endif %}" href="{{ url_for('suppliers.index') }}">Suppliers</a></li>
+            {% endif %}
+            {% if (has_labor if has_labor is defined else false) and can_permission('page.labor.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('labor.') %}active{% endif %}" href="{{ url_for('labor.index') }}">Labor</a></li>
+            {% endif %}
+            {% if _has_salesreps %}
+              {% if can_permission('page.salesreps.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ url_for('salesreps.index') }}">Sales Reps+</a></li>
+              {% endif %}
+            {% else %}
+            <li class="nav-item"><a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Sales Reps+</a></li>
+            {% endif %}
+            {% if (returns_enabled if returns_enabled is defined else false) and (can_permission('page.returns.view') or can_permission('page.returns.customer_portal') or can_permission('page.returns.ops') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('returns_') %}active{% endif %}" href="{{ url_for('returns_portal.index') }}">Returns</a></li>
+            {% endif %}
+            {% if (ai_enabled if ai_enabled is defined else false) and (
+              can_permission('page.overview.view') or
+              can_permission('page.customers.view') or
+              can_permission('page.products.view') or
+              can_permission('page.regions.view') or
+              can_permission('page.suppliers.view') or
+              can_permission('page.labor.view') or
+              can_permission('page.salesreps.view') or
+              can_permission('page.returns.view') or
+              can_permission('page.admin.view') or
+              can_permission('page.notifications.view')
+            ) %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant.') %}active{% endif %}" href="{{ url_for('assistant.assistant_page', ref=request.path, page=request.endpoint or request.path) }}">Assistant</a></li>
+            {% endif %}
+          </ul>
+          {% endif %}
+          <ul class="navbar-nav">
+            {% if current_user.is_authenticated %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                {{ current_user.get_id() or 'User' }}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" role="menu">
+                {% if (notifications_enabled if notifications_enabled is defined else false) and can_permission('page.notifications.view') %}
+                <li><a class="dropdown-item" role="menuitem" href="{{ url_for('notifications.index') }}">Notifications</a></li>
+                {% if (admin_notif_defaults_enabled if admin_notif_defaults_enabled is defined else false) and can_permission('admin.notifications.defaults') %}
+                <li><a class="dropdown-item" role="menuitem" href="{{ url_for('notifications.notifications_defaults') }}">Notification Defaults</a></li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                {% endif %}
+                {% set _can_admin_portal = (admin_portal_enabled if admin_portal_enabled is defined else true) and can_permission('page.admin.view') and can_permission('admin.users.manage') %}
+                {% if _can_admin_portal %}
+                <li><a class="dropdown-item" role="menuitem" href="/admin/users">Admin</a></li>
+                {% if (returns_enabled if returns_enabled is defined else false) and can_permission('admin.returns.manage') %}
+                <li><a class="dropdown-item" role="menuitem" href="{{ url_for('returns_admin.index') }}">Returns Admin</a></li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                {% endif %}
+                <li><a class="dropdown-item" role="menuitem" href="/auth/logout">Logout</a></li>
+              </ul>
+            </li>
+            {% else %}
+            <li class="nav-item"><a class="nav-link" href="/auth/login">Login</a></li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <main class="app-main container-xxl">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-3">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ 'warning' if category=='message' else category }} alert-dismissible fade show shadow-soft border-faint" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% if current_user.is_authenticated and access_scope is defined and (not access_scope.is_admin) and access_scope.scope_mode == 'none' %}
+        <div class="alert alert-warning shadow-soft border-faint" role="alert">
+          Access not configured. Ask an admin to grant your ERP visibility in Admin.
+        </div>
+      {% endif %}
+      {% if current_user.is_authenticated and not _hide_global_filters %}
+        {% block filters_bar %}
+          {% include "_filters.html" %}
+        {% endblock %}
+      {% endif %}
+      {% block breadcrumbs %}{% endblock %}
+      {% if current_user.is_authenticated and not (hide_drill_context_banner if hide_drill_context_banner is defined else false) %}
+        {% if active_drilldown_context %}
+          <section class="udrill-banner shadow-soft border-faint mb-3" aria-label="Active drilldown context">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+              <div>
+                <div class="udrill-banner__title">{{ active_drilldown_context.headline }}</div>
+                <div class="udrill-banner__path">{{ active_drilldown_context.path }}</div>
+                {% if active_drilldown_context.filter_chips %}
+                  <div class="udrill-chip-row mt-2">
+                    {% for chip in active_drilldown_context.filter_chips %}
+                      <span class="udrill-chip">{{ chip }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                {% if active_drilldown_context.back_href %}
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ active_drilldown_context.back_href }}">Back To Source</a>
+                {% endif %}
+                {% if active_drilldown_context.clear_href %}
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ active_drilldown_context.clear_href }}">Clear Context</a>
+                {% endif %}
+              </div>
+            </div>
+          </section>
+        {% elif active_drilldown_context_error %}
+          <div class="alert alert-warning shadow-soft border-faint mb-3" role="alert">
+            {{ active_drilldown_context_error.message }}
+            {% if active_drilldown_context_error.clear_href %}
+              <a class="alert-link ms-2" href="{{ active_drilldown_context_error.clear_href }}">Clear context</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+    {% if current_user.is_authenticated %}
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;" aria-live="polite" aria-atomic="true">
+      <div id="liveRefreshToast" class="toast shadow border-0" role="alert" data-bs-autohide="false" aria-live="assertive" aria-atomic="true">
+        <div class="toast-body">
+          <div class="d-flex align-items-start gap-3">
+            <div class="me-2">
+              <div class="fw-semibold" data-refresh-message>New data loaded. Refresh charts?</div>
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="autoRefreshToggle" data-auto-refresh>
+                <label class="form-check-label" for="autoRefreshToggle">Auto-refresh charts</label>
+              </div>
+            </div>
+            <div class="d-flex flex-column align-items-end gap-2">
+              <button type="button" class="btn btn-primary btn-sm" data-action="refresh-now">Refresh</button>
+              <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% if branding.primary_color %}
+    <style>
+      :root {
+        --wa-primary: {{ branding.primary_color }};
+        --bs-primary: {{ branding.primary_color }};
+      }
+    </style>
+    {% endif %}
+    {% if current_user.is_authenticated %}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="{{ url_for('static', filename='js/auth-fetch.js') }}"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="/static/js/live-updates.js?v=20260325-liveupdates-gated-1"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+    <script src="/static/js/exports.js"></script>
+    <script src="/static/js/chart-utils.js?v=20260326-contrast-hardening-1"></script>
+    {% if config.get('DEBUG') %}
+    <script src="{{ url_for('static', filename='js/dev-bundle-helper.js') }}"></script>
+    {% endif %}
+    {% endif %}
+    {% if current_user.is_authenticated and not _hide_global_filters %}
+    {# Keep filters boot sequence predictable: FilterState -> adapter -> filters UI #}
+    <script src="{{ url_for('static', filename='js/global_filters.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/bundle-adapter.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/filters-enhanced.js') }}?v=20260408-fiscal-quick-ranges-1" defer></script>
+    {% endif %}
+    {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='js/page-state-cache.js') }}?v=20260401-page-state-cache-1" defer></script>
+    <script src="{{ url_for('static', filename='js/universal_drilldown.js') }}" defer></script>
+    {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+  </html>

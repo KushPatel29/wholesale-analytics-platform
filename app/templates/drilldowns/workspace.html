@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% set filters_handler = "ssr" %}
+
+{% block title %}{{ workspace_title or "Drilldown Workspace" }}{% endblock %}
+
+{% block content %}
+<section class="udw-page">
+  <div class="udw-hero card shadow-soft mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <div class="udw-eyebrow">Universal Drilldown Workspace</div>
+          <h1 class="mb-1">{{ workspace_title or "Drilldown Workspace" }}</h1>
+          <p class="text-muted mb-2">{{ workspace_subtitle or "Resolved from a clicked chart, card, table row, or action item." }}</p>
+          {% if workspace and workspace.filter_chips %}
+            <div class="udw-chip-row">
+              {% for chip in workspace.filter_chips %}
+                <span class="udw-chip">{{ chip }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          {% if workspace and workspace.back_href %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ workspace.back_href }}">Back To Source</a>
+          {% endif %}
+          {% if workspace and workspace.primary_table and workspace.primary_table.rows %}
+            <a class="btn btn-primary btn-sm" href="{{ url_for('drilldowns.workspace', token=workspace_token, format='csv') }}">Export CSV</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if drilldown_invalid %}
+    <div class="alert alert-warning shadow-soft border-faint">
+      This drilldown context can no longer be opened. It may have expired, been copied across users, or no longer match your current RBAC scope.
+    </div>
+  {% elif workspace %}
+    {% if workspace.summary_cards %}
+      <section class="udw-summary-grid mb-3">
+        {% for card in workspace.summary_cards %}
+          <article class="card shadow-soft">
+            <div class="card-body">
+              <div class="udw-card-label">{{ card.label }}</div>
+              <div class="udw-card-value">{{ card.value }}</div>
+              {% if card.detail %}
+                <div class="udw-card-detail">{{ card.detail }}</div>
+              {% endif %}
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    {% if workspace.clicked_metric or workspace.time_context or workspace.narrative %}
+      <section class="card shadow-soft mb-3">
+        <div class="card-body">
+          <div class="row g-3">
+            {% if workspace.clicked_metric %}
+              <div class="col-lg-4">
+                <div class="udw-detail-label">Clicked Metric</div>
+                <div class="udw-detail-value">{{ workspace.clicked_metric }}</div>
+                {% if workspace.clicked_metric_value %}
+                  <div class="text-muted small">Value {{ workspace.clicked_metric_value }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+            {% if workspace.time_context %}
+              <div class="col-lg-4">
+                <div class="udw-detail-label">Time Slice</div>
+                <div class="udw-detail-value">{{ workspace.time_context }}</div>
+              </div>
+            {% endif %}
+            {% if workspace.narrative %}
+              <div class="col-lg-12">
+                <div class="udw-detail-label">Why This Was Drilled</div>
+                <div class="text-muted">{{ workspace.narrative }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="row g-3">
+      <div class="{% if workspace.secondary_table and workspace.secondary_table.rows %}col-xl-7{% else %}col-12{% endif %}">
+        <article class="card shadow-soft h-100">
+          <div class="card-header">
+            <h5 class="mb-1">{{ (workspace.primary_table or {}).get('title') or "Detail" }}</h5>
+            <div class="small text-muted">Resolved under the current filter inheritance and RBAC-safe scope.</div>
+          </div>
+          <div class="card-body">
+            {% if workspace.primary_table and workspace.primary_table.rows %}
+              <div class="table-responsive udw-table-wrap">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      {% for column in workspace.primary_table.columns %}
+                        <th>{{ column.label }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in workspace.primary_table.rows %}
+                      <tr>
+                        {% for column in workspace.primary_table.columns %}
+                          <td>{{ row.get(column.key) }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="udw-empty">{{ workspace.empty_message or "No detail rows are available for this drilled context." }}</div>
+            {% endif %}
+          </div>
+        </article>
+      </div>
+
+      {% if workspace.secondary_table and workspace.secondary_table.rows %}
+        <div class="col-xl-5">
+          <article class="card shadow-soft h-100">
+            <div class="card-header">
+              <h5 class="mb-1">{{ workspace.secondary_table.title }}</h5>
+              <div class="small text-muted">Closest supporting breakdown for the clicked slice.</div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive udw-table-wrap">
+                <table class="table table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      {% for column in workspace.secondary_table.columns %}
+                        <th>{{ column.label }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in workspace.secondary_table.rows %}
+                      <tr>
+                        {% for column in workspace.secondary_table.columns %}
+                          <td>{{ row.get(column.key) }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

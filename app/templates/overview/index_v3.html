@@ -1,0 +1,1472 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Business Performance{% endblock %}
+
+{% block content %}
+<style>
+  #overviewPage {
+    --overview-ink: var(--wa-text-strong);
+    --overview-ink-soft: var(--wa-text-muted);
+    --overview-border: rgba(29, 42, 67, 0.12);
+    --overview-border-strong: rgba(29, 42, 67, 0.2);
+    --overview-surface: rgba(255, 255, 255, 0.9);
+    --overview-surface-muted: rgba(245, 248, 252, 0.92);
+    --overview-shadow: var(--wa-shadow-sm);
+    border-radius: 1.5rem;
+    padding: 1.1rem 1.1rem 1.5rem;
+    background:
+      radial-gradient(1200px 360px at 100% -15%, rgba(200, 138, 73, 0.12), rgba(200, 138, 73, 0)),
+      radial-gradient(900px 280px at 0% 0%, rgba(47, 124, 255, 0.1), rgba(47, 124, 255, 0)),
+      linear-gradient(180deg, rgba(244, 248, 253, 0.96) 0%, rgba(255, 255, 255, 0.94) 30%, rgba(247, 250, 253, 0.98) 100%);
+  }
+  #overviewPage.is-loading {
+    opacity: 0.82;
+    transition: opacity 0.18s ease;
+  }
+  #overviewPage .overview-panel,
+  #overviewPage .overview-shell-card,
+  #overviewPage .section-shell,
+  #overviewPage .hero-main,
+  #overviewPage .hero-side {
+    border: 1px solid var(--overview-border);
+    border-radius: 1.15rem;
+    background: var(--overview-surface);
+    box-shadow: var(--overview-shadow);
+    backdrop-filter: none;
+  }
+  #overviewPage .panel-header,
+  #overviewPage .section-shell-header {
+    border-bottom: 1px solid rgba(29, 42, 67, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(246, 249, 252, 0.92));
+    padding: 1rem 1.1rem;
+  }
+  #overviewPage .panel-body,
+  #overviewPage .section-shell-body {
+    padding: 1.05rem 1.1rem 1.1rem;
+  }
+  #overviewPage .hero-label,
+  #overviewPage .panel-eyebrow,
+  #overviewPage .overview-section-title,
+  #overviewPage .health-scan-label,
+  #overviewPage .action-rail-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--wa-primary);
+    font-weight: 700;
+  }
+  #overviewPage .panel-title {
+    margin: 0.12rem 0 0.1rem;
+    font-size: 1.15rem;
+    color: var(--overview-ink);
+  }
+  #overviewPage .panel-subtitle,
+  #overviewPage .section-shell-copy {
+    color: var(--overview-ink-soft);
+  }
+  #overviewPage .overview-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.95fr) minmax(320px, 0.92fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .overview-hero {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .hero-main {
+    padding: 1.2rem 1.25rem 1.15rem;
+  }
+  #overviewPage .hero-side {
+    padding: 1rem 1.05rem;
+  }
+  #overviewPage .hero-title {
+    font-size: clamp(1.95rem, 2.35vw, 2.7rem);
+    line-height: 1.02;
+    color: var(--overview-ink);
+    margin: 0.2rem 0 0.45rem;
+  }
+  #overviewPage .hero-copy {
+    max-width: 56rem;
+    color: #4d617b;
+    margin-bottom: 0.65rem;
+  }
+  #overviewPage .hero-status-blurb {
+    border-radius: 0.9rem;
+    background: linear-gradient(135deg, rgba(233, 241, 255, 0.88), rgba(247, 239, 228, 0.62));
+    border: 1px solid rgba(47, 124, 255, 0.12);
+    padding: 0.7rem 0.82rem;
+    color: #284663;
+    font-size: 0.9rem;
+    margin-bottom: 0.8rem;
+  }
+  #overviewPage .hero-filter-line {
+    font-size: 0.92rem;
+    color: #59687c;
+  }
+  #overviewPage .hero-period-note {
+    margin-top: 0.55rem;
+    border-left: 3px solid #9bc2f5;
+    padding: 0.12rem 0 0.12rem 0.72rem;
+    color: #42546b;
+    font-size: 0.84rem;
+  }
+  #overviewPage .context-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.9rem;
+  }
+  #overviewPage .context-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    border-radius: 999px;
+    border: 1px solid rgba(29, 42, 67, 0.1);
+    background: rgba(255, 255, 255, 0.72);
+    color: #294567;
+    font-size: 0.79rem;
+    padding: 0.38rem 0.7rem;
+    text-decoration: none;
+  }
+  #overviewPage .context-chip strong {
+    color: var(--overview-ink);
+    font-weight: 700;
+  }
+  #overviewPage .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.95rem;
+  }
+  #overviewPage .hero-link,
+  #overviewPage .action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.46rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid rgba(29, 42, 67, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    color: #294567;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  #overviewPage .overview-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.14rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  #overviewPage .overview-status-pill.is-red {
+    color: #991b1b;
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(185, 28, 28, 0.16);
+  }
+  #overviewPage .overview-status-pill.is-orange {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(194, 65, 12, 0.18);
+  }
+  #overviewPage .overview-status-pill.is-yellow {
+    color: #8a5b00;
+    background: rgba(250, 204, 21, 0.16);
+    border-color: rgba(202, 138, 4, 0.2);
+  }
+  #overviewPage .overview-status-pill.is-light-green {
+    color: #15803d;
+    background: rgba(134, 239, 172, 0.2);
+    border-color: rgba(34, 197, 94, 0.18);
+  }
+  #overviewPage .overview-status-pill.is-green {
+    color: #027a48;
+    background: rgba(2, 122, 72, 0.08);
+    border-color: rgba(2, 122, 72, 0.16);
+  }
+  #overviewPage .overview-status-pill.is-neutral {
+    color: #475569;
+    background: rgba(148, 163, 184, 0.16);
+    border-color: rgba(100, 116, 139, 0.18);
+  }
+  #overviewPage .hero-side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+  }
+  #overviewPage .hero-side-header h2 {
+    font-size: 1rem;
+    color: var(--overview-ink);
+    margin: 0.1rem 0 0;
+  }
+  #overviewPage .hero-side-header p {
+    color: var(--overview-ink-soft);
+    margin: 0.2rem 0 0;
+    font-size: 0.86rem;
+  }
+  #overviewPage .hero-side-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin: 0.92rem 0;
+  }
+  @media (max-width: 575.98px) {
+    #overviewPage .hero-side-metrics {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .hero-side-metric,
+  #overviewPage .health-scan-card,
+  #overviewPage .command-side-card,
+  #overviewPage .rail-panel-card,
+  #overviewPage .risk-summary-card,
+  #overviewPage .movers-slab,
+  #overviewPage .drivers-period-card,
+  #overviewPage .kpi-group-card,
+  #overviewPage .trust-card,
+  #overviewPage .briefing-card {
+    border: 1px solid rgba(29, 42, 67, 0.1);
+    border-radius: 0.92rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 249, 252, 0.86));
+    min-height: 100%;
+  }
+  #overviewPage .hero-side-metric,
+  #overviewPage .health-scan-card,
+  #overviewPage .command-side-card,
+  #overviewPage .rail-panel-card,
+  #overviewPage .risk-summary-card,
+  #overviewPage .movers-slab,
+  #overviewPage .drivers-period-card,
+  #overviewPage .kpi-group-card,
+  #overviewPage .trust-card,
+  #overviewPage .briefing-card {
+    padding: 0.85rem 0.9rem;
+  }
+  #overviewPage .hero-side-metric .label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6c7a8d;
+  }
+  #overviewPage .hero-side-metric .value,
+  #overviewPage .health-scan-value,
+  #overviewPage .score-value,
+  #overviewPage .briefing-value {
+    margin-top: 0.22rem;
+    font-weight: 700;
+    color: var(--overview-ink);
+    font-size: clamp(1rem, 1.35vw, 1.55rem);
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPage .hero-side-list,
+  #overviewPage .briefing-list,
+  #overviewPage .watchouts-list,
+  #overviewPage .action-rail-list,
+  #overviewPage .issue-list,
+  #overviewPage .watchlist-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+  #overviewPage .hero-side-list li,
+  #overviewPage .action-rail-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.85rem;
+    border-bottom: 1px dashed #e2e8f0;
+    padding-bottom: 0.52rem;
+    color: #4b5a6e;
+    font-size: 0.86rem;
+  }
+  #overviewPage .hero-side-list li:last-child,
+  #overviewPage .action-rail-list li:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  #overviewPage .overview-health-rail {
+    margin-bottom: 1rem;
+  }
+  #overviewPage .health-rail-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+  @media (max-width: 1399.98px) {
+    #overviewPage .health-rail-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .health-rail-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .health-scan-card[data-tone="positive"] {
+    background: linear-gradient(180deg, #f4fff8, #ffffff);
+    border-color: #bce6d2;
+  }
+  #overviewPage .health-scan-card[data-tone="warning"] {
+    background: linear-gradient(180deg, #fffaf0, #ffffff);
+    border-color: #f1d7a4;
+  }
+  #overviewPage .health-scan-card[data-tone="negative"] {
+    background: linear-gradient(180deg, #fff7f8, #ffffff);
+    border-color: #efc1c8;
+  }
+  #overviewPage .health-scan-card[data-tone="neutral"] {
+    background: linear-gradient(180deg, #f8fbff, #ffffff);
+    border-color: #d8e4f5;
+  }
+  #overviewPage .health-scan-detail,
+  #overviewPage .command-side-copy,
+  #overviewPage .score-support,
+  #overviewPage .score-delta,
+  #overviewPage .briefing-detail,
+  #overviewPage .trust-detail,
+  #overviewPage .kpi-group-copy {
+    color: var(--overview-ink-soft);
+    font-size: 0.82rem;
+  }
+  #overviewPage .control-tower-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.92fr);
+    gap: 1rem;
+    align-items: start;
+  }
+  @media (max-width: 1299.98px) {
+    #overviewPage .control-tower-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .control-tower-main,
+  #overviewPage .control-tower-rail {
+    display: grid;
+    gap: 1rem;
+  }
+  #overviewPage .overview-main-flow {
+    display: grid;
+    gap: 1rem;
+  }
+  #overviewPage .section-shell-grid {
+    align-items: stretch;
+  }
+  #overviewPage .overview-side-stack {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+  #overviewPage .section-shell-grid > * {
+    min-width: 0;
+  }
+  #overviewPage .section-shell-grid.section-shell-grid-wide {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  #overviewPage .section-shell-grid.section-shell-grid-balanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .section-shell-grid.section-shell-grid-wide,
+    #overviewPage .section-shell-grid.section-shell-grid-balanced {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .control-tower-rail {
+    position: sticky;
+    top: 1rem;
+  }
+  @media (max-width: 1299.98px) {
+    #overviewPage .control-tower-rail {
+      position: static;
+      top: auto;
+    }
+  }
+  #overviewPage .executive-command-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+    gap: 0.95rem;
+    margin-bottom: 0.95rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .executive-command-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .command-primary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 0.85rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .command-primary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .command-primary-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .command-secondary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .command-secondary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .command-secondary-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .command-primary-card {
+    border: 1px solid #e1e8f2;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+    padding: 1rem 1rem 0.95rem;
+    min-height: 100%;
+  }
+  #overviewPage .score-label,
+  #overviewPage .briefing-label,
+  #overviewPage .trust-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #6b788b;
+    font-weight: 700;
+  }
+  #overviewPage .command-context-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+  }
+  #overviewPage .command-context-strip .context-chip {
+    font-size: 0.76rem;
+    padding: 0.3rem 0.55rem;
+  }
+  #overviewPage .comparison-note-stack {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1rem;
+  }
+  #overviewPage .comparison-note-card {
+    border: 1px solid #e5edf7;
+    border-radius: 0.88rem;
+    background: #fbfdff;
+    padding: 0.8rem 0.85rem;
+  }
+  #overviewPage .briefing-grid,
+  #overviewPage .briefing-support-grid,
+  #overviewPage .trust-grid {
+    display: grid;
+    gap: 0.8rem;
+  }
+  #overviewPage .briefing-grid,
+  #overviewPage .briefing-support-grid,
+  #overviewPage .trust-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .briefing-grid,
+    #overviewPage .briefing-support-grid,
+    #overviewPage .trust-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .briefing-card.positive {
+    border-color: #b9e5d0;
+    background: linear-gradient(180deg, #f4fff8 0%, #ffffff 100%);
+  }
+  #overviewPage .briefing-card.negative {
+    border-color: #f1c0c6;
+    background: linear-gradient(180deg, #fff7f8 0%, #ffffff 100%);
+  }
+  #overviewPage .briefing-card.warning {
+    border-color: #f0d69f;
+    background: linear-gradient(180deg, #fffaf0 0%, #ffffff 100%);
+  }
+  #overviewPage .briefing-card.info {
+    border-color: #c8daf4;
+    background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  }
+  #overviewPage .briefing-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+    color: #0d6efd;
+    font-size: 0.83rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  #overviewPage .briefing-list li,
+  #overviewPage .watchouts-list li {
+    color: #49586d;
+    padding: 0.15rem 0;
+    border-bottom: 1px dashed #edf1f6;
+  }
+  #overviewPage .briefing-list li:last-child,
+  #overviewPage .watchouts-list li:last-child {
+    border-bottom: 0;
+  }
+  #overviewPage .briefing-context {
+    display: grid;
+    gap: 0.4rem;
+  }
+  #overviewPage .briefing-context .context-revenue {
+    font-size: 1.4rem;
+    line-height: 1.1;
+    font-weight: 700;
+    color: var(--overview-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPage .briefing-inline-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    font-size: 0.82rem;
+    color: #506074;
+  }
+  #overviewPage .briefing-inline-metrics span {
+    border-radius: 999px;
+    background: #f5f8fc;
+    padding: 0.28rem 0.52rem;
+  }
+  #overviewPage .kpi-command-layout {
+    display: grid;
+    gap: 0.85rem;
+  }
+  #overviewPage .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+    align-items: stretch;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .kpi-card {
+    border-radius: 0.95rem;
+    padding: 1rem 1rem 0.95rem;
+    background: #fff;
+    border: 1px solid #e1e8f2;
+    min-height: 178px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.36rem;
+    overflow: hidden;
+    height: 100%;
+  }
+  #overviewPage .kpi-card.is-hidden {
+    display: none;
+  }
+  #overviewPage .kpi-head {
+    align-items: flex-start !important;
+  }
+  #overviewPage .kpi-label {
+    color: #697586;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  #overviewPage .kpi-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  #overviewPage .kpi-status {
+    border-radius: 999px;
+    background: #eef4fb;
+    color: #41546d;
+    padding: 0.18rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  #overviewPage .kpi-value-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+  #overviewPage .kpi-value-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #overviewPage .kpi-value {
+    font-size: clamp(1.45rem, 1.9vw, 2rem);
+    line-height: 1.08;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    color: var(--overview-ink);
+  }
+  #overviewPage .kpi-value.is-empty {
+    color: #99a5b6;
+  }
+  #overviewPage .kpi-deltas {
+    flex: 0 0 auto;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 0.76rem;
+  }
+  #overviewPage .kpi-delta-pill {
+    padding: 0.3rem 0.5rem;
+    border-radius: 999px;
+    background: #f3f6fb;
+  }
+  #overviewPage .kpi-sub {
+    margin-top: 0.1rem;
+    font-size: 0.78rem;
+    color: #687688;
+  }
+  #overviewPage .overview-section-shell {
+    display: grid;
+    gap: 0.9rem;
+  }
+  #overviewPage .section-shell-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+    gap: 1rem;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .section-shell-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .chart-placeholder {
+    min-height: 340px;
+    position: relative;
+  }
+  #overviewPage #trendDiagnosticsCard .chart-placeholder {
+    min-height: 380px;
+  }
+  #overviewPage .chart-placeholder canvas {
+    width: 100% !important;
+    height: 340px !important;
+  }
+  #overviewPage #trendDiagnosticsCard .chart-placeholder canvas {
+    height: 380px !important;
+  }
+  #overviewPage .chart-container-sm canvas {
+    height: 240px !important;
+  }
+  #overviewPage .trend-meta-row,
+  #overviewPage .section-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+  }
+  #overviewPage .section-meta-row .summary,
+  #overviewPage .trend-meta-row .summary {
+    color: #5b6a80;
+    font-size: 0.84rem;
+  }
+  #overviewPage .drivers-insight {
+    border-top: 1px dashed #e3e8ef;
+    padding-top: 0.55rem;
+  }
+  #overviewPage .drivers-details summary {
+    cursor: pointer;
+  }
+  #overviewPage .drivers-period-card h6 {
+    color: var(--overview-ink);
+    font-size: 0.95rem;
+  }
+  #overviewPage .drivers-contrib-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  @media (max-width: 991.98px) {
+    #overviewPage .drivers-contrib-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .movers-legend {
+    color: #627186;
+    font-size: 0.82rem;
+  }
+  #overviewPage .movers-direction,
+  #overviewPage .insight-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b788b;
+    font-weight: 700;
+  }
+  #overviewPage .insight-item {
+    border: 1px solid #e2e9f3;
+    border-radius: 0.9rem;
+    padding: 0.9rem 0.95rem;
+    background: #fff;
+    min-height: 112px;
+  }
+  #overviewPage .insight-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--overview-ink);
+  }
+  #overviewPage .insight-detail {
+    font-size: 0.82rem;
+    color: #627186;
+  }
+  #overviewPage .mini-list li,
+  #overviewPage .issue-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.7rem;
+  }
+  #overviewPage .issue-list li {
+    border: 1px solid #e5ebf4;
+    border-radius: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    background: #fbfcfe;
+    align-items: center;
+  }
+  #overviewPage .issue-list .issue-count {
+    font-weight: 700;
+    color: var(--overview-ink);
+  }
+  #overviewPage .watchlist-list li {
+    border: 1px solid #e7edf6;
+    border-radius: 0.82rem;
+    padding: 0.72rem 0.8rem;
+    background: #fff;
+  }
+  #overviewPage .watchlist-list li strong {
+    color: var(--overview-ink);
+  }
+  #overviewPage .health-actions {
+    border-radius: 0.9rem;
+    background: #f8fbff;
+    border: 1px solid var(--overview-border);
+    padding: 0.85rem 0.95rem;
+    color: #516075;
+  }
+  #overviewPage .action-rail-feature {
+    border-radius: 0.92rem;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid #dbe7f6;
+    background: linear-gradient(180deg, #f8fbff, #ffffff);
+  }
+  #overviewPage .action-rail-feature h3 {
+    font-size: 1rem;
+    color: var(--overview-ink);
+    margin: 0.15rem 0 0.25rem;
+  }
+  #overviewPage .action-rail-feature p {
+    color: var(--overview-ink-soft);
+    font-size: 0.85rem;
+    margin-bottom: 0.6rem;
+  }
+  #overviewPage .action-link-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+  @media (max-width: 575.98px) {
+    #overviewPage .action-link-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .action-inline-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #0d6efd;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  #overviewPage .outlook-shell-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "forecast forecast"
+      "shape pulse";
+    gap: 1rem;
+    align-items: stretch;
+  }
+  #overviewPage .outlook-shell-grid .outlook-main {
+    grid-area: forecast;
+    min-width: 0;
+  }
+  #overviewPage .outlook-shell-grid .outlook-shape {
+    grid-area: shape;
+    min-width: 0;
+  }
+  #overviewPage .outlook-shell-grid .outlook-pulse {
+    grid-area: pulse;
+    min-width: 0;
+  }
+  #overviewPage .trust-shell-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+    grid-template-areas:
+      "health action"
+      "health signals";
+    gap: 1rem;
+    align-items: stretch;
+  }
+  #overviewPage .trust-shell-grid .trust-health {
+    grid-area: health;
+    min-width: 0;
+  }
+  #overviewPage .trust-shell-grid .trust-action {
+    grid-area: action;
+    min-width: 0;
+  }
+  #overviewPage .trust-shell-grid .trust-signals {
+    grid-area: signals;
+    min-width: 0;
+  }
+  #overviewPage #forecastCard .chart-placeholder {
+    min-height: 320px;
+  }
+  #overviewPage #forecastCard .chart-placeholder canvas {
+    height: 320px !important;
+  }
+  #overviewPage #forecastCard .forecast-summary-card {
+    margin: 0.85rem 0 0.95rem;
+    padding: 0.9rem 0.95rem;
+    border-radius: 0.95rem;
+    border: 1px solid #dfe8f4;
+    background: linear-gradient(135deg, #f7fbff, #f1f8ff);
+    color: #274463;
+    font-size: 0.92rem;
+  }
+  #overviewPage #forecastCard .forecast-command-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.95rem;
+  }
+  #overviewPage #forecastCard .forecast-signal-card,
+  #overviewPage #forecastCard .forecast-note-card {
+    border: 1px solid #dfe7f2;
+    border-radius: 0.95rem;
+    background: #fff;
+    padding: 0.8rem 0.88rem;
+  }
+  #overviewPage #forecastCard .forecast-signal-label,
+  #overviewPage #forecastCard .forecast-note-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #66778c;
+    font-weight: 700;
+  }
+  #overviewPage #forecastCard .forecast-signal-value {
+    margin-top: 0.25rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--overview-ink);
+  }
+  #overviewPage #forecastCard .forecast-signal-detail,
+  #overviewPage #forecastCard .forecast-note-copy {
+    margin-top: 0.2rem;
+    color: #58697f;
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+  #overviewPage #forecastCard .forecast-note-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  #overviewPage #forecastCard .forecast-mini-list {
+    list-style: none;
+    margin: 0.45rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+  }
+  #overviewPage #forecastCard .forecast-mini-list li {
+    color: #58697f;
+    font-size: 0.84rem;
+    line-height: 1.42;
+    padding-left: 0.8rem;
+    position: relative;
+  }
+  #overviewPage #forecastCard .forecast-mini-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 999px;
+    background: #7ea7dd;
+  }
+  #overviewPage #forecastCard .forecast-value-high {
+    color: #11795e;
+  }
+  #overviewPage #forecastCard .forecast-value-medium {
+    color: #9b6a00;
+  }
+  #overviewPage #forecastCard .forecast-value-low {
+    color: #a23d3d;
+  }
+  #overviewPage #forecastCard .forecast-value-watch {
+    color: #9b6a00;
+  }
+  #overviewPage #forecastCard .forecast-value-limited {
+    color: #a23d3d;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage #forecastCard .forecast-command-grid,
+    #overviewPage #forecastCard .forecast-note-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage #forecastCard .forecast-command-grid,
+    #overviewPage #forecastCard .forecast-note-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage #commercialShapeCard .chart-placeholder {
+    min-height: 290px;
+  }
+  #overviewPage #commercialShapeCard .chart-placeholder canvas {
+    height: 290px !important;
+  }
+  #overviewPage .focus-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+  @media (max-width: 991.98px) {
+    #overviewPage .focus-summary-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .focus-summary-card {
+    border: 1px solid #dfe7f2;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #f8fbff, #ffffff);
+    padding: 0.82rem 0.9rem;
+    min-height: 100%;
+  }
+  #overviewPage .focus-summary-card .focus-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #66778c;
+    font-weight: 700;
+  }
+  #overviewPage .focus-summary-card .focus-title {
+    margin-top: 0.24rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--overview-ink);
+  }
+  #overviewPage .focus-summary-card .focus-value {
+    margin-top: 0.18rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--overview-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPage .focus-summary-card .focus-detail {
+    margin-top: 0.18rem;
+    font-size: 0.82rem;
+    color: #5a6c81;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .outlook-shell-grid,
+    #overviewPage .trust-shell-grid {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "forecast"
+        "shape"
+        "pulse";
+    }
+    #overviewPage .trust-shell-grid {
+      grid-template-areas:
+        "health"
+        "action"
+        "signals";
+    }
+  }
+</style>
+
+<div id="overviewPage"
+     class="page-shell shadow-soft"
+     data-page="overview"
+     data-api="{{ url_for('overview_page.overview_bundle_v3') }}"
+     data-bundle-url="{{ url_for('overview_page.overview_bundle_v3') }}"
+     data-forecast-api="{{ url_for('overview_api.forecast') }}"
+     data-insights-api="{{ url_for('overview_api.insights') }}"
+     data-snapshot-export-url="{{ url_for('overview_page.overview_snapshot_export') }}"
+     data-trend-export-url="{{ url_for('overview_page.overview_trend_export') }}"
+     data-drilldown-base="/overview/api/drilldown"
+     data-last-refresh="{{ last_refresh }}"
+     data-version="{{ version }}"
+     data-overview-v2="1"
+     data-overview-v3="1">
+
+  <section class="overview-hero">
+    <div class="hero-main">
+      <div class="hero-label">Executive command center</div>
+      <h1 class="hero-title">Business Performance</h1>
+      <p class="hero-copy">An executive operating readout for revenue, profit quality, concentration risk, forecast confidence, and the next investigation path worth taking under the active business filters.</p>
+      <div id="businessStatusLine" class="hero-status-blurb">Business status is resolving for the active window.</div>
+      <div class="hero-filter-line">Filters applied: <span id="filterSummaryText">Default (Current FY)</span></div>
+      <div id="comparisonNoteText" class="hero-period-note">Comparisons follow the active filtered window.</div>
+      <div class="context-strip" aria-label="Business context strip">
+        <span class="context-chip"><i class="bi bi-calendar-range"></i>Window <strong id="dataWindowChip">Not available</strong></span>
+        <span class="context-chip"><i class="bi bi-arrow-left-right"></i>Comparison <strong id="comparisonBasisChip">Prior comparable window</strong></span>
+        <span class="context-chip"><i class="bi bi-hourglass-split"></i>Period mode <strong id="periodModeChip">Filtered window</strong></span>
+        <span class="context-chip"><i class="bi bi-funnel"></i>Filters <strong id="filterCountChip">0 active</strong></span>
+        <span class="context-chip"><i class="bi bi-diagram-3"></i>Scope <strong id="scopeModeChip">Enterprise</strong></span>
+        <span class="context-chip"><i class="bi bi-shield-check"></i>Trust <strong id="heroTrustStatus">Watch</strong></span>
+        <span class="context-chip"><i class="bi bi-calendar-event"></i>Data cutoff <strong id="dataCutoffChip">-</strong></span>
+        <span class="context-chip"><i class="bi bi-clock-history"></i>Last refresh <strong id="lastRefreshChip">{{ last_refresh or "unknown" }}</strong></span>
+        <a href="#dataHealthSection" id="dataHealthBadgeLink" class="context-chip" role="button" aria-label="Jump to data trust panel">
+          <i class="bi bi-arrow-down-right-circle"></i>Open trust center
+        </a>
+      </div>
+      <div class="hero-actions">
+        {% if can_permission('page.customers.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/customers/"><i class="bi bi-people"></i>Customers</a>
+        {% endif %}
+        {% if can_permission('page.products.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/products/"><i class="bi bi-box-seam"></i>Products</a>
+        {% endif %}
+        {% if can_permission('page.regions.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/regions/"><i class="bi bi-map"></i>Regions</a>
+        {% endif %}
+        {% if can_permission('page.suppliers.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/suppliers/"><i class="bi bi-truck"></i>Suppliers</a>
+        {% endif %}
+        {% if can_permission('page.salesreps.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/salesreps/"><i class="bi bi-person-badge"></i>Sales reps</a>
+        {% endif %}
+        {% if can_permission('page.returns.view') %}
+        <a class="hero-link" data-preserve-filters-link="1" href="/returns/"><i class="bi bi-arrow-counterclockwise"></i>Returns</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <aside class="hero-side">
+      <div class="hero-side-header">
+        <div>
+          <div class="hero-label">Operating context</div>
+          <h2>Trust, governed refresh, and export control</h2>
+          <p>Snapshot export, governed refresh timing, and data limitations stay visible while the business narrative changes below.</p>
+        </div>
+        <button id="downloadSnapshotBtn" class="btn btn-primary btn-sm" type="button" aria-label="Download business performance snapshot">
+          <i class="bi bi-download me-1"></i>Export Snapshot
+        </button>
+      </div>
+
+      <div class="hero-side-metrics">
+        <div class="hero-side-metric">
+          <div class="label">Cost coverage</div>
+          <div class="value" id="costCoverageChip">-</div>
+        </div>
+        <div class="hero-side-metric">
+          <div class="label">Packs coverage</div>
+          <div class="value" id="packsCoverageChip">-</div>
+        </div>
+        <div class="hero-side-metric">
+          <div class="label">Missing mapping</div>
+          <div class="value" id="missingMappingChip">-</div>
+        </div>
+        <div class="hero-side-metric">
+          <div class="label">Refresh age</div>
+          <div class="value" id="freshnessChip">-</div>
+        </div>
+      </div>
+
+      <ul class="hero-side-list">
+        <li><span>Commercial story</span><strong>Executive-first</strong></li>
+        <li><span>Route contract</span><strong>Filter + drill parity</strong></li>
+        <li><span>Sensitive metrics</span><strong>Mask-aware</strong></li>
+        <li><span>Remediation path</span><a href="#dataHealthSection" class="action-inline-link">Open trust center</a></li>
+      </ul>
+    </aside>
+  </section>
+
+  <div id="overviewBanner" class="alert alert-warning d-none py-2 px-3 mb-3" role="alert"></div>
+
+  <section class="overview-health-rail overview-shell-card">
+    <div class="section-shell-header">
+      <div class="panel-eyebrow">Business health summary rail</div>
+      <h2 class="panel-title">Five-second executive scan</h2>
+      <div class="section-shell-copy">Plain-English status cards translate the current business window into operating condition, risk posture, and trust confidence before users read the deeper analysis.</div>
+    </div>
+    <div class="section-shell-body">
+      <div class="health-rail-grid">
+        <article class="health-scan-card" id="healthRevenueCard" data-tone="neutral">
+          <div class="health-scan-label">Revenue trend</div>
+          <div class="health-scan-value" id="healthRevenueState">Unavailable</div>
+          <div class="health-scan-detail" id="healthRevenueDetail">Assessing current trading direction.</div>
+        </article>
+        <article class="health-scan-card" id="healthProfitCard" data-tone="neutral">
+          <div class="health-scan-label">Profit status</div>
+          <div class="health-scan-value" id="healthProfitState">Unavailable</div>
+          <div class="health-scan-detail" id="healthProfitDetail">Checking protected finance outputs.</div>
+        </article>
+        <article class="health-scan-card" id="healthMarginCard" data-tone="neutral">
+          <div class="health-scan-label">Margin condition</div>
+          <div class="health-scan-value" id="healthMarginState">Unavailable</div>
+          <div class="health-scan-detail" id="healthMarginDetail">Evaluating quality of gross margin.</div>
+        </article>
+        <article class="health-scan-card" id="healthMovementCard" data-tone="neutral">
+          <div class="health-scan-label">Customer movement</div>
+          <div class="health-scan-value" id="healthMovementState">Unavailable</div>
+          <div class="health-scan-detail" id="healthMovementDetail">Reviewing expansion versus churn signals.</div>
+        </article>
+        <article class="health-scan-card" id="healthRiskCard" data-tone="neutral">
+          <div class="health-scan-label">Risk alert</div>
+          <div class="health-scan-value" id="healthRiskState">Unavailable</div>
+          <div class="health-scan-detail" id="healthRiskDetail">Measuring concentration and margin exposure.</div>
+        </article>
+        <article class="health-scan-card" id="healthTrustCard" data-tone="neutral">
+          <div class="health-scan-label">Data confidence</div>
+          <div class="health-scan-value" id="healthTrustState">Unavailable</div>
+          <div class="health-scan-detail" id="healthTrustDetail">Validating cost, pack, and mapping coverage.</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <div class="overview-main-flow">
+    <section class="overview-panel" id="executiveScorecardCard">
+      <div class="panel-header">
+        <div class="panel-eyebrow">Executive KPI command center</div>
+        <h2 class="panel-title">Strategic outcomes and operating context</h2>
+        <div class="panel-subtitle">Strategic KPIs stay prominent, while surrounding context explains why performance moved and where leadership should focus next.</div>
+      </div>
+      <div class="panel-body">
+        <div class="command-context-strip">
+          <span class="context-chip"><i class="bi bi-graph-up-arrow"></i>Revenue now <strong id="heroRevenueCurrentChip">-</strong></span>
+          <span class="context-chip"><i class="bi bi-arrow-left-right"></i><span id="heroRevenueDeltaLabel">Δ$ vs prior</span> <strong id="heroRevenueDeltaChip">-</strong></span>
+          <span class="context-chip"><i class="bi bi-percent"></i><span id="heroRevenueDeltaPctLabel">Δ% vs prior</span> <strong id="heroRevenueDeltaPctChip">-</strong></span>
+          <span class="context-chip"><i class="bi bi-calendar-event"></i><strong id="heroPriorWindowChip">Prior window: -</strong></span>
+          <span class="context-chip"><i class="bi bi-shield-exclamation"></i><strong id="heroCostCoverageBadge">Cost coverage: -</strong></span>
+        </div>
+        <div class="executive-command-grid">
+          <div>
+            <div class="command-primary-grid">
+              <article class="command-primary-card">
+                <div class="score-label">Revenue</div>
+                <div class="score-value" id="scoreRevenue">-</div>
+                <div class="score-delta" id="scoreRevenueMeta">Current trading-window revenue</div>
+                <div class="score-support" id="scoreRevenueSupport">Comparator pending</div>
+              </article>
+              <article class="command-primary-card">
+                <div class="score-label">Profit</div>
+                <div class="score-value" id="scoreProfit">-</div>
+                <div class="score-delta" id="scoreProfitMeta">Protected when cost is restricted</div>
+                <div class="score-support" id="scoreProfitSupport">Coverage context pending</div>
+              </article>
+              <article class="command-primary-card">
+                <div class="score-label">Margin %</div>
+                <div class="score-value" id="scoreMargin">-</div>
+                <div class="score-delta" id="scoreMarginMeta">Margin quality and movement</div>
+                <div class="score-support" id="scoreMarginSupport">Coverage-aware</div>
+              </article>
+              <article class="command-primary-card">
+                <div class="score-label" id="scoreRevenueComparisonLabel">Revenue change</div>
+                <div class="score-value" id="scoreRevenueMom">-</div>
+                <div class="score-delta" id="scoreRevenueMomMeta">Primary comparison movement</div>
+                <div class="score-support" id="scoreRevenueMomSupport">Comparator context pending</div>
+              </article>
+            </div>
+
+            <div class="command-secondary-grid">
+              <article class="hero-side-metric">
+                <div class="label">ASP</div>
+                <div class="value" id="scoreAsp">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">AOV</div>
+                <div class="value" id="scoreAov">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">Profit / Order</div>
+                <div class="value" id="scoreProfitPerOrder">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">Profit / Lb</div>
+                <div class="value" id="scoreProfitPerLb">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">New customer share</div>
+                <div class="value" id="scoreNewShare">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">Returning share</div>
+                <div class="value" id="scoreReturningShare">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">Top 1 share / HHI</div>
+                <div class="value" id="scoreConcentration">-</div>
+              </article>
+              <article class="hero-side-metric">
+                <div class="label">Margin risk</div>
+                <div class="value" id="scoreMarginRisk">-</div>
+              </article>
+            </div>
+          </div>
+
+          <aside class="command-side-card">
+            <div class="overview-section-title">Leadership narrative</div>
+            <div class="command-side-copy">This narrative translates the KPI deck into an operating readout so first-time and executive users can understand business posture quickly.</div>
+            <ul id="execNarrativeList" class="briefing-list small mt-3">
+              <li class="text-muted">Leadership narrative unavailable for current filters.</li>
+            </ul>
+            <div class="mt-3">
+              <div class="overview-section-title">Driver context</div>
+              <div class="small text-muted mt-2" id="commandMainDriver">Main driver: not available.</div>
+              <div class="small text-muted mt-1" id="commandSecondaryDriver">Secondary detail: not available.</div>
+            </div>
+            <div class="comparison-note-stack">
+              <div class="comparison-note-card">
+                <div class="overview-section-title">Period awareness</div>
+                <div class="small text-muted mt-2" id="commandWindowNote">Comparisons follow the active filtered window.</div>
+              </div>
+              <div class="comparison-note-card">
+                <div class="overview-section-title">Trust and caveats</div>
+                <div class="small text-muted mt-2" id="commandTrustNote">Coverage and governance caveats will appear here.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    {% include "overview/_overview_kpis.html" %}
+
+    <section class="overview-panel" id="executiveBriefingCard">
+      <div class="panel-header">
+        <div class="panel-eyebrow">Executive briefing</div>
+        <h2 class="panel-title">Morning narrative</h2>
+        <div class="panel-subtitle">Biggest win, sharpest decline, key risk, top action, and watchouts are consolidated into one morning briefing panel.</div>
+      </div>
+      <div class="panel-body">
+        <div class="briefing-grid">
+          <article class="briefing-card positive" id="briefWinCard">
+            <div class="briefing-label">Biggest win</div>
+            <div class="briefing-value" id="briefWinValue">-</div>
+            <div class="fw-semibold mt-1" id="briefWinTitle">Insight unavailable</div>
+            <div class="briefing-detail" id="briefWinDetail">No win narrative is currently available for this window.</div>
+            <a id="briefWinLink" class="briefing-link d-none" href="#">Open detail <i class="bi bi-arrow-right"></i></a>
+          </article>
+          <article class="briefing-card negative" id="briefDeclineCard">
+            <div class="briefing-label">Biggest decline</div>
+            <div class="briefing-value" id="briefDeclineValue">-</div>
+            <div class="fw-semibold mt-1" id="briefDeclineTitle">Insight unavailable</div>
+            <div class="briefing-detail" id="briefDeclineDetail">No decline narrative is currently available for this window.</div>
+            <a id="briefDeclineLink" class="briefing-link d-none" href="#">Open detail <i class="bi bi-arrow-right"></i></a>
+          </article>
+          <article class="briefing-card warning" id="briefRiskCard">
+            <div class="briefing-label">Key risk</div>
+            <div class="briefing-value" id="briefRiskValue">-</div>
+            <div class="fw-semibold mt-1" id="briefRiskTitle">Insight unavailable</div>
+            <div class="briefing-detail" id="briefRiskDetail">No risk narrative is currently available for this window.</div>
+          </article>
+          <article class="briefing-card info" id="briefActionCard">
+            <div class="briefing-label">Top action</div>
+            <div class="briefing-value" id="briefActionValue">Next</div>
+            <div class="fw-semibold mt-1" id="briefActionTitle">No action available</div>
+            <div class="briefing-detail" id="briefActionDetail">No recommended action is currently available for this window.</div>
+            <a id="briefActionLink" class="briefing-link d-none" href="#">Open action <i class="bi bi-arrow-right"></i></a>
+          </article>
+        </div>
+        <div class="briefing-support-grid">
+          <div class="briefing-card">
+            <div class="overview-section-title">What improved</div>
+            <ul id="briefImprovedList" class="briefing-list small mt-2">
+              <li class="text-muted">No material improvements identified.</li>
+            </ul>
+          </div>
+          <div class="briefing-card">
+            <div class="overview-section-title">What declined</div>
+            <ul id="briefDeclinedList" class="briefing-list small mt-2">
+              <li class="text-muted">No material declines identified.</li>
+            </ul>
+          </div>
+          <div class="briefing-card">
+            <div class="overview-section-title">Key watchouts</div>
+            <ul id="execWatchoutsList" class="watchouts-list small mt-2">
+              <li class="text-muted">No active watchouts available.</li>
+            </ul>
+          </div>
+          <div class="briefing-card">
+            <div class="overview-section-title">Business context</div>
+            <div class="briefing-context mt-2">
+              <span class="badge rounded-pill text-bg-light border w-auto" id="execCostCoverageBadge">Cost coverage: -</span>
+              <div class="context-revenue" id="execRevenueCurrent">-</div>
+              <div class="briefing-inline-metrics">
+                <span><span id="execRevenueDeltaLabel">Δ$ vs prior</span> <strong id="execRevenueDelta">-</strong></span>
+                <span><span id="execRevenueDeltaPctLabel">Δ% vs prior</span> <strong id="execRevenueDeltaPct">-</strong></span>
+              </div>
+              <div class="small text-muted" id="execComparisonNote">Comparisons follow the active filtered window.</div>
+              <div class="small text-muted" id="execMainDriver">Main driver: not available.</div>
+              <div class="small text-muted" id="execSecondaryDriver">Secondary detail: not available.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overview-section-shell" id="trendDriversSection">
+      <div class="section-shell-header">
+        <div class="panel-eyebrow">Trend and performance diagnostics</div>
+        <h2 class="panel-title">Trend workspace and commercial drivers</h2>
+        <div class="section-shell-copy">Use this workspace to confirm what changed over time and whether movement is price, volume, or mix led.</div>
+      </div>
+      <div class="section-shell-body">
+        <div class="section-shell-grid section-shell-grid-wide">
+          <div>{% include "overview/_overview_trend_health.html" %}</div>
+          <div>{% include "overview/_overview_decomposition.html" %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overview-section-shell" id="moversRiskSection">
+      <div class="section-shell-header">
+        <div class="panel-eyebrow">Commercial movement and risk</div>
+        <h2 class="panel-title">Top customers and SKU risk control center</h2>
+        <div class="section-shell-copy">Keep the highest-signal customer movement and SKU margin exposure in one workspace, with secondary product and region movement still available when needed.</div>
+      </div>
+      <div class="section-shell-body">
+        <div class="section-shell-grid section-shell-grid-wide">
+          <div>{% include "overview/_overview_movers.html" %}</div>
+          <div>{% include "overview/_overview_risk_profitability.html" %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overview-section-shell" id="outlookShapeSection">
+      <div class="section-shell-header">
+        <div class="panel-eyebrow">Outlook and business shape</div>
+        <h2 class="panel-title">Forecast center with concentration and operating mix</h2>
+        <div class="section-shell-copy">Forecast quality and confidence are paired with Pareto concentration and operating rhythm so outlook stays actionable.</div>
+      </div>
+      <div class="section-shell-body">
+        <div class="outlook-shell-grid">
+          <div class="outlook-main">{% include "overview/_overview_forecast.html" %}</div>
+          <div class="outlook-shape">{% include "overview/_overview_mix_pareto.html" %}</div>
+          <div class="outlook-pulse">{% include "overview/_overview_momentum_mix.html" %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overview-section-shell" id="trustActionSection">
+      <div class="section-shell-header">
+        <div class="panel-eyebrow">Data trust and action paths</div>
+        <h2 class="panel-title">Governance confidence and next-step investigations</h2>
+        <div class="section-shell-copy">Trust, remediation, and module handoffs are kept in one place so governance context is always attached to action.</div>
+      </div>
+      <div class="section-shell-body">
+        <div class="trust-shell-grid">
+          <div class="trust-health">
+            <section id="dataHealthSection" class="overview-panel">
+              <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                  <div class="panel-eyebrow">Data trust and remediation</div>
+                  <h2 class="panel-title">Data health, governance, and next fixes</h2>
+                  <div class="panel-subtitle">Coverage, freshness, and mapping integrity remain the trust layer for sensitive metric interpretation.</div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge text-bg-light border" id="healthRowsChip">rows</span>
+                  <button class="btn btn-sm btn-outline-secondary" id="exportDataHealthBtn" type="button">Download Data Issues</button>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div id="healthBadges" class="trust-grid mb-3 small"></div>
+                <ul id="healthList" class="issue-list mb-3 small"></ul>
+                <div id="dataHealthActions" class="health-actions small text-muted">Recommended actions will appear when issues are detected.</div>
+              </div>
+            </section>
+          </div>
+          <div class="trust-action">
+            <section class="overview-panel" id="investigationRailCard">
+              <div class="panel-header">
+                <div class="panel-eyebrow">Action paths</div>
+                <h2 class="panel-title">Investigation and follow-up rail</h2>
+                <div class="panel-subtitle">Each major signal should lead to a valid module handoff, governed drilldown, or trust remediation step.</div>
+              </div>
+              <div class="panel-body">
+                <div class="action-rail-feature">
+                  <div class="action-rail-label">Recommended next action</div>
+                  <h3 id="actionRailTopTitle">No recommended next action</h3>
+                  <p id="actionRailTopDetail">No additional follow-up is currently available for this window.</p>
+                  <a id="actionRailTopLink" class="action-inline-link d-none" href="#">Open investigation <i class="bi bi-arrow-right"></i></a>
+                </div>
+                <ul class="action-rail-list mt-3">
+                  <li><span>Trend diagnostic workspace</span><a href="#trendDiagnosticsCard" class="action-inline-link">Open trends</a></li>
+                  <li><span>Margin-risk watchlist</span><a href="#riskWatchlistCard" class="action-inline-link">Review risk</a></li>
+                  <li><span>Data issue remediation</span><a href="#dataHealthSection" class="action-inline-link">Open trust center</a></li>
+                </ul>
+                <div class="action-link-grid mt-3">
+                  {% if can_permission('page.customers.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/customers/"><i class="bi bi-people"></i>Review customers</a>
+                  {% endif %}
+                  {% if can_permission('page.products.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/products/"><i class="bi bi-box-seam"></i>Inspect products</a>
+                  {% endif %}
+                  {% if can_permission('page.regions.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/regions/"><i class="bi bi-map"></i>Inspect regions</a>
+                  {% endif %}
+                  {% if can_permission('page.suppliers.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/suppliers/"><i class="bi bi-truck"></i>Supplier detail</a>
+                  {% endif %}
+                  {% if can_permission('page.salesreps.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/salesreps/"><i class="bi bi-person-badge"></i>Sales reps</a>
+                  {% endif %}
+                  {% if can_permission('page.returns.view') %}
+                  <a class="action-link" data-preserve-filters-link="1" href="/returns/"><i class="bi bi-arrow-counterclockwise"></i>Returns</a>
+                  {% endif %}
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="trust-signals">{% include "overview/_overview_insights.html" %}</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="overviewEmpty" class="alert alert-info d-none mt-3" role="alert">
+    <i class="bi bi-info-circle me-1"></i>No data for the selected window or filters.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview.js', v=(version or 'overview-nowcast-20260328')) }}" defer></script>
+{% endblock %}

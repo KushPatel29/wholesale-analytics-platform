@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Business Performance{% endblock %}
+
+{% block content %}
+
+<style>
+  #overviewPage {
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 40%, #f4f6fb 100%);
+  }
+  #overviewPage .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  #overviewPage .kpi-coverage-badge {
+    grid-column: 1 / -1;
+    background: #fff3cd;
+    border: 1px solid #ffe8a1;
+    color: #664d03;
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
+    display: none;
+  }
+  @media (max-width: 1199.98px) {
+    #overviewPage .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  #overviewPage .kpi-card {
+    border-radius: 0.85rem;
+    padding: 1.4rem 1.54rem;
+    background: #fff;
+    border: 1px solid #e6e9ef;
+    min-height: 195px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    overflow: hidden;
+    height: 100%;
+  }
+  #overviewPage .kpi-card.is-hidden {
+    display: none;
+  }
+  #overviewPage .kpi-label {
+    color: #6c757d;
+    letter-spacing: 0.02em;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin: 0;
+  }
+  #overviewPage .kpi-value-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  #overviewPage .kpi-value-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #overviewPage .kpi-value {
+    font-size: clamp(12px, 1.2vw, 18px);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.2px;
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPage .kpi-value.is-empty {
+    color: #adb5bd;
+  }
+  #overviewPage .kpi-deltas {
+    flex: 0 0 auto;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  #overviewPage .kpi-deltas span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  #overviewPage .kpi-delta-pill {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #f1f5fb;
+  }
+  #overviewPage .kpi-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    opacity: 0.65;
+  }
+  #overviewPage .chart-placeholder {
+    min-height: 340px;
+    position: relative;
+  }
+  #overviewPage .chart-placeholder canvas {
+    width: 100% !important;
+    height: 340px !important;
+  }
+  #overviewPage .card {
+    border-radius: 0.9rem;
+    border: 1px solid #e6e9ef;
+  }
+  #overviewPage .badge-soft {
+    background-color: #f1f5fb;
+    color: #0d6efd;
+  }
+  #overviewPage .pill-muted {
+    background: #f8f9fa;
+    border: 1px solid #e6e9ef;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+  }
+  #overviewPage .insight-item {
+    border: 1px solid #e6e9ef;
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    min-height: 110px;
+  }
+  #overviewPage .insight-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6c757d;
+  }
+  #overviewPage .insight-value {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  #overviewPage .insight-detail {
+    font-size: 0.8rem;
+    color: #6c757d;
+  }
+  #overviewPage .mini-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+</style>
+
+<div id="overviewPage"
+     class="page-shell shadow-soft"
+     data-page="overview"
+     data-api="{{ url_for('overview_page.overview_bundle_v3') }}"
+     data-bundle-url="{{ url_for('overview_page.overview_bundle_v3') }}"
+     data-forecast-api="{{ url_for('overview_api.forecast') }}"
+     data-insights-api="{{ url_for('overview_api.insights') }}"
+     data-last-refresh="{{ last_refresh }}"
+     data-version="{{ version }}">
+  <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h1 class="display-6 fw-bold text-primary mb-1">Business Performance</h1>
+      <p class="text-muted mb-2">Executive KPIs, drivers, and data health for the active filters.</p>
+      <div class="small text-muted">Filters applied: <span id="filterSummaryText">Loading...</span></div>
+    </div>
+    <div class="d-flex flex-column align-items-end gap-2">
+      <div class="pill-muted d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-primary"></i>
+        <span>Last refresh</span>
+        <strong id="lastRefreshChip">{{ last_refresh or "unknown" }}</strong>
+      </div>
+      <div class="pill-muted d-flex align-items-center gap-2">
+        <i class="bi bi-calendar-range text-primary"></i>
+        <span>Window</span>
+        <strong id="dataWindowChip">Loading...</strong>
+      </div>
+    </div>
+  </header>
+
+  <div id="overviewBanner" class="alert alert-warning d-none" role="alert"></div>
+
+  <section class="kpi-grid my-3" id="kpiGrid"></section>
+
+  <section class="card shadow-soft mb-4" id="forecastCard">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="mb-0">Live Forecast</h5>
+        <small class="text-muted">Run on-demand to project the next months for the active filters.</small>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Forecast metric">
+          <button type="button" class="btn btn-outline-primary active" data-forecast-metric="revenue">Revenue</button>
+          <button type="button" class="btn btn-outline-primary" data-forecast-metric="profit">Profit</button>
+          <button type="button" class="btn btn-outline-primary" data-forecast-metric="margin">Margin %</button>
+        </div>
+        <select class="form-select form-select-sm w-auto" id="forecastHorizon" aria-label="Forecast horizon">
+          <option value="3">3 mo</option>
+          <option value="6" selected>6 mo</option>
+          <option value="12">12 mo</option>
+        </select>
+        <button class="btn btn-primary btn-sm" type="button" id="runForecastBtn">
+          <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="forecastSpinner"></span>
+          <span>Run Forecast</span>
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div id="forecastStatus" class="small text-muted">Click Run Forecast to generate predictions.</div>
+        <div id="forecastFiltersNotice" class="badge bg-warning-subtle text-warning-emphasis d-none">Filters changed - run forecast again.</div>
+      </div>
+      <div class="chart-placeholder" aria-label="Forecast chart">
+        <div id="forecastEmpty" class="text-muted text-center py-4">No forecast yet.</div>
+        <canvas id="forecastChart" width="400" height="300"></canvas>
+      </div>
+      <div class="mt-2 d-flex flex-wrap gap-2 align-items-center small">
+        <span id="forecastModelChip" class="badge bg-light text-muted border d-none"></span>
+        <span id="forecastQualityChip" class="badge bg-light text-muted border d-none"></span>
+        <span id="forecastWarnings" class="text-warning small"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-0">Revenue, Units, ASP</h5>
+            <small class="text-muted">Monthly trend with profit & margin overlays</small>
+          </div>
+          <div class="d-flex align-items-center gap-3 small">
+            <div class="form-check form-check-inline mb-0">
+              <input class="form-check-input" type="checkbox" id="toggleProfit" data-trend-toggle="profit" checked>
+              <label class="form-check-label" for="toggleProfit">Profit</label>
+            </div>
+            <div class="form-check form-check-inline mb-0">
+              <input class="form-check-input" type="checkbox" id="toggleMargin" data-trend-toggle="margin" checked>
+              <label class="form-check-label" for="toggleMargin">Margin %</label>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-placeholder" aria-label="Trend chart">
+            <div id="trendEmpty" class="text-muted text-center py-5 d-none">No data for selected window/filters.</div>
+            <canvas id="trendChart" width="400" height="340"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Data Health</h5>
+          <span class="badge badge-soft" id="healthRowsChip">rows</span>
+        </div>
+        <div class="card-body">
+          <div id="healthBadges" class="d-flex flex-wrap gap-2 mb-3 small"></div>
+          <ul id="healthList" class="list-unstyled mb-0 small">
+            <li class="placeholder-glow"><span class="placeholder col-6"></span></li>
+            <li class="placeholder-glow"><span class="placeholder col-5"></span></li>
+            <li class="placeholder-glow"><span class="placeholder col-4"></span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Mix (Top 10)</h5>
+          <div class="btn-group btn-group-sm" role="group" id="dimToggle">
+            <button class="btn btn-outline-secondary active" data-dim="customer">Customers</button>
+            <button class="btn btn-outline-secondary" data-dim="product">Products</button>
+            <button class="btn btn-outline-secondary" data-dim="region">Regions</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-placeholder" aria-label="Mix chart">
+            <canvas id="mixChart" width="400" height="320"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Pareto (Revenue share)</h5>
+          <small class="text-muted">Top 30 by selected dimension</small>
+        </div>
+        <div class="card-body">
+          <div class="chart-placeholder" aria-label="Pareto chart">
+            <canvas id="paretoChart" width="400" height="320"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card shadow-soft mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">Top Movers (vs previous month)</h5>
+      <small class="text-muted">Revenue delta by Customers/Products/Regions</small>
+    </div>
+    <div class="card-body">
+      <div id="topMoversEmpty" class="text-muted small d-none">No movement data for the selected window.</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col">Label</th>
+              <th scope="col" class="text-end">Current</th>
+              <th scope="col" class="text-end">Delta Revenue</th>
+              <th scope="col" class="text-end">Delta %</th>
+            </tr>
+          </thead>
+          <tbody id="topMoversBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="card shadow-soft mb-4" id="insightsCard">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="mb-0">Executive Insights</h5>
+        <small class="text-muted">What changed and what to watch next.</small>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="insightsList" class="row g-3"></div>
+      <div id="insightsEmpty" class="text-muted small d-none">No insights available for the current filters.</div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-0">Driver Decomposition</h5>
+            <small class="text-muted">Price, volume, and mix effects (MoM / YoY)</small>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="driversTable" class="small"></div>
+          <div id="driversEmpty" class="text-muted small d-none">Not enough history to compute drivers.</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-3">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Concentration Risk</h5>
+        </div>
+        <div class="card-body">
+          <div id="concentrationPanel" class="small text-muted"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-3">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Profitability Snapshot</h5>
+        </div>
+        <div class="card-body">
+          <div id="profitabilityPanel" class="small"></div>
+          <ul id="marginRiskList" class="list-unstyled small mt-2 mb-0"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Customer Momentum</h5>
+        </div>
+        <div class="card-body">
+          <div id="customerMomentum" class="small"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card shadow-soft h-100">
+        <div class="card-header">
+          <h5 class="mb-0">Operational Mix</h5>
+          <small class="text-muted">Top regions, methods, and suppliers</small>
+        </div>
+        <div class="card-body">
+          <div id="opsMixPanel" class="small"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card shadow-soft h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Weekday Revenue</h5>
+          <span id="weekdayBest" class="text-muted small"></span>
+        </div>
+        <div class="card-body">
+          <div class="chart-placeholder chart-container-sm" aria-label="Weekday revenue">
+            <div id="weekdayEmpty" class="text-muted text-center py-4 d-none">No weekday data.</div>
+            <canvas id="weekdayChart" width="320" height="220"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="overviewEmpty" class="alert alert-info d-none" role="alert">
+    <i class="bi bi-info-circle me-1"></i>No data for the selected window/filters.
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview_legacy.js') }}" defer></script>
+{% endblock %}

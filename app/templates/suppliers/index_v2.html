@@ -1,0 +1,621 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% set suppliers_rev = config.get('STATIC_REV', '20260325') ~ '-suppliers-intel-3' %}
+{% block head_extras %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers_v2.css', v=suppliers_rev) }}">
+{% endblock %}
+{% block content %}
+<a class="visually-hidden-focusable" href="#suppliersCommandTable">Skip to Supplier Command Table</a>
+
+<div
+  id="SuppliersV2App"
+  class="container-fluid py-4 suppliers-v2-page"
+  data-page="suppliers"
+  data-suppliers-v2="1"
+  data-bundle-url="{{ url_for('bundles.suppliers_bundle') }}"
+  data-export-csv-url="{{ url_for('bundles.suppliers_export_csv') }}"
+  data-export-xlsx-url="{{ url_for('bundles.suppliers_export_xlsx') }}"
+  data-show-costs="{{ show_costs|tojson }}"
+>
+  <section class="card suppliers-hero shadow-soft border-0 mb-4 overflow-hidden">
+    <div class="card-body suppliers-hero-body">
+      <div class="suppliers-hero-grid">
+        <div class="suppliers-hero-main">
+          <div class="suppliers-hero-topbar">
+            <div class="suppliers-hero-copy">
+              <div class="suppliers-hero-eyebrow">Supplier Intelligence</div>
+              <h1 class="suppliers-hero-title mb-2">Supplier Command Center</h1>
+              <p class="suppliers-hero-subtitle mb-0">
+                Executive supplier readout for concentration, cost trust, protein exposure, commercial risk, and the next actions under the active Wholesale Analytics filter scope.
+              </p>
+            </div>
+            <div class="suppliers-hero-actions" aria-label="Supplier exports">
+              <a id="supV2ExportXlsx" class="btn btn-sm btn-light" href="{{ url_for('bundles.suppliers_export_xlsx') }}?scope=table&suppliers_v2=1">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Table XLSX
+              </a>
+              <a id="supV2ExportCsv" class="btn btn-sm btn-outline-light" href="{{ url_for('bundles.suppliers_export_csv') }}?scope=table&suppliers_v2=1">
+                <i class="bi bi-filetype-csv me-1"></i>Table CSV
+              </a>
+              <a id="supV2ExportProtein" class="btn btn-sm btn-outline-light" href="{{ url_for('bundles.suppliers_export_csv') }}?scope=protein&suppliers_v2=1">
+                <i class="bi bi-diagram-3 me-1"></i>Protein CSV
+              </a>
+              <a id="supV2ExportActions" class="btn btn-sm btn-outline-light" href="{{ url_for('bundles.suppliers_export_csv') }}?scope=actions&suppliers_v2=1">
+                <i class="bi bi-lightning-charge me-1"></i>Action CSV
+              </a>
+            </div>
+          </div>
+
+          <div class="suppliers-hero-purpose">
+            <div class="suppliers-hero-purpose-label">What this page is for</div>
+            <p class="mb-0">
+              Use this workspace to understand which suppliers drive the book, where margin and data quality are weakest, how the protein mix is shifting, and which relationships need immediate action.
+            </p>
+          </div>
+
+          <div class="suppliers-hero-ranges" aria-label="Active and comparison windows">
+            <div class="suppliers-hero-panel suppliers-range-card">
+              <div class="suppliers-panel-label">Active window</div>
+              <div class="suppliers-range-value" id="suppliersWindowSummary">Building current supplier window...</div>
+              <div class="suppliers-range-note" id="suppliersWindowNote">Reading the active filtered range and filter scope.</div>
+            </div>
+            <div class="suppliers-hero-panel suppliers-range-card">
+              <div class="suppliers-panel-label">Comparison window</div>
+              <div class="suppliers-range-value" id="suppliersComparisonSummary">Preparing prior comparable window...</div>
+              <div class="suppliers-range-note" id="suppliersComparisonNote">Determining the correct prior comparable view.</div>
+            </div>
+          </div>
+
+          <div class="suppliers-hero-panel suppliers-command-card">
+            <div class="suppliers-command-head">
+              <div>
+                <div class="suppliers-panel-label">Executive summary</div>
+                <div class="suppliers-command-headline" id="supplierCommandHeadline">Loading supplier portfolio...</div>
+              </div>
+              <div class="suppliers-command-status" id="supplierCoverageState">—</div>
+            </div>
+            <div class="suppliers-command-note" id="supplierCommandNote">Top suppliers, concentration posture, and data trust will summarize here.</div>
+            <div class="suppliers-command-points">
+              <div class="suppliers-command-point">
+                <div class="suppliers-command-point-label">Portfolio story</div>
+                <div id="supplierNarrative" class="suppliers-command-point-copy">Reading the supplier portfolio...</div>
+              </div>
+              <div class="suppliers-command-point">
+                <div class="suppliers-command-point-label">Data trust</div>
+                <div id="supplierCoverageSummary" class="suppliers-command-point-copy">Checking cost coverage and risk posture...</div>
+              </div>
+              <div class="suppliers-command-point">
+                <div class="suppliers-command-point-label">Movers and mix</div>
+                <div id="supplierTopMoversSummary" class="suppliers-command-point-copy">Scanning supplier movers and protein mix...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="suppliers-hero-aside">
+          <div class="suppliers-hero-panel suppliers-summary-panel">
+            <div class="suppliers-panel-label">At a glance</div>
+            <div class="suppliers-hero-metric-grid">
+              <div class="suppliers-hero-metric">
+                <span class="label">Revenue</span>
+                <span class="value" id="supplierHeroRevenueValue">—</span>
+                <span class="meta" id="supplierHeroRevenueMeta">Loading revenue trend...</span>
+              </div>
+              <div class="suppliers-hero-metric">
+                <span class="label" id="supplierHeroSecondaryLabel">Profit</span>
+                <span class="value" id="supplierHeroSecondaryValue">—</span>
+                <span class="meta" id="supplierHeroSecondaryMeta">Loading covered performance...</span>
+              </div>
+              <div class="suppliers-hero-metric">
+                <span class="label">Active suppliers</span>
+                <span class="value" id="supplierHeroSuppliersValue">—</span>
+                <span class="meta" id="supplierHeroSuppliersMeta">Loading supplier activity...</span>
+              </div>
+              <div class="suppliers-hero-metric">
+                <span class="label">Top 5 share</span>
+                <span class="value" id="supplierHeroConcentrationValue">—</span>
+                <span class="meta" id="supplierHeroConcentrationMeta">Loading concentration posture...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="suppliers-hero-panel suppliers-summary-panel">
+            <div class="suppliers-panel-label">Portfolio signals</div>
+            <div class="suppliers-panel-mini-grid">
+              <div class="suppliers-mini-stat">
+                <span class="label">Top gain</span>
+                <span class="value" id="supplierTopGainer">—</span>
+              </div>
+              <div class="suppliers-mini-stat">
+                <span class="label">Top decline</span>
+                <span class="value" id="supplierTopDecliner">—</span>
+              </div>
+              <div class="suppliers-mini-stat">
+                <span class="label">Top protein</span>
+                <span class="value" id="supplierTopProtein">—</span>
+              </div>
+              <div class="suppliers-mini-stat">
+                <span class="label">Revenue at risk</span>
+                <span class="value" id="supplierAtRiskSignal">—</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div id="supplierHealthChips" class="suppliers-chip-row mt-3" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <nav class="suppliers-subnav mb-3" aria-label="Supplier workspace navigation">
+    <a class="suppliers-subnav-link" href="#suppliers-scorecard">Scorecard</a>
+    <a class="suppliers-subnav-link" href="#suppliers-trend-layer">Trend</a>
+    <a class="suppliers-subnav-link" href="#suppliers-protein-layer">Protein</a>
+    <a class="suppliers-subnav-link" href="#suppliers-risk-layer">Risk</a>
+    <a class="suppliers-subnav-link" href="#suppliers-segments-layer">Segments</a>
+    <a class="suppliers-subnav-link" href="#suppliers-command-table">Command Table</a>
+  </nav>
+
+  <section id="suppliers-scorecard" class="mb-3">
+    <div class="suppliers-section-intro">
+      <div>
+        <div class="suppliers-section-kicker">Executive scorecard</div>
+        <h3 class="suppliers-section-title">Portfolio performance at a glance</h3>
+        <p class="suppliers-section-copy mb-0">Commercial scale, profit quality, concentration, and supplier health aligned to the active window and its matched comparison period.</p>
+      </div>
+    </div>
+    <div class="row g-3" aria-live="polite">
+      <div class="col-6 col-xl-3">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Revenue</div>
+            <div class="suppliers-kpi-value" id="kpiRevenue">—</div>
+            <div class="suppliers-kpi-meta" id="kpiRevenueDelta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Profit</div>
+            <div class="suppliers-kpi-value" id="kpiProfit">—</div>
+            <div class="suppliers-kpi-meta" id="kpiProfitDelta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Margin %</div>
+            <div class="suppliers-kpi-value" id="kpiMargin">—</div>
+            <div class="suppliers-kpi-meta" id="kpiMarginDelta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Active suppliers</div>
+            <div class="suppliers-kpi-value" id="kpiActiveSuppliers">—</div>
+            <div class="suppliers-kpi-meta" id="kpiActiveSuppliersMeta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Top supplier share</div>
+            <div class="suppliers-kpi-value" id="kpiTopShare">—</div>
+            <div class="suppliers-kpi-meta" id="kpiTopShareMeta">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-6 col-xl-3">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Cost coverage</div>
+            <div class="suppliers-kpi-value" id="kpiCostCoverage">—</div>
+            <div class="suppliers-kpi-meta" id="kpiCostCoverageMeta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Revenue at risk</div>
+            <div class="suppliers-kpi-value" id="kpiRevenueAtRisk">—</div>
+            <div class="suppliers-kpi-meta" id="kpiRevenueAtRiskMeta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Concentration</div>
+            <div class="suppliers-kpi-value" id="kpiConcentration">—</div>
+            <div class="suppliers-kpi-meta" id="kpiConcentrationMeta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">New / lost</div>
+            <div class="suppliers-kpi-value" id="kpiNewLost">—</div>
+            <div class="suppliers-kpi-meta" id="kpiNewLostMeta">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-2">
+        <div class="card suppliers-kpi-card h-100">
+          <div class="card-body">
+            <div class="suppliers-kpi-label">Strategic / long tail</div>
+            <div class="suppliers-kpi-value" id="kpiStrategic">—</div>
+            <div class="suppliers-kpi-meta" id="kpiStrategicMeta">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-3">
+    <div class="suppliers-section-intro">
+      <div>
+        <div class="suppliers-section-kicker">Portfolio posture</div>
+        <h3 class="suppliers-section-title">How concentrated, resilient, and trustworthy is the supplier base?</h3>
+        <p class="suppliers-section-copy mb-0">A compact command layer for dependency, activity rhythm, protein exposure, and trust so leadership can separate portfolio shape from day-to-day noise.</p>
+      </div>
+    </div>
+    <div id="supplierPostureCards" class="suppliers-posture-grid" aria-live="polite">
+      <div class="suppliers-posture-card">
+        <div class="suppliers-posture-label">Loading</div>
+        <div class="suppliers-posture-value">Preparing supplier posture...</div>
+        <div class="suppliers-posture-note">Concentration, activity rhythm, protein posture, and trust summaries will appear here.</div>
+      </div>
+    </div>
+    <div id="supplierPostureNarrative" class="suppliers-inline-note mt-3">Reading portfolio posture...</div>
+  </section>
+
+  <section class="mb-3">
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Executive readout</div>
+            <h4 class="mb-1">Where concentration, trust, and margin pressure need attention</h4>
+            <div class="text-muted small">Executive narrative grounded in comparable-window deltas, concentration posture, data trust, and protein exposure.</div>
+          </div>
+          <div class="card-body">
+            <div id="strategicReadout" class="suppliers-callout-list">Loading supplier concentration story...</div>
+            <div id="supplierProteinNarrative" class="suppliers-inline-note mt-3">Reading protein-family contribution...</div>
+            <div id="supplierDependencyNarrative" class="suppliers-inline-note mt-2">Assessing supplier dependency and revenue concentration...</div>
+            <div id="supplierRiskNarrative" class="suppliers-inline-note mt-2">Quantifying margin pressure and trust risk...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Commercial actions</div>
+            <h4 class="mb-1">What should the team do next?</h4>
+            <div class="text-muted small">Action cards route directly into the command table without changing the shared page layout or filter contract.</div>
+          </div>
+          <div class="card-body">
+            <div id="supplierActionCards" class="suppliers-action-grid" aria-live="polite">
+              <div class="suppliers-action-card">
+                <div class="suppliers-action-label">Loading</div>
+                <div class="suppliers-action-value">Preparing supplier actions...</div>
+                <div class="suppliers-action-note">Recover margin, protect strategic relationships, and review data risk will populate here.</div>
+              </div>
+            </div>
+            <div id="supplierOpportunityNarrative" class="suppliers-inline-note mt-3">Calculating revenue exposure and recovery potential...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suppliers-trend-layer" class="mb-3">
+    <div class="row g-3">
+      <div class="col-xl-7">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Trend layer</div>
+            <h4 class="mb-1">Revenue, profit, and margin trend</h4>
+            <div class="text-muted small">Monthly supplier portfolio trend for the active scope. Comparison logic follows the same period-aware contract as the rest of the application.</div>
+          </div>
+          <div class="card-body">
+            <div id="supTrendChart" class="suppliers-chart" aria-label="Monthly supplier portfolio trend"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Concentration</div>
+            <h4 class="mb-1">Supplier dependency profile</h4>
+            <div class="text-muted small" id="concentrationSummary">—</div>
+          </div>
+          <div class="card-body">
+            <div id="supParetoChart" class="suppliers-chart" aria-label="Supplier concentration pareto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suppliers-protein-layer" class="mb-3">
+    <div class="row g-3">
+      <div class="col-xl-7">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Protein layer</div>
+            <h4 class="mb-1">Protein contribution and mix shift</h4>
+            <div class="text-muted small">Revenue, margin, and share change by protein family across the visible supplier portfolio.</div>
+          </div>
+          <div class="card-body">
+            <div id="supProteinChart" class="suppliers-chart" aria-label="Protein contribution chart"></div>
+            <div id="supplierProteinHighlights" class="suppliers-posture-grid suppliers-posture-grid-compact mt-3"></div>
+            <div id="supplierProteinFocusNarrative" class="suppliers-inline-note mt-3">Reviewing protein mix shift and concentration context...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Protein watch</div>
+            <h4 class="mb-1">Protein families that deserve review</h4>
+            <div class="text-muted small">Top protein families by current revenue, mix shift, and margin risk. Click a protein chip to focus the command table.</div>
+          </div>
+          <div class="card-body">
+            <div id="supplierProteinChips" class="suppliers-chip-row mb-3"></div>
+            <div class="table-responsive suppliers-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Protein</th>
+                    <th>Top supplier</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Share</th>
+                    <th class="text-end">Δ mix</th>
+                    <th class="text-end">Margin</th>
+                  </tr>
+                </thead>
+                <tbody id="proteinMixRows">
+                  <tr><td colspan="6" class="text-muted">Loading protein mix...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suppliers-risk-layer" class="mb-3">
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Margin recovery</div>
+            <h4 class="mb-1">Below-target suppliers</h4>
+            <div class="text-muted small">Suppliers with meaningful revenue under the supplier margin target and estimated uplift if margin recovers.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive suppliers-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Supplier</th>
+                    <th>Top protein</th>
+                    <th class="text-end">Margin</th>
+                    <th class="text-end">Uplift</th>
+                  </tr>
+                </thead>
+                <tbody id="marginLeakageRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Data risk</div>
+            <h4 class="mb-1">Missing-cost exposure</h4>
+            <div class="text-muted small">Revenue where supplier cost coverage is incomplete or missing, which weakens margin reliability.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive suppliers-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Supplier</th>
+                    <th class="text-end">Missing Revenue</th>
+                    <th class="text-end">Coverage</th>
+                    <th>Top protein</th>
+                  </tr>
+                </thead>
+                <tbody id="dataRiskRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Dependency</div>
+            <h4 class="mb-1">Supplier concentration watch</h4>
+            <div class="text-muted small">Suppliers most dependent on a single protein family or dominant SKU mix.</div>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive suppliers-mini-table">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Supplier</th>
+                    <th>Top protein</th>
+                    <th class="text-end">Protein share</th>
+                    <th class="text-end">Posture</th>
+                  </tr>
+                </thead>
+                <tbody id="dependencyRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suppliers-segments-layer" class="mb-3">
+    <div class="row g-3">
+      <div class="col-xl-5">
+        <div class="card suppliers-section-card h-100">
+          <div class="card-header">
+            <div class="suppliers-card-kicker">Segment mix</div>
+            <h4 class="mb-1">Portfolio segmentation</h4>
+            <div class="text-muted small">Strategic, growth, margin-risk, data-risk, and long-tail supplier groups. Click a segment row to focus the command table.</div>
+          </div>
+          <div class="card-body">
+            <div id="supSegmentChart" class="suppliers-chart suppliers-chart-sm" aria-label="Supplier segment mix"></div>
+            <div class="suppliers-inline-note mt-3" id="supplierSegmentNarrative">Building segment summary...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-7">
+        <div class="card suppliers-section-card h-100">
+            <div class="card-header">
+              <div class="suppliers-card-kicker">Change layer</div>
+              <h4 class="mb-1">Supplier Segments & Movers</h4>
+              <div class="text-muted small">Top gainers, decliners, and segment-level change versus the prior comparable window.</div>
+            </div>
+          <div class="card-body">
+            <div id="supplierMoverNarrative" class="suppliers-inline-note mb-3">Reading supplier gains, declines, and whether change is concentrated or broad-based...</div>
+            <div class="row g-3">
+              <div class="col-lg-5">
+                <div class="table-responsive suppliers-mini-table">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>Supplier</th>
+                        <th class="text-end">Δ Revenue</th>
+                        <th class="text-end">Δ Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody id="moversRows"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="col-lg-7">
+                <div class="table-responsive suppliers-mini-table">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>Segment</th>
+                        <th class="text-end">Suppliers</th>
+                        <th class="text-end">Revenue</th>
+                        <th class="text-end">Δ %</th>
+                        <th class="text-end">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody id="segmentSummaryRows"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="suppliers-command-table" class="mb-2">
+    <div class="card suppliers-section-card">
+      <div class="card-header">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+          <div>
+            <div class="suppliers-card-kicker">Supplier command center</div>
+            <h4 class="mb-1">Decision table for drilldown, negotiation, and review</h4>
+            <div class="text-muted small">Use segment, risk, or protein shortcuts to isolate suppliers that need action, then click a row to open drilldown.</div>
+            <div id="supplierTableNarrative" class="suppliers-inline-note mt-2">Building the current command-table slice...</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-protein-reset">Clear protein focus</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="suppliers-command-toolbar mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="suppliers-toolbar-label">Quick filters</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip active" data-quick="all">All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="strategic">Strategic</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="growth">Growth</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="margin_risk">Margin risk</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="data_risk">Data risk</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="high_concentration">High concentration</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="below_target_margin">Below target</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="missing_cost">Missing cost</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="at_risk">At risk</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="new">New</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="lost">Lost</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-quick-chip" data-quick="long_tail">Long tail</button>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <label for="supV2PageSize" class="suppliers-toolbar-label mb-0">Page size</label>
+            <select id="supV2PageSize" class="form-select form-select-sm" aria-label="Supplier table page size">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
+            <div class="input-group input-group-sm suppliers-search">
+              <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+              <input id="supV2Search" type="search" class="form-control" placeholder="Search supplier..." aria-label="Search suppliers">
+              <button type="button" class="btn btn-outline-secondary" id="supV2SearchClear">Clear</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="supplierProteinFocus" class="suppliers-inline-note mb-3">No protein focus selected.</div>
+
+        <div class="table-responsive suppliers-command-table">
+          <table id="suppliersCommandTable" class="table table-sm align-middle table-hover mb-0">
+            <thead class="sticky-top">
+              <tr>
+                <th class="sortable" data-sort="supplier_name" scope="col">Supplier</th>
+                <th class="sortable" data-sort="segment_label" scope="col">Segment</th>
+                <th class="sortable text-end" data-sort="risk_band" scope="col">Risk</th>
+                <th class="sortable text-end" data-sort="revenue_current" scope="col">Revenue</th>
+                <th class="sortable text-end" data-sort="revenue_prior" scope="col">Revenue prior</th>
+                <th class="sortable text-end" data-sort="delta_revenue" scope="col">Δ Revenue $</th>
+                <th class="sortable text-end" data-sort="delta_revenue_pct" scope="col">Δ Revenue %</th>
+                <th class="sortable text-end" data-sort="margin_pct" scope="col">Margin %</th>
+                <th class="sortable text-end" data-sort="orders" scope="col">Orders</th>
+                <th class="sortable text-end" data-sort="cost_coverage_pct" scope="col">Coverage</th>
+                <th class="sortable text-end" data-sort="missing_cost_revenue" scope="col">Missing cost</th>
+                <th class="sortable text-end" data-sort="days_since_last_order" scope="col">Days since last</th>
+                <th class="sortable" data-sort="top_protein" scope="col">Top protein</th>
+                <th class="sortable text-end" data-sort="top_protein_share_pct" scope="col">Protein share</th>
+                <th class="sortable text-end" data-sort="top_sku_share_pct" scope="col">Top SKU share</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="supV2TableBody">
+              <tr><td colspan="16" class="text-center text-muted py-4">Loading supplier command table...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div id="supV2TableStatus" class="small text-muted">Loading...</div>
+          <button id="supV2LoadMore" class="btn btn-sm btn-outline-secondary">Load More</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="{{ url_for('static', filename='js/suppliers_v2.js', v=suppliers_rev) }}" defer></script>
+{% endblock %}

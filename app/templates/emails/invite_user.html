@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<body style="font-family: Arial, sans-serif; color: #1f2933; line-height: 1.5;">
+  <p>Hello {{ recipient_name or "there" }},</p>
+  {% if purpose == "invite" %}
+  <p>Your Wholesale Analytics account is ready.</p>
+  {% else %}
+  <p>A password reset was requested for your Wholesale Analytics account.</p>
+  {% endif %}
+  <p>
+    <a href="{{ set_password_link }}" style="display: inline-block; padding: 10px 14px; background: #0d6efd; color: #ffffff; text-decoration: none; border-radius: 6px;">
+      Set your password
+    </a>
+  </p>
+  <p>Or copy and paste this URL into your browser:<br>{{ set_password_link }}</p>
+  <p>This link expires and can only be used once.</p>
+</body>
+</html>
+

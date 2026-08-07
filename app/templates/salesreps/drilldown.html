@@ -1,0 +1,1053 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% set salesrep_drilldown_rev = config.get('STATIC_REV', '20260411') ~ '-salesrep-drilldown-final-3' %}
+{% block title %}Sales Rep Drilldown{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/salesrep_drilldown_v2.css', v=salesrep_drilldown_rev) }}">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
+{% endblock %}
+
+{% block content %}
+<div id="SalesRepDrilldownMeta"
+     class="d-none"
+     data-page="salesrep_drilldown"
+     data-bundle-url="{{ url_for('bundles.salesreps_drilldown_bundle') }}"
+     data-entity-id="{{ rep_id }}"
+     data-v2-enabled="{{ '1' if salesrep_drilldown_v2_enabled else '0' }}"></div>
+{% if salesrep_drilldown_boot_payload %}
+<script id="SalesRepDrilldownBoot" type="application/json">{{ salesrep_drilldown_boot_payload|tojson }}</script>
+{% endif %}
+
+{% if salesrep_drilldown_v2_enabled %}
+<div class="container-fluid salesrep-drilldown-v2 py-3 pb-4">
+  <section class="card srpd-hero mb-3">
+    <div class="card-body">
+      <div class="srpd-hero-grid">
+        <div class="srpd-hero-copy">
+          <div class="srpd-eyebrow">Sales Performance Workspace</div>
+          <h1 id="salesrepName">Loading owner portfolio...</h1>
+          <div class="srpd-hero-subtitle mt-2" id="salesrepId">Current owner portfolio context</div>
+          <div class="srpd-hero-summary" id="drWhatChanged">Loading latest change insight...</div>
+          <div class="srpd-hero-support" id="drHeroSupport">Building leadership context for ownership mix, concentration, and margin posture.</div>
+          <div class="srpd-chip-row">
+            <span class="srpd-chip" id="drDateChip">Window: --</span>
+            <span class="srpd-chip" id="drFilterChip">Filters: --</span>
+            <span class="srpd-chip" id="drModeChip">Mode: --</span>
+            <span class="srpd-chip" id="drBridgeChip">Ownership bridge: --</span>
+            <span class="srpd-chip" id="drWarningChip">Warnings: --</span>
+            <span class="srpd-chip" id="drLastRefresh">Last refresh: --</span>
+          </div>
+        </div>
+
+        <div class="srpd-hero-side">
+          <div class="srpd-toolbar-card">
+            <div class="card-body">
+              <div class="srpd-panel-label">Controls & Exports</div>
+              <div class="srpd-toolbar-actions">
+                <a class="btn btn-sm btn-outline-secondary" id="drBackLink" href="{{ url_for('salesreps.index') }}">
+                  <i class="bi bi-arrow-left"></i> Back to Sales Reps
+                </a>
+                <a
+                  class="btn btn-outline-primary btn-sm"
+                  id="salesrepExportXlsx"
+                  data-export-dataset="all"
+                  data-export-format="xlsx"
+                  href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='all', format='xlsx') }}"
+                ><i class="bi bi-download"></i> Export XLSX</a>
+                <a
+                  class="btn btn-outline-secondary btn-sm"
+                  id="salesrepExportAllXlsx"
+                  data-export-dataset="all"
+                  data-export-format="xlsx"
+                  data-include-history="1"
+                  href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='all', format='xlsx', include_history='1') }}"
+                ><i class="bi bi-clock-history"></i> Export All History</a>
+              </div>
+              <div class="srpd-control-bar">
+                <div class="srpd-control-stack">
+                  <label class="form-label form-label-sm mb-1" for="drAttributionMode">Attribution Mode</label>
+                  <select class="form-select form-select-sm" id="drAttributionMode">
+                    <option value="current_owner" selected>Current Account Owner</option>
+                    <option value="historical_rep">Historical Rep</option>
+                  </select>
+                </div>
+                <div class="srpd-control-stack d-flex align-items-end" id="drFormerToggleWrap">
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="drIncludeFormerReps">
+                    <label class="form-check-label" for="drIncludeFormerReps">Include former reps in historical view</label>
+                  </div>
+                </div>
+              </div>
+              <div class="srpd-toolbar-note">Exports, linked detail views, and this page narrative stay aligned to the active filters and attribution mode.</div>
+            </div>
+          </div>
+
+          <div class="srpd-hero-highlights">
+            <article class="srpd-highlight">
+              <div class="srpd-panel-label">Direct vs Inherited</div>
+              <div class="srpd-highlight-value" id="drHeroMixValue">Loading mix...</div>
+              <div class="srpd-highlight-detail" id="drHeroMixDetail">Computing direct and inherited revenue posture.</div>
+            </article>
+            <article class="srpd-highlight">
+              <div class="srpd-panel-label">Concentration Watch</div>
+              <div class="srpd-highlight-value" id="drHeroRiskValue">Loading risk...</div>
+              <div class="srpd-highlight-detail" id="drHeroRiskDetail">Scanning top-customer concentration and ownership coverage.</div>
+            </article>
+            <article class="srpd-highlight">
+              <div class="srpd-panel-label">Margin Pressure</div>
+              <div class="srpd-highlight-value" id="drHeroMarginValue">Loading margin posture...</div>
+              <div class="srpd-highlight-detail" id="drHeroMarginDetail">Assessing below-target and negative-margin SKU exposure.</div>
+            </article>
+            <article class="srpd-highlight">
+              <div class="srpd-panel-label">Immediate Focus</div>
+              <div class="srpd-highlight-value" id="drHeroActionValue">Loading action cue...</div>
+              <div class="srpd-highlight-detail" id="drHeroActionDetail">Preparing the next best commercial move for leadership review.</div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="srpd-section-nav" aria-label="Sales rep section navigation">
+    <a class="srpd-nav-link" href="#srpd-kpis"><span>Scorecard</span><span class="srpd-nav-pill" id="drNavKpi">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-ownership"><span>Ownership</span><span class="srpd-nav-pill" id="drNavOwnership">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-operating"><span>Operating Console</span><span class="srpd-nav-pill" id="drNavOperating">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-trends"><span>Trends</span><span class="srpd-nav-pill" id="drNavTrend">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-risks"><span>Risk & Movers</span><span class="srpd-nav-pill" id="drNavRisk">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-customers"><span>Customers</span><span class="srpd-nav-pill" id="drNavCustomers">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-products"><span>Products</span><span class="srpd-nav-pill" id="drNavProducts">--</span></a>
+    <a class="srpd-nav-link" href="#srpd-actions"><span>Actions</span><span class="srpd-nav-pill" id="drNavActions">--</span></a>
+  </nav>
+
+  <div class="drilldown-alerts mb-3" id="drWarnings"></div>
+
+  <div class="mb-3" id="drPacingNarrative" aria-live="polite"></div>
+
+  <section id="srpd-kpis" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">KPI Summary</div>
+        <h2>Leadership scorecard</h2>
+      </div>
+      <div class="srpd-section-summary">Refined KPI groupings keep revenue, profitability, mix quality, and concentration signals in one scan path without changing the underlying calculations.</div>
+    </div>
+
+    <div class="row g-3">
+      {% set primary_cards = [
+        ('revenue', 'Revenue', 'Total recognized revenue in the selected period.'),
+        ('profit', 'Profit', 'Revenue minus cost where cost is available.'),
+        ('margin_pct', 'Margin %', 'Profit divided by revenue.'),
+        ('orders', 'Orders', 'Distinct order count in scope.')
+      ] %}
+      <div class="col-12 col-xxl-6">
+        <div class="card srpd-kpi-panel h-100">
+          <div class="card-header border-0">
+            <div class="srpd-section-kicker mb-1">Commercial Core</div>
+            <div class="srpd-section-summary">Outcome metrics for how the rep is landing the current window.</div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-kpi-grid">
+              {% for key, label, tip in primary_cards %}
+              <div class="srpd-kpi-card is-featured" title="{{ tip }}">
+                <div class="label">{{ label }}</div>
+                <div class="value" data-kpi-key="{{ key }}">N/A</div>
+                {% if key in ('revenue', 'profit', 'margin_pct') %}
+                <div class="detail">
+                  <span data-kpi-delta="{{ key.split('_pct')[0] }}_mom_pct">MoM: N/A</span>
+                  <span class="ms-2" data-kpi-delta="{{ key.split('_pct')[0] }}_yoy_pct">YoY: N/A</span>
+                </div>
+                {% if key == 'margin_pct' %}
+                <div class="subdetail d-flex flex-wrap align-items-center gap-2">
+                  <span id="drMarginTargetMeta">Target context unavailable</span>
+                  <span class="srpd-pill srpd-pill--neutral" id="drMarginHealthBadge">Target context</span>
+                </div>
+                {% endif %}
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% set scale_cards = [
+        ('customers', 'Customers', 'Distinct customers in scope.'),
+        ('active_customers_curr', 'Active Customers', 'Customers active in the latest visible period.'),
+        ('weight_lb', 'Weight (lb)', 'Total shipped weight in pounds.'),
+        ('units', 'Units', 'Total units in scope.'),
+        ('asp_lb', 'ASP/LB', 'Average selling price per pound.'),
+        ('asp', 'ASP', 'Average selling price per unit.')
+      ] %}
+      <div class="col-12 col-xxl-6">
+        <div class="card srpd-kpi-panel h-100">
+          <div class="card-header border-0">
+            <div class="srpd-section-kicker mb-1">Book Scale & Pricing</div>
+            <div class="srpd-section-summary">Breadth, activity, and realized pricing for the current book of business.</div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-kpi-grid">
+              {% for key, label, tip in scale_cards %}
+              <div class="srpd-kpi-card" title="{{ tip }}">
+                <div class="label">{{ label }}</div>
+                <div class="value" data-kpi-key="{{ key }}">N/A</div>
+                {% if key == 'active_customers_curr' %}
+                <div class="detail" data-kpi-delta="active_customers_delta">Delta: N/A</div>
+                {% elif key in ('asp_lb', 'asp') %}
+                <div class="detail">Pricing health inside the scoped mix.</div>
+                {% elif key == 'customers' %}
+                <div class="detail">Visible customer coverage under current filters.</div>
+                {% else %}
+                <div class="detail">Operational scale for the selected window.</div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% set quality_cards = [
+        ('top_customer_share', 'Top 1 Customer %', 'Revenue share from the largest customer.'),
+        ('top5_customer_share', 'Top 5 Customer %', 'Revenue share from the top five customers.'),
+        ('customer_hhi', 'Customer HHI', 'Concentration index. Higher means concentrated.'),
+        ('cost_coverage_pct', 'Cost Coverage %', 'Percent of rows with valid cost values.')
+      ] %}
+      <div class="col-12">
+        <div class="card srpd-kpi-panel">
+          <div class="card-header border-0">
+            <div class="srpd-section-kicker mb-1">Quality, Risk, and Trust</div>
+            <div class="srpd-section-summary">These indicators frame how concentrated the book is and how much confidence leadership can place on margin conclusions.</div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-kpi-grid">
+              {% for key, label, tip in quality_cards %}
+              <div class="srpd-kpi-card" title="{{ tip }}">
+                <div class="label">{{ label }}</div>
+                <div class="value" data-kpi-key="{{ key }}">N/A</div>
+                <div class="detail">
+                  {% if key == 'top_customer_share' %}
+                  Largest single-customer dependency.
+                  {% elif key == 'top5_customer_share' %}
+                  Combined concentration of top accounts.
+                  {% elif key == 'customer_hhi' %}
+                  Higher values imply less diversification.
+                  {% else %}
+                  Margin reliability based on cost visibility.
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="srpd-ownership" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Portfolio & Attribution</div>
+        <h2>Current-owner versus historical accountability</h2>
+      </div>
+      <div class="srpd-section-summary">This layer preserves the existing ownership bridge and historical attribution logic while making the current book, inherited exposure, and transfer effects easier to read.</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-6 col-xxl-3">
+        <div class="card srpd-owner-card">
+          <div class="card-body">
+            <div class="srpd-panel-label">Current Owned Customers</div>
+            <div class="srpd-owner-value" id="drCurrentOwnedCustomers">0</div>
+            <div class="srpd-owner-note" id="drCurrentOwnedRevenue">Current owner revenue: --</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xxl-3">
+        <div class="card srpd-owner-card">
+          <div class="card-body">
+            <div class="srpd-panel-label">Inherited Accounts</div>
+            <div class="srpd-owner-value" id="drInheritedCustomers">0</div>
+            <div class="srpd-owner-note" id="drGainedLost">0 gained | 0 lost</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xxl-3">
+        <div class="card srpd-owner-card">
+          <div class="card-body">
+            <div class="srpd-panel-label">Historical vs Current Roll-Up</div>
+            <div class="srpd-owner-value fs-6" id="drHistoricalVsCurrent">--</div>
+            <div class="srpd-owner-note" id="drTransferSummary">Transferred in: -- | out: --</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xxl-3">
+        <div class="card srpd-owner-card">
+          <div class="card-body">
+            <div class="srpd-panel-label">Attribution Summary</div>
+            <div class="srpd-owner-value fs-6" id="drModeNarrative">--</div>
+            <div class="srpd-owner-note" id="drOwnerSummary">Unassigned customers: --</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="srpd-story-grid">
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Book Anatomy</div>
+        <div class="srpd-story-title" id="drOwnershipNarrative">Loading ownership readout...</div>
+        <div class="srpd-story-note" id="drOwnershipNarrativeDetail">Direct versus inherited posture will summarize once the scoped book is loaded.</div>
+      </article>
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Mode & Mapping</div>
+        <div class="srpd-story-title" id="drOwnershipModeNarrative">Loading attribution posture...</div>
+        <div class="srpd-story-note" id="drOwnershipBridgeNarrative">Ownership bridge coverage and warnings will appear here.</div>
+      </article>
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Leadership Watchpoints</div>
+        <ul class="srpd-story-list" id="drOwnershipWatchList">
+          <li><strong>Loading watchpoints...</strong><span>--</span></li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="srpd-operating" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Operating Console</div>
+        <h2>Portfolio map, whitespace, and next-best actions</h2>
+      </div>
+      <div class="srpd-section-summary">This console isolates the rep’s accounts, surfaces whitespace across core proteins, and turns the current slice into concrete leadership guidance.</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xxl-8">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Portfolio Map</div>
+              <div class="fw-semibold">Rep account map</div>
+              <div class="small drilldown-muted">Hover for account detail. Click a bubble for customer drilldown.</div>
+            </div>
+            <div class="small drilldown-muted" id="drPortfolioMapSummary">Loading portfolio map...</div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-map-shell">
+              <div id="drPortfolioMap" class="srpd-portfolio-map" aria-label="Sales rep portfolio map"></div>
+              <div id="drPortfolioMapEmpty" class="srpd-map-empty">Portfolio map will render when customer coordinates are available.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xxl-4">
+        <div class="card h-100">
+          <div class="card-header border-0">
+            <div class="srpd-table-kicker">Smart Notes</div>
+            <div class="fw-semibold">Executive guidance</div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-smart-notes" id="drSmartNotes">
+              <div class="text-muted">Generating rep-specific guidance...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header border-0 d-flex justify-content-between align-items-center">
+        <div>
+          <div class="srpd-table-kicker">Portfolio Analysis</div>
+          <div class="fw-semibold">Revenue · Margin · Health — Customer Bubble Chart</div>
+        </div>
+        <div class="small drilldown-muted">Click a bubble to open the customer drilldown. Size = health score.</div>
+      </div>
+      <div class="card-body">
+        <div class="srpd-bubble-chart-shell">
+          <canvas id="drBubbleChart" aria-label="Customer portfolio bubble chart: revenue vs margin sized by health"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header border-0 d-flex justify-content-between align-items-center">
+        <div>
+          <div class="srpd-table-kicker">Whitespace</div>
+          <div class="fw-semibold">Product Gap Matrix</div>
+        </div>
+        <div class="small drilldown-muted" id="drGapMatrixSummary">Scanning top customer whitespace...</div>
+      </div>
+      <div class="card-body">
+        <div class="srpd-gap-matrix-wrap">
+          <table class="table table-sm align-middle mb-0 srpd-gap-matrix" aria-label="Customer protein gap matrix">
+            <thead id="drGapMatrixHead">
+              <tr><th scope="col">Customer</th><th scope="col" class="text-end">Revenue</th><th scope="col">Proteins</th></tr>
+            </thead>
+            <tbody id="drGapMatrixBody">
+              <tr><td colspan="3" class="text-muted">Loading product gap matrix...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="srpd-trends" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Trends & Comparison</div>
+        <h2>Performance story and decomposition</h2>
+      </div>
+      <div class="srpd-section-summary">Trend, decomposition, and ownership comparison now sit in a clearer executive readout so leadership can move from what changed to why it changed without losing detail.</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xxl-8">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex flex-wrap justify-content-between gap-2 align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Trend</div>
+              <div class="fw-semibold">
+                Revenue and Profit Trend
+                <i class="bi bi-info-circle text-muted ms-1" title="Tracks rep performance over time. Use weekly to inspect short-term changes."></i>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Trend grain toggle">
+                <button type="button" class="btn btn-outline-secondary active" data-trend-grain="monthly">Monthly</button>
+                <button type="button" class="btn btn-outline-secondary" data-trend-grain="weekly">Weekly</button>
+              </div>
+              <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" id="drTrendRollingToggle">
+                <label class="form-check-label small" for="drTrendRollingToggle">Rolling Avg</label>
+              </div>
+              <a
+                class="btn btn-outline-secondary btn-sm"
+                data-export-dataset="trend"
+                data-export-format="xlsx"
+                href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='trend', format='xlsx') }}"
+              ><i class="bi bi-download"></i> Download Excel</a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="ratio ratio-16x9 srpd-chart-wrap"><canvas id="drTrend"></canvas></div>
+            <div class="srpd-chart-note" id="drTrendNarrative">Trend readout will populate after the bundle loads.</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xxl-4">
+        <div class="card h-100">
+          <div class="card-header border-0">
+            <div class="srpd-table-kicker">MoM Drivers</div>
+            <div class="fw-semibold">
+              MoM Decomposition
+              <i class="bi bi-info-circle text-muted ms-1" title="Approximation of revenue change split into price, volume, and mix."></i>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="srpd-card-note mb-3" id="drDecompReadout">Preparing price, volume, and mix readout.</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0" aria-label="MoM decomposition">
+                <thead>
+                  <tr>
+                    <th scope="col">Driver</th>
+                    <th scope="col" class="text-end">Impact</th>
+                  </tr>
+                </thead>
+                <tbody id="drDecompTable">
+                  <tr><td colspan="2" class="text-muted">Loading decomposition...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="srpd-chart-note mt-3" id="drDecompMethod">Method: --</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-xxl-6">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">YoY Context</div>
+              <div class="fw-semibold">
+                Monthly YoY Comparison
+                <i class="bi bi-info-circle text-muted ms-1" title="Compares current-month revenue and profit against the same periods last year."></i>
+              </div>
+            </div>
+            <span class="small drilldown-muted">Revenue, profit, and shipped weight</span>
+          </div>
+          <div class="card-body">
+            <div class="ratio ratio-16x9 srpd-chart-wrap"><canvas id="drMonthlyCompare"></canvas></div>
+            <div class="srpd-chart-note" id="drCompareNarrative">Year-over-year readout will populate after the bundle loads.</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xxl-6">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Ownership Delta</div>
+              <div class="fw-semibold">
+                Ownership Roll-Up Comparison
+                <i class="bi bi-info-circle text-muted ms-1" title="Separates sales history from current account ownership for the selected rep."></i>
+              </div>
+            </div>
+            <span class="small drilldown-muted">Historical seller vs current owner</span>
+          </div>
+          <div class="card-body">
+            <div class="srpd-mini-metrics">
+              <div class="srpd-mini-metric">
+                <div class="srpd-mini-metric-label">Historical Revenue</div>
+                <div class="srpd-mini-metric-value" id="drOwnershipHistoricalValue">--</div>
+                <div class="srpd-mini-metric-note">Attributed to historical rep</div>
+              </div>
+              <div class="srpd-mini-metric">
+                <div class="srpd-mini-metric-label">Current Owner Revenue</div>
+                <div class="srpd-mini-metric-value" id="drOwnershipCurrentValue">--</div>
+                <div class="srpd-mini-metric-note">Current owner roll-up</div>
+              </div>
+              <div class="srpd-mini-metric">
+                <div class="srpd-mini-metric-label">Transferred In</div>
+                <div class="srpd-mini-metric-value" id="drOwnershipTransferInValue">--</div>
+                <div class="srpd-mini-metric-note">Revenue inherited into book</div>
+              </div>
+              <div class="srpd-mini-metric">
+                <div class="srpd-mini-metric-label">Transferred Out</div>
+                <div class="srpd-mini-metric-value" id="drOwnershipTransferOutValue">--</div>
+                <div class="srpd-mini-metric-note">Revenue no longer owned</div>
+              </div>
+            </div>
+            <div class="ratio ratio-16x9 srpd-chart-wrap"><canvas id="drOwnershipCompare"></canvas></div>
+            <div class="srpd-chart-note" id="drOwnershipSummary">Loading ownership comparison...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="srpd-risks" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Movers & Risk</div>
+        <h2>What is driving the result right now</h2>
+      </div>
+      <div class="srpd-section-summary">Customer and product movement, concentration, and margin pressure are organized together so leadership can identify where action is required next.</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xl-6">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Customer Movement</div>
+              <div class="fw-semibold">Customer Movers (MoM)</div>
+            </div>
+            <a
+              class="btn btn-outline-secondary btn-sm"
+              data-export-dataset="movers_customers"
+              data-export-format="xlsx"
+              href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='movers_customers', format='xlsx') }}"
+            ><i class="bi bi-download"></i> Download Excel</a>
+          </div>
+          <div class="card-body">
+            <div class="srpd-card-note mb-3" id="drCustomerMoversNarrative">Loading customer movers...</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0" aria-label="Customer movers">
+                <thead>
+                  <tr>
+                    <th scope="col">Customer</th>
+                    <th scope="col" class="text-end">MoM $</th>
+                    <th scope="col" class="text-end">MoM %</th>
+                  </tr>
+                </thead>
+                <tbody id="drMoversCustomersTable">
+                  <tr><td colspan="3" class="text-muted">Loading movers...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Product Movement</div>
+              <div class="fw-semibold">Product Movers (MoM)</div>
+            </div>
+            <a
+              class="btn btn-outline-secondary btn-sm"
+              data-export-dataset="movers_products"
+              data-export-format="xlsx"
+              href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='movers_products', format='xlsx') }}"
+            ><i class="bi bi-download"></i> Download Excel</a>
+          </div>
+          <div class="card-body">
+            <div class="srpd-card-note mb-3" id="drProductMoversNarrative">Loading product movers...</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0" aria-label="Product movers">
+                <thead>
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="text-end">MoM $</th>
+                    <th scope="col" class="text-end">MoM %</th>
+                  </tr>
+                </thead>
+                <tbody id="drMoversProductsTable">
+                  <tr><td colspan="3" class="text-muted">Loading movers...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-xxl-5">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Portfolio Mix</div>
+              <div class="fw-semibold">
+                Portfolio Mix
+                <i class="bi bi-info-circle text-muted ms-1" title="Top revenue products for this rep. Export includes all products under current filters."></i>
+              </div>
+            </div>
+            <a
+              class="btn btn-outline-secondary btn-sm"
+              data-export-dataset="mix"
+              data-export-format="xlsx"
+              href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='mix', format='xlsx') }}"
+            ><i class="bi bi-download"></i> Download Excel</a>
+          </div>
+          <div class="card-body">
+            <div class="ratio ratio-16x9 srpd-chart-wrap srpd-chart-wrap--compact mb-3"><canvas id="drMixBar"></canvas></div>
+            <div class="srpd-chart-note mb-2" id="drMixNarrative">Loading product mix readout...</div>
+            <button class="btn btn-link btn-sm px-0" type="button" data-bs-toggle="collapse" data-bs-target="#drMixDonutWrap" aria-expanded="false" aria-controls="drMixDonutWrap">Show donut view</button>
+            <div class="collapse" id="drMixDonutWrap">
+              <div class="ratio ratio-1x1 mt-2 srpd-chart-wrap srpd-chart-wrap--compact"><canvas id="drMix"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xxl-4">
+        <div class="card h-100">
+          <div class="card-header border-0">
+            <div class="srpd-table-kicker">Concentration</div>
+            <div class="fw-semibold">
+              Customer Concentration Risk
+              <i class="bi bi-info-circle text-muted ms-1" title="Top 1 and top 5 customer share with HHI concentration."></i>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="ratio ratio-16x9 srpd-chart-wrap srpd-chart-wrap--compact mb-3"><canvas id="drConcentration"></canvas></div>
+            <div class="srpd-card-note mb-2" id="drConcentrationNarrative">Loading concentration readout...</div>
+            <div class="srpd-card-note">HHI: <span id="drHHI">N/A</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xxl-3">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Margin Risk</div>
+              <div class="fw-semibold">Margin Risk</div>
+            </div>
+            <a
+              class="btn btn-outline-secondary btn-sm"
+              data-export-dataset="margin_risk"
+              data-export-format="xlsx"
+              href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='margin_risk', format='xlsx') }}"
+            ><i class="bi bi-download"></i></a>
+          </div>
+          <div class="card-body">
+            <div class="srpd-card-note mb-3" id="drMarginRiskNarrative">Loading margin exposure readout...</div>
+            <div class="srpd-pill-row mb-3">
+              <span class="srpd-pill srpd-pill--warn">Below target SKUs: <span class="ms-1" id="drBelowTargetCount">0</span></span>
+              <span class="srpd-pill srpd-pill--risk">Negative margin SKUs: <span class="ms-1" id="drNegativeMarginCount">0</span></span>
+              <span class="srpd-pill srpd-pill--neutral">At-risk customers: <span class="ms-1" id="drAtRiskCount">0</span></span>
+            </div>
+            <ul class="list-group list-group-flush srpd-risk-list" id="drRiskFlags">
+              <li class="list-group-item px-0 text-muted">Loading risk flags...</li>
+            </ul>
+            <div class="table-responsive mt-3">
+              <table class="table table-sm align-middle mb-0" aria-label="Top margin leakage products">
+                <thead>
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="text-end">Margin %</th>
+                    <th scope="col" class="text-end">Leakage</th>
+                    <th scope="col" class="text-end">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody id="drMarginRiskTable">
+                  <tr><td colspan="4" class="text-muted">Loading margin leakage...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lost Accounts Follow-Up Panel -->
+  <div class="card mb-3" id="drLostAccountsCard" style="border-left: 4px solid #d39c5f;">
+    <div class="card-header border-0 d-flex justify-content-between align-items-center"
+         style="cursor:pointer;background:#fff;"
+         onclick="document.getElementById('drLostAccountsBody').classList.toggle('show');this.querySelector('.bi-chevron-down').classList.toggle('rotated');"
+         aria-expanded="false">
+      <div>
+        <div class="srpd-table-kicker" style="color:#d39c5f;">Follow-Up Opportunities</div>
+        <div class="fw-semibold">
+          Lost Accounts — Follow-Up Opportunities
+          <span class="badge ms-2" id="drLostAccountsBadge" style="background:#dc3545;">0</span>
+        </div>
+        <div class="text-muted small">Customers who bought in the prior 30 days but placed no orders in the current 30-day window.</div>
+      </div>
+      <i class="bi bi-chevron-down" style="transition:transform 0.2s;font-size:1.2rem;"></i>
+    </div>
+    <div class="collapse" id="drLostAccountsBody">
+      <div class="card-body" id="drLostAccountsContent">
+        <p class="text-muted">Loading lost accounts...</p>
+      </div>
+    </div>
+  </div>
+  <style>
+    .bi-chevron-down.rotated { transform: rotate(180deg); }
+  </style>
+
+  <section id="srpd-customers" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Customer Intelligence</div>
+        <h2>Top customers, ownership context, and churn watch</h2>
+      </div>
+      <div class="srpd-section-summary">Customer detail remains intact, but the table hierarchy, search summary, and ownership chips are upgraded to support faster account review.</div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-xl-8">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex flex-wrap justify-content-between gap-2 align-items-center">
+            <div>
+              <div class="srpd-table-kicker">Top Customers</div>
+              <div class="fw-semibold">Customer portfolio detail</div>
+              <div class="srpd-search-summary" id="drCustomerTableSummary">Showing customer detail.</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Customer view toggle" id="drCustomerViewToggle">
+                <button type="button" class="btn btn-sm active" data-customer-view="all" style="background-color:#965951;border-color:#965951;color:#fff;">All Accounts</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-customer-view="best">Top 10 Best</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-customer-view="risk">Top 10 At-Risk</button>
+              </div>
+              <input id="drCustomerSearch" class="form-control form-control-sm" type="search" placeholder="Search customer" aria-label="Search customers table">
+              <a
+                class="btn btn-outline-secondary btn-sm"
+                data-export-dataset="customers"
+                data-export-format="xlsx"
+                href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='customers', format='xlsx') }}"
+              ><i class="bi bi-download"></i> Download Excel</a>
+            </div>
+          </div>
+          <div class="drilldown-table-wrap">
+            <table class="table table-sm table-striped align-middle mb-0 srpd-table-wide" aria-label="Top customers table">
+              <thead>
+                <tr>
+                  <th scope="col" title="Customer name">Customer</th>
+                  <th scope="col" title="Current active account owner">Account Owner</th>
+                  <th scope="col" title="Most recent historical sales rep">Last Sales Rep</th>
+                  <th scope="col" class="text-end" title="Total revenue">Revenue</th>
+                  <th scope="col" class="text-end" title="Total profit">Profit</th>
+                  <th scope="col" class="text-end" title="Profit as a % of revenue">Margin %</th>
+                  <th scope="col" class="text-end" title="Total orders">Orders</th>
+                  <th scope="col" class="text-end" title="Total weight">Weight (lb)</th>
+                  <th scope="col" class="text-end" title="Average selling price per pound">ASP/LB</th>
+                  <th scope="col" class="text-end" title="Year-over-year revenue percent">YoY %</th>
+                  <th scope="col" class="text-end" title="Inherited history under the current owner">Inherited</th>
+                  <th scope="col" title="Ownership mapping quality">Owner Status</th>
+                  <th scope="col" class="text-end" title="Most recent historical sale date">Last Sale</th>
+                </tr>
+              </thead>
+              <tbody id="drCustomersTable">
+                <tr><td colspan="13" class="text-muted">Loading customer data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-4">
+        <div class="card h-100">
+          <div class="card-header border-0 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="srpd-table-kicker">At-Risk Accounts</div>
+              <div class="fw-semibold">At-risk customers</div>
+              <div class="srpd-search-summary" id="drAtRiskSummary">Loading churn watch...</div>
+            </div>
+            <a
+              class="btn btn-outline-secondary btn-sm"
+              data-export-dataset="at_risk"
+              data-export-format="xlsx"
+              href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='at_risk', format='xlsx') }}"
+            ><i class="bi bi-download"></i></a>
+          </div>
+          <div class="drilldown-table-wrap">
+            <table class="table table-sm table-striped align-middle mb-0" aria-label="At-risk customers">
+              <thead>
+                <tr>
+                  <th scope="col">Customer</th>
+                  <th scope="col" class="text-end">Days Since</th>
+                  <th scope="col" class="text-end">Prior Revenue</th>
+                </tr>
+              </thead>
+              <tbody id="drAtRiskTable">
+                <tr><td colspan="3" class="text-muted">Loading at-risk accounts...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="srpd-products" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Product Intelligence</div>
+        <h2>Top products, pricing posture, and target exposure</h2>
+      </div>
+      <div class="srpd-section-summary">Product detail stays tied to the rep context, but margin status, target gaps, and pricing cues are now easier to scan across the table.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header border-0 d-flex flex-wrap justify-content-between gap-2 align-items-center">
+        <div>
+          <div class="srpd-table-kicker">Top Products</div>
+          <div class="fw-semibold">Product portfolio detail</div>
+          <div class="srpd-search-summary" id="drProductTableSummary">Showing product detail.</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <input id="drProductSearch" class="form-control form-control-sm" type="search" placeholder="Search product" aria-label="Search products table">
+          <a
+            class="btn btn-outline-secondary btn-sm"
+            data-export-dataset="products"
+            data-export-format="xlsx"
+            href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='products', format='xlsx') }}"
+          ><i class="bi bi-download"></i> Download Excel</a>
+        </div>
+      </div>
+      <div class="drilldown-table-wrap">
+        <table class="table table-sm table-striped align-middle mb-0 srpd-table-wide" aria-label="Top products table">
+          <thead>
+            <tr>
+              <th scope="col" title="Product name">Product</th>
+              <th scope="col" title="Protein or category family">Protein</th>
+              <th scope="col" class="text-end" title="Total revenue">Revenue</th>
+              <th scope="col" class="text-end" title="Total profit">Profit</th>
+              <th scope="col" class="text-end" title="Profit as a % of revenue">Margin %</th>
+              <th scope="col" class="text-end" title="Target gross margin for the protein family">Target Margin %</th>
+              <th scope="col" class="text-end" title="Total orders">Orders</th>
+              <th scope="col" class="text-end" title="Total weight">Weight (lb)</th>
+              <th scope="col" class="text-end" title="Average selling price per pound">ASP/LB</th>
+              <th scope="col" class="text-end" title="Target price per pound">Target Price/LB</th>
+              <th scope="col" class="text-end" title="Current ASP/LB gap to target">Gap to Target</th>
+              <th scope="col" class="text-end" title="Year-over-year revenue percent">YoY %</th>
+              <th scope="col" class="text-end" title="Price change proxy">Price Δ%</th>
+              <th scope="col" title="Target status">Status</th>
+              <th scope="col" class="text-end" title="Most recent order date">Last Order</th>
+            </tr>
+          </thead>
+          <tbody id="drProductsTable">
+            <tr><td colspan="15" class="text-muted">Loading product data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="srpd-actions" class="srpd-section">
+    <div class="srpd-section-head">
+      <div>
+        <div class="srpd-section-kicker">Action Summary</div>
+        <h2>Where leadership should act next</h2>
+      </div>
+      <div class="srpd-section-summary">A focused intelligence layer translates the visible portfolio into a concise commercial brief, preserving current detail while making the page feel more decision-ready.</div>
+    </div>
+
+    <div class="srpd-story-grid">
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Leadership Brief</div>
+        <div class="srpd-story-title" id="drActionHeadline">Loading commercial brief...</div>
+        <div class="srpd-story-note" id="drActionSupport">Summarizing the strongest signal in the current book.</div>
+      </article>
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Recommended Focus</div>
+        <ul class="srpd-focus-list" id="drActionList">
+          <li>Loading action priorities...</li>
+        </ul>
+      </article>
+      <article class="srpd-story-card">
+        <div class="srpd-panel-label">Context & Export Integrity</div>
+        <div class="srpd-story-title">Filter-aligned detail view</div>
+        <div class="srpd-story-note" id="drActionExportContext">This page preserves active filters, attribution mode, exports, and downstream customer/product detail links.</div>
+        <ul class="srpd-story-list mt-3" id="drActionContextList">
+          <li><strong>Filters</strong><span>Loading...</span></li>
+          <li><strong>Ownership view</strong><span>Loading...</span></li>
+          <li><strong>Risk posture</strong><span>Loading...</span></li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</div>
+{% else %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <p class="text-uppercase text-muted small mb-1">Sales Rep Drilldown</p>
+    <h2 class="fw-bold mb-0" id="salesrepName">Loading owner portfolio...</h2>
+    <div class="text-muted small" id="salesrepId">Current owner portfolio context</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a
+      class="btn btn-outline-primary btn-sm"
+      id="salesrepExportXlsx"
+      data-export-dataset="all"
+      data-export-format="xlsx"
+      href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='all', format='xlsx') }}"
+    ><i class="bi bi-download"></i> Export XLSX</a>
+    <a
+      class="btn btn-outline-secondary btn-sm"
+      id="salesrepExportAllXlsx"
+      data-export-dataset="all"
+      data-export-format="xlsx"
+      data-include-history="1"
+      href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='all', format='xlsx', include_history='1') }}"
+    ><i class="bi bi-download"></i> Export All History</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  {% set cards = [
+    ('revenue', 'Revenue', 'currency'),
+    ('orders', 'Orders', 'int'),
+    ('customers', 'Customers', 'int'),
+    ('weight_lb', 'Weight (lb)', 'int'),
+    ('units', 'Units', 'int'),
+    ('profit', 'Profit', 'currency'),
+    ('margin_pct', 'Margin %', 'percent'),
+    ('asp_lb', 'ASP / lb', 'currency'),
+    ('asp', 'ASP', 'currency'),
+    ('momentum_pct', 'Momentum', 'percent'),
+    ('top_customer_share', 'Top Customer %', 'share')
+  ] %}
+  {% for key, label, kind in cards %}
+  <div class="col-6 col-md-3 col-lg-2">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase">{{ label }}</div>
+        <div class="fs-4 fw-semibold" data-kpi-key="{{ key }}">N/A</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-4" id="SalesRepDrilldown" data-rep-id="{{ rep_id }}" data-empty="true">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+        <span>Revenue and Profit Trend (Monthly)</span>
+        <a class="btn btn-outline-secondary btn-sm" data-export-dataset="trend" data-export-format="xlsx" href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='trend', format='xlsx') }}"><i class="bi bi-download"></i> Download Excel</a>
+      </div>
+      <div class="card-body"><div class="ratio ratio-16x9"><canvas id="drTrend"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+        <span>Product Mix</span>
+        <a class="btn btn-outline-secondary btn-sm" data-export-dataset="mix" data-export-format="xlsx" href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='mix', format='xlsx') }}"><i class="bi bi-download"></i> Download Excel</a>
+      </div>
+      <div class="card-body"><div class="ratio ratio-1x1"><canvas id="drMix"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+        <span>Top Customers (Revenue)</span>
+        <a class="btn btn-outline-secondary btn-sm" data-export-dataset="customers" data-export-format="xlsx" href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='customers', format='xlsx') }}"><i class="bi bi-download"></i> Download Excel</a>
+      </div>
+      <div class="card-body"><div class="ratio ratio-16x9"><canvas id="drCustomers"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+        <span>Top Customers</span>
+        <a class="btn btn-outline-secondary btn-sm" data-export-dataset="customers" data-export-format="xlsx" href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='customers', format='xlsx') }}"><i class="bi bi-download"></i> Download Excel</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light"><tr><th>Customer</th><th class="text-end">Revenue</th><th class="text-end">Orders</th></tr></thead>
+          <tbody id="drCustomersTable">
+            <tr><td colspan="3" class="text-muted">Loading customer data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center">
+        <span>Top Products</span>
+        <a class="btn btn-outline-secondary btn-sm" data-export-dataset="products" data-export-format="xlsx" href="{{ url_for('salesreps.rep_export_data', rep_id=rep_id, dataset='products', format='xlsx') }}"><i class="bi bi-download"></i> Download Excel</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Product</th>
+              <th>Family</th>
+              <th class="text-end">Revenue</th>
+              <th class="text-end">Profit</th>
+              <th class="text-end">Margin %</th>
+              <th class="text-end">Target Margin %</th>
+              <th class="text-end">Orders</th>
+              <th class="text-end">Weight</th>
+              <th class="text-end">ASP/lb</th>
+              <th class="text-end">Target Price/lb</th>
+              <th class="text-end">Gap to Target</th>
+              <th class="text-end">YoY Revenue %</th>
+              <th class="text-end">Price Change %</th>
+              <th>Status</th>
+              <th class="text-end">Last order</th>
+            </tr>
+          </thead>
+          <tbody id="drProductsTable">
+            <tr><td colspan="15" class="text-muted">Loading product data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/salesrep_drilldown.js', v=salesrep_drilldown_rev) }}" defer></script>
+{% endblock %}

@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+<div id="SupplierDrilldownMeta"
+     class="d-none"
+     data-page="supplier_drilldown"
+     data-entity-id="{{ supplier_id|default(supplier.SupplierId) }}"
+     data-bundle-url="{{ url_for('suppliers.api_drilldown_bundle') }}"
+     data-show-costs="{{ show_costs|tojson }}"></div>
+
+<div class="container-fluid py-4 bg-light">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-3">
+    <div class="col">
+      <h2 class="mb-0">
+        Supplier: {{ supplier_name or 'Unknown' }}
+        <span class="text-muted">(ID: {{ supplier_id or '—' }})</span>
+      </h2>
+      <div class="text-muted small">Details reflect your current filters.</div>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('suppliers.index') }}"><i class="bi bi-arrow-left"></i> Back</a>
+      <a id="supplierProductsExportBtn"
+         class="btn btn-sm btn-outline-primary"
+         href="{{ url_for('bundles.suppliers_products_export_csv', supplier_id=supplier_id) }}">
+        <i class="bi bi-file-earmark-spreadsheet"></i> Export Products
+      </a>
+    </div>
+  </div>
+
+  {% if error_message %}
+  <div class="alert alert-warning border-warning shadow-sm" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+  </div>
+  {% endif %}
+
+  <!-- KPI strip -->
+  <div class="row g-3 mb-3" aria-live="polite">
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-cash-coin me-1"></i>Total Revenue</div>
+          <div class="fs-4 fw-bold" id="kpiTotalRevenue">—</div>
+          <div class="text-muted small" id="kpiMonthsActive">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-graph-up me-1"></i>Avg Monthly</div>
+          <div class="fs-4 fw-bold" id="kpiAvgMonthly">—</div>
+          <div class="text-muted small">3-mo MA shown</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-calendar3 me-1"></i>Last Month</div>
+          <div class="fs-4 fw-bold" id="kpiLastMonth">—</div>
+          <div class="text-muted small" id="kpiMoM">MoM: —</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-box-seam me-1"></i>Product Concentration</div>
+          <div class="fs-5 fw-bold" id="kpiTopProdShare">—</div>
+          <div class="text-muted small" id="kpiProdHHI">HHI: —</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-people me-1"></i>Customer Concentration</div>
+          <div class="fs-5 fw-bold" id="kpiTopCustShare">—</div>
+          <div class="text-muted small" id="kpiCustHHI">HHI: —</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="card text-center shadow-sm h-100 kpi-card">
+        <div class="card-body">
+          <div class="text-muted small"><i class="bi bi-tag me-1"></i>Pricing / Margin</div>
+          <div class="small">
+            <div>Unit p50: <span class="fw-semibold" id="kpiUP50">—</span></div>
+            {% if show_costs %}
+            <div>Margin p50: <span class="fw-semibold" id="kpiM50">—</span></div>
+            {% else %}
+            <div class="text-muted">Margin hidden</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trend + Top Products -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-7">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Monthly Revenue</h5>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" type="button" onclick="exportPlotly('supTrend','supplier_{{ supplier_id }}_trend')">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="supTrend" class="chart-container skeleton" aria-label="Monthly revenue trend">
+            <div class="loading shimmer"></div>
+          </div>
+          {% if not months or months|length == 0 %}
+            <p class="text-muted small mt-2 mb-0">No monthly revenue available in the current window.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Top Products by Revenue</h5>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" type="button" onclick="exportBarsCSV('prodBar','supplier_{{ supplier_id }}_top_products')">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="prodBar" class="chart-container skeleton" aria-label="Top products">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2">Horizontal bars improve readability of long product names.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Metrics -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Avg Sale Price by Product</h5>
+          <div class="text-muted small">Top {{ product_metrics|length or 0 }} products</div>
+        </div>
+        <div class="card-body">
+          <div id="prodAvgPrice" class="chart-container skeleton" aria-label="Average sale price by product">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          {% if show_costs %}
+          <h5 class="card-title mb-0">Margin % by Product</h5>
+          {% else %}
+          <h5 class="card-title mb-0">Units by Product</h5>
+          {% endif %}
+          <div class="text-muted small">Same sample as chart left</div>
+        </div>
+        <div class="card-body">
+          <div id="prodMetricSecondary" class="chart-container skeleton" aria-label="{% if show_costs %}Margin percent by product{% else %}Units by product{% endif %}">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price Distribution + Top Customers -->
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Unit Price Distribution</h5>
+          <div class="text-muted small">p10 / p50 / p90</div>
+        </div>
+        <div class="card-body">
+          <div id="upHist" class="chart-container skeleton" aria-label="Unit price distribution">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2">Use to spot outliers, price tiers, and mix shifts.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Top Customers</h5>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" type="button" onclick="exportBarsCSV('custBar','supplier_{{ supplier_id }}_top_customers')">CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="custBar" class="chart-container skeleton" aria-label="Top customers">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ======= Scripts ======= -->
+<script src="{{ url_for('static', filename='js/suppliers_drilldown.js') }}" defer></script>
+
+<style>
+  :root{ --soft-shadow: 0 8px 20px rgba(0,0,0,.08); }
+  .kpi-card .fs-4{ font-size: clamp(1.25rem, 2vw, 1.5rem)!important; }
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform .15s ease-in-out, box-shadow .15s ease-in-out; }
+    .card:hover { transform: translateY(-2px); box-shadow: var(--soft-shadow); }
+  }
+  .chart-container { width: 100%; min-height: 380px; position: relative; }
+  /* Skeleton loader */
+  .skeleton { background: #f6f7f8; position: relative; overflow: hidden; border-radius: .25rem; }
+  .skeleton .loading.shimmer {
+    position:absolute; inset:0;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+    transform: translateX(-100%);
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+</style>
+
+{% endblock %}
+

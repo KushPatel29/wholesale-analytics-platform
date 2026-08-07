@@ -1,0 +1,1129 @@
+{# templates/products/index.html #}
+{% extends 'base.html' %}
+{% import 'products/_components.html' as products_ui %}
+{% set filters_handler = 'ajax' %}
+{% block content %}
+
+{# ───────────────── Global Filters (server-rendered) ───────────────── #}
+
+<a class="visually-hidden-focusable" href="#products-main">Skip to Product Intelligence</a>
+
+{% if products_warning %}
+  <div class="alert alert-warning mx-3 mt-3" role="alert">{{ products_warning }}</div>
+{% endif %}
+
+<div id="productsError" class="alert alert-danger d-none mx-3 mt-3" role="alert"></div>
+
+<div id="products-main"
+     class="container-fluid py-4 bg-light products-v2 products-v3"
+     data-page="products"
+     data-products-v2="1"
+     data-products-v3="1"
+     data-overview-url="{{ url_for('products.api_overview') }}"
+     data-trend-delta-url="{{ url_for('products.api_trend_delta') }}"
+     data-price-url="{{ url_for('products.api_price_distribution') }}"
+     data-bundle-url="{{ url_for('bundles.products_bundle') }}"
+     data-table-url="{{ url_for('products.api_table') }}"
+     data-segments-url="{{ url_for('products.api_segments') }}"
+     data-recommendations-url="{{ url_for('products.api_recommendations') }}"
+     data-bubble-url="{{ bubble_url }}"
+     data-export-xlsx="{{ url_for('products.export_overview_xlsx') }}"
+     data-export-csv="{{ url_for('products.export_overview_table_csv') }}"
+     data-export-movers-csv="{{ url_for('products.export_movers_csv') }}"
+     data-drilldown-template="{{ url_for('products.drilldown', product_id='__PID__') }}"
+     data-currency="{{ currency_code or 'CAD' }}">
+
+  <!-- Hero -->
+  <div class="card products-hero shadow-soft mb-3 text-white border-0 overflow-hidden">
+    <div class="card-body d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-3 gap-lg-5">
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+          <div class="hero-badge"><i class="bi bi-box-seam"></i></div>
+          <h2 class="fw-bold mb-0">Product Performance & Pricing</h2>
+          <span id="costModeBadge" class="badge text-bg-warning text-dark d-none">Sales-only mode</span>
+        </div>
+        <p class="mb-3 text-white-50">
+          Enterprise scorecard, mover diagnostics, and pricing risk controls under current filters and RBAC scope.
+        </p>
+
+        <div class="d-flex flex-wrap gap-3 text-white-50 small">
+          <span class="d-inline-flex align-items-center gap-1">
+            <i class="bi bi-calendar3"></i>
+            <span id="heroDateRange">Live filters</span>
+          </span>
+          <span class="d-inline-flex align-items-center gap-1">
+            <i class="bi bi-layers"></i>
+            Products <strong id="kpiUniqueHero">—</strong>
+          </span>
+          <span class="d-inline-flex align-items-center gap-1">
+            <i class="bi bi-people"></i>
+            Customers <strong id="kpiCustomersHero">—</strong>
+          </span>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2">
+        <a id="productsHeroExportExcel" class="btn btn-light btn-sm" href="{{ url_for('products.export_overview_xlsx') }}{{ querystring|default('') }}">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Excel
+        </a>
+        <a id="productsHeroExportCsv" class="btn btn-outline-light btn-sm" href="{{ url_for('products.export_overview_table_csv') }}{{ querystring|default('') }}">
+          <i class="bi bi-filetype-csv me-1"></i>Export CSV
+        </a>
+        <a class="btn btn-outline-light btn-sm" href="#products-table">
+          <i class="bi bi-table me-1"></i>Go to table
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-gloss"></div>
+  </div>
+
+  <!-- Sticky section nav -->
+  <div class="sticky-top products-subnav mb-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <ul class="nav nav-pills nav-pills-sm gap-1 mb-0">
+          <li class="nav-item"><a class="nav-link active" href="#products-overview">Overview</a></li>
+          <li class="nav-item"><a class="nav-link" href="#products-trajectory">Trajectory</a></li>
+          <li class="nav-item"><a class="nav-link" href="#products-pricing">Pricing</a></li>
+          <li class="nav-item"><a class="nav-link" href="#products-segments">Segments</a></li>
+          <li class="nav-item"><a class="nav-link" href="#products-table">Table</a></li>
+        </ul>
+
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <span class="text-muted small">Forecast and partial-month toggles removed (not in use).</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <section id="products-velocity-pulse" class="mb-3">
+    <div class="card shadow-sm border-0">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-2">
+          <div>
+            <h5 class="mb-0">Velocity pulse</h5>
+            <p class="text-muted small mb-0">Weekly movement and revenue signals (follows current filters)</p>
+          </div>
+        </div>
+        <div class="row g-3">
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Average weekly velocity">
+              <div class="label text-muted small">Avg weekly</div>
+              <div class="value fw-bold" id="velAvgWeekly">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Last 13 weeks velocity">
+              <div class="label text-muted small">W13 trend</div>
+              <div class="value fw-bold" id="velW13">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Weekly revenue">
+              <div class="label text-muted small">Weekly revenue</div>
+              <div class="value fw-bold" id="velWeeklyRevenue">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Revenue per product">
+              <div class="label text-muted small">Rev / product</div>
+              <div class="value fw-bold" id="velRevPerProduct">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Active products">
+              <div class="label text-muted small">Active SKUs</div>
+              <div class="value fw-bold" id="velActive">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="ROI">
+              <div class="label text-muted small">ROI</div>
+              <div class="value fw-bold" id="velRoi">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Retail velocity">
+              <div class="label text-muted small">Retail velocity</div>
+              <div class="value fw-bold" id="velRetail">—</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3 col-xl-2">
+            <div class="metric-tile" aria-label="Top mover">
+              <div class="label text-muted small">Top mover</div>
+              <div class="value fw-bold" id="velTopMover">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="products-overview" class="mb-3">
+    <!-- Quick insights -->
+    <div class="row g-3 mb-3" aria-live="polite">
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="insight-card shadow-sm h-100">
+          <div class="insight-label text-uppercase small">Revenue momentum</div>
+          <div class="insight-value" id="insightMomentum">—</div>
+          <div class="insight-detail" id="insightMomentumDelta">&nbsp;</div>
+          <div class="insight-note" id="insightMomentumNote"></div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="insight-card shadow-sm h-100">
+          <div class="insight-label text-uppercase small">Top product</div>
+          <div class="insight-value" id="insightTopProduct">—</div>
+          <div class="insight-note" id="insightTopProductShare"></div>
+          <div class="insight-note text-muted">Tip: click <strong>Intel</strong> in the table for SKU-specific actions.</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="insight-card shadow-sm h-100 momentum-card">
+          <div class="insight-label text-uppercase small">MoM delta (trend)</div>
+          <div class="insight-value" id="momDelta">—</div>
+          <div class="insight-note" id="momNote"></div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="insight-card shadow-sm h-100 predictive-card">
+          <div class="insight-label text-uppercase small">Projected next month</div>
+          <div class="insight-value" id="predictiveRev">—</div>
+          <div class="insight-note" id="predictiveRevNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="row g-3 mb-3" aria-live="polite">
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Total revenue</div>
+          <div class="metric-value" id="kpiRevenue">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label" id="kpiQtyLabel">Total quantity</div>
+          <div class="metric-value" id="kpiQty">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Total weight</div>
+          <div class="metric-value" id="kpiWeight">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Active products</div>
+          <div class="metric-value" id="kpiUnique">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Active customers</div>
+          <div class="metric-value" id="kpiCustomers">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100" data-requires-cost="1">
+          <div class="metric-label">Avg margin %</div>
+          <div class="metric-value" id="kpiMargin">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4" aria-live="polite">
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Avg unit price</div>
+          <div class="metric-value" id="kpiAvgPrice">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Median unit price</div>
+          <div class="metric-value" id="kpiMedianPrice">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Revenue / product</div>
+          <div class="metric-value" id="kpiRevPerProduct">—</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 col-xxl-2">
+        <div class="metric-card shadow-sm h-100">
+          <div class="metric-label">Revenue / customer</div>
+          <div class="metric-value" id="kpiRevPerCustomer">—</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6 col-xxl-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">AI signals (sales-only safe)</h6>
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
+              Auto
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-6">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Margin risk</div>
+                  <div class="mini-kpi-value" id="aiMarginRisk">—</div>
+                  <div class="mini-kpi-note" id="aiMarginRiskNote"></div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Pricing action</div>
+                  <div class="mini-kpi-value" id="aiPricing">—</div>
+                  <div class="mini-kpi-note" id="aiPricingNote"></div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="small text-muted">
+              These signals are computed using the current filters and available fields. If cost/margin is missing, pricing guidance uses conservative heuristics.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if product_intelligence_v2 %}
+  <section id="products-health" class="mb-4">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+            {{ products_ui.section_heading(
+              'Product health matrix',
+              'Velocity vs margin using current filters. Counts and revenue share stay scoped to the active user and filters.',
+              'Each SKU is classified by median velocity and median margin. Use it to separate profitable winners, low-margin volume, hidden upsides, and long-tail drag.'
+            ) }}
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">V2</span>
+          </div>
+          <div class="card-body">
+            <div id="healthMatrixPanel" class="products-health-grid text-muted small">Loading product health…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Trajectory -->
+  <section id="products-trajectory" class="mb-4">
+    <div class="row g-3">
+      <div class="col-xl-8">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Performance trajectory</h5>
+              <div class="text-muted small">Revenue bars + (optional) forecast overlay.</div>
+            </div>
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">12M</span>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="trendChart"></div>
+            <canvas id="trendChart" class="chart-canvas" height="220" aria-label="Revenue trend" role="img"></canvas>
+            <div class="text-muted small mt-2">
+              Revenue bars on left axis; quantity (if available) on right; dashed line shows forecast.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4 d-flex flex-column gap-3">
+        <div class="card shadow-sm flex-grow-1">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Price vs velocity</h5>
+              <div class="text-muted small">Bubble size = revenue share.</div>
+            </div>
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">Top SKUs</span>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="priceVelocityChart"></div>
+            <div id="priceVelocityChart" class="chart-container" style="height:200px;" aria-label="Price vs velocity map"></div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Recommendations</h6>
+            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">Live</span>
+          </div>
+          <div class="card-body">
+            <div id="recPanel" class="small text-muted">Loading recommendations…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="products-pricing" class="mb-4">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Performance bubble (target price uplift)</h5>
+              <div class="text-muted small">
+                Target margin band: <strong id="priceTargetMargin">—</strong> &middot; Minimum band: <strong id="priceBaseMargin">—</strong>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <div class="d-flex align-items-center gap-2">
+                  <label class="form-label small mb-0 text-muted" for="bubbleTopN">Top N</label>
+                  <select id="bubbleTopN" class="form-select form-select-sm" style="width:auto;">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="250" selected>250</option>
+                    <option value="500">500</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                <label class="form-label small mb-0 text-muted" for="bubbleYMetric">Y-axis</label>
+                <select id="bubbleYMetric" class="form-select form-select-sm" style="width:auto;">
+                  <option value="velocity" selected>Velocity / month</option>
+                  <option value="revenue">Revenue</option>
+                </select>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                  <label class="form-label small mb-0 text-muted" for="bubbleColorBy">Color</label>
+                  <select id="bubbleColorBy" class="form-select form-select-sm" style="width:auto;">
+                    <option value="uplift_pct" selected>Uplift %</option>
+                    <option value="margin_pct">Margin %</option>
+                    <option value="segment">Segment</option>
+                  </select>
+                </div>
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" id="bubbleIncludeMissing" aria-label="Include items with missing cost">
+                  <label class="form-check-label small text-muted" for="bubbleIncludeMissing">Include missing cost</label>
+                </div>
+                <button id="bubbleResetZoom" class="btn btn-outline-secondary btn-sm" type="button">Reset zoom</button>
+              </div>
+            </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="priceBubbleChart"></div>
+            <div id="priceBubbleChart" class="chart-container" style="height:320px;" aria-label="Performance bubble chart"></div>
+            <div id="priceBubbleMeta" class="text-muted small mt-2">
+              Bubble size = revenue share. Click a bubble to open product drilldown with current filters.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title mb-0">Unit price distribution</h5>
+              <div class="text-muted small">P10 · P50 (median) · P90 guardrails</div>
+            </div>
+            <a id="priceExportCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('products.export_overview_table_csv') }}{{ querystring|default('') }}">
+              <i class="bi bi-download me-1"></i>Export CSV
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="priceDistChart"></div>
+            <canvas id="priceDistChart" class="chart-canvas" height="160" aria-label="Unit price distribution" role="img"></canvas>
+            <div class="d-flex justify-content-around small mt-2">
+              <div>P10: <span id="upP10">&mdash;</span></div>
+              <div>P50: <span id="upP50">&mdash;</span></div>
+              <div>P90: <span id="upP90">&mdash;</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Top movers</h5>
+            <a id="topMoversCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('products.export_movers_csv') }}{{ querystring|default('') }}">
+              <i class="bi bi-download me-1"></i>Export Movers
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="moversChart"></div>
+            <canvas id="moversChart" class="chart-canvas" height="160" aria-label="Top movers" role="img"></canvas>
+            <div class="text-muted small mt-2">Δ Revenue (recent window vs prior window).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="products-risk-opportunity" class="mb-4">
+    <div class="row g-3">
+      <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent">
+            <h5 class="card-title mb-0">Portfolio concentration</h5>
+            <div class="text-muted small">SKU dependency under current filters.</div>
+          </div>
+          <div class="card-body">
+            <div class="d-flex justify-content-between py-1"><span>Top 1 share</span><strong id="concTop1Share">—</strong></div>
+            <div class="d-flex justify-content-between py-1"><span>Top 10 share</span><strong id="concTop10Share">—</strong></div>
+            <div class="d-flex justify-content-between py-1"><span>HHI (SKU)</span><strong id="concHhi">—</strong></div>
+            <div class="d-flex justify-content-between py-1"><span>SKUs for 80% revenue</span><strong id="concPareto80">—</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title mb-0">Margin risk and uplift</h5>
+              <div class="text-muted small">Focus on high-revenue SKUs below target gross margin.</div>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('products.export_movers_csv') }}{{ querystring|default('') }}">
+              <i class="bi bi-download me-1"></i>Export Priority List
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="row g-3 mb-3">
+              <div class="col-sm-3">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Below target SKUs</div>
+                  <div class="mini-kpi-value" id="riskBelowTargetCount">—</div>
+                </div>
+              </div>
+              <div class="col-sm-3">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Below target revenue</div>
+                  <div class="mini-kpi-value" id="riskBelowTargetRevenue">—</div>
+                </div>
+              </div>
+              <div class="col-sm-3">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Negative margin SKUs</div>
+                  <div class="mini-kpi-value" id="riskNegativeCount">—</div>
+                </div>
+              </div>
+              <div class="col-sm-3">
+                <div class="mini-kpi">
+                  <div class="mini-kpi-label">Profit uplift to target</div>
+                  <div class="mini-kpi-value" id="riskProfitUplift">—</div>
+                </div>
+              </div>
+            </div>
+            <div id="marginRiskList" class="small text-muted">Loading margin risk list…</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-transparent">
+            <h5 class="card-title mb-0">Velocity and pricing opportunities</h5>
+            <div class="text-muted small">High velocity + low margin and high margin + low velocity candidates.</div>
+          </div>
+          <div class="card-body">
+            <div id="velocityOpportunityList" class="small text-muted">Loading opportunities…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Segments -->
+  <section id="products-segments" class="mb-4">
+    <div class="row g-3">
+      <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Segment summary</h5>
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">Mix</span>
+          </div>
+          <div class="card-body">
+            <div id="segmentSummaryList" class="small text-muted">Loading segments…</div>
+            <hr class="my-3">
+            <label class="form-label small text-muted mb-1" for="segmentFilter">Filter table by segment</label>
+            <select id="segmentFilter" class="form-select form-select-sm" multiple size="6" aria-label="Segment filter">
+              <option disabled>(loading)</option>
+            </select>
+            <div class="form-text">Multi-select supported.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Segment movers</h5>
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">Top 10</span>
+          </div>
+          <div class="card-body">
+            <div id="segmentMoversList" class="small text-muted">Loading movers…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">How to use</h5>
+            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">Tips</span>
+          </div>
+          <div class="card-body">
+            <ol class="small mb-0">
+              <li>Use global filters (date / customer / region) to focus the view.</li>
+              <li>Use <strong>Segment filter</strong> to narrow the table quickly.</li>
+              <li>Click <strong>Intel</strong> on a SKU to load product-specific recommendations.</li>
+              <li>Export Excel/CSV for stakeholder-ready snapshots.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Top lists + Pareto -->
+  <section class="mb-4">
+    <div class="row g-3">
+      <div class="col-xl-6">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h5 class="card-title mb-0">Top products</h5>
+              <select id="topMetric" class="form-select form-select-sm" style="width:auto;">
+                <option value="revenue" selected>by Revenue</option>
+                <option value="qty">by Quantity</option>
+                <option value="margin">by Margin %</option>
+                <option value="avg_price">by Avg Price</option>
+              </select>
+              <select id="topN" class="form-select form-select-sm" style="width:auto;">
+                <option>15</option><option>25</option><option>50</option><option>100</option>
+              </select>
+            </div>
+            <a id="topProductsExportCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('products.export_overview_table_csv') }}{{ querystring|default('') }}">
+              <i class="bi bi-download me-1"></i>Export CSV
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="topChart"></div>
+            <canvas id="topChart" class="chart-canvas" height="160" aria-label="Top products chart" role="img"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-6">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Pareto (80/20)</h5>
+            <a id="paretoExportCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('products.export_overview_table_csv') }}{{ querystring|default('') }}">
+              <i class="bi bi-download me-1"></i>Export CSV
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="skeleton" data-for="paretoChart"></div>
+            <canvas id="paretoChart" class="chart-canvas" height="160" aria-label="Pareto chart" role="img"></canvas>
+            <div class="text-muted small mt-2">Bars = revenue · Line = cumulative share.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Products table -->
+  <section id="products-table" class="mb-2">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Products — paginated</h5>
+              <div class="text-muted small">
+                Click column headers to sort. Use <strong>Intel</strong> for SKU recommendations.
+                <span class="ms-1">Server exports include every row matching current filters, segments, and quick filters.</span>
+              </div>
+            </div>
+            <div class="btn-group btn-group-sm">
+              <a id="productsTableExportExcel" class="btn btn-primary" href="{{ url_for('products.export_overview_xlsx') }}">Excel</a>
+              <a id="productsTableExportCsv" class="btn btn-outline-secondary" href="{{ url_for('products.export_overview_table_csv') }}">CSV</a>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="row g-2 mb-2 align-items-center">
+              <div class="col-sm-4">
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="search" class="form-control" id="tableSearch" placeholder="Search products…" aria-label="Search products">
+                </div>
+              </div>
+
+              <div class="col-sm-8 text-sm-end">
+                <div class="d-flex justify-content-sm-end align-items-center gap-2 flex-wrap">
+                  <label class="text-muted small mb-0 d-flex align-items-center gap-1">
+                    <span>Page size</span>
+                    <select class="form-select form-select-sm" id="tablePageSize" aria-label="Rows per page">
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </label>
+
+                  <div class="btn-group btn-group-sm" role="group" aria-label="Table pagination">
+                    <button class="btn btn-outline-secondary" id="tablePrev" type="button">Prev</button>
+                    <button class="btn btn-outline-secondary" id="tableNext" type="button">Next</button>
+                  </div>
+
+                  <span id="tableStatus" class="text-muted small" aria-live="polite">Loading…</span>
+                </div>
+              </div>
+            </div>
+
+            {% if product_intelligence_v2 %}
+            <div class="row g-2 mb-3 align-items-start">
+              <div class="col-lg-8">
+                <div id="tableQuickFilters" class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="below_target_margin">Below target gross margin</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="negative_margin">Negative margin</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="high_velocity">High velocity</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="top_revenue_20">Top 20% revenue</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="high_revenue_share">High revenue share</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="high_price_outlier">High price outlier</button>
+                  <button class="btn btn-sm btn-outline-secondary table-chip" type="button" data-quick-filter="missing_cost">Missing cost</button>
+                </div>
+                <div class="small text-muted mt-2">
+                  Column groups: Sales, Prior window deltas, Pricing, Cost / Margin, and Risk / Signals. Quick filters stay aligned with global filters and server-side sorting.
+                </div>
+              </div>
+              <div class="col-lg-4">
+                <details id="productsColumnChooserWrap" class="products-column-chooser">
+                  <summary>Visible columns</summary>
+                  <div id="productsColumnChooser" class="mt-2"></div>
+                </details>
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="table-responsive">
+              <table id="productTable" class="table table-striped table-hover align-middle {% if product_intelligence_v2 %}products-table-v2{% endif %}">
+                {% if product_intelligence_v2 %}
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th class="sticky-col sticky-col-1 sortable" data-key="sku" data-column="sku" scope="col">SKU</th>
+                    <th class="sticky-col sticky-col-2 sortable" data-key="product_id" data-column="product" scope="col">Product</th>
+                    <th data-column="segment" scope="col">Segment</th>
+                    <th class="text-end sortable" data-key="revenue" data-column="revenue" scope="col">Revenue</th>
+                    <th class="text-end sortable" data-key="revenue_current" data-column="revenue_current" scope="col">Revenue (28d)</th>
+                    <th class="text-end sortable" data-key="revenue_prior" data-column="revenue_prior" scope="col">Revenue (Prior 28d)</th>
+                    <th class="text-end sortable" data-key="revenue_delta" data-column="revenue_delta" scope="col">Δ Revenue $</th>
+                    <th class="text-end sortable" data-key="revenue_delta_pct" data-column="revenue_delta_pct" scope="col">Δ Revenue %</th>
+                    <th class="text-end sortable" data-key="revenue_share" data-column="revenue_share" scope="col">Rev Share</th>
+                    <th class="text-end sortable" data-key="orders" data-column="orders" scope="col">Orders</th>
+                    <th class="text-end sortable" data-key="orders_current" data-column="orders_current" scope="col">Orders (28d)</th>
+                    <th class="text-end sortable" data-key="orders_prior" data-column="orders_prior" scope="col">Orders (Prior)</th>
+                    <th class="text-end sortable" data-key="qty" data-column="qty" scope="col" id="thQty">Quantity</th>
+                    <th class="text-end sortable" data-key="weight" data-column="weight" scope="col">Weight</th>
+                    <th class="text-end sortable" data-key="current_unit_price" data-column="current_unit_price" scope="col">Current Price</th>
+                    <th class="text-end sortable" data-key="target_price" data-column="target_price" scope="col" id="thTarget">Target Price</th>
+                    <th class="text-end sortable" data-key="uplift_pct" data-column="uplift_pct" scope="col">Uplift %</th>
+                    <th class="text-end sortable requires-cost" data-key="cost" data-column="cost" scope="col">Cost</th>
+                    <th class="text-end sortable requires-cost" data-key="profit" data-column="profit" scope="col">Profit</th>
+                    <th class="text-end sortable requires-cost" data-key="profit_current" data-column="profit_current" scope="col">Profit (28d)</th>
+                    <th class="text-end sortable requires-cost" data-key="profit_prior" data-column="profit_prior" scope="col">Profit (Prior)</th>
+                    <th class="text-end sortable requires-cost" data-key="profit_delta" data-column="profit_delta" scope="col">Δ Profit $</th>
+                    <th class="text-end sortable requires-cost" data-key="profit_share" data-column="profit_share" scope="col">Profit Share</th>
+                    <th class="text-end sortable requires-cost" data-key="contribution_margin_lb" data-column="contribution_margin_lb" scope="col">CM / lb</th>
+                    <th class="text-end sortable requires-cost" data-key="margin_pct" data-column="margin_pct" scope="col" id="thMarginPct">Margin %</th>
+                    <th class="text-end sortable requires-cost" data-key="margin_pct_prior" data-column="margin_pct_prior" scope="col">Margin % Prior</th>
+                    <th class="text-end sortable requires-cost" data-key="margin_delta_pp" data-column="margin_delta_pp" scope="col">Δ Margin (pp)</th>
+                    <th class="text-end sortable" data-key="price_variance_vs_median" data-column="price_variance_vs_median" scope="col">vs Median</th>
+                    <th class="text-end sortable" data-key="volatility_score" data-column="volatility_score" scope="col">Volatility</th>
+                    <th data-column="margin_risk" scope="col">Margin Risk</th>
+                    <th data-column="recommendation" scope="col">Recommendation</th>
+                    <th data-column="first_sold" scope="col">First Sold</th>
+                    <th class="sortable" data-key="last_sold" data-column="last_sold" scope="col">Last Sold</th>
+                    <th data-column="quick_rec" scope="col">Quick Rec</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                {% else %}
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">Segment</th>
+                    <th class="text-end sortable" data-key="revenue" scope="col">Revenue</th>
+                    <th class="text-end sortable" data-key="revenue_share" scope="col">Rev Share</th>
+                    <th class="text-end sortable" data-key="qty" scope="col" id="thQty">Quantity</th>
+                    <th class="text-end sortable" data-key="qty_share" scope="col" id="thQtyShare">Qty Share</th>
+                    <th class="text-end sortable" data-key="current_unit_price" scope="col">Current Price</th>
+                    <th class="text-end sortable requires-cost" data-key="cost" scope="col">Cost</th>
+                    <th class="text-end sortable requires-cost" data-key="profit" scope="col">Profit</th>
+                    <th class="text-end sortable requires-cost" data-key="target_price" scope="col" id="thTarget">Target Price</th>
+                    <th class="text-end sortable requires-cost" data-key="uplift_pct" scope="col">Uplift %</th>
+                    <th class="text-end sortable requires-cost" data-key="margin_pct" scope="col" id="thMarginPct">Margin %</th>
+                    <th class="text-end sortable requires-cost" data-key="margin" scope="col" id="thMargin">Margin $</th>
+                    <th class="requires-cost" scope="col">Recommendation</th>
+                    <th scope="col">First Sold</th>
+                    <th scope="col">Last Sold</th>
+                    <th scope="col">Quick Rec</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                {% endif %}
+                  <tbody id="productTbody">
+                    <tr><td colspan="{% if product_intelligence_v2 %}34{% else %}18{% endif %}" class="text-center text-muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+{# Chart.js is loaded globally in base.html; products.js only renders charts. #}
+<script defer src="{{ url_for('static', filename='js/products.js', v=config.get('STATIC_REV', '20260306-504fix1')) }}"></script>
+
+<style>
+  /* Layout + polish */
+  .chart-canvas { width: 100%; }
+  .card { border-radius: 1rem; }
+  .table { font-size: .94rem; }
+  .table thead th { position: sticky; top: 0; z-index: 2; white-space: nowrap; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable.asc::after  { content: '  ▲'; font-size: .75rem; opacity: .7; }
+  th.sortable.desc::after { content: '  ▼'; font-size: .75rem; opacity: .7; }
+
+  /* Hero */
+  .products-hero {
+    background: linear-gradient(120deg, #7a413a 0%, #9b5f3d 55%, rgba(255,255,255,0.10) 100%);
+    position: relative;
+    border-radius: 1.1rem;
+  }
+  .products-hero .hero-gloss {
+    position:absolute; inset:0;
+    background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 55%);
+    pointer-events:none;
+  }
+  .hero-badge{
+    width: 38px; height: 38px;
+    display: inline-flex; align-items:center; justify-content:center;
+    border-radius: 12px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.18);
+  }
+
+  /* Subnav */
+  .products-subnav { top: 0.75rem; z-index: 1020; }
+  .nav-pills-sm .nav-link { padding: .35rem .6rem; font-size: .88rem; }
+  .nav-pills .nav-link { border-radius: 999px; }
+  .nav-pills .nav-link:not(.active) { color: #6c757d; background: rgba(108,117,125,.08); }
+  .nav-pills .nav-link:not(.active):hover { background: rgba(108,117,125,.14); }
+
+  /* Cards */
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform .18s ease, box-shadow .18s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,.08); }
+  }
+  .shadow-soft { box-shadow: 0 18px 40px rgba(122,65,58,0.15); }
+
+  .insight-card {
+    background: #fff;
+    border-radius: .95rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .insight-label { color: #6c757d; letter-spacing: .06em; margin-bottom: .35rem; }
+  .insight-value { font-size: 1.35rem; font-weight: 700; color: #1f2933; }
+  .insight-detail { font-weight: 600; min-height: 1.25rem; }
+  .insight-note { font-size: .82rem; color: #6c757d; margin-top: .25rem; }
+
+  .metric-card {
+    background: linear-gradient(180deg, rgba(122,65,58,0.07), rgba(122,65,58,0));
+    border-radius: .95rem;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(0,0,0,0.04);
+    text-align: center;
+  }
+  .metric-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: #6c757d; }
+  .metric-value { font-size: 1.75rem; font-weight: 800; color: #1f2933; }
+
+  .mini-kpi {
+    background: rgba(0,0,0,0.02);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: .85rem;
+    padding: .75rem .85rem;
+  }
+  .mini-kpi-label { font-size: .78rem; color: #6c757d; text-transform: uppercase; letter-spacing: .06em; }
+  .mini-kpi-value { font-size: 1.1rem; font-weight: 800; color: #1f2933; }
+  .mini-kpi-note { font-size: .78rem; color: #6c757d; margin-top: .15rem; }
+
+  .predictive-card { border-left: 4px solid rgba(13,110,253,.35); }
+  .momentum-card { border-left: 4px solid rgba(255,193,7,.45); }
+
+  .products-v2 {
+    --products-accent: #7a413a;
+    --products-accent-soft: rgba(122, 65, 58, 0.10);
+    --products-success: #1f7a4c;
+    --products-warning: #b26a1a;
+    --products-danger: #b13e3e;
+    --products-neutral: #5a6472;
+  }
+  .products-v2 .products-hero {
+    background: linear-gradient(126deg, #43211d 0%, #7a413a 50%, #c17d4f 100%);
+    box-shadow: 0 22px 44px rgba(67, 33, 29, 0.18);
+  }
+  .products-v2 .products-subnav .card {
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .products-v2 .metric-card {
+    text-align: left;
+    padding: 1rem 1rem 1.1rem;
+    background:
+      linear-gradient(180deg, rgba(122, 65, 58, 0.09), rgba(122, 65, 58, 0.01)),
+      linear-gradient(120deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 240, 0.98));
+  }
+  .products-v2 .metric-label,
+  .products-v2 .insight-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .products-v2 .mini-kpi,
+  .products-v2 .metric-tile {
+    background: linear-gradient(180deg, rgba(122, 65, 58, 0.05), rgba(255, 255, 255, 0.9));
+  }
+  .products-v2 #recPanel {
+    max-height: 16rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+  .products-v2 .table-chip.is-active {
+    border-color: var(--products-accent);
+    color: var(--products-accent);
+    background: var(--products-accent-soft);
+  }
+  .products-v2 .products-column-chooser {
+    border: 1px solid rgba(31, 41, 51, 0.08);
+    border-radius: 0.85rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .products-v2 .products-column-chooser summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #364152;
+  }
+  .products-v2 .products-column-chooser-grid {
+    display: grid;
+    gap: 0.45rem 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+  .products-v2 .products-column-chooser label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.84rem;
+    color: #4b5563;
+  }
+  .products-v2 .products-table-v2 {
+    min-width: 1450px;
+  }
+  .products-v2 .products-table-v2 thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .products-v2 .products-table-v2 tbody td {
+    vertical-align: middle;
+    border-color: rgba(148, 163, 184, 0.16);
+  }
+  .products-v2 .products-table-v2 .sticky-col {
+    position: sticky;
+    z-index: 3;
+    background: #fff;
+  }
+  .products-v2 .products-table-v2 thead .sticky-col {
+    z-index: 4;
+    background: #f8fafc;
+  }
+  .products-v2 .products-table-v2 .sticky-col-1 {
+    left: 0;
+    min-width: 8.5rem;
+    max-width: 8.5rem;
+    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.06);
+  }
+  .products-v2 .products-table-v2 .sticky-col-2 {
+    left: 8.5rem;
+    min-width: 18rem;
+    max-width: 18rem;
+    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.06);
+  }
+  .products-v2 .product-name-cell {
+    display: inline-block;
+    max-width: 16rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .products-v2 .tag-badge,
+  .products-v2 .risk-badge,
+  .products-v2 .recommendation-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .products-v2 .tag-badge {
+    background: rgba(15, 118, 110, 0.10);
+    color: #0f766e;
+  }
+  .products-v2 .risk-badge.tone-danger {
+    background: rgba(177, 62, 62, 0.12);
+    color: var(--products-danger);
+  }
+  .products-v2 .risk-badge.tone-warning {
+    background: rgba(178, 106, 26, 0.12);
+    color: var(--products-warning);
+  }
+  .products-v2 .risk-badge.tone-neutral {
+    background: rgba(90, 100, 114, 0.12);
+    color: var(--products-neutral);
+  }
+  .products-v2 .recommendation-badge {
+    background: rgba(31, 122, 76, 0.10);
+    color: var(--products-success);
+  }
+  .products-v2 .products-health-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+  .products-v2 .health-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 1rem;
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+  }
+  .products-v2 .health-card.tone-success { border-top: 4px solid var(--products-success); }
+  .products-v2 .health-card.tone-warning { border-top: 4px solid var(--products-warning); }
+  .products-v2 .health-card.tone-info { border-top: 4px solid #0f766e; }
+  .products-v2 .health-card.tone-neutral { border-top: 4px solid var(--products-neutral); }
+  .products-v2 .health-kicker {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+  }
+  .products-v2 .health-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: #1f2937;
+    line-height: 1.1;
+  }
+  .products-v2 .health-meta {
+    font-size: 0.82rem;
+    color: #5b6472;
+  }
+  .products-v2 .health-card details {
+    margin-top: 0.85rem;
+  }
+  .products-v2 .health-card summary {
+    cursor: pointer;
+    color: var(--products-accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .products-v2 .health-items {
+    margin-top: 0.6rem;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .products-v2 .health-items-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    padding-bottom: 0.35rem;
+  }
+  .products-v2 .info-dot {
+    color: #6c757d;
+    text-decoration: none;
+  }
+  .products-v3 .products-hero {
+    background: #1f2a37;
+    box-shadow: 0 10px 24px rgba(31, 42, 55, 0.16);
+  }
+  .products-v3 .products-hero .hero-gloss {
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 60%);
+  }
+  .products-v3 .metric-card {
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .products-v3 .mini-kpi {
+    background: #f8fafc;
+    border-color: rgba(148, 163, 184, 0.25);
+  }
+  .products-v3 .insight-card {
+    border-color: rgba(15, 23, 42, 0.08);
+  }
+  .products-v3 .table-chip.is-active {
+    background: rgba(31, 122, 76, 0.10);
+    border-color: #1f7a4c;
+    color: #1f7a4c;
+  }
+  .products-v3 .products-table-v2 {
+    min-width: 2200px;
+  }
+  @media (max-width: 991.98px) {
+    .products-v2 .products-table-v2 .sticky-col,
+    .products-v2 .products-table-v2 .sticky-col-1,
+    .products-v2 .products-table-v2 .sticky-col-2 {
+      position: static;
+      left: auto;
+      min-width: auto;
+      max-width: none;
+      box-shadow: none;
+    }
+  }
+
+  /* Skeleton shimmer (can be removed once you hide via JS) */
+  .skeleton {
+    height: 160px;
+    border-radius: .6rem;
+    background: linear-gradient(90deg, #f1f3f5 0%, #f8f9fa 50%, #f1f3f5 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.15s infinite;
+    margin-bottom: .6rem;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* Better selection UI for segment multi-select */
+  #segmentFilter { font-size: .9rem; }
+</style>
+
+{% endblock %}
+
+

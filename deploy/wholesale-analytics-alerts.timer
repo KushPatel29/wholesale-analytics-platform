@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Wholesale Analytics Analytics Notifications & Alerts hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=wholesale_analytics-alerts.service
+
+[Install]
+WantedBy=timers.target

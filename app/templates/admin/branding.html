@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2 class="mb-0">Branding</h2>
+    <a class="btn btn-outline-secondary btn-sm" href="/admin/users">Back</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card"><div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="mb-3">
+          <label class="form-label" for="brand_name">Brand Name</label>
+          <input class="form-control" id="brand_name" name="brand_name" autocomplete="organization" value="{{ branding.brand_name }}" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="primary_color">Primary Color</label>
+          <input class="form-control" id="primary_color" name="primary_color" type="color" value="{{ branding.primary_color }}" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="brand_logo">Logo (PNG/JPG/SVG)</label>
+          <input class="form-control" id="brand_logo" type="file" name="logo" accept=".png,.jpg,.jpeg,.svg" />
+        </div>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card"><div class="card-body">
+      <h5 class="card-title">Preview</h5>
+      <div class="d-flex align-items-center">
+        {% if branding.logo_filename %}
+          <img src="/static/branding/{{ branding.logo_filename }}" alt="Logo" style="height:40px; margin-right:10px;" />
+        {% endif %}
+        <strong style="font-size: 1.25rem;">{{ branding.brand_name }}</strong>
+      </div>
+      <div class="mt-3">
+        <span class="badge" style="background: {{ branding.primary_color }};">Primary</span>
+      </div>
+    </div></div>
+  </div>
+  
+</div>
+{% endblock %}

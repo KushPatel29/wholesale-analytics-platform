@@ -1,0 +1,10 @@
+[Unit]
+Description=Wholesale Analytics Fact Refresh Timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=fact-refresh-once.service
+
+[Install]
+WantedBy=timers.target

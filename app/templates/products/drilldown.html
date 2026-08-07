@@ -1,0 +1,1330 @@
+{# templates/products/drilldown.html (or products/drilldown.html) #}
+{% extends 'base.html' %}
+{% set filters_handler = 'ssr' %}
+{% block content %}
+<div id="ProductDrilldownMeta"
+     class="d-none"
+     data-page="product_drilldown"
+     data-entity-id="{{ product_id }}"
+     data-sku="{{ product_id }}"
+     data-bundle-url="{{ url_for('bundles.products_drilldown_bundle') }}"></div>
+
+{# Optional global filters #}
+{% if form is defined %}
+{% endif %}
+
+{% if products_warning %}
+  <div class="alert alert-warning" role="alert">{{ products_warning }}</div>
+{% endif %}
+
+{% set currency = currency_code or 'CAD' %}
+{% set show_forecast = (request.args.get('forecast','0') == '1') %}
+{% set ps = product_snapshot|default({}) %}
+{% set lifecycle = lifecycle|default({}) %}
+{% set classification = classification|default({}) %}
+{% set class_label = (classification.get('label') if classification is mapping else None) %}
+{% set class_label = class_label or 'Insufficient history' %}
+{% set class_cv = (classification.get('cv_pct') if classification is mapping else None) %}
+
+<div class="container-fluid py-4 bg-light"
+     data-currency="{{ currency }}"
+     data-product-id="{{ product_id }}"
+     data-sku="{{ product_id }}"
+     data-also-bought-url="{{ url_for('products.api_also_bought') }}"
+     data-drilldown-template="{{ url_for('products.drilldown', product_id='__PID__') }}"
+     data-querystring="{{ querystring|default('') }}">
+
+  <!-- Header / Hero -->
+  <div class="card shadow-soft border-0 mb-3 overflow-hidden drill-hero">
+    <div class="card-body d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <div class="hero-badge"><i class="bi bi-bar-chart-steps"></i></div>
+          <h2 class="mb-0 fw-bold">
+            {{ product_display_name or product_name or 'Unknown Product' }}
+          </h2>
+        </div>
+        <div class="text-white-50 small">
+          Drilldown reflects your current filters. Use the table + exports for stakeholder-ready snapshots.
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <span class="badge bg-white bg-opacity-10 border border-white border-opacity-25 text-white">
+            Classification: <strong class="ms-1">{{ class_label }}</strong>
+          </span>
+          <span class="badge bg-white bg-opacity-10 border border-white border-opacity-25 text-white">
+            CV: <strong class="ms-1">{% if class_cv is not none %}{{ '%.1f'|format(class_cv) }}%{% else %}&mdash;{% endif %}</strong>
+          </span>
+          <span class="badge bg-white bg-opacity-10 border border-white border-opacity-25 text-white">
+            Lifecycle: <strong class="ms-1">{{ lifecycle.get('stage')|default('Insufficient history', true) }}</strong>
+          </span>
+          {% if show_costs %}
+          <span class="badge bg-white bg-opacity-10 border border-white border-opacity-25 text-white">
+            Cost view: <strong class="ms-1">Enabled</strong>
+          </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2">
+        {% set back_url = url_for('products.index') ~ (querystring or '') %}
+        {% set forecast_toggle = url_for('products.drilldown', product_id=product_id, customer=selected_cid, forecast=('0' if show_forecast else '1')) %}
+        {% if querystring_suffix %}
+          {% set forecast_toggle = forecast_toggle ~ ('&' if '?' in forecast_toggle else '?') ~ querystring_suffix %}
+        {% elif querystring %}
+          {% set forecast_toggle = forecast_toggle ~ querystring %}
+        {% endif %}
+        {% set export_url = url_for('products.export_product', product_id=product_id, format='xlsx') ~ (querystring or '') %}
+
+        <a class="btn btn-light btn-sm" href="{{ back_url }}">
+          <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
+
+        <a class="btn btn-outline-light btn-sm"
+           href="{{ forecast_toggle }}">
+          <i class="bi bi-graph-up-arrow me-1"></i>{{ 'Hide Forecast' if show_forecast else 'Show 6-Month Forecast' }}
+        </a>
+
+        <a class="btn btn-outline-light btn-sm"
+           href="{{ export_url }}">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>Excel
+        </a>
+
+        <a class="btn btn-outline-light btn-sm" href="#priceSuggestion">
+          <i class="bi bi-tag me-1"></i>Price suggestion
+        </a>
+      </div>
+    </div>
+    <div class="hero-gloss"></div>
+  </div>
+
+  <div id="drillError" class="alert alert-danger d-none" role="alert"></div>
+
+  <!-- Snapshot -->
+  <div class="card shadow-sm product-snapshot mb-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+          <h5 class="mb-0">Snapshot</h5>
+          <div class="text-muted small">Transparent roll-ups from underlying shipments</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline-secondary" href="#charts"><i class="bi bi-activity me-1"></i>Charts</a>
+          <a class="btn btn-sm btn-outline-secondary" href="#customers"><i class="bi bi-people me-1"></i>Customers</a>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Total Revenue</div>
+          <div class="snapshot-value">{{ ps.total_revenue|default(0)|currency }}</div>
+          {% if ps.mom_pct is not none %}
+            <div class="snapshot-note {{ 'text-success' if ps.mom_pct >= 0 else 'text-danger' }}">
+              MoM {{ '%+.1f'|format(ps.mom_pct) }}%
+            </div>
+          {% endif %}
+          {% if ps.yoy_pct is not none %}
+            <div class="snapshot-note {{ 'text-success' if ps.yoy_pct >= 0 else 'text-danger' }}">
+              YoY {{ '%+.1f'|format(ps.yoy_pct) }}%
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Total Quantity</div>
+          <div class="snapshot-value">{{ ps.total_qty|default(0)|intcomma }}</div>
+          {% if ps.recent_velocity is not none %}
+            {% set velocity_label = (qty_title or 'Quantity')|lower|replace(' (lb)', ' lb') %}
+            <div class="snapshot-note">3M avg {{ ps.recent_velocity|round(1) }} {{ velocity_label }}/mo</div>
+          {% endif %}
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Avg Unit Price</div>
+          <div class="snapshot-value">
+            {% if ps.avg_unit_price is not none %}{{ ps.avg_unit_price|currency }}{% else %}—{% endif %}
+          </div>
+          {% if ps.asp_recent is not none %}
+            <div class="snapshot-note">Last month {{ ps.asp_recent|currency }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Total Weight</div>
+          <div class="snapshot-value">
+            {% if ps.total_weight is not none %}{{ ps.total_weight|round(0)|intcomma }} lb{% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Customers</div>
+          <div class="snapshot-value">{{ ps.customer_count|default(0)|intcomma }}</div>
+          <div class="snapshot-note">
+            Regions {{ ps.region_count|default(0)|intcomma }} · Suppliers {{ ps.supplier_count|default(0)|intcomma }}
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Revenue / Customer</div>
+          <div class="snapshot-value">
+            {% if ps.avg_revenue_per_customer is not none %}{{ ps.avg_revenue_per_customer|currency }}{% else %}—{% endif %}
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">First Sold</div>
+          <div class="snapshot-value">{{ ps.first_sold or '—' }}</div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="snapshot-label">Last Sold</div>
+          <div class="snapshot-value">{{ ps.last_sold or '—' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advanced Analytics -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
+          <h5 class="card-title mb-2">Product Classification</h5>
+          {% set class_badge = 'bg-secondary' %}
+          {% if class_label == 'Stable' %}
+            {% set class_badge = 'bg-success' %}
+          {% elif class_label == 'Variable' %}
+            {% set class_badge = 'bg-warning text-dark' %}
+          {% elif class_label == 'Highly Variable' %}
+            {% set class_badge = 'bg-danger' %}
+          {% endif %}
+          <div class="mb-2">
+            <span class="badge fs-5 px-3 py-2 {{ class_badge }}">
+              {{ class_label }}
+            </span>
+          </div>
+          <small class="text-muted">
+            {% if class_cv is not none %}
+              CV: {{ '%.1f'|format(class_cv) }}%
+            {% else %}
+              CV: &mdash;
+            {% endif %}
+            {% if classification.get('notes') %}
+              <br>{{ classification.get('notes') }}
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Product Lifecycle</h5>
+        </div>
+        <div class="card-body">
+          {% set lc_stage = lifecycle.get('stage')|default('Insufficient history', true) %}
+          {% set lc_conf = lifecycle.get('confidence', 0) %}
+          {% set lc_growth = lifecycle.get('growth_rate') %}
+          {% set lc_recent_rev = lifecycle.get('recent_avg_revenue') %}
+          {% set lc_recent_units = lifecycle.get('recent_avg_units') %}
+          <div class="lifecycle-stage lifecycle-{{ lc_stage|lower }}">
+            <h3 class="mb-2">{{ lc_stage }}</h3>
+            <div class="progress mb-2" style="height: 8px;">
+              <div class="progress-bar bg-info" role="progressbar"
+                   style="width: {{ lc_conf }}%"
+                   aria-valuenow="{{ lc_conf }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="text-muted small mb-1"><strong>Confidence:</strong> {{ lc_conf }}%</div>
+            <div class="text-muted small mb-1">
+              <strong>Growth Rate:</strong>
+              {% if lc_growth is not none %}{{ '%.1f'|format(lc_growth) }}%{% else %}&mdash;{% endif %}<br>
+              <strong>Recent Avg Revenue:</strong>
+              {% if lc_recent_rev is not none %}{{ lc_recent_rev|currency }}{% else %}&mdash;{% endif %}<br>
+              <strong>Recent Avg Units:</strong>
+              {% if lc_recent_units is not none %}{{ lc_recent_units|round(1) }}{% else %}&mdash;{% endif %}
+            </div>
+            <div class="text-muted small mb-0">{{ lifecycle.get('message','') }}</div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forecast + FBT -->
+  <div class="row g-3 mb-3" id="charts">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-start gap-2 flex-wrap">
+          <div>
+            <h5 class="card-title mb-0">Demand Forecast</h5>
+            <small class="text-muted">
+              {% if forecast and forecast.message %}
+                {{ forecast.message }}
+              {% elif forecast %}
+                Model: {{ forecast.model|default('&mdash;') }}
+                &middot; Confidence: {{ forecast.confidence|default('&mdash;') }}
+                {% if forecast.mape is not none %}&middot; MAPE: {{ forecast.mape }}%{% endif %}
+              {% else %}
+                Forecast metadata unavailable
+              {% endif %}
+            </small>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="forecastChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="forecastChart" class="chart-container skeleton" data-lazy="true" aria-label="Product demand forecast">
+            <div class="loading shimmer"></div>
+          </div>
+          <script type="application/json" id="forecast-data">{{ forecast|default({})|tojson }}</script>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <h5 class="card-title mb-0">Frequently Bought Together</h5>
+            <small class="text-muted" id="fbtMeta">Confidence based on co-orders in the current filters.</small>
+          </div>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Co-purchase metric">
+            <button type="button" class="btn btn-outline-secondary active" data-metric="confidence" id="fbtSortConfidence">Confidence</button>
+            <button type="button" class="btn btn-outline-secondary" data-metric="lift" id="fbtSortLift">Lift</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="skeleton" data-for="fbtChart"></div>
+          <div id="fbtChart" class="chart-container" style="height:260px;" aria-label="Frequently bought together chart"></div>
+          <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0" id="fbtTable">
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col" class="text-end">Confidence</th>
+                  <th scope="col" class="text-end">Lift</th>
+                  <th scope="col" class="text-end">Co-orders</th>
+                  <th scope="col" class="text-end">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr id="fbtEmpty">
+                  <td colspan="5" class="text-center text-muted">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anomalies + Price Optimization -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      {% if anomalies %}
+        <div class="card border-warning shadow-sm h-100">
+          <div class="card-header bg-warning text-dark">
+            <h5 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Anomalies Detected</h5>
+          </div>
+          <div class="card-body">
+            {% for anomaly in anomalies %}
+              <div class="alert alert-{{ 'danger' if anomaly.severity == 'high' else 'warning' }} py-2 px-3 mb-2">
+                <strong>{{ anomaly.date }}</strong>:
+                {{ 'Spike' if anomaly.direction == 'spike' else 'Drop' }} detected<br>
+                <small>
+                  Value: {{ anomaly.value|currency }} (Expected: {{ anomaly.expected|currency }}) · Z-score: {{ anomaly.z_score }}
+                </small>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex flex-column justify-content-center align-items-center text-muted">
+            <i class="bi bi-check-circle-fill fs-1 text-success mb-2"></i>
+            <p class="mb-0">No significant anomalies detected for this product.</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="col-lg-6">
+      {% if price_insights %}
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-transparent">
+            <h5 class="card-title mb-0">Price Optimization Insights</h5>
+          </div>
+          <div class="card-body">
+            <div class="row text-center mb-3">
+              <div class="col-md-4 border-end">
+                <small class="text-muted">Price Elasticity</small>
+                <h4 class="fw-bold mb-0">{{ price_insights.elasticity }}</h4>
+              </div>
+              <div class="col-md-4 border-end">
+                <small class="text-muted">Current Avg Price</small>
+                <h4 class="fw-bold mb-0">{{ price_insights.current_avg_price|currency }}</h4>
+              </div>
+              <div class="col-md-4">
+                <small class="text-muted">Optimal Range</small>
+                <h4 class="fw-bold mb-0">{{ price_insights.optimal_price_min|currency }} – {{ price_insights.optimal_price_max|currency }}</h4>
+              </div>
+            </div>
+            <div class="alert alert-info mt-3 py-2 px-3 mb-0">
+              <i class="bi bi-lightbulb-fill me-2"></i>{{ price_insights.recommendation }}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex flex-column justify-content-center align-items-center text-muted">
+            <i class="bi bi-info-circle-fill fs-1 text-primary mb-2"></i>
+            <p class="mb-0 text-center">Price optimization insights not available (requires permissions + valid price data).</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Trend + ASP -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Monthly Revenue &amp; {{ (qty_title or 'Quantity') }}</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="trendChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="trendChart" class="chart-container skeleton" data-lazy="true" aria-label="Revenue and quantity trend">
+            <div class="loading shimmer"></div>
+          </div>
+          {% if not months or months|length == 0 %}
+            <p class="text-muted small mt-2 mb-0">No dated data for this product in the current window.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">ASP Trend</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="aspChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="aspChart" class="chart-container skeleton" data-lazy="true" aria-label="Average selling price trend">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2">ASP = Revenue / {{ (qty_title or 'Quantity') }} per month.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price Distribution + Price vs Volume -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Unit Price Distribution</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="upHist" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="upHist" class="chart-container skeleton" data-lazy="true" aria-label="Unit price histogram">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="d-flex justify-content-around small mt-2">
+            <div>P10: <span id="upP10">—</span></div>
+            <div>P50: <span id="upP50">—</span></div>
+            <div>P90: <span id="upP90">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Price vs Volume</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="pxqChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="pxqChart" class="chart-container skeleton" data-lazy="true" aria-label="Price vs volume scatter">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2" id="pxqNote">Correlation: —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seasonality + Customer Concentration -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Seasonality Heatmap</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="seasonChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="seasonChart" class="chart-container skeleton" data-lazy="true" aria-label="Revenue seasonality heatmap">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2">Revenue by Year × Month.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Customer Concentration</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="custPie" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="custPie" class="chart-container skeleton" data-lazy="true" aria-label="Customer revenue share">
+            <div class="loading shimmer"></div>
+          </div>
+          <div class="text-muted small mt-2" id="custPieNote">Top customers share —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Region & Supplier -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Revenue by Region</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="regionChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="regionChart" class="chart-container skeleton" data-lazy="true" aria-label="Revenue by region">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Revenue by Supplier</h5>
+          <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="supplierChart" type="button">CSV</button>
+        </div>
+        <div class="card-body">
+          <div id="supplierChart" class="chart-container skeleton" data-lazy="true" aria-label="Revenue by supplier">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customers + Price Suggestion -->
+  <div class="row g-3" id="customers">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
+          <h5 class="card-title mb-0">Top Customers</h5>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="custCsv" type="button">CSV</button>
+            <a class="btn btn-outline-primary" href="{{ url_for('products.export_product', product_id=product_id, format='xlsx') }}">Excel</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive" style="max-height: 360px; overflow-y:auto;">
+            <table class="table table-sm table-striped align-middle" id="custTable">
+              <thead class="table-light">
+                <tr><th>Customer</th><th class="text-end">Revenue</th></tr>
+              </thead>
+              <tbody>
+                {% for r in (top_cust_rows or []) %}
+                  <tr>
+                    <td class="text-truncate" style="max-width: 420px;">{{ r.Customer }}</td>
+                    <td class="text-end">{{ (r.Revenue is not none) and ('$%.2f'|format(r.Revenue)) or '$0.00' }}</td>
+                  </tr>
+                {% endfor %}
+                {% if not top_cust_rows or top_cust_rows|length == 0 %}
+                  <tr><td colspan="2" class="text-muted small text-center py-3">No customer data for this product.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6" id="priceSuggestion">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="card-title mb-0">Price Suggestion</h5>
+            {% if selected_cid %}
+              <a class="btn btn-sm btn-outline-secondary"
+                 href="{{ url_for('products.drilldown', product_id=product_id, forecast=request.args.get('forecast','0')) }}">Clear</a>
+            {% endif %}
+          </div>
+
+          <form class="row g-2 align-items-end" method="get">
+            {% if request.args.get('forecast') %}
+              <input type="hidden" name="forecast" value="{{ request.args.get('forecast') }}">
+            {% endif %}
+            <div class="col-md-8">
+              <label class="form-label" for="customerSelect">Select customer</label>
+              <select id="customerSelect" class="form-select form-select-sm" name="customer" onchange="this.form.submit()">
+                <option value="">Choose…</option>
+                {% for opt in (cust_options or []) %}
+                  <option value="{{ opt.id }}" {% if selected_cid == opt.id %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Uses sales-only heuristics unless cost view is enabled.</div>
+            </div>
+          </form>
+
+          <div class="mt-3">
+            {% if selected_cid and price_suggestion %}
+              <div class="row text-center">
+                <div class="col-6 border-end">
+                  <div class="text-muted small">Current</div>
+                  <div class="fs-4 fw-bold">
+                    {% if price_suggestion.current_price is not none %}{{ '$%.2f'|format(price_suggestion.current_price) }}{% else %}<span class="text-muted">n/a</span>{% endif %}
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="text-muted small">Suggested</div>
+                  <div class="fs-4 fw-bold">
+                    {% if price_suggestion.suggested_price is not none %}{{ '$%.2f'|format(price_suggestion.suggested_price) }}{% else %}<span class="text-muted">n/a</span>{% endif %}
+                  </div>
+                </div>
+              </div>
+              {% if price_suggestion.rationale %}
+                <div class="text-muted small mt-2">{{ price_suggestion.rationale }}</div>
+              {% endif %}
+            {% else %}
+              <div class="text-muted small">Choose a customer to see a tailored suggestion.</div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# Plotly (loaded once if not present) #}
+<script>
+(() => {
+  const root = document.querySelector('.container-fluid[data-currency]');
+  const authFetch = window.authFetch || fetch;
+  const currency = root?.dataset.currency || 'CAD';
+  const alsoBoughtUrl = root?.dataset.alsoBoughtUrl || '';
+  const drilldownTemplate = root?.dataset.drilldownTemplate || '';
+  const productId = root?.dataset.sku || root?.dataset.productId || '';
+  const querystring = root?.dataset.querystring || window.location.search || '';
+  const querystringSuffix = querystring.startsWith('?') ? querystring.slice(1) : querystring;
+
+  if (!productId) {
+    const err = document.getElementById('drillError');
+    if (err) {
+      err.textContent = 'Missing product SKU. Please return to Product Intelligence and select a valid item.';
+      err.classList.remove('d-none');
+    }
+    return;
+  }
+
+  // ===== Server payload =====
+  const months         = {{ months|default([])|tojson }};
+  const monthlyRevenue = {{ monthly_revenue|default([])|tojson }};
+  const monthlyQty     = {{ monthly_qty|default([])|tojson }};
+  const qtyTitle       = {{ (qty_title or 'Quantity')|tojson }};
+
+  const boughtTogether = {{ bought_together|default({})|tojson }};
+
+  const regionLabels   = {{ region_labels|default([])|tojson }};
+  const regionValues   = {{ region_values|default([])|tojson }};
+  const supplierLabels = {{ supplier_labels|default([])|tojson }};
+  const supplierValues = {{ supplier_values|default([])|tojson }};
+
+  const unitPriceStats = {{ unit_price_stats|default({})|tojson }};
+  const unitPrices     = {{ unit_prices|default([])|tojson }};
+
+  const topCustomers   = {{ (top_cust_rows or [])|tojson }};
+
+  // Forecast object (optional richer payload)
+  let forecastObj = {};
+  try {
+    const el = document.getElementById('forecast-data');
+    forecastObj = el ? JSON.parse(el.textContent || '{}') : {};
+  } catch (_) { forecastObj = {}; }
+
+  // ===== Formatters =====
+  const nfMoney0 = new Intl.NumberFormat(undefined,{style:'currency',currency,maximumFractionDigits:0});
+  const nfMoney2 = new Intl.NumberFormat(undefined,{style:'currency',currency,maximumFractionDigits:2});
+  const nfInt    = new Intl.NumberFormat(undefined,{maximumFractionDigits:0});
+  const nfPct1   = new Intl.NumberFormat(undefined,{maximumFractionDigits:1});
+
+  const safe = n => (Number.isFinite(+n) ? +n : 0);
+  const forecastSeries = Array.isArray(forecastObj?.series) ? forecastObj.series : [];
+  const forecastPoints = Array.isArray(forecastObj?.forecast) ? forecastObj.forecast : [];
+  const forecastActualDates = forecastSeries.map(p => p?.date);
+  const forecastActualVals = forecastSeries.map(p => safe(p?.actual));
+  const forecastDates = forecastPoints.map(p => p?.date);
+  const forecastYhat = forecastPoints.map(p => safe(p?.yhat));
+  const forecastLo = forecastPoints.map(p => safe(p?.yhat_lower));
+  const forecastHi = forecastPoints.map(p => safe(p?.yhat_upper));
+  const displayName = (row) => {
+    if (!row || typeof row !== 'object') return '-';
+    if (row.display_name) return row.display_name;
+    const sku = row.sku || row.product_id || row.id;
+    const name = row.product_name || row.name || row.label;
+    if (sku && name) return `${sku}  ${name}`;
+    return sku || name || '-';
+  };
+  const appendQS = (url) => {
+    if (!url) return '#';
+    if (!querystring) return url;
+    return url.includes('?') ? `${url}&${querystringSuffix}` : `${url}${querystring}`;
+  };
+
+  // ===== Plotly loader (promise) =====
+  const ensurePlotly = (() => {
+    let p;
+    return () => p || (p = new Promise((resolve, reject) => {
+      if (window.Plotly) return resolve(window.Plotly);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+      s.async = true;
+      s.onload = () => window.Plotly ? resolve(window.Plotly) : reject(new Error('Plotly failed to initialize'));
+      s.onerror = () => reject(new Error('Failed to load Plotly'));
+      document.head.appendChild(s);
+    }));
+  })();
+
+  // ===== CSV helpers =====
+  const aoaToCSV = aoa => aoa.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  function downloadCSV(aoa, name){
+    const blob = new Blob([aoaToCSV(aoa)], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  }
+
+  // ===== Frequently bought together =====
+  const btRows = Array.isArray(boughtTogether?.rows) ? boughtTogether.rows : [];
+  let fbtRows = btRows;
+  let fbtApprox = false;
+  let fbtBaseOrders = Number(boughtTogether?.base_orders || 0);
+  let fbtTotalOrders = Number(boughtTogether?.total_orders || 0);
+  let fbtMessage = boughtTogether?.message || '';
+  let fbtMetric = boughtTogether?.mode === 'lift' ? 'lift' : 'confidence';
+  let fbtReqId = 0;
+  let fbtAbort = null;
+
+  function setFbtMeta(){
+    const meta = document.getElementById('fbtMeta');
+    if (!meta) return;
+    if (fbtMessage) {
+      meta.textContent = fbtMessage;
+      return;
+    }
+    const pieces = [];
+    pieces.push(fbtApprox ? 'Approximate: grouped by customer/week (no order IDs).' : 'Based on co-orders within the same order.');
+    if (fbtBaseOrders) {
+      const basePct = fbtTotalOrders ? (fbtBaseOrders / fbtTotalOrders * 100) : null;
+      pieces.push(`Base orders: ${fbtBaseOrders}${basePct != null ? ` of ${fbtTotalOrders} (${nfPct1.format(basePct)}%)` : ''}`);
+    }
+    meta.textContent = pieces.join(' | ');
+  }
+
+  function renderAlsoBoughtTable(rows){
+    const tbody = document.querySelector('#fbtTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!rows || !rows.length){
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'text-center text-muted';
+      const emptyMessage = fbtMessage || 'No co-purchase data for current filters.';
+      td.textContent = emptyMessage;
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.classList.add('cursor-pointer');
+      tr.addEventListener('click', () => {
+        const pid = r?.sku || r?.product_id;
+        if (drilldownTemplate && pid){
+          const url = drilldownTemplate.replace('__PID__', encodeURIComponent(pid));
+          window.location.href = appendQS(url);
+        }
+      });
+      const rowRevenue = (r.revenue != null ? r.revenue : r.paired_revenue);
+      tr.innerHTML = `
+        <td>${displayName(r)}</td>
+        <td class="text-end">${r.confidence != null ? nfPct1.format(safe(r.confidence)) + '%' : '-'}</td>
+        <td class="text-end">${r.lift != null ? safe(r.lift).toFixed(2) + 'x' : '-'}</td>
+        <td class="text-end">${nfInt.format(safe(r.co_orders))}</td>
+        <td class="text-end">${nfMoney0.format(safe(rowRevenue || 0))}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+async function renderAlsoBoughtChart(rows){
+    await ensurePlotly();
+    removeSkeleton('fbtChart');
+    const el = document.getElementById('fbtChart');
+    if (!el) return;
+    if (!rows || !rows.length){
+      const emptyMessage = fbtMessage || 'No co-purchase data for current filters.';
+      el.innerHTML = `<p class="text-muted text-center mt-3 mb-0">${emptyMessage}</p>`;
+      return;
+    }
+    const metric = fbtMetric === 'lift' ? 'lift' : 'confidence';
+    const labels = rows.map(r => displayName(r));
+    const x = rows.map(r => safe(r[metric]));
+    const hover = rows.map((r) => {
+      return `${displayName(r)}<br>` +
+        `Confidence: ${r.confidence != null ? nfPct1.format(safe(r.confidence)) + '%' : '—'}<br>` +
+        `Lift: ${r.lift != null ? safe(r.lift).toFixed(2) : '—'}<br>` +
+        `Co-orders: ${nfInt.format(safe(r.co_orders))}<br>` +
+        `Revenue: ${nfMoney0.format(safe((r.revenue != null ? r.revenue : r.paired_revenue) || 0))}`;
+    });
+    Plotly.newPlot('fbtChart', [{
+      x,
+      y: labels,
+      type:'bar',
+      orientation:'h',
+      text: x.map(v => (Number.isFinite(v) ? v.toFixed(1) : '')),
+      textposition:'auto',
+      hovertemplate:'%{customdata}<extra></extra>',
+      customdata: hover,
+      marker:{ color:'#7a413a' },
+    }], {
+      margin:{t:10,l:10,r:10,b:40},
+      xaxis:{ title: metric === 'lift' ? 'Lift (x)' : 'Confidence (%)' },
+      yaxis:{ automargin:true },
+      height:260,
+    }, { displayModeBar:false, responsive:true });
+
+    el.on('plotly_click', (ev) => {
+      const idx = ev?.points?.[0]?.pointIndex;
+      if (idx == null) return;
+      const r = rows[idx];
+      const pid = r?.sku || r?.product_id;
+      if (drilldownTemplate && pid){
+        const url = drilldownTemplate.replace('__PID__', encodeURIComponent(pid));
+        window.location.href = appendQS(url);
+      }
+    });
+  }
+
+  function renderAlsoBought(rows){
+    const sorted = [...(rows || [])].sort((a,b) => {
+      const aVal = safe(a[fbtMetric]);
+      const bVal = safe(b[fbtMetric]);
+      if (aVal === bVal) return safe(b.lift) - safe(a.lift);
+      return bVal - aVal;
+    });
+    const btnConf = document.getElementById('fbtSortConfidence');
+    const btnLift = document.getElementById('fbtSortLift');
+    btnConf?.classList.toggle('active', fbtMetric !== 'lift');
+    btnLift?.classList.toggle('active', fbtMetric === 'lift');
+    setFbtMeta();
+    renderAlsoBoughtTable(sorted);
+    renderAlsoBoughtChart(sorted);
+  }
+
+  async function loadAlsoBought(metric = fbtMetric){
+    if (!alsoBoughtUrl || !productId) return;
+    const reqId = ++fbtReqId;
+    if (fbtAbort) fbtAbort.abort();
+    fbtAbort = new AbortController();
+    try {
+      const params = new URLSearchParams(querystring || '');
+      params.set('product_id', productId);
+      const url = new URL(alsoBoughtUrl, window.location.origin);
+      url.search = params.toString();
+      const resp = await authFetch(url.toString(), { headers: { 'Accept':'application/json' }, signal: fbtAbort.signal });
+      const payload = await resp.json();
+      if (reqId !== fbtReqId) return;
+      const data = payload.data || payload;
+      fbtRows = data.rows || payload.rows || [];
+      fbtApprox = Boolean(data.approximate ?? payload.approximate);
+      fbtBaseOrders = safe(data.base_orders ?? payload.base_orders);
+      fbtTotalOrders = safe(data.total_orders ?? payload.total_orders);
+      fbtMessage = data.message || payload.message || '';
+      fbtMetric = metric || fbtMetric;
+      renderAlsoBought(fbtRows);
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      console.warn('also_bought failed', err);
+      fbtRows = [];
+      fbtMessage = 'Unable to load co-purchase data.';
+      renderAlsoBought([]);
+    }
+  }
+
+  function removeSkeleton(id){
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('skeleton');
+    const l = el.querySelector('.loading');
+    if (l) l.remove();
+  }
+
+  function exportPlotly(divId, name){
+    const gd = document.getElementById(divId);
+    if (!gd || !gd.data || !gd.data.length) return;
+
+    const t = gd.data[0];
+    const type = (t.type || '').toLowerCase();
+
+    // Heatmap
+    if (type === 'heatmap' && Array.isArray(t.z)) {
+      const x = (t.x && t.x.length) ? t.x : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const y = (t.y && t.y.length) ? t.y : Array(t.z.length).fill('').map((_,i)=>`Row ${i+1}`);
+      const rows = [['Year/Month', ...x]];
+      y.forEach((yy, ri) => rows.push([yy, ...((t.z[ri]||[]).map(v=>v==null?'':v))]));
+      return downloadCSV(rows, name);
+    }
+
+    // Pie
+    if (type === 'pie' && Array.isArray(t.labels) && Array.isArray(t.values)) {
+      const rows = [['Label','Value']];
+      for (let i=0;i<Math.max(t.labels.length,t.values.length);i++) rows.push([t.labels[i]??'', t.values[i]??'']);
+      return downloadCSV(rows, name);
+    }
+
+    // Horizontal bar
+    if (type === 'bar' && t.orientation === 'h' && Array.isArray(t.y) && Array.isArray(t.x)) {
+      const rows = [['Label','Value']];
+      for (let i=0;i<Math.max(t.y.length,t.x.length);i++) rows.push([t.y[i]??'', t.x[i]??'']);
+      return downloadCSV(rows, name);
+    }
+
+    // Generic multi-trace
+    const traces = gd.data;
+    const hasX = traces.some(tt => Array.isArray(tt.x));
+    const header = [hasX ? 'X' : 'Index', ...traces.map((tt,i)=>tt.name || `Trace ${i+1}`)];
+    const maxLen = Math.max(...traces.map(tt => (tt.x?.length || tt.y?.length || tt.values?.length || 0)), 0);
+
+    const rows = [header];
+    for (let i=0;i<maxLen;i++){
+      const xVal = hasX ? (traces.find(tt=>Array.isArray(tt.x))?.x?.[i] ?? i+1) : (i+1);
+      const row = [xVal];
+      traces.forEach(tt => row.push(Array.isArray(tt.y) ? (tt.y[i] ?? '') : (Array.isArray(tt.values) ? (tt.values[i] ?? '') : '')));
+      rows.push(row);
+    }
+    downloadCSV(rows, name);
+  }
+
+  document.querySelectorAll('.exp-csv').forEach(btn => {
+    btn.addEventListener('click', () => exportPlotly(btn.dataset.export, `${btn.dataset.export}_{{ product_id }}`));
+  });
+
+  // Top customers table CSV
+  (function wireCustCSV(){
+    const tbl = document.getElementById('custTable');
+    const btn = document.getElementById('custCsv');
+    if (!tbl || !btn) return;
+    btn.addEventListener('click', () => {
+      const head = Array.from(tbl.tHead?.rows?.[0]?.cells || []).map(th => th.innerText.trim());
+      const aoa = [head];
+      Array.from(tbl.tBodies?.[0]?.rows || []).forEach(tr => aoa.push(Array.from(tr.cells).map(td => td.innerText.trim())));
+      downloadCSV(aoa, `top_customers_{{ product_id }}`);
+    });
+  })();
+
+  // ===== Charts =====
+  async function plotTrend(){
+    await ensurePlotly();
+    removeSkeleton('trendChart');
+
+    const el = document.getElementById('trendChart');
+    if (!months.length){
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No data available.</p>';
+      return;
+    }
+
+    const traces = [
+      { x: months, y: monthlyRevenue, type:'bar', name:'Revenue',
+        hovertemplate:'%{x}<br>%{y:$,.0f}<extra></extra>' },
+      { x: months, y: monthlyQty, type:'scatter', mode:'lines+markers', name: qtyTitle, yaxis:'y2',
+        hovertemplate:'%{x}<br>%{y:,.2f}<extra></extra>' }
+    ];
+
+    // Optional overlay from forecast payload
+    if (forecastDates.length && forecastYhat.length) {
+      traces.push({ x: forecastDates, y: forecastYhat, type:'scatter', mode:'lines', name:'Forecast', line:{dash:'dot'},
+        hovertemplate:'%{x}<br>%{y:$,.0f}<extra></extra>' });
+      if (forecastLo?.length && forecastHi?.length) {
+        traces.push({
+          x: forecastDates.concat([...forecastDates].reverse()),
+          y: forecastHi.concat([...forecastLo].reverse()),
+          type:'scatter', fill:'toself', name:'Forecast band', hoverinfo:'skip', line:{width:0}, opacity:.18
+        });
+      }
+    }
+
+    Plotly.newPlot('trendChart', traces, {
+      margin:{ t:10, r:40, b:50, l:60 },
+      hovermode:'x unified',
+      yaxis:{ title:'Revenue', tickformat:'$,.0f' },
+      yaxis2:{ overlaying:'y', side:'right', title: qtyTitle },
+      height:380,
+      showlegend:true
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotForecast(){
+    await ensurePlotly();
+    removeSkeleton('forecastChart');
+
+    const el = document.getElementById('forecastChart');
+    const actualX = forecastActualDates.length ? forecastActualDates : months;
+    const actualY = forecastActualVals.length ? forecastActualVals : monthlyRevenue.map(safe);
+    if (!actualX.length || !actualY.length) {
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No data available for the current window.</p>';
+      return;
+    }
+
+    const traces = [{
+      x: actualX, y: actualY, type:'scatter', mode:'lines+markers', name:'Actual',
+      hovertemplate:'%{x}<br>%{y:$,.0f}<extra></extra>'
+    }];
+
+    if (forecastDates.length && forecastYhat.length) {
+      traces.push({
+        x: forecastDates, y: forecastYhat, type:'scatter', mode:'lines', name:'Forecast', line:{dash:'dot'},
+        hovertemplate:'%{x}<br>%{y:$,.0f}<extra></extra>'
+      });
+      if (forecastLo.length && forecastHi.length) {
+        traces.push({
+          x: forecastDates.concat([...forecastDates].reverse()),
+          y: forecastHi.concat([...forecastLo].reverse()),
+          type:'scatter', fill:'toself', name:'Confidence band', hoverinfo:'skip', line:{width:0}, opacity:.18
+        });
+      }
+    }
+
+    Plotly.newPlot('forecastChart', traces, {
+      margin:{ t:10, r:20, b:50, l:60 },
+      yaxis:{ title:'Revenue', tickformat:'$,.0f' },
+      height:380,
+      showlegend:true
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotASP(){
+    await ensurePlotly();
+    removeSkeleton('aspChart');
+
+    const el = document.getElementById('aspChart');
+    if (!months.length || !monthlyQty.some(q=>safe(q)>0)) {
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">Not enough quantity to compute ASP.</p>';
+      return;
+    }
+    const asp = months.map((_,i)=> (safe(monthlyQty[i])>0 ? safe(monthlyRevenue[i])/safe(monthlyQty[i]) : null));
+    Plotly.newPlot('aspChart', [{
+      x: months, y: asp, type:'scatter', mode:'lines+markers', name:'ASP',
+      hovertemplate:'%{x}<br>%{y:$,.2f}<extra></extra>'
+    }], {
+      margin:{ t:10, r:20, b:50, l:60 },
+      yaxis:{ title:'ASP', tickformat:'$,.2f' },
+      height:380
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotUP(){
+    await ensurePlotly();
+    removeSkeleton('upHist');
+
+    const p10 = unitPriceStats?.p10, p50 = unitPriceStats?.p50, p90 = unitPriceStats?.p90;
+    document.getElementById('upP10').textContent = (p10!=null) ? nfMoney2.format(p10) : '—';
+    document.getElementById('upP50').textContent = (p50!=null) ? nfMoney2.format(p50) : '—';
+    document.getElementById('upP90').textContent = (p90!=null) ? nfMoney2.format(p90) : '—';
+
+    const el = document.getElementById('upHist');
+    if (!Array.isArray(unitPrices) || unitPrices.length === 0) {
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No unit price samples.</p>';
+      return;
+    }
+
+    const shapes = [];
+    if (p10!=null) shapes.push({type:'line',x0:p10,x1:p10,y0:0,y1:1,yref:'paper',line:{dash:'dot'}});
+    if (p50!=null) shapes.push({type:'line',x0:p50,x1:p50,y0:0,y1:1,yref:'paper',line:{dash:'dot'}});
+    if (p90!=null) shapes.push({type:'line',x0:p90,x1:p90,y0:0,y1:1,yref:'paper',line:{dash:'dot'}});
+
+    Plotly.newPlot('upHist', [{ x: unitPrices, type:'histogram', nbinsx: 40, name:'Unit price' }], {
+      margin:{ t:10, r:20, b:40, l:60 },
+      xaxis:{ title:'Unit Price', tickformat:'$,.2f' },
+      yaxis:{ title:'Count' },
+      shapes,
+      height:380
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotPxQ(){
+    await ensurePlotly();
+    removeSkeleton('pxqChart');
+
+    const el = document.getElementById('pxqChart');
+    const asp = months.map((_,i)=> (safe(monthlyQty[i])>0 ? safe(monthlyRevenue[i])/safe(monthlyQty[i]) : null));
+
+    const xs=[], ys=[], labels=[];
+    months.forEach((m,i)=>{ if (asp[i]!=null && Number.isFinite(asp[i])) { xs.push(asp[i]); ys.push(safe(monthlyQty[i])); labels.push(m); } });
+    if (!xs.length){
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">Not enough data.</p>';
+      return;
+    }
+
+    // correlation
+    const mx = xs.reduce((a,b)=>a+b,0)/xs.length;
+    const my = ys.reduce((a,b)=>a+b,0)/ys.length;
+    const num = xs.map((x,i)=>(x-mx)*(ys[i]-my)).reduce((a,b)=>a+b,0);
+    const den = Math.sqrt(xs.map(x=>(x-mx)**2).reduce((a,b)=>a+b,0) * ys.map(y=>(y-my)**2).reduce((a,b)=>a+b,0)) || 0;
+    const r = den ? (num/den) : 0;
+    const note = document.getElementById('pxqNote');
+    if (note) note.textContent = `Correlation: ${r.toFixed(2)} (-1 price-sensitive, +1 price-insensitive)`;
+
+    Plotly.newPlot('pxqChart', [{
+      x: xs, y: ys, text: labels, mode:'markers', type:'scatter',
+      hovertemplate:'%{text}<br>ASP %{x:$,.2f}<br>' + qtyTitle + ' %{y:,.0f}<extra></extra>'
+    }], {
+      margin:{ t:10, r:20, b:50, l:60 },
+      xaxis:{ title:'ASP', tickformat:'$,.2f' },
+      yaxis:{ title: qtyTitle },
+      height:380
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotSeasonality(){
+    await ensurePlotly();
+    removeSkeleton('seasonChart');
+
+    const el = document.getElementById('seasonChart');
+    if (!months.length){
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No data.</p>';
+      return;
+    }
+    const yr = m => m.slice(0,4);
+    const mIdx = m => +m.slice(5,7);
+    const years = [...new Set(months.map(yr))].sort();
+    const z = years.map(()=>Array(12).fill(null));
+
+    months.forEach((m,i)=>{ const r=years.indexOf(yr(m)); const c=mIdx(m)-1; z[r][c]=safe(monthlyRevenue[i]); });
+
+    Plotly.newPlot('seasonChart', [{
+      z,
+      x:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      y:years,
+      type:'heatmap',
+      colorscale:'Blues',
+      hovertemplate:'%{y} %{x}<br>%{z:$,.0f}<extra></extra>'
+    }], { margin:{t:10,r:20,b:40,l:40}, height:380 }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotHBar(divId, labels, values, title){
+    await ensurePlotly();
+    removeSkeleton(divId);
+
+    const el = document.getElementById(divId);
+    if (!labels || !labels.length || !values || !values.length) {
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No data available.</p>';
+      return;
+    }
+
+    Plotly.newPlot(divId, [{
+      x: values,
+      y: labels.map(s => (s && s.length > 42) ? (s.slice(0,39)+'…') : s),
+      type:'bar',
+      orientation:'h',
+      hovertext: labels,
+      hovertemplate:'<b>%{hovertext}</b><br>%{x:$,.0f}<extra></extra>'
+    }], {
+      margin:{t:10,l:10,r:40,b:30},
+      xaxis:{ title: String(title), tickformat:'$,.0f' },
+      yaxis:{ automargin:true },
+      height:360
+    }, { displayModeBar:false, responsive:true });
+  }
+
+  async function plotCustPie(){
+    await ensurePlotly();
+    removeSkeleton('custPie');
+
+    const el = document.getElementById('custPie');
+    const labels = (topCustomers||[]).map(r=>r.Customer);
+    const values = (topCustomers||[]).map(r=>safe(r.Revenue));
+
+    if (!values.length) {
+      el.innerHTML = '<p class="text-muted text-center mt-3 mb-0">No customers.</p>';
+      return;
+    }
+
+    const totalRev = monthlyRevenue.reduce((a,b)=>a+safe(b),0);
+    const sumTop = values.reduce((a,b)=>a+b,0);
+    const other = Math.max(0, totalRev - sumTop);
+    if (other > 0) { labels.push('Other'); values.push(other); }
+
+    const shareTop = totalRev ? (sumTop/totalRev*100) : 0;
+    const note = document.getElementById('custPieNote');
+    if (note) note.textContent = `Top ${topCustomers.length} cover ${shareTop.toFixed(1)}% of revenue`;
+
+    Plotly.newPlot('custPie', [{
+      labels, values, type:'pie', textinfo:'label+percent',
+      hovertemplate:'%{label}<br>%{value:$,.0f} (%{percent})<extra></extra>'
+    }], { margin:{t:10,r:10,b:10,l:10}, height:360 }, { displayModeBar:false, responsive:true });
+  }
+
+  async function renderChartById(id){
+    try {
+      switch(id){
+        case 'forecastChart':  return plotForecast();
+        case 'trendChart':     return plotTrend();
+        case 'aspChart':       return plotASP();
+        case 'upHist':         return plotUP();
+        case 'pxqChart':       return plotPxQ();
+        case 'seasonChart':    return plotSeasonality();
+        case 'custPie':        return plotCustPie();
+        case 'regionChart':    return plotHBar('regionChart', regionLabels, regionValues, 'Revenue');
+        case 'supplierChart':  return plotHBar('supplierChart', supplierLabels, supplierValues, 'Revenue');
+      }
+    } catch (e) {
+      console.error('Render error', id, e);
+      const err = document.getElementById('drillError');
+      if (err) {
+        err.textContent = 'One or more charts failed to render. Check console for details.';
+        err.classList.remove('d-none');
+      }
+    }
+  }
+
+  // Co-purchase metric toggles + initial load
+  document.getElementById('fbtSortConfidence')?.addEventListener('click', () => {
+    fbtMetric = 'confidence';
+    renderAlsoBought(fbtRows);
+  });
+  document.getElementById('fbtSortLift')?.addEventListener('click', () => {
+    fbtMetric = 'lift';
+    renderAlsoBought(fbtRows);
+  });
+  if ((fbtRows && fbtRows.length) || fbtMessage || fbtBaseOrders) {
+    renderAlsoBought(fbtRows);
+  } else {
+    loadAlsoBought().catch(err => console.warn('also_bought init failed', err));
+  }
+
+  // Lazy render (IntersectionObserver)
+  const lazy = Array.from(document.querySelectorAll('[data-lazy="true"]'));
+  const pending = new Set(lazy.map(el => el.id).filter(Boolean));
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && pending.has(e.target.id)){
+        pending.delete(e.target.id);
+        renderChartById(e.target.id);
+      }
+    });
+  }, { rootMargin:'250px 0px' });
+
+  lazy.forEach(el => io.observe(el));
+
+  // Render above-the-fold immediately
+  const immediateIds = ['forecastChart','trendChart','aspChart'];
+  immediateIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top < window.innerHeight + 120) {
+      pending.delete(id);
+      renderChartById(id);
+    }
+  });
+})();
+</script>
+
+<style>
+  /* Hero */
+  .drill-hero{
+    background: linear-gradient(120deg, #7a413a 0%, #9b5f3d 55%, rgba(255,255,255,0.10) 100%);
+    position: relative;
+    border-radius: 1.1rem;
+    color: #fff;
+  }
+  .drill-hero .hero-gloss{
+    position:absolute; inset:0;
+    background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 55%);
+    pointer-events:none;
+  }
+  .hero-badge{
+    width: 38px; height: 38px;
+    display: inline-flex; align-items:center; justify-content:center;
+    border-radius: 12px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .shadow-soft { box-shadow: 0 18px 40px rgba(122,65,58,0.15); }
+
+  /* Snapshot */
+  .product-snapshot .snapshot-label { font-size:.75rem; text-transform:uppercase; color:#6c757d; letter-spacing:.05em; }
+  .product-snapshot .snapshot-value { font-size:1.4rem; font-weight:700; color:#1f2933; }
+  .product-snapshot .snapshot-note { font-size:.8rem; color:#6c757d; }
+  .product-snapshot .card-body { background: linear-gradient(180deg, rgba(122,65,58,0.05), rgba(255,255,255,0)); }
+
+  /* Cards */
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform .15s ease-in-out, box-shadow .15s ease-in-out; border-radius: 1rem; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,.08); }
+  }
+
+  /* Charts */
+  .chart-container { width: 100%; min-height: 360px; position: relative; }
+  .badge { font-weight: 600; }
+
+  /* Skeleton shimmer */
+  .skeleton { background:#f6f7f8; position:relative; overflow:hidden; border-radius:.6rem; }
+  .skeleton .loading.shimmer {
+    position:absolute; inset:0;
+    background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.65) 50%,rgba(255,255,255,0) 100%);
+    transform:translateX(-100%); animation:shimmer 1.15s infinite;
+  }
+  @keyframes shimmer{100%{transform:translateX(100%)}}
+
+  /* Lifecycle */
+  .lifecycle-stage { padding: .25rem 0; }
+</style>
+
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

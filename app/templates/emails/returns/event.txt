@@ -1,0 +1,32 @@
+{{ event_label }}
+
+Return #{{ rma.id }}
+Status: {{ rma.status_label or rma.status }}
+Order: {{ rma.order_id }}
+Customer: {{ rma.customer_name or rma.customer_id }}
+Rep: {{ summary.rep_name or '-' }}
+Submitted: {{ summary.date_submitted or '-' }}
+{% if summary.wh_approved_at %}Warehouse Approved: {{ summary.wh_approved_at }}
+{% endif %}{% if summary.mgr_approved_at %}Manager Approved: {{ summary.mgr_approved_at }}
+{% endif %}{% if detail %}Detail: {{ detail }}
+{% endif %}
+Totals:
+- Credit: ${{ '%.2f'|format(summary.total_credit_amount or 0) }}
+- Weight (lb): {{ '%.3f'|format(summary.total_weight_lb or 0) }}
+- Packs: {{ summary.total_packs or 0 }}
+{% if summary.primary_reason or summary.primary_category or summary.primary_follow_up %}
+Reason Summary:
+- Reason: {{ summary.primary_reason or '-' }}
+- Category: {{ summary.primary_category or '-' }}
+- Follow-up: {{ summary.primary_follow_up or '-' }}
+{% endif %}
+
+Line Items (top {{ top_items|length }}):
+{% for item in top_items -%}
+- {{ item.product_code or item.sku or '-' }} | {{ item.product_desc or item.product_name or '-' }} | {{ '%.3f'|format(item.weight_lb or 0) }} lb | ${{ '%.2f'|format(item.credit_amount or 0) }}
+{% else -%}
+- No line items
+{% endfor %}
+
+Open Return:
+{{ return_url }}

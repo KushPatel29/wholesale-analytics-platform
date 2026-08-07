@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div id="filters-bar">
+  <div class="alert alert-info py-2 px-3" role="alert">
+    <strong>Data quality:</strong>
+    Unit cost gaps: <span id="warn-unit" class="fw-bold">{{ warnings.missing_unit_cost or 0 }}</span> |
+    Missing CostPrice: <span id="warn-missing" class="fw-bold">{{ warnings.missing_costprice or 0 }}</span> |
+    Negative revenue: <span id="warn-negative" class="fw-bold">{{ warnings.negative_revenue or 0 }}</span> |
+    NaT dates: <span id="warn-nat" class="fw-bold">{{ warnings.nat_dates or 0 }}</span>
+  </div>
+  <small class="text-muted">Counts reflect current filters.</small>
+  <hr />
+</div>
+
+<div class="row mb-3" id="kpi-cards">
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="text-muted">Customers</div>
+      <div id="kpi-customers" class="fs-4 fw-bold">{{ kpis.total_customers }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="text-muted">Revenue</div>
+      <div id="kpi-revenue" class="fs-4 fw-bold">{{ kpis.total_revenue|currency }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="text-muted">Orders</div>
+      <div id="kpi-orders" class="fs-4 fw-bold">{{ kpis.total_orders }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-6 col-lg-3 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="text-muted">Average Order Value</div>
+      <div id="kpi-aov" class="fs-4 fw-bold">{{ kpis.aov|currency }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-6 col-lg-3 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="text-muted">90-day Churn</div>
+      <div id="kpi-churn" class="fs-4 fw-bold">{{ '%.1f'|format(kpis.churn_rate) }}%</div>
+    </div></div>
+  </div>
+  </div>
+
+<div class="row">
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <h5 class="card-title">Monthly Revenue</h5>
+      <div id="rev_chart" style="height:340px;"></div>
+    </div></div>
+  </div>
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <h5 class="card-title">Monthly Orders</h5>
+      <div id="orders_chart" style="height:340px;"></div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+  const authFetch = window.authFetch || fetch;
+  async function fetchJSON(url) {
+    const res = await authFetch(url, { credentials: 'same-origin' });
+    if (res.status === 304) { return null; }
+    return res.json();
+  }
+
+  function fmtCurrency(n) {
+    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD'}).format(n || 0); } catch (_) { return (n||0).toFixed(2); }
+  }
+
+  async function loadKPIs() {
+    const data = await fetchJSON('/api/slice/kpis');
+    if (!data) return;
+    document.getElementById('kpi-customers').textContent = data.total_customers;
+    document.getElementById('kpi-revenue').textContent = fmtCurrency(data.total_revenue);
+    document.getElementById('kpi-orders').textContent = data.total_orders;
+    document.getElementById('kpi-aov').textContent = fmtCurrency(data.aov);
+    document.getElementById('kpi-churn').textContent = (data.churn_rate || 0).toFixed(1) + '%';
+  }
+
+  async function loadMonthly() {
+    const data = await fetchJSON('/api/slice/monthly');
+    if (!data) return;
+    const months = data.months || [];
+    const revenue = data.revenue || [];
+    const orders = data.orders || [];
+    const revTrace = { x: months, y: revenue, type: 'scatter', mode: 'lines+markers', name: 'Revenue' };
+    const ordTrace = { x: months, y: orders, type: 'scatter', mode: 'lines+markers', name: 'Orders' };
+    Plotly.react('rev_chart', [revTrace], { margin: { t: 20 }, xaxis: { title: 'Month' }, yaxis: { title: 'Revenue' } }, {displayModeBar:false});
+    Plotly.react('orders_chart', [ordTrace], { margin: { t: 20 }, xaxis: { title: 'Month' }, yaxis: { title: 'Orders' } }, {displayModeBar:false});
+  }
+
+  async function refreshAll() {
+    await Promise.all([loadKPIs(), loadMonthly()]);
+  }
+
+  // Intercept filter form submit to update session filters then refresh API-driven widgets
+  (function() {
+    const container = document.getElementById('filters-bar');
+    const form = container ? container.querySelector('form') : null;
+    if (form) {
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(form);
+        const res = await authFetch(window.location.pathname, { method: 'POST', body: fd, credentials: 'same-origin' });
+        if (res.ok) {
+          refreshAll();
+        } else {
+          // fallback: reload full page
+          window.location.reload();
+        }
+      });
+    }
+    // Initial load from API (fast + cached)
+    refreshAll();
+  })();
+</script>
+
+<div class="row mt-3">
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Pareto Curve</h5>
+        <a class="small" data-bs-toggle="collapse" href="#expPareto">Explain</a>
+      </div>
+      <div id="pareto_chart" style="height:320px;"></div>
+      <div class="collapse" id="expPareto"><div class="mt-2 small text-muted">
+        Shows cumulative revenue share as we add customers in descending revenue order. A steep curve indicates concentration (e.g., 20% customers drive 80% revenue). Useful to target retention for high-value cohorts and to assess revenue diversification across the base.
+      </div></div>
+    </div></div>
+  </div>
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Tenure Histogram (months)</h5>
+        <a class="small" data-bs-toggle="collapse" href="#expTenure">Explain</a>
+      </div>
+      <div id="tenure_hist" style="height:320px;"></div>
+      <div class="collapse" id="expTenure"><div class="mt-2 small text-muted">
+        Distribution of customer tenure measured as months between first and last order. Highlights how mature the customer base is; shifts right imply longer relationships.
+      </div></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Revenue by Weekday</h5>
+        <a class="small" data-bs-toggle="collapse" href="#expWeekday">Explain</a>
+      </div>
+      <div id="weekday_bar" style="height:320px;"></div>
+      <div class="collapse" id="expWeekday"><div class="mt-2 small text-muted">
+        Sum of revenue grouped by weekday. Use it to plan staffing or campaigns around peak sales days; consider timezone effects and seasonality.
+      </div></div>
+    </div></div>
+  </div>
+  <div class="col-lg-6 mb-3">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Order Frequency Histogram</h5>
+        <a class="small" data-bs-toggle="collapse" href="#expFreq">Explain</a>
+      </div>
+      <div id="freq_hist" style="height:320px;"></div>
+      <div class="collapse" id="expFreq"><div class="mt-2 small text-muted">
+        Number of orders per customer bucketed: one-time buyers, repeat buyers, and heavy purchasers. Track movement across buckets after interventions.
+      </div></div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+  // Static data from server for supporting charts
+  (function(){
+    const px = {{ pareto_x|tojson }};
+    const py = {{ pareto_y|tojson }};
+    if (px.length && py.length) {
+      Plotly.newPlot('pareto_chart', [{x: px, y: py, type:'scatter', mode:'lines', name:'Cumulative Revenue'}], {margin:{t:20}, xaxis:{title:'% of Customers'}, yaxis:{title:'% of Revenue'}}, {displayModeBar:false});
+    } else {
+      document.getElementById('pareto_chart').innerHTML = '<div class="text-muted">No data</div>';
+    }
+
+    const tl = {{ tenure_labels|tojson }};
+    const tc = {{ tenure_counts|tojson }};
+    Plotly.newPlot('tenure_hist', [{x: tl, y: tc, type:'bar'}], {margin:{t:20}, xaxis:{title:'Months'}, yaxis:{title:'Customers'}}, {displayModeBar:false});
+
+    const wdL = {{ weekday_labels|tojson }};
+    const wdV = {{ weekday_values|tojson }};
+    Plotly.newPlot('weekday_bar', [{x: wdL, y: wdV, type:'bar'}], {margin:{t:20}, xaxis:{title:'Weekday'}, yaxis:{title:'Revenue'}}, {displayModeBar:false});
+
+    const fl = {{ freq_labels|tojson }};
+    const fv = {{ freq_counts|tojson }};
+    Plotly.newPlot('freq_hist', [{x: fl, y: fv, type:'bar'}], {margin:{t:20}, xaxis:{title:'Orders per Customer'}, yaxis:{title:'Customers'}}, {displayModeBar:false});
+  })();
+</script>
+{% endblock %}

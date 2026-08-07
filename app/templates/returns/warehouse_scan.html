@@ -1,0 +1,217 @@
+{% extends "returns/base.html" %}
+{% block returns_title %}Warehouse Scan{% endblock %}
+{% block content %}
+<section class="returns-page py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+    <div>
+      <h1 class="h3 mb-1">Warehouse Scan</h1>
+      <p class="text-muted mb-0">Scan or enter an RMA value to jump directly into warehouse receive/inspection.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.approvals') }}">Back to Approvals</a>
+  </div>
+
+  {% if scan_error %}
+  <div class="alert alert-warning mb-3" role="alert">{{ scan_error }}</div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <form method="post" class="card shadow-sm border-0 mb-3" id="warehouseScanForm" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="card-body">
+          <label class="form-label fw-semibold" for="rma_id">RMA ID / Barcode</label>
+          <div class="input-group">
+            <input class="form-control" id="rma_id" name="rma_id" autofocus autocomplete="off" placeholder="Example: 123, RMA-123, RETURN-123">
+            <button class="btn btn-primary" type="submit">Open</button>
+          </div>
+          <div id="scanStatus" class="small text-muted mt-2">Keyboard wedge scanners can scan directly into this input and press Enter.</div>
+        </div>
+      </form>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <details id="cameraPanel">
+            <summary class="fw-semibold" style="cursor: pointer;">Camera Scan (Chrome)</summary>
+            <div class="mt-3">
+              <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-outline-primary btn-sm" type="button" id="startCameraButton">Start Camera</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="stopCameraButton" disabled>Stop Camera</button>
+              </div>
+              <div class="returns-scan-preview-wrap">
+                <video id="scanVideo" class="returns-scan-video d-none" autoplay playsinline muted></video>
+              </div>
+              <div id="cameraStatus" class="small text-muted mt-2">
+                Camera scanning uses native <code>BarcodeDetector</code> and <code>getUserMedia</code> only.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Recent Scans</h2>
+          <ul class="list-unstyled mb-0 returns-recent-list">
+            {% for row in recent_scans %}
+            <li class="py-1 border-bottom">
+              <a class="text-decoration-none" href="{{ url_for('returns_warehouse.inspect_or_receive', rma_id=row.rma_id) }}">#{{ row.rma_id }}</a>
+              <span class="small text-muted">{{ row.raw_value }}</span>
+            </li>
+            {% else %}
+            <li class="text-muted small">No recent scans in this browser session.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+  (function () {
+    const form = document.getElementById('warehouseScanForm');
+    const input = document.getElementById('rma_id');
+    const statusEl = document.getElementById('scanStatus');
+    const video = document.getElementById('scanVideo');
+    const startBtn = document.getElementById('startCameraButton');
+    const stopBtn = document.getElementById('stopCameraButton');
+    const cameraStatus = document.getElementById('cameraStatus');
+
+    if (!form || !input) {
+      return;
+    }
+
+    let stream = null;
+    let detector = null;
+    let rafId = null;
+    let scanning = false;
+
+    function setStatus(message, tone) {
+      if (!statusEl) {
+        return;
+      }
+      statusEl.className = 'small mt-2 ' + (tone === 'danger' ? 'text-danger' : (tone === 'success' ? 'text-success' : 'text-muted'));
+      statusEl.textContent = message || '';
+    }
+
+    function setCameraStatus(message, tone) {
+      if (!cameraStatus) {
+        return;
+      }
+      cameraStatus.className = 'small mt-2 ' + (tone === 'danger' ? 'text-danger' : (tone === 'success' ? 'text-success' : 'text-muted'));
+      cameraStatus.textContent = message || '';
+    }
+
+    function canUseCameraScan() {
+      return Boolean(window.BarcodeDetector) && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+
+    function stopCamera() {
+      scanning = false;
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach(function (track) { track.stop(); });
+        stream = null;
+      }
+      if (video) {
+        video.srcObject = null;
+        video.classList.add('d-none');
+      }
+      if (startBtn) {
+        startBtn.disabled = false;
+      }
+      if (stopBtn) {
+        stopBtn.disabled = true;
+      }
+    }
+
+    function submitScan(rawValue) {
+      if (!rawValue) {
+        return;
+      }
+      input.value = rawValue;
+      setStatus('Scan captured. Opening return...', 'success');
+      stopCamera();
+      form.requestSubmit();
+    }
+
+    async function scanLoop() {
+      if (!scanning || !video || !detector) {
+        return;
+      }
+      try {
+        const barcodes = await detector.detect(video);
+        if (Array.isArray(barcodes) && barcodes.length) {
+          const value = (barcodes[0].rawValue || '').trim();
+          if (value) {
+            submitScan(value);
+            return;
+          }
+        }
+      } catch (err) {
+        setCameraStatus('Camera scanning failed while detecting codes.', 'danger');
+      }
+      rafId = window.requestAnimationFrame(scanLoop);
+    }
+
+    async function startCamera() {
+      if (!canUseCameraScan()) {
+        setCameraStatus('Camera scan is not available on this browser/device.', 'danger');
+        return;
+      }
+      try {
+        const formats = ['code_128', 'code_39', 'code_93', 'codabar', 'ean_13', 'ean_8', 'itf', 'qr_code', 'upc_a', 'upc_e'];
+        detector = new window.BarcodeDetector({ formats: formats });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        video.srcObject = stream;
+        video.classList.remove('d-none');
+        await video.play();
+        scanning = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        setCameraStatus('Camera active. Point at barcode or QR code.', 'success');
+        rafId = window.requestAnimationFrame(scanLoop);
+      } catch (err) {
+        stopCamera();
+        setCameraStatus('Unable to access camera. Check permissions and retry.', 'danger');
+      }
+    }
+
+    form.addEventListener('submit', function () {
+      if (!input.value.trim()) {
+        setStatus('Enter or scan an RMA value first.', 'danger');
+      }
+    });
+
+    if (startBtn) {
+      startBtn.addEventListener('click', startCamera);
+    }
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function () {
+        stopCamera();
+        setCameraStatus('Camera stopped.', 'muted');
+      });
+    }
+
+    if (!canUseCameraScan()) {
+      if (startBtn) {
+        startBtn.disabled = true;
+      }
+      setCameraStatus('Camera scan requires Chrome with BarcodeDetector support.', 'muted');
+    }
+
+    window.addEventListener('beforeunload', stopCamera);
+    input.focus();
+  }());
+</script>
+{% endblock %}

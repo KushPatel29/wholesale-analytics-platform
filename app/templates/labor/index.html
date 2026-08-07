@@ -1,0 +1,808 @@
+
+{% extends "base.html" %}
+{% from "labor/_macros.html" import metric_card, mini_stat, section_header, signal_card, watchlist_panel %}
+{% block title %}Labor Intelligence | Wholesale Analytics{% endblock %}
+{% block head_extras %}
+  {{ super() }}
+  {% set labor_asset_version = '20260326-enterprise-workspace' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/labor.css', v=labor_asset_version) }}">
+{% endblock %}
+{% block content %}
+{% set hero = payload.get('hero') or {} %}
+{% set scope = payload.get('scope') or {} %}
+{% set kpis = payload.get('kpis') or {} %}
+{% set scorecard_groups = payload.get('scorecard_groups') or [] %}
+{% set workspace = payload.get('workspace') or {} %}
+{% set department_rows = payload.get('department_table') or [] %}
+{% set category_rows = payload.get('category_table') or [] %}
+{% set worker_rows = payload.get('worker_table') or [] %}
+{% set watchlists = payload.get('watchlists') or {} %}
+{% set focus = payload.get('focus') or {} %}
+{% set department_focus = focus.get('department') or {} %}
+{% set category_focus = focus.get('category') or {} %}
+{% set worker_focus = focus.get('worker') or {} %}
+<div id="LaborPage" class="labor-page py-4" data-page="labor">
+  <section class="labor-hero card border-0 mb-4 position-relative">
+    <div class="card-body p-4 p-xl-5">
+      <div class="labor-hero-layout">
+        <div class="labor-hero-main">
+          <div class="labor-kicker">Workforce Command Header</div>
+          <h1 class="labor-hero-title">{{ hero.get('title', 'Labor Intelligence') }}</h1>
+          <p class="labor-hero-subtitle">{{ hero.get('subtitle', 'Enterprise workforce and labor decision support.') }}</p>
+          <p class="labor-hero-purpose">{{ hero.get('purpose', 'Use this workspace to understand where labor pressure sits, what is driving it, and what management should inspect next.') }}</p>
+          {% if hero.get('executive_narrative') %}
+            <div class="labor-hero-narrative">{{ hero.get('executive_narrative') }}</div>
+          {% endif %}
+          <div class="labor-chip-row mt-3">
+            <span class="labor-chip">Current window {{ hero.get('current_window_label') or scope.get('current_window_label') or 'n/a' }}</span>
+            <span class="labor-chip">Prior window {{ hero.get('prior_window_label') or scope.get('prior_window_label') or 'n/a' }}</span>
+            <span class="labor-chip">Top driver {{ hero.get('top_driver') or 'Stable' }}</span>
+            {% if hero.get('last_refresh_label') %}<span class="labor-chip">Last refresh {{ hero.get('last_refresh_label') }}</span>{% endif %}
+          </div>
+        </div>
+        <aside class="labor-hero-side">
+          <div class="labor-command-card">
+            <div class="labor-command-card__label">Review First</div>
+            <div class="labor-command-list">
+              {% for action in payload.get('actions', [])[:3] %}
+                {% if action.url %}
+                  <a class="labor-command-link" href="{{ action.url }}">
+                    <span class="labor-command-link__title">{{ action.title }}</span>
+                    <span class="labor-command-link__detail">{{ action.detail }}</span>
+                  </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <details class="labor-export-menu mt-3">
+            <summary>Exports</summary>
+            <div class="labor-export-menu__body">
+              <a class="btn btn-light btn-sm" href="{{ export_urls.get('snapshot_xlsx') }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Snapshot XLSX</a>
+              <a class="btn btn-outline-light btn-sm" href="{{ export_urls.get('detail_csv') }}"><i class="bi bi-filetype-csv me-1"></i>Detail CSV</a>
+              <a class="btn btn-outline-light btn-sm" href="{{ export_urls.get('department_summary_xlsx') }}">Department Summary</a>
+              <a class="btn btn-outline-light btn-sm" href="{{ export_urls.get('category_summary_xlsx') }}">Category Summary</a>
+              <a class="btn btn-outline-light btn-sm" href="{{ export_urls.get('employee_summary_xlsx') }}">Worker Summary</a>
+              <a class="btn btn-outline-light btn-sm" href="{{ export_urls.get('watchlist_csv') }}">Watchlist Export</a>
+            </div>
+          </details>
+        </aside>
+      </div>
+      <div class="labor-summary-strip mt-4">
+        {{ mini_stat('Labor Cost', (hero.get('total_labor_cost') or 0)|currency, 'Paid hours ' ~ ('%0.1f'|format(hero.get('total_paid_hours') or 0)), 'primary') }}
+        {{ mini_stat('Stability Score', '%0.0f'|format(hero.get('stability_score') or 0) if hero.get('stability_score') is not none else 'n/a', 'Higher is more stable', 'info') }}
+        {{ mini_stat('Top Department', hero.get('top_department') or 'n/a', 'Top worker ' ~ (hero.get('top_worker') or 'n/a'), 'info') }}
+        {{ mini_stat('Top Category', hero.get('top_category') or 'n/a', 'Top driver ' ~ (hero.get('top_driver') or 'Stable'), 'info') }}
+      </div>
+    </div>
+  </section>
+
+  <section class="card labor-filter-card border-0 mb-4">
+    <div class="card-body p-4">
+      {{ section_header('Scope', 'Filters And Context', 'Keep the existing labor filter contract, but make the current analytical scope obvious.', 'Every scorecard, chart, watchlist, drill, and export inherits the active labor filters and comparable-period contract.') }}
+      <div class="labor-context-strip mb-4">
+        <div>
+          <div class="labor-context-label">Active scope</div>
+          <div class="labor-context-copy">{{ scope.get('active_scope_label', 'the full labor scope')|capitalize }}.</div>
+          <div class="labor-context-note">{{ scope.get('comparator_note') }}</div>
+          {% if scope.get('trust_note') %}
+            <div class="labor-trust-note mt-2">{{ scope.get('trust_note') }}</div>
+          {% endif %}
+        </div>
+        <div class="labor-chip-row labor-chip-row-wrap">
+          {% if scope.get('chips') %}
+            {% for chip in scope.get('chips', []) %}
+              <a class="labor-chip labor-chip-dark" href="{{ chip.clear_url }}">{{ chip.label }} <span class="labor-chip-clear">×</span></a>
+            {% endfor %}
+          {% else %}
+            <span class="labor-chip labor-chip-dark">No scoped filter chips are active</span>
+          {% endif %}
+        </div>
+      </div>
+      <form method="get" class="row g-3 align-items-end labor-filter-form">
+        <div class="col-md-3">
+          <label class="form-label">Start Date</label>
+          <input class="form-control" type="date" name="start" value="{{ filters.get('start') }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">End Date</label>
+          <input class="form-control" type="date" name="end" value="{{ filters.get('end') }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Departments</label>
+          <select class="form-select" name="department" multiple size="5">
+            {% for option in filter_options.get('departments', []) %}
+              <option value="{{ option.value }}" {% if option.value in filters.get('departments', []) %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Workers</label>
+          <select class="form-select" name="employee" multiple size="5">
+            {% for option in filter_options.get('employees', []) %}
+              <option value="{{ option.value }}" {% if option.value in filters.get('employees', []) %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Time Categories</label>
+          <select class="form-select" name="time_category" multiple size="5">
+            {% for option in filter_options.get('time_categories', []) %}
+              <option value="{{ option.value }}" {% if option.value in filters.get('time_categories', []) %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Statuses</label>
+          <select class="form-select" name="status" multiple size="5">
+            {% for option in filter_options.get('statuses', []) %}
+              <option value="{{ option.value }}" {% if option.value in filters.get('statuses', []) %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Work Rules</label>
+          <select class="form-select" name="work_rule" multiple size="5">
+            {% for option in filter_options.get('work_rules', []) %}
+              <option value="{{ option.value }}" {% if option.value in filters.get('work_rules', []) %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Search</label>
+          <input class="form-control" type="search" name="search" placeholder="Department, worker, category, status, work rule..." value="{{ filters.get('search') or '' }}">
+        </div>
+        <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+          <button type="submit" class="btn btn-primary">Apply Filters</button>
+          <a href="{{ url_for('labor.index') }}" class="btn btn-outline-secondary">Reset</a>
+          <div class="labor-filter-note">Chart clicks, table links, and watchlists preserve date range, scoped filters, and comparator context.</div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {% for message in payload.get('messages', []) %}
+    <div class="alert alert-warning shadow-sm border-0 mb-4">{{ message }}</div>
+  {% endfor %}
+
+  <section class="labor-section">
+    {{ section_header('Executive', 'Executive Labor Scorecard', 'Organize the labor story into actionable KPI groups for leadership, HR, operations, and finance.', 'Each KPI shows its definition, current value, and comparator-aware movement where a prior window is available.') }}
+    <div class="labor-score-group-grid">
+      {% for group in scorecard_groups %}
+        <article class="labor-score-group card border-0">
+          <div class="card-body">
+            <div class="labor-score-group__title">{{ group.title }}</div>
+            <div class="labor-score-group__subtitle">{{ group.description }}</div>
+            <div class="labor-metric-grid mt-3">
+              {% for metric in group.metrics %}
+                {{ metric_card(metric) }}
+              {% endfor %}
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Signals', 'Decision Signals', 'Actionable labor signals for leaders and managers.', 'These cards say what changed, why it matters, what to inspect next, and where to drill with one click.') }}
+    <div class="labor-signal-grid">
+      {% for signal in payload.get('signals', []) %}
+        {{ signal_card(signal) }}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Departments', 'Department Performance Layer', 'Find the departments that cost the most, change the fastest, or look the least stable.', payload.get('narratives', {}).get('department', 'Departments should be ranked by management priority, not just raw cost.')) }}
+    <div class="labor-chart-grid labor-chart-grid-departments">
+      <div class="card border-0 labor-chart-card labor-chart-card-lg">
+        <div class="card-body">
+          <div class="labor-chart-title">Departments by labor cost</div>
+          <div id="laborDeptCostChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card labor-chart-card-lg">
+        <div class="card-body">
+          <div class="labor-chart-title">Fastest cost movement vs prior comparable window</div>
+          <div id="laborDeptChangeChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Cost vs paid hours by department</div>
+          <div id="laborDeptScatterChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Premium and absence share</div>
+          <div id="laborDeptRiskChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Department instability</div>
+          <div id="laborDeptVolatilityChart" class="labor-chart"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card border-0 mt-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle labor-data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Department</th>
+                <th class="text-end">Labor Cost</th>
+                <th class="text-end">Paid Hours</th>
+                <th class="text-end">Blended Rate</th>
+                <th class="text-end">Premium Share</th>
+                <th class="text-end">Absence Share</th>
+                <th class="text-end">Cost Δ</th>
+                <th class="text-end">Volatility</th>
+                <th>Management Focus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in department_rows %}
+                <tr>
+                  <td>
+                    <a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a>
+                    <div class="small text-muted">{{ row.focus_reason or 'Review department detail.' }}</div>
+                  </td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.blended_rate|currency) if row.blended_rate is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ ('%0.1f%%'|format((row.premium_share_pct or 0) * 100)) if row.premium_share_pct is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ ('%0.1f%%'|format((row.absence_share_pct or 0) * 100)) if row.absence_share_pct is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ ('%+0.1f%%'|format((row.cost_delta_pct or 0) * 100)) if row.cost_delta_pct is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ ('%0.1f%%'|format((row.cost_volatility or 0) * 100)) if row.cost_volatility is not none else 'n/a' }}</td>
+                  <td>
+                    <span class="labor-tag labor-tag-{{ row.risk_tone or 'success' }}">{{ row.management_focus or 'maintain staffing rhythm' }}</span>
+                    {% if row.department_scope_url %}
+                      <a class="labor-inline-action d-block mt-2" href="{{ row.department_scope_url }}">{{ row.action_label or 'Open department investigation' }}</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="9" class="text-center text-muted py-4">No department rows matched the active filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="labor-section" id="department-focus">
+    {{ section_header('Department Drill', 'Department Investigation Layer', 'Embedded department drilldown with trend, workers, categories, and watch signals.', 'Use this as the first scoped investigation view when a department needs staffing or labor-cost attention.') }}
+    {% if department_focus %}
+      {% set focus_summary = department_focus.get('summary') or {} %}
+      <div class="labor-focus-card p-4">
+        <div class="labor-focus-card__head">
+          <div>
+            <div class="labor-focus-card__eyebrow">{{ 'Selected department' if department_focus.get('is_selected') else 'Default focus' }}</div>
+            <h3 class="labor-focus-card__title">{{ department_focus.get('department_name') }}</h3>
+            <div class="labor-focus-card__copy">{{ department_focus.get('interpretation') }}</div>
+            <div class="labor-focus-card__note">{{ department_focus.get('reason_note') }}</div>
+          </div>
+          {% if department_focus.get('clear_url') and department_focus.get('is_selected') %}
+            <a class="btn btn-outline-secondary btn-sm" href="{{ department_focus.get('clear_url') }}">Clear department filter</a>
+          {% endif %}
+        </div>
+        <div class="labor-summary-strip mt-4">
+          {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Share ' ~ ('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100) if focus_summary.get('labor_cost_share_pct') is not none else 0), 'primary') }}
+          {{ mini_stat('Paid Hours', '%0.1f'|format(focus_summary.get('paid_hours') or 0), 'Hours share ' ~ ('%0.1f%%'|format((focus_summary.get('paid_hours_share_pct') or 0) * 100) if focus_summary.get('paid_hours_share_pct') is not none else 0), 'info') }}
+          {{ mini_stat('Blended Rate', (focus_summary.get('blended_rate')|currency) if focus_summary.get('blended_rate') is not none else 'n/a', 'Driver ' ~ ((focus_summary.get('driver_label') or 'stable')|replace('-', ' ')), 'info') }}
+          {{ mini_stat('Premium Share', ('%0.1f%%'|format((focus_summary.get('premium_share_pct') or 0) * 100)) if focus_summary.get('premium_share_pct') is not none else 'n/a', 'Absence ' ~ (('%0.1f%%'|format((focus_summary.get('absence_share_pct') or 0) * 100)) if focus_summary.get('absence_share_pct') is not none else 'n/a'), 'warning') }}
+          {{ mini_stat('Priority Score', '%0.0f'|format(focus_summary.get('priority_score') or 0), focus_summary.get('risk_posture') or 'Stable', focus_summary.get('risk_tone') or 'success') }}
+          {{ mini_stat('Pressure Source', focus_summary.get('management_focus') or 'maintain staffing rhythm', focus_summary.get('focus_reason') or '', focus_summary.get('risk_tone') or 'success') }}
+        </div>
+        <div class="row g-4 mt-1">
+          <div class="col-xl-7">
+            <div class="card border-0 h-100">
+              <div class="card-body">
+                <div class="labor-chart-title">Recent department labor trend</div>
+                <div id="laborDepartmentFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-5">
+            <div class="labor-stack">
+              <div class="card border-0">
+                <div class="card-body">
+                  <div class="labor-subtable-title">Top workers in this department</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm align-middle labor-data-table mb-0">
+                      <thead class="table-light"><tr><th>Worker</th><th class="text-end">Cost</th><th class="text-end">Hours</th><th>Focus</th></tr></thead>
+                      <tbody>
+                        {% for row in department_focus.get('worker_rows', []) %}
+                          <tr>
+                            <td><a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a></td>
+                            <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                            <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                            <td><span class="labor-tag labor-tag-{{ row.risk_tone or 'success' }}">{{ row.management_focus or 'review workload concentration' }}</span></td>
+                          </tr>
+                        {% else %}
+                          <tr><td colspan="4" class="text-center text-muted py-3">No worker rows for this department.</td></tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="card border-0">
+                <div class="card-body">
+                  <div class="labor-subtable-title">Category mix in this department</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm align-middle labor-data-table mb-0">
+                      <thead class="table-light"><tr><th>Category</th><th class="text-end">Cost</th><th class="text-end">Share</th></tr></thead>
+                      <tbody>
+                        {% for row in department_focus.get('category_rows', []) %}
+                          <tr>
+                            <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
+                            <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                            <td class="text-end">{{ ('%0.1f%%'|format((row.share_display_pct or 0) * 100)) if row.share_display_pct is not none else 'n/a' }}</td>
+                          </tr>
+                        {% else %}
+                          <tr><td colspan="3" class="text-center text-muted py-3">No category rows for this department.</td></tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="card border-0">
+                <div class="card-body">
+                  <div class="labor-subtable-title">Department worker watchlist</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm align-middle labor-data-table mb-0">
+                      <thead class="table-light"><tr><th>Worker</th><th>Why flagged</th></tr></thead>
+                      <tbody>
+                        {% for row in department_focus.get('worker_watch_rows', []) %}
+                          <tr>
+                            <td><a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a></td>
+                            <td>{{ row.focus_reason }}</td>
+                          </tr>
+                        {% else %}
+                          <tr><td colspan="2" class="text-center text-muted py-3">No worker watch signals in this department.</td></tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="card border-0">
+                <div class="card-body">
+                  <div class="labor-subtable-title">Department category watch</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm align-middle labor-data-table mb-0">
+                      <thead class="table-light"><tr><th>Category</th><th>Why flagged</th></tr></thead>
+                      <tbody>
+                        {% for row in department_focus.get('category_watch_rows', []) %}
+                          <tr>
+                            <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
+                            <td>{{ row.focus_reason }}</td>
+                          </tr>
+                        {% else %}
+                          <tr><td colspan="2" class="text-center text-muted py-3">No category watch signals in this department.</td></tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="labor-empty">No department focus is available yet. Use the department table, chart clicks, or watchlists to open the scoped investigation.</div>
+    {% endif %}
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Categories', 'Category & Composition Layer', 'Track where labor spend and operational hours are sitting across time categories.', payload.get('narratives', {}).get('composition', 'Category mix becomes actionable when managers can see whether spend is regular, premium, absence-driven, or operationally relevant without booked cost.')) }}
+    <div class="labor-chart-grid labor-chart-grid-categories">
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">{{ (payload.get('charts', {}).get('category_mix_meta') or {}).get('label', 'Category mix') }}</div>
+          <div id="laborCategoryMixChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card labor-chart-card-lg">
+        <div class="card-body">
+          <div class="labor-chart-title">Category shift over time</div>
+          <div id="laborCategoryTrendChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card border-0 mt-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle labor-data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Category</th>
+                <th class="text-end">Labor Cost</th>
+                <th class="text-end">Paid Hours</th>
+                <th class="text-end">Primary Share</th>
+                <th class="text-end">Cost Δ</th>
+                <th>Leading Department</th>
+                <th>Management Focus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in category_rows %}
+                <tr>
+                  <td>
+                    <a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a>
+                    <div class="small text-muted">{{ row.activity_note or row.focus_reason }}</div>
+                  </td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">
+                    {{ ('%0.1f%%'|format((row.share_display_pct or 0) * 100)) if row.share_display_pct is not none else 'n/a' }}
+                    <div class="small text-muted">{{ row.share_display_label or 'Primary share' }}</div>
+                  </td>
+                  <td class="text-end">{{ ('%+0.1f%%'|format((row.cost_delta_pct or 0) * 100)) if row.cost_delta_pct is not none else 'n/a' }}</td>
+                  <td>{{ row.leading_department or 'n/a' }}</td>
+                  <td>
+                    <span class="labor-tag labor-tag-{{ row.risk_tone or 'success' }}">{{ row.management_focus or 'review category mix' }}</span>
+                    {% if row.category_scope_url %}
+                      <a class="labor-inline-action d-block mt-2" href="{{ row.category_scope_url }}">{{ row.action_label or 'Open category spotlight' }}</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No category rows matched the active filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4">
+      {% if category_focus %}
+        {% set focus_summary = category_focus.get('summary') or {} %}
+        <div class="labor-focus-card p-4">
+          <div class="labor-focus-card__head">
+            <div>
+              <div class="labor-focus-card__eyebrow">{{ 'Selected category' if category_focus.get('is_selected') else 'Default focus' }}</div>
+              <h3 class="labor-focus-card__title">{{ category_focus.get('time_category') }}</h3>
+              <div class="labor-focus-card__copy">{{ category_focus.get('interpretation') }}</div>
+              <div class="labor-focus-card__note">{{ category_focus.get('reason_note') }}</div>
+            </div>
+            {% if category_focus.get('clear_url') and category_focus.get('is_selected') %}
+              <a class="btn btn-outline-secondary btn-sm" href="{{ category_focus.get('clear_url') }}">Clear category filter</a>
+            {% endif %}
+          </div>
+          <div class="labor-mini-stat-grid mt-4">
+            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Paid hours ' ~ ('%0.1f'|format(focus_summary.get('paid_hours') or 0)), 'primary') }}
+            {{ mini_stat('Primary Share', ('%0.1f%%'|format((focus_summary.get('share_display_pct') or 0) * 100)) if focus_summary.get('share_display_pct') is not none else 'n/a', focus_summary.get('share_display_label') or 'Primary share', 'info') }}
+            {{ mini_stat('Category Kind', focus_summary.get('category_kind') or 'n/a', focus_summary.get('activity_note') or '', 'info') }}
+            {{ mini_stat('Leading Department', focus_summary.get('leading_department') or 'n/a', 'Ownership ' ~ (('%0.1f%%'|format((focus_summary.get('leading_department_share_pct') or 0) * 100)) if focus_summary.get('leading_department_share_pct') is not none else 'n/a'), focus_summary.get('risk_tone') or 'success') }}
+          </div>
+          <div class="row g-4 mt-1">
+            <div class="col-xl-7">
+              <div class="card border-0 h-100">
+                <div class="card-body">
+                  <div class="labor-chart-title">Recent category trend</div>
+                  <div id="laborCategoryFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="labor-stack">
+                <div class="card border-0">
+                  <div class="card-body">
+                    <div class="labor-subtable-title">Departments contributing to this category</div>
+                    <div class="table-responsive">
+                      <table class="table table-sm align-middle labor-data-table mb-0">
+                        <thead class="table-light"><tr><th>Department</th><th class="text-end">Cost</th><th>Focus</th></tr></thead>
+                        <tbody>
+                          {% for row in category_focus.get('department_rows', []) %}
+                            <tr>
+                              <td><a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a></td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td>{{ row.management_focus or 'review labor acceleration' }}</td>
+                            </tr>
+                          {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No departments contribute to this category in scope.</td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div class="card border-0">
+                  <div class="card-body">
+                    <div class="labor-subtable-title">Workers contributing to this category</div>
+                    <div class="table-responsive">
+                      <table class="table table-sm align-middle labor-data-table mb-0">
+                        <thead class="table-light"><tr><th>Worker</th><th class="text-end">Cost</th><th>Focus</th></tr></thead>
+                        <tbody>
+                          {% for row in category_focus.get('worker_rows', []) %}
+                            <tr>
+                              <td><a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a></td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td>{{ row.management_focus or 'review workload concentration' }}</td>
+                            </tr>
+                          {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No workers contribute to this category in scope.</td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="labor-empty">No category focus is available yet. Use category chart clicks, table rows, or watchlists to open the scoped view.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Workers', 'Worker & Assignment Layer', 'See who is driving exposure, how broad their coverage is, and whether labor is concentrated in too few people.', payload.get('narratives', {}).get('workers', 'Worker analysis should support staffing assignment decisions, absence review, premium review, and coverage resilience.')) }}
+    <div class="labor-chart-grid labor-chart-grid-workers">
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Top workers by labor cost</div>
+          <div id="laborWorkerCostChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Top workers by paid hours</div>
+          <div id="laborWorkerHoursChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Worker concentration and exposure</div>
+          <div id="laborWorkerRiskChart" class="labor-chart"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card border-0 mt-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle labor-data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Worker</th>
+                <th class="text-end">Labor Cost</th>
+                <th class="text-end">Paid Hours</th>
+                <th class="text-end">Premium Share</th>
+                <th class="text-end">Absence Share</th>
+                <th class="text-end">Departments</th>
+                <th class="text-end">Categories</th>
+                <th>Management Focus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in worker_rows %}
+                <tr>
+                  <td>
+                    <a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a>
+                    <div class="small text-muted">{{ row.employee_code }} · {{ row.exposure_profile or 'active' }}</div>
+                  </td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ ('%0.1f%%'|format((row.premium_share_pct or 0) * 100)) if row.premium_share_pct is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ ('%0.1f%%'|format((row.absence_share_pct or 0) * 100)) if row.absence_share_pct is not none else 'n/a' }}</td>
+                  <td class="text-end">{{ row.department_count or 0 }}</td>
+                  <td class="text-end">{{ row.category_count or 0 }}</td>
+                  <td>
+                    <span class="labor-tag labor-tag-{{ row.risk_tone or 'success' }}">{{ row.management_focus or 'review workload concentration' }}</span>
+                    {% if row.employee_scope_url %}
+                      <a class="labor-inline-action d-block mt-2" href="{{ row.employee_scope_url }}">{{ row.action_label or 'Open worker spotlight' }}</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4">No worker rows matched the active filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4">
+      {% if worker_focus %}
+        {% set focus_summary = worker_focus.get('summary') or {} %}
+        <div class="labor-focus-card p-4">
+          <div class="labor-focus-card__head">
+            <div>
+              <div class="labor-focus-card__eyebrow">{{ 'Selected worker' if worker_focus.get('is_selected') else 'Default focus' }}</div>
+              <h3 class="labor-focus-card__title">{{ worker_focus.get('employee_name') }}</h3>
+              <div class="labor-focus-card__copy">{{ worker_focus.get('interpretation') }}</div>
+              <div class="labor-focus-card__note">{{ worker_focus.get('reason_note') }}</div>
+            </div>
+            {% if worker_focus.get('clear_url') and worker_focus.get('is_selected') %}
+              <a class="btn btn-outline-secondary btn-sm" href="{{ worker_focus.get('clear_url') }}">Clear worker filter</a>
+            {% endif %}
+          </div>
+          <div class="labor-mini-stat-grid mt-4">
+            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Share ' ~ (('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100)) if focus_summary.get('labor_cost_share_pct') is not none else 'n/a'), 'primary') }}
+            {{ mini_stat('Paid Hours', '%0.1f'|format(focus_summary.get('paid_hours') or 0), 'Active days ' ~ (focus_summary.get('active_days') or 0), 'info') }}
+            {{ mini_stat('Premium / Absence', (('%0.1f%%'|format((focus_summary.get('premium_share_pct') or 0) * 100)) if focus_summary.get('premium_share_pct') is not none else 'n/a') ~ ' / ' ~ (('%0.1f%%'|format((focus_summary.get('absence_share_pct') or 0) * 100)) if focus_summary.get('absence_share_pct') is not none else 'n/a'), focus_summary.get('focus_reason') or '', focus_summary.get('risk_tone') or 'success') }}
+            {{ mini_stat('Coverage', (focus_summary.get('department_count') or 0) ~ ' departments', (focus_summary.get('category_count') or 0) ~ ' categories', 'info') }}
+          </div>
+          <div class="row g-4 mt-1">
+            <div class="col-xl-7">
+              <div class="card border-0 h-100">
+                <div class="card-body">
+                  <div class="labor-chart-title">Recent worker trend</div>
+                  <div id="laborWorkerFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-xl-5">
+              <div class="labor-stack">
+                <div class="card border-0">
+                  <div class="card-body">
+                    <div class="labor-subtable-title">Departments worked</div>
+                    <div class="table-responsive">
+                      <table class="table table-sm align-middle labor-data-table mb-0">
+                        <thead class="table-light"><tr><th>Department</th><th class="text-end">Cost</th><th>Focus</th></tr></thead>
+                        <tbody>
+                          {% for row in worker_focus.get('department_rows', []) %}
+                            <tr>
+                              <td><a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a></td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td>{{ row.management_focus or 'review labor acceleration' }}</td>
+                            </tr>
+                          {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No department mix is available.</td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div class="card border-0">
+                  <div class="card-body">
+                    <div class="labor-subtable-title">Categories used</div>
+                    <div class="table-responsive">
+                      <table class="table table-sm align-middle labor-data-table mb-0">
+                        <thead class="table-light"><tr><th>Category</th><th class="text-end">Cost</th><th>Focus</th></tr></thead>
+                        <tbody>
+                          {% for row in worker_focus.get('category_rows', []) %}
+                            <tr>
+                              <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td>{{ row.management_focus or 'review category mix' }}</td>
+                            </tr>
+                          {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No category mix is available.</td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="labor-empty">No worker focus is available yet. Use worker chart clicks, table rows, or watchlists to inspect the worker spotlight.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Rhythm', 'Trend & Operating Rhythm Layer', 'Understand whether labor pressure is being driven by cost, hours, rate, premium, absence, or weekly rhythm.', payload.get('narratives', {}).get('trend', 'Operating rhythm should help managers tell whether the problem is volume, rate, premium, absence, or mix.')) }}
+    <div class="labor-driver-callout">
+      Current labor pressure reads as <strong>{{ hero.get('top_driver') or 'Stable' }}</strong> under the active scope. Use the four charts below together before changing staffing volume or schedule structure.
+    </div>
+    <div class="labor-chart-grid labor-chart-grid-rhythm mt-3">
+      <div class="card border-0 labor-chart-card labor-chart-card-lg">
+        <div class="card-body">
+          <div class="labor-chart-title">Labor cost, paid hours, premium cost, and absence cost over time</div>
+          <div id="laborTrendChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Blended rate trend</div>
+          <div id="laborRateTrendChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card">
+        <div class="card-body">
+          <div class="labor-chart-title">Average weekday pattern</div>
+          <div id="laborWeekdayChart" class="labor-chart"></div>
+        </div>
+      </div>
+      <div class="card border-0 labor-chart-card labor-chart-card-lg">
+        <div class="card-body">
+          <div class="labor-chart-title">Top department monthly labor cost trend</div>
+          <div id="laborDeptTrendChart" class="labor-chart labor-chart-lg"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Action Center', 'Watchlist & Action Layer', 'A true action center organized around risk, watch, and next drill steps.', payload.get('narratives', {}).get('watchlist', 'Use these watchlists to move directly into the scoped review that explains the signal.')) }}
+    <div class="labor-watch-grid">
+      {% for section in payload.get('watchlist_sections', []) %}
+        {{ watchlist_panel(section) }}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="labor-section">
+    {{ section_header('Workspace', 'Exploration Workspace', 'The row-level trace-back layer for managers, HR, finance, and stakeholders.', payload.get('narratives', {}).get('workspace', 'Use the detailed workspace to trace any signal back to the exact filtered rows and export the scoped evidence when action is required.')) }}
+    <div class="card border-0">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+          <div>
+            <div class="labor-table-note">Rows {{ workspace.get('total_rows', 0) }}. Page {{ workspace.get('page', 1) }} of {{ workspace.get('total_pages', 1) }}.</div>
+            <div class="labor-table-note">{{ workspace.get('scope_note') }}</div>
+          </div>
+          <div class="labor-chip-row">
+            <a class="btn btn-outline-secondary btn-sm" href="{{ export_urls.get('detail_csv') }}">Export Detail CSV</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ export_urls.get('snapshot_xlsx') }}">Export Snapshot XLSX</a>
+          </div>
+        </div>
+        <div class="table-responsive labor-workspace-table-wrap">
+          <table class="table table-sm table-striped align-middle labor-data-table labor-workspace-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="labor_date">Date</button></th>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="department_name">Department</button></th>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="employee_name">Worker</button></th>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="time_category">Time Category</button></th>
+                <th class="text-end"><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="labor_cost">Labor Cost</button></th>
+                <th class="text-end"><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="paid_hours">Paid Hours</button></th>
+                <th class="text-end"><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="effective_rate">Effective Rate</button></th>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="status">Status</button></th>
+                <th><button class="btn btn-link p-0 text-decoration-none js-sort" type="button" data-sort="work_rule">Work Rule</button></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in workspace.get('rows', []) %}
+                <tr>
+                  <td>{{ row.labor_date }}</td>
+                  <td><a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a></td>
+                  <td>
+                    <a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a>
+                    <div class="small text-muted">{{ row.employee_code }}</div>
+                  </td>
+                  <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                  <td class="text-end">{{ '%0.2f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.effective_rate|currency) if row.effective_rate is not none else 'n/a' }}</td>
+                  <td>{{ row.status or 'n/a' }}</td>
+                  <td>{{ row.work_rule or 'n/a' }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="9" class="text-center text-muted py-4">No workspace rows matched the active filters.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+          <div class="labor-table-note">Sorting, paging, chart clicks, table links, and exports all preserve the active labor filter context.</div>
+          <div class="btn-group">
+            {% set current_page = workspace.get('page', 1) %}
+            {% set total_pages = workspace.get('total_pages', 1) %}
+            <button type="button" class="btn btn-outline-secondary btn-sm js-page" data-page="{{ current_page - 1 }}" {% if current_page <= 1 %}disabled{% endif %}>Previous</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm js-page" data-page="{{ current_page + 1 }}" {% if current_page >= total_pages %}disabled{% endif %}>Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script id="LaborPageData" type="application/json">{{ payload_json|tojson }}</script>
+<script src="{{ url_for('static', filename='js/labor.js', v=labor_asset_version) }}" defer></script>
+{% endblock %}

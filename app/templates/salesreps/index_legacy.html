@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Sales Reps Performance{% endblock %}
+
+{% block head_extras %}
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+<style>
+  .salesreps-hero {
+    background: linear-gradient(135deg, rgba(13,110,253,0.12), rgba(32,201,151,0.12));
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .salesreps-hero .metric {
+    min-width: 120px;
+  }
+  .table-hover tbody tr:hover { cursor: pointer; }
+  .kpi-value {
+    font-size: clamp(1.35rem, 2vw, 1.75rem);
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kpi-card {
+    min-height: 110px;
+  }
+  .table th.sortable.asc::after { content: " \2191"; }
+  .table th.sortable.desc::after { content: " \2193"; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="card shadow-sm salesreps-hero mb-4">
+  <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <p class="text-uppercase text-muted small mb-1">Sales Reps Performance</p>
+      <h2 class="fw-bold mb-0">Sales Reps Command Center</h2>
+      <div class="text-muted small">Unified KPIs, linked detail views, and trends with global filters applied.</div>
+    </div>
+    <div class="d-flex gap-3 flex-wrap">
+      <div class="d-flex flex-column metric">
+        <span class="text-muted small">Date Window</span>
+        <span class="fw-semibold">{{ (filters.date_preset or 'last_3_months')|replace('_',' ')|title }}</span>
+      </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-primary btn-sm" id="salesrepsExportXlsx" href="{{ url_for('salesreps.export_xlsx') }}"><i class="bi bi-download"></i> Export XLSX</a>
+      <a class="btn btn-outline-secondary btn-sm" id="salesrepsExportCsv" href="{{ url_for('salesreps.export_csv') }}"><i class="bi bi-file-earmark-text"></i> Export CSV</a>
+    </div>
+  </div>
+</div>
+</div>
+
+{% if error_message %}
+  <div class="alert alert-warning">{{ error_message }}</div>
+{% endif %}
+
+<!-- KPI cards -->
+<div class="row g-3 mb-4">
+  {% set _k = kpis or {} %}
+  {% set has_margin = has_margin or False %}
+  {% set units_label = units_label or 'Units' %}
+  {% set asp_label = asp_label or 'ASP' %}
+  {% set asp_lb_label = asp_lb_label or 'ASP / lb' %}
+  {% set cards = [
+    ('revenue', 'Revenue', _k.get('revenue',0), 'currency'),
+    ('profit', 'Profit', _k.get('profit'), 'currency'),
+    ('margin_pct', 'Margin %', _k.get('margin_pct'), 'percent'),
+    ('orders', 'Orders', _k.get('orders',0), 'int'),
+    ('customers', 'Customers', _k.get('customers',0), 'int'),
+    ('weight_lb', 'Weight (lb)', _k.get('weight_lb',0.0), 'int'),
+    ('units', units_label, _k.get('units',0.0), 'int'),
+    ('asp_lb', asp_lb_label, _k.get('asp_lb'), 'currency'),
+    ('asp', asp_label, _k.get('asp'), 'currency')
+  ] %}
+  {% for key, label, value, kind in cards %}
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card shadow-sm border-0 h-100 kpi-card">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase text-truncate" title="{{ label }}">{{ label }}</div>
+        <div class="fw-semibold kpi-value" data-kpi-key="{{ key }}" title="{% if value is none %}N/A{% elif kind=='currency' %}{{ value|currency }}{% elif kind=='percent' %}{{ value|percent(1) }}{% else %}{{ value|intcomma }}{% endif %}">
+          {% if value is none %}N/A{% elif kind=='currency' %}{{ value|currency }}{% elif kind=='percent' %}{{ value|percent(1) }}{% else %}{{ value|intcomma }}{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Alerts -->
+{% if alerts %}
+  <div class="alert alert-info d-flex flex-column gap-1">
+    <div class="fw-semibold"><i class="bi bi-bell"></i> Operational Alerts</div>
+    <ul class="mb-0">
+      {% for a in alerts %}<li>{{ a }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<!-- Charts -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Revenue Trend (Top reps)</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="trendChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Top Reps</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="topRepsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Rep Efficiency (Customers vs Revenue)</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="effChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Customer Concentration</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="concentrationChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Profit vs Revenue (by Rep)</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="profitRevenueChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">{{ asp_label }} Leaders</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="aspChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Margin Ranking</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="marginRankChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 fw-semibold">Revenue Share (Pareto)</div>
+      <div class="card-body">
+        <div class="ratio ratio-16x9"><canvas id="revenueShareChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card shadow-sm border-0" id="SalesRepsApp"
+    data-page="salesreps"
+    data-api-overview="{{ url_for('salesreps.api_overview') }}"
+    data-api-trend="{{ url_for('salesreps.api_trend') }}"
+    data-api-table="{{ url_for('salesreps.api_table') }}"
+    data-bundle-url="{{ url_for('bundles.salesreps_bundle') }}"
+    data-drilldown-template="{{ url_for('salesreps.rep_detail', rep_id='__ID__') }}"
+    data-units-label="{{ units_label }}"
+    data-asp-label="{{ asp_label }}"
+    data-asp-lb-label="{{ asp_lb_label }}"
+    data-has-margin="{{ 'true' if has_margin else 'false' }}">
+  <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">Sales Reps Table</span>
+    <small class="text-muted">Rows are clickable for detail</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="sortable" data-sort-key="rep" style="cursor:pointer;">Rep</th>
+          <th class="text-end sortable" data-sort-key="revenue" style="cursor:pointer;">Revenue</th>
+          <th class="text-end sortable" data-sort-key="orders" style="cursor:pointer;">Orders</th>
+          <th class="text-end">Customers</th>
+          <th class="text-end">Weight (lb)</th>
+          <th class="text-end" data-column-label="units">{{ units_label }}</th>
+          <th class="text-end" data-column-label="asp_lb">{{ asp_lb_label }}</th>
+          <th class="text-end" data-column-label="asp">{{ asp_label }}</th>
+          <th class="text-end">Momentum</th>
+          <th class="text-end">Top Cust%</th>
+          <th class="text-end">Drilldown</th>
+        </tr>
+      </thead>
+      <tbody id="salesreps-table-body"></tbody>
+    </table>
+  </div>
+  <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+    <div id="salesrepsPagerSummary" class="text-muted small"></div>
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-secondary" id="salesrepsPrev" type="button">Prev</button>
+      <button class="btn btn-outline-secondary" id="salesrepsNext" type="button">Next</button>
+    </div>
+  </div>
+  <div id="salesrepsPagerIndicator" class="text-muted small px-3 pb-2"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/salesreps_legacy.js') }}" defer></script>
+{% endblock %}

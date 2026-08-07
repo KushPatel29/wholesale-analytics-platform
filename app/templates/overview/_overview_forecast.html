@@ -1,0 +1,86 @@
+<section class="overview-panel" id="forecastCard">
+  <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="panel-eyebrow">Forecast and outlook</div>
+      <h2 class="panel-title">Outlook with confidence and model context</h2>
+      <div class="panel-subtitle">A smart default revenue outlook runs on load using a current-month month-end estimate plus the best recent complete history, while confidence, validation quality, and caveats stay explicit.</div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="btn-group btn-group-sm" role="group" aria-label="Forecast metric">
+        <button type="button" class="btn btn-outline-primary active" data-forecast-metric="revenue">Revenue</button>
+        <button type="button" class="btn btn-outline-primary" data-forecast-metric="profit">Profit</button>
+        <button type="button" class="btn btn-outline-primary" data-forecast-metric="margin">Margin %</button>
+      </div>
+      <select class="form-select form-select-sm w-auto" id="forecastHorizon" aria-label="Forecast horizon">
+        <option value="3">3 mo</option>
+        <option value="6" selected>6 mo</option>
+        <option value="12">12 mo</option>
+      </select>
+      <div class="form-check form-check-inline mb-0">
+        <input class="form-check-input" type="checkbox" id="forecastIncludePartial" checked>
+        <label class="form-check-label small" for="forecastIncludePartial">Include current month estimate</label>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" id="runForecastBtn">
+        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="forecastSpinner"></span>
+        <span>Refresh Forecast</span>
+      </button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="section-meta-row">
+      <div id="forecastStatus" class="summary">Preparing smart default forecast for the active business window.</div>
+      <div id="forecastFiltersNotice" class="badge bg-warning-subtle text-warning-emphasis d-none">Filters changed - default forecast refresh is available.</div>
+    </div>
+    <div id="forecastSummary" class="forecast-summary-card">
+      Forecast will summarize selected model basis, confidence, caveats, and expected direction under the active filters.
+    </div>
+    <div class="forecast-command-grid">
+      <div class="forecast-signal-card">
+        <div class="forecast-signal-label">Selected model</div>
+        <div id="forecastModelValue" class="forecast-signal-value">-</div>
+        <div id="forecastModelDetail" class="forecast-signal-detail">Awaiting forecast run.</div>
+      </div>
+      <div class="forecast-signal-card">
+        <div class="forecast-signal-label">Confidence</div>
+        <div id="forecastConfidenceValue" class="forecast-signal-value">-</div>
+        <div id="forecastConfidenceDetail" class="forecast-signal-detail">Confidence and forecastability will appear here.</div>
+      </div>
+      <div class="forecast-signal-card">
+        <div class="forecast-signal-label">Validation quality</div>
+        <div id="forecastQualityValue" class="forecast-signal-value">-</div>
+        <div id="forecastQualityDetail" class="forecast-signal-detail">SMAPE, WAPE, and directional quality will be shown after scoring.</div>
+      </div>
+      <div class="forecast-signal-card">
+        <div class="forecast-signal-label">History basis</div>
+        <div id="forecastHistoryValue" class="forecast-signal-value">-</div>
+        <div id="forecastHistoryDetail" class="forecast-signal-detail">Training window and cutoff details will appear here.</div>
+      </div>
+    </div>
+    <div class="chart-placeholder" aria-label="Forecast chart">
+      <div id="forecastEmpty" class="text-muted text-center py-4">
+        The default forecast is preparing. Use Refresh Forecast to rerun the outlook after changing metric, horizon, or partial-month treatment.
+      </div>
+      <canvas id="forecastChart" width="400" height="300"></canvas>
+    </div>
+    <div class="forecast-note-grid mt-3">
+      <div class="forecast-note-card">
+        <div class="forecast-note-label">Training basis</div>
+        <div id="forecastBasisText" class="forecast-note-copy">
+          Forecast basis will explain the history used, selected window mode, and partial-period treatment.
+        </div>
+      </div>
+      <div class="forecast-note-card">
+        <div class="forecast-note-label">Caveats and notes</div>
+        <ul id="forecastNotesList" class="forecast-mini-list">
+          <li>Forecast notes, caveats, and quality warnings will appear here.</li>
+        </ul>
+      </div>
+      <div class="forecast-note-card">
+        <div class="forecast-note-label">Runner-up models</div>
+        <ul id="forecastRunnerUpsList" class="forecast-mini-list">
+          <li>Run a forecast to compare model alternatives.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

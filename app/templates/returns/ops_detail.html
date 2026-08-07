@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-1">Ops Review: Return #{{ rma.id }}</h1>
+      <p class="text-muted mb-0">Current status: {{ rma.status_label }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_ops.queue') }}">Back to Queue</a>
+  </div>
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h5">Return Summary</h2>
+          <p class="mb-1"><strong>Order:</strong> {{ rma.order_id }}</p>
+          <p class="mb-1"><strong>Customer:</strong> {{ rma.customer_name or rma.customer_id }}</p>
+          <p class="mb-3"><strong>Decision:</strong> {{ rma.decision_summary or "-" }}</p>
+          <ul class="list-group list-group-flush">
+            {% for item in rma['items'] %}
+            <li class="list-group-item px-0">
+              {{ item.sku or "n/a" }} | {{ item.product_name or "-" }} | qty {{ item.qty }} | {{ item.reason_code or "-" }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <h2 class="h5">Actions</h2>
+          <form method="post" class="vstack gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+              <label class="form-label" for="notes">Notes</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+            </div>
+            <div>
+              <label class="form-label" for="override_status">Override Status</label>
+              <input class="form-control" id="override_status" name="override_status" placeholder="completed">
+            </div>
+            <div>
+              <label class="form-label" for="carrier">Carrier</label>
+              <input class="form-control" id="carrier" name="carrier" value="manual">
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label" for="refund_amount">Refund Amount</label>
+                <input class="form-control" id="refund_amount" name="refund_amount" type="number" min="0" step="0.01" placeholder="0.00">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label" for="refund_method">Refund Method</label>
+                <input class="form-control" id="refund_method" name="refund_method" value="manual">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label" for="refund_processor_ref">Processor Ref</label>
+                <input class="form-control" id="refund_processor_ref" name="refund_processor_ref" placeholder="optional">
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              {% if can_permission('returns.ops.approve') or can_permission('returns.approve') or can_permission('admin.returns.manage') %}
+              <button class="btn btn-success" name="action" value="approve" type="submit">Approve</button>
+              {% endif %}
+              {% if can_permission('returns.ops.deny') or can_permission('returns.deny') or can_permission('admin.returns.manage') %}
+              <button class="btn btn-danger" name="action" value="deny" type="submit">Deny</button>
+              {% endif %}
+              {% if can_permission('returns.ops.override') or can_permission('returns.override') or can_permission('admin.returns.manage') %}
+              <button class="btn btn-outline-primary" name="action" value="override" type="submit">Override</button>
+              {% endif %}
+              {% if config.get('RETURNS_LABELS_ENABLED') and (can_permission('returns.labels.generate') or can_permission('admin.returns.manage')) %}
+              <button class="btn btn-outline-secondary" name="action" value="label" type="submit">Generate Label</button>
+              {% endif %}
+              {% if config.get('RETURNS_REFUNDS_ENABLED', True) and (can_permission('returns.refunds.issue') or can_permission('admin.returns.manage')) %}
+              <button class="btn btn-outline-dark" name="action" value="refund" type="submit">Issue Refund</button>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
