@@ -4819,3 +4819,67 @@ body.theme-wa-future .auth-panel__subtitle {
   color: var(--muted-foreground);
   font-size: 0.95rem;
 }
+
+/* Demo credentials panel, shown only on the public demo build. */
+body.theme-wa-future .auth-demo {
+  margin-bottom: 1.35rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.32));
+  border-radius: 12px;
+  background: rgba(45, 127, 95, 0.07);
+}
+
+body.theme-wa-future .auth-demo__lead {
+  margin: 0 0 0.65rem;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+body.theme-wa-future .auth-demo__lead code,
+body.theme-wa-future .auth-demo__pick code {
+  padding: 0.08rem 0.32rem;
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.18);
+  font-size: 0.82em;
+}
+
+body.theme-wa-future .auth-demo__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+
+body.theme-wa-future .auth-demo__list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+body.theme-wa-future .auth-demo__pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+body.theme-wa-future .auth-demo__pick:hover code,
+body.theme-wa-future .auth-demo__pick:focus-visible code {
+  background: rgba(45, 127, 95, 0.28);
+}
+
+body.theme-wa-future .auth-demo__note {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+body.theme-wa-future .auth-demo__hint {
+  margin: 0.6rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  opacity: 0.8;
+}

@@ -167,32 +167,9 @@ def enable_2fa_cmd(username: str, issuer: str):
     log_audit("cli", "enable_2fa", {"username": username})
 
 
-DEMO_USERS = {
-    # Full access, including the admin portal. The `admin` role short-circuits
-    # the scope check entirely, so it needs no rules.
-    "admin": dict(role="admin", scope={}, note="everything, plus the admin portal"),
-    # Sees the whole company but cannot administer it. "*" is the wildcard the
-    # access policy recognises as unrestricted.
-    "gm": dict(role="gm", scope={"rep": ("*",)}, note="everything, no admin portal"),
-    # Scoped to two regions: every page silently narrows to that territory.
-    "manager.coast": dict(
-        role="sales_manager",
-        scope={"region": ("RG01", "RG02")},
-        note="Lower Mainland + Vancouver Island only",
-    ),
-    # Scoped to a single rep's own book.
-    "rep.dana": dict(role="sales", scope={"rep": ("R01",)}, note="Dana Whitfield's accounts only"),
-    "rep.tomasz": dict(role="sales", scope={"rep": ("R04",)}, note="Tomasz Bielski's accounts only"),
-    # Sees every row but has no view_costs permission, so cost, margin and
-    # profit come back masked rather than merely hidden in the template.
-    "viewer.nocost": dict(
-        role="warehouse",
-        scope={"rep": ("*",)},
-        note="all rows, but cost/margin columns masked",
-    ),
-}
-
-DEMO_PASSWORD = "demo-password-1234"
+# The catalogue lives in app/core/demo_accounts.py so the seeder and the
+# login page that advertises these credentials cannot drift apart.
+from app.core.demo_accounts import DEMO_PASSWORD, DEMO_USERS  # noqa: E402
 
 
 @cli.command("seed-demo-users")

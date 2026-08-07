@@ -68,3 +68,17 @@ jobs:
 
       - name: Walk every page and assert row-level security
         run: python scripts/demo_smoke.py
+
+      # About fifteen tests skip themselves when no dataset exists - the
+      # overview parity checks, which compare each API payload against the
+      # authoritative fact-frame calculation, and the bundle endpoint smokes.
+      # There is a dataset here, so run them for real rather than let CI report
+      # green on a suite that skipped its own integration coverage.
+      - name: Dataset-backed parity and bundle tests
+        env:
+          PARQUET_PATH: cache/fact_dataset
+        run: |
+          pip install pytest pytest-mock
+          pytest -q -o addopts="" -rs \
+            tests/test_overview_parity.py \
+            tests/test_bundle_endpoints.py

@@ -6,6 +6,31 @@
       <div class="auth-panel__eyebrow">Wholesale Analytics</div>
       <h1 class="auth-panel__title">Login</h1>
       <p class="auth-panel__subtitle">Sign in to open the analytics workspace and restore your saved scope.</p>
+
+      {# On the public demo, tell the visitor how to get in. Nobody can guess
+         a password, and a login wall with no credentials is where a portfolio
+         demo loses its reader. #}
+      {% if demo_logins %}
+      <div class="auth-demo" role="note">
+        <p class="auth-demo__lead">
+          <strong>Demo access</strong> &mdash; every account below uses the password
+          <code>{{ demo_password }}</code>. Each one sees a different slice of the
+          same data.
+        </p>
+        <ul class="auth-demo__list">
+          {% for login in demo_logins %}
+          <li>
+            <button type="button" class="auth-demo__pick" data-username="{{ login.username }}">
+              <code>{{ login.username }}</code>
+            </button>
+            <span class="auth-demo__note">{{ login.note }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="auth-demo__hint">Click a username to fill the form.</p>
+      </div>
+      {% endif %}
+
     <form method="post">
       {{ form.hidden_tag() }}
       <div class="mb-3">
@@ -25,6 +50,22 @@
       </div>
     </form>
     </section>
+    {% if demo_logins %}
+    <script>
+      (() => {
+        const password = {{ demo_password | tojson }};
+        document.querySelectorAll('.auth-demo__pick').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const user = document.getElementById('username');
+            const pass = document.getElementById('password');
+            if (user) user.value = btn.dataset.username || '';
+            if (pass) pass.value = password;
+            if (pass) pass.focus();
+          });
+        });
+      })();
+    </script>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

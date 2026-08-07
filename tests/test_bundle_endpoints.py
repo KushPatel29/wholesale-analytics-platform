@@ -21,8 +21,21 @@ DRILLDOWNS = [
     ("salesreps", "salesrep_id", fs.CANON.sales_rep),
 ]
 
+# How many DuckDB queries each bundle is allowed. The point of the bundle
+# pattern is one server-side payload per page instead of a dozen chatty
+# endpoints, so a page that starts issuing more queries is worth knowing about.
+#
+# Only `customers` had a budget; everything else fell back to a default of 3
+# that had never actually run, because these tests skip themselves without a
+# dataset. Measured against the seeded dataset: customers 5, products 2,
+# suppliers 2, regions 3, salesreps 4. Each budget is the measured count plus
+# one, so an added query trips it but normal variation does not.
 BUNDLE_BUDGETS = {
     "customers": {"query_string": {"sections": "overview"}, "max_queries": 6, "expected_sections": ["overview"]},
+    "products": {"max_queries": 3},
+    "suppliers": {"max_queries": 3},
+    "regions": {"max_queries": 4},
+    "salesreps": {"max_queries": 5},
 }
 
 DRILLDOWN_BUDGETS = {

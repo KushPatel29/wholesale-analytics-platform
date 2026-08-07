@@ -121,6 +121,18 @@ def register_blueprints(app: Flask) -> None:
         app.register_blueprint(returns_admin_bp)
 
     @app.context_processor
+    def _inject_demo_logins():
+        """Advertise the demo credentials on the public demo only."""
+        try:
+            from .core.demo_accounts import DEMO_PASSWORD, demo_login_hints, demo_logins_enabled
+
+            if not demo_logins_enabled():
+                return {"demo_logins": None, "demo_password": None}
+            return {"demo_logins": demo_login_hints(), "demo_password": DEMO_PASSWORD}
+        except Exception:
+            return {"demo_logins": None, "demo_password": None}
+
+    @app.context_processor
     def _inject_nav_flags():
         try:
             return {
@@ -649,7 +661,10 @@ def create_app() -> Flask:
                 return None
             if path.startswith("/returns/webhooks"):
                 return None
-            if path in {"/login", "/logout", "/health", "/health/returns", "/favicon.ico"}:
+            # /healthz is the container liveness probe. It was missing from
+            # this list, so the global gate redirected it to the login page and
+            # the orchestrator read a healthy process as unhealthy.
+            if path in {"/login", "/logout", "/health", "/healthz", "/health/returns", "/favicon.ico"}:
                 return None
             if (
                 path.startswith("/auth/login")
@@ -948,17 +963,20 @@ def create_app() -> Flask:
         response.headers["X-Request-ID"] = req_id or ""
         return response
 
-    # Liveness: basic process + env info
+    # Liveness. Deliberately unauthenticated: this is what a container
+    # orchestrator polls, and it has no session. Behind @login_required it
+    # answered 302, which every health checker reads as unhealthy - so the
+    # platform restarts a process that is in fact serving fine.
+    #
+    # It reports only that this process is alive. Anything that reveals
+    # configuration or data state belongs on /readyz, which stays authenticated.
     @app.get("/healthz")
-    @login_required
     def healthz():  # pragma: no cover - trivial
         from datetime import datetime, timezone
-        import os as _os
+
         return jsonify(
             status="ok",
             time=datetime.now(tz=timezone.utc).isoformat(),
-            pid=_os.getpid(),
-            env=str(app.config.get("ENV", "")),
         ), 200
 
     # Short aliases for auth routes (kept for backward compatibility)
@@ -1273,6 +1291,15 @@ def create_app() -> Flask:
         return resp
 
     # Root route handled by dashboard blueprint
+
+    # Prime the bundle caches in the background so the first visitor to a page
+    # does not pay for building it. No-op unless DEMO_WARMUP is set.
+    try:
+        from .core.warmup import start_warmup
+
+        start_warmup(app)
+    except Exception:
+        app.logger.warning("warmup.start_failed", exc_info=True)
 
     return app
 
