@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 
 # In-memory cache for churn model
 _CHURN_MODEL_BUNDLE: Optional[Dict[str, Any]] = None

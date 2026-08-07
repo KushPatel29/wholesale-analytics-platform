@@ -527,7 +527,11 @@ def _cache_version() -> str:
     try:
         return current_data_version()
     except Exception:
-        return str(int(time.time() // max(1, CACHE_TTL_SECONDS)))
+        # The fallback referenced an undefined CACHE_TTL_SECONDS, so a failure
+        # in current_data_version() raised NameError out of this function
+        # instead of degrading to a time-bucketed version - taking every
+        # products page down with it.
+        return str(int(time.time() // max(1, API_TTL_SEC)))
 
 
 def _ttl_bucket(ttl: int) -> int:
@@ -4307,67 +4311,6 @@ def api_bundle():
 
     payload = bundle_service.bundle("products", request.args)
     return jsonify(payload)
-    bubble_limit = _safe_int(request.args.get("bubble_limit") or request.args.get("limit") or BUBBLE_LIMIT_MAX, BUBBLE_LIMIT_MAX)
-    bubble_limit = max(1, min(bubble_limit, BUBBLE_LIMIT_MAX))
-    per_page = _safe_int(request.args.get("per_page", request.args.get("page_size", TABLE_PAGE_SIZE_DEFAULT)), TABLE_PAGE_SIZE_DEFAULT)
-    per_page = max(1, min(per_page, TABLE_PAGE_SIZE_MAX))
-    segments_page_size = _safe_int(request.args.get("segments_page_size") or request.args.get("segments_per_page") or request.args.get("page_size") or SEGMENTS_PAGE_SIZE_MAX, SEGMENTS_PAGE_SIZE_MAX)
-    segments_page_size = max(1, min(segments_page_size, SEGMENTS_PAGE_SIZE_MAX))
-    df, cache_hit = _get_cached_df(filters)
-    rows_in_slice = int(len(df))
-
-    overview = _build_overview_from_service(filters)
-    movers = _top_movers(df)
-    bundle = {
-        "overview": overview,
-        "trend_delta": {
-            "labels": [m.get("desc") or m.get("sku") or m.get("product_id") for m in movers],
-            "values": [m.get("delta_revenue") or 0.0 for m in movers],
-            "rows": movers,
-        },
-        "bubble": _bubble_payload(df, filters, limit=bubble_limit),
-    }
-
-    seg_payload = copy.deepcopy(_cached_sales_segments(_filters_to_tuple(filters), _ttl_bucket(PAYLOAD_LRU_TTL_SEC), _cache_version()))
-    total_segments = len(seg_payload.get("products") or [])
-    seg_payload["products"] = (seg_payload.get("products") or [])[:segments_page_size]
-    seg_payload["meta"] = {**seg_payload.get("meta", {}), "total_products": total_segments, "page_size": segments_page_size}
-    bundle["segments"] = seg_payload
-
-    table_payload = build_table_payload(
-        filters=filters,
-        page=1,
-        per_page=per_page,
-        sort_by=request.args.get("sort_by", "revenue"),
-        sort_dir=request.args.get("sort_dir", "desc"),
-    )
-    bundle["table"] = table_payload
-    bundle["meta"] = {
-        "duration_ms": int((time.perf_counter() - started) * 1000),
-        "rows_in_slice": rows_in_slice,
-        "cache_hit": cache_hit,
-        "params_hash": _filters_fingerprint(filters),
-    }
-
-    status = get_products_parquet_status()
-    bundle = _attach_parquet_warning(bundle, status, add_empty_data=not status.available)
-    ck = _api_cache_key("bundle", filters, {"bl": bubble_limit, "pp": per_page, "sp": segments_page_size})
-    resp = _json_response(bundle, cache_key=ck, ttl=API_TTL_SEC)
-    _log_timing(
-        "products.api_bundle",
-        started,
-        filters,
-        {
-            "rows_in_slice": rows_in_slice,
-            "cache_hit": cache_hit,
-            "per_page": per_page,
-            "bubble_limit": bubble_limit,
-            "segments_page_size": segments_page_size,
-            "movers": len(movers),
-            "products": int(df[CAN.product_id].nunique()) if CAN.product_id in df.columns else 0,
-        },
-    )
-    return resp
 
 
 @bp.route("/api/recommendations")

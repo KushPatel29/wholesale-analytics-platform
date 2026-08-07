@@ -404,10 +404,13 @@ def _build_drilldown_bundle(
     revenue_col = _safe_col(cols, fs.CANON.revenue, "Revenue")
     qty_col = _safe_col(cols, fs.CANON.qty_units, "QuantityShipped", "QuantityOrdered")
     cost_col = _safe_col(cols, fs.CANON.cost, "CostPrice", "Cost")
-    order_col = _safe_col(cols, fs.CANON.order_id, "OrderId", "OrderID") or key_col
 
+    # key_col has to be resolved before order_col, which falls back to it.
+    # It used to be assigned on the following line, so the fallback branch
+    # raised UnboundLocalError whenever no order column was present.
     cfg = _DRILLDOWN_CONFIG.get(entity) or {}
     key_col = _safe_col(cols, cfg.get("key_col"), "Id", "ID")
+    order_col = _safe_col(cols, fs.CANON.order_id, "OrderId", "OrderID") or key_col
     label_col = _safe_col(cols, cfg.get("label_col"), "Name", "Label")
     if not key_col:
         key_col = _safe_col(cols, cfg.get("label_col"), fs.CANON.sales_rep, "SalesRepName")

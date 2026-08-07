@@ -15,6 +15,10 @@ from app.services import (
     customers_bundle,
     products_bundle,
     suppliers_bundle,
+    # Used to build the region-performance section. Without it the call raised
+    # NameError into a bare `except Exception`, so that section of the
+    # stakeholder report was always empty.
+    regions_bundle,
     overview_query,
     analytics_utils as au
 )

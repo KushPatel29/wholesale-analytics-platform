@@ -2367,6 +2367,11 @@ def build_customers_bundle(
     cols = fact_store.list_columns()
     date_col = _safe_col(cols, fs.CANON.date, "Date")
     revenue_col = _safe_col(cols, fs.CANON.revenue, "Revenue")
+    # Both are read further down (CLV cost availability, and the monthly trend
+    # query) but were never resolved in this function, so every reference
+    # raised NameError into a bare `except Exception` and silently degraded.
+    cost_col = _safe_col(cols, fs.CANON.cost, "Cost", "CostPrice")
+    qty_col = _safe_col(cols, fs.CANON.qty_units, "QuantityShipped", "QuantityOrdered", "Quantity")
     cust_id = _safe_col(cols, fs.CANON.customer_id, "CustomerID")
     cust_name = _safe_col(cols, fs.CANON.customer_name, "Customer")
     order_col = _safe_col(cols, fs.CANON.order_id, "OrderID")
