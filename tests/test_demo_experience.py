@@ -116,6 +116,27 @@ class TestWarmup:
         warmup._warm(object())
         assert len(calls) == len(demo_accounts.DEMO_USERS)
 
+    def test_warms_the_bundles_the_pages_fetch(self):
+        """
+        Warming the HTML alone was not enough. Each page renders in a second or
+        two and then waits on its JSON bundle, which is where the work happens
+        - on the hosted demo that was an eight second wait after the page had
+        already appeared.
+        """
+        for endpoint in ("/api/products/bundle", "/api/customers/bundle"):
+            assert endpoint in warmup.BUNDLE_ENDPOINTS
+
+    def test_bundle_warmup_uses_the_window_the_front_end_sends(self):
+        """
+        The pages compute the current-fiscal-year window in JavaScript and send
+        explicit start and end dates, and those dates are part of the cache
+        key. Warming `?date_preset=current_fy` on its own produces a different
+        key and buys the visitor nothing.
+        """
+        query = warmup._default_window_query()
+        assert "start=" in query and "end=" in query, f"no explicit window in {query!r}"
+        assert "date_preset=current_fy" in query
+
     def test_does_not_go_through_the_rate_limited_login_route(self):
         """
         /auth/login is capped at 5 requests a minute. Warming six accounts

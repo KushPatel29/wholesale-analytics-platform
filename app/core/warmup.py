@@ -53,6 +53,48 @@ SECONDARY_PATHS: tuple[str, ...] = (
     "/salesreps/",
 )
 
+# The JSON bundles each page fetches after render. Warming the HTML alone was
+# not enough: the page came back in a second or two and then sat waiting eight
+# seconds for its bundle, because that is where the work actually happens.
+BUNDLE_ENDPOINTS: tuple[str, ...] = (
+    "/api/products/bundle",
+    "/api/customers/bundle",
+    "/api/suppliers/bundle",
+    "/api/regions/bundle",
+    "/api/salesreps/bundle",
+)
+
+
+def _default_window_query() -> str:
+    """
+    Reproduce the query string the front end builds for the default view.
+
+    The pages default to the current fiscal year and compute the window in
+    JavaScript, then send explicit start and end dates. Those dates are part of
+    the cache key, so warming `?date_preset=current_fy` alone produces a
+    different key and buys nothing - the visitor still pays full price. Derive
+    the same window from the server's own fiscal helper instead.
+    """
+    try:
+        import pandas as pd
+
+        from app.services.filters import get_fiscal_periods
+
+        periods = get_fiscal_periods()
+        current = periods.get("current_fy") or {}
+        start = current.get("start")
+        end = current.get("end") or pd.Timestamp.utcnow()
+        if start is None:
+            return "date_preset=current_fy"
+        return (
+            f"start={pd.Timestamp(start).date().isoformat()}"
+            f"&end={pd.Timestamp(end).date().isoformat()}"
+            f"&date_preset=current_fy"
+        )
+    except Exception:
+        logger.debug("warmup.window_resolution_failed", exc_info=True)
+        return "date_preset=current_fy"
+
 
 def _enabled() -> bool:
     return str(os.getenv("DEMO_WARMUP", "")).strip().lower() in {"1", "true", "yes", "on"}
@@ -122,8 +164,11 @@ def _warm(app) -> None:
 
     started = time.perf_counter()
 
-    # The documented demo login goes first and gets every page.
-    _warm_user(app, primary, WARMUP_PATHS)
+    # The documented demo login goes first: every page, then the bundles those
+    # pages fetch, with the same default window the front end sends.
+    window = _default_window_query()
+    primary_paths = WARMUP_PATHS + tuple(f"{ep}?{window}" for ep in BUNDLE_ENDPOINTS)
+    _warm_user(app, primary, primary_paths)
 
     # Then the rest, so whichever account a visitor picks is already warm.
     # Bounded by a budget: on a slow host it is better to leave some accounts
