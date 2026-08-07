@@ -14,7 +14,6 @@ credentials or warms anything.
 
 from __future__ import annotations
 
-import os
 
 import pytest
 
