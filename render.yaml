@@ -1,7 +1,10 @@
 services:
   - type: web
     name: wholesale-analytics-platform
-    env: docker
+    runtime: docker
     plan: free
     healthCheckPath: /healthz
-    autoDeploy: true
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
