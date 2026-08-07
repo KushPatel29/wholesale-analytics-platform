@@ -23,7 +23,7 @@ from app.core.exports import fmt_currency, fmt_percent
 
 def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, Any]:
     """
-    Synthesizes a live stakeholder executive report bundle for Wholesale Analytics (Vancouver Meat Co).
+    Synthesizes a live stakeholder executive report bundle for the Wholesale Analytics demo company.
     Professional Business Analyst perspective, MTD-aware and pace-calculated.
     """
     # 1) Core Dataset & KPIs

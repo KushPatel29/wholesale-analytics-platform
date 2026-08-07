@@ -39,7 +39,7 @@ def _mail_from() -> str:
     sender = str(current_app.config.get("MAIL_FROM") or "").strip()
     if sender:
         return sender
-    return "no-reply@the distributormeats.com"
+    return "no-reply@wholesaleprovisions.example.com"
 
 
 def _smtp_use_tls() -> bool:

@@ -337,11 +337,11 @@ def test_batch_test_email_uses_immediate_filter_and_override(app, monkeypatch):
         sent = notifications_service.send_test_emails_for_user(
             user,
             immediate_only=True,
-            override_email="kush@the distributormeats.com",
+            override_email="kush@wholesaleprovisions.example.com",
         )
         assert sent == 2
         assert len(deliveries) == 2
-        assert {item["to_email"] for item in deliveries} == {"kush@the distributormeats.com"}
+        assert {item["to_email"] for item in deliveries} == {"kush@wholesaleprovisions.example.com"}
         assert all(len(item["attachments"]) == 1 for item in deliveries)
         assert all(item["attachments"][0]["data"] == fake_xlsx for item in deliveries)
 

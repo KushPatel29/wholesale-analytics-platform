@@ -87,7 +87,7 @@ def test_build_filter_summary_compacts_dimension_labels():
             "date_preset": "current_fy",
             "date_type": "fiscal",
             "regions": ["Burnaby", "Delta", "Vancouver W"],
-            "suppliers": ["Alberta Bison", "the distributor", "Northshore"],
+            "suppliers": ["Alberta Bison", "Wholesale Provisions", "Northshore"],
         }
     )
     assert summary["date_label"] == "Current FY"

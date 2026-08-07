@@ -168,6 +168,91 @@ def enable_2fa_cmd(username: str, issuer: str):
     log_audit("cli", "enable_2fa", {"username": username})
 
 
+DEMO_USERS = {
+    # Full access, including the admin portal. The `admin` role short-circuits
+    # the scope check entirely, so it needs no rules.
+    "admin": dict(role="admin", scope={}, note="everything, plus the admin portal"),
+    # Sees the whole company but cannot administer it. "*" is the wildcard the
+    # access policy recognises as unrestricted.
+    "gm": dict(role="gm", scope={"rep": ("*",)}, note="everything, no admin portal"),
+    # Scoped to two regions: every page silently narrows to that territory.
+    "manager.coast": dict(
+        role="sales_manager",
+        scope={"region": ("RG01", "RG02")},
+        note="Lower Mainland + Vancouver Island only",
+    ),
+    # Scoped to a single rep's own book.
+    "rep.dana": dict(role="sales", scope={"rep": ("R01",)}, note="Dana Whitfield's accounts only"),
+    "rep.tomasz": dict(role="sales", scope={"rep": ("R04",)}, note="Tomasz Bielski's accounts only"),
+    # Sees every row but has no view_costs permission, so cost, margin and
+    # profit come back masked rather than merely hidden in the template.
+    "viewer.nocost": dict(
+        role="warehouse",
+        scope={"rep": ("*",)},
+        note="all rows, but cost/margin columns masked",
+    ),
+}
+
+DEMO_PASSWORD = "demo-password-1234"
+
+
+@cli.command("seed-demo-users")
+@click.option("--password", default=DEMO_PASSWORD, show_default=True, help="Password for every demo login")
+def seed_demo_users_cmd(password: str) -> None:
+    """
+    Create the demo logins used by the synthetic dataset.
+
+    Each one exercises a different slice of the access model, so the RBAC
+    scoping and the cost-masking rules can be seen by logging in rather than
+    taken on trust.
+    """
+    from app.auth.models import UserScopeRule, sync_permissions
+
+    # Role and permission rows are what AUTHZ_DB_PERMISSIONS reads. Without
+    # this, permission-gated pages (returns, notifications) 404 for everyone,
+    # including admin.
+    synced = sync_permissions()
+    click.echo(f"Synced roles/permissions: {synced}")
+
+    with get_session() as s:
+        for username, spec in DEMO_USERS.items():
+            u = s.query(User).filter(func.lower(User.username) == username).first()
+            if u is None:
+                u = User(username=username, role=spec["role"], is_active=True, is_approved=True)
+                s.add(u)
+            u.role = spec["role"]
+            u.is_active = True
+            u.is_approved = True
+            u.must_reset_password = False
+            u.email = f"{username}@wholesaleprovisions.example.com"
+            reps = spec["scope"].get("rep", ())
+            regions = spec["scope"].get("region", ())
+            u.sales_rep_id = reps[0] if reps and reps[0] != "*" else None
+            u.region_id = regions[0] if regions else None
+            u.set_password(password)
+            s.flush()
+
+            # Rewrite this user's scope rules from scratch so re-running the
+            # command is idempotent rather than additive.
+            s.query(UserScopeRule).filter(UserScopeRule.user_id == u.id).delete()
+            for scope_type, values in spec["scope"].items():
+                for value in values:
+                    s.add(
+                        UserScopeRule(
+                            user_id=u.id,
+                            scope_type=scope_type,
+                            scope_value=value,
+                            scope_mode="allow",
+                        )
+                    )
+        s.commit()
+
+    click.secho(f"Seeded {len(DEMO_USERS)} demo users (password: {password})", fg="green")
+    for username, spec in DEMO_USERS.items():
+        click.echo(f"  {username:16} role={spec['role']:14} {spec['note']}")
+    log_audit("cli", "seed_demo_users", {"count": len(DEMO_USERS)})
+
+
 @cli.command("build-products-parquet")
 @click.option(
     "--output",

@@ -1,4 +1,4 @@
-﻿"""Template filters and global filter forms â€” production ready."""
+"""Template filters and global filter forms â€” production ready."""
 
 from __future__ import annotations
 

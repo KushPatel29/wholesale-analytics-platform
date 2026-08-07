@@ -582,7 +582,7 @@ def get_returns_settings() -> dict[str, Any]:
         "workflow_options": {
             "follow_up_actions": ["Credit", "Replacement", "Discount", "No Action"],
             "warehouse_outcomes": ["Returning to Inventory", "Spoilage"],
-            "companies": ["the distributor Meats", "Black Forest"],
+            "companies": ["Wholesale Provisions", "Alderwood Charcuterie"],
         },
         "email_templates": {
             "new_return_subject": "New return pending review for order {{ order_id }}",
@@ -713,7 +713,7 @@ def export_sage_csv(rma_ids: list[int], *, actor_user: Any = None) -> bytes:
             
             rows.append({
                 "RMA Number": rma.rma_number,
-                "Company": rma.company or "the distributor Meats",
+                "Company": rma.company or "Wholesale Provisions",
                 "Customer ID": rma.customer_id,
                 "Customer Name": rma.customer_name,
                 "Original Invoice": rma.order_id,
@@ -1614,10 +1614,10 @@ def _build_structured_return_pdf(
     company = str(detail.get("company") or "").strip().lower()
     if "black forest" in company:
         logo_file = "bf-logo.png"
-        company_header = "Black Forest Meats"
+        company_header = "Alderwood Charcuterie Meats"
     else:
         logo_file = "wa-logo-badge.png"
-        company_header = "the distributor Meats"
+        company_header = "Wholesale Provisions"
         
     logo_path = Path(current_app.root_path) / "static" / "img" / logo_file
     top_y = pdf.get_y()
@@ -1720,7 +1720,7 @@ def _build_structured_return_pdf(
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(156, 163, 175)
     audit_id = f"{detail.get('id')}-{str(detail.get('last_updated', '')).replace(':', '').replace('-', '').replace(' ', '')}"
-    pdf.cell(0, 5, f"Enterprise Audit ID: {audit_id} | Generated for {detail.get('company', 'the distributor')} Finance Review", ln=1)
+    pdf.cell(0, 5, f"Enterprise Audit ID: {audit_id} | Generated for {detail.get('company', 'Wholesale Provisions')} Finance Review", ln=1)
 
     pdf_output = pdf.output(dest="S")
     return pdf_output.encode("latin-1") if isinstance(pdf_output, str) else bytes(pdf_output)
@@ -2994,7 +2994,7 @@ def create_rma(
     submitted_at = _coerce_datetime(order_payload.get("date_submitted")) or _vancouver_now()
     advised_customer_note = str(order_payload.get("advised_customer_note") or "").strip()
     receiving_notes = str(order_payload.get("receiving_notes") or "").strip()
-    company = str(order_payload.get("company") or "").strip() or "the distributor"
+    company = str(order_payload.get("company") or "").strip() or "Wholesale Provisions"
     with get_session() as session:
         row = ReturnRMA(
             customer_id=customer_id,
@@ -3319,10 +3319,10 @@ def build_return_pdf_bytes(
     company = str(detail.get("company") or "").strip().lower()
     if "black forest" in company:
         logo_file = "bf-logo.png"
-        company_header = "Black Forest Meats"
+        company_header = "Alderwood Charcuterie Meats"
     else:
         logo_file = "wa-logo-badge.png"
-        company_header = "the distributor Meats"
+        company_header = "Wholesale Provisions"
         
     logo_path = Path(current_app.root_path) / "static" / "img" / logo_file
     logo_uri = logo_path.resolve().as_uri() if logo_path.exists() else None
@@ -3470,8 +3470,8 @@ def _send_finance_notification_email(rma_detail: dict[str, Any], pdf_bytes: byte
     if "black forest" in company:
         recipient = "ar@bfmeats.com"
     else:
-        # Default to the distributor if not explicitly Black Forest
-        recipient = "ar@the distributormeats.com"
+        # Default to Wholesale Provisions if not explicitly Alderwood Charcuterie
+        recipient = "ar@wholesaleprovisions.example.com"
     
     rma_id = rma_detail.get("id")
     rma_number = rma_detail.get("rma_number") or f"#{rma_id}"

@@ -59,9 +59,9 @@
     <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
-          <img src="{{ url_for('static', filename='img/wa-logo-badge.png') }}"
-               alt="the distributor Meats"
-               height="40"
+          <img src="{{ url_for('static', filename='img/wa-logo-badge.svg') }}"
+               alt="Wholesale Provisions"
+               height="34"
                class="navbar-brand-img">
           <span class="fw-semibold small text-uppercase navbar-brand-copy">Analytics</span>
         </a>

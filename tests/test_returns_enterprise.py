@@ -18,7 +18,7 @@ def enterprise_config(app, monkeypatch):
     monkeypatch.setattr(service, "_send_return_event_email", lambda *args, **kwargs: True)
     monkeypatch.setattr(service, "_send_finance_notification_email", lambda *args, **kwargs: True)
 
-def _make_rma_payload(order_id="ORD-ENT-1", company="the distributor Meats"):
+def _make_rma_payload(order_id="ORD-ENT-1", company="Wholesale Provisions"):
     return {
         "order_id": order_id,
         "customer_id": "C-ENT-1",
@@ -52,7 +52,7 @@ def test_enterprise_rma_creation_initial_status(app):
         payload = _make_rma_payload()
         result = service.create_rma(order_payload=payload, item_payloads=payload["items"])
         assert result["status"] == "awaiting_ops"
-        assert result["company"] == "the distributor Meats"
+        assert result["company"] == "Wholesale Provisions"
 
 def test_enterprise_sla_timestamps(app):
     """Test that SLA timestamps are set during transitions."""

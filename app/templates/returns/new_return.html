@@ -2,7 +2,7 @@
 {% set _settings_defaults = returns_settings.get('defaults', {}) if returns_settings else {} %}
 {% set _return_type_options = returns_settings.get('return_type_options', ['Sales Return', 'Vendor Return', 'Production Return']) if returns_settings else ['Sales Return', 'Vendor Return', 'Production Return'] %}
 {% set _follow_up_options = (returns_settings.get('workflow_options', {}).get('follow_up_actions') or ['Credit', 'Replacement', 'Discount', 'No Action']) if returns_settings else ['Credit', 'Replacement', 'Discount', 'No Action'] %}
-{% set _company_options = (returns_settings.get('workflow_options', {}).get('companies') or ['the distributor Meats', 'Black Forest']) if returns_settings else ['the distributor Meats', 'Black Forest'] %}
+{% set _company_options = (returns_settings.get('workflow_options', {}).get('companies') or ['Wholesale Provisions', 'Alderwood Charcuterie']) if returns_settings else ['Wholesale Provisions', 'Alderwood Charcuterie'] %}
 {% block returns_title %}Submit New Return{% endblock %}
 {% block breadcrumbs %}
 <nav aria-label="breadcrumb" class="py-3">

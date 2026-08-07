@@ -298,7 +298,7 @@ def test_supplier_drilldown_v2_scope_denied_returns_403(app_client, seed_supplie
 
 def test_supplier_product_label_formatter_standardizes_sku_and_name():
     assert presentation.format_product_label("13667", "Deli Bacon No Nitrate Added") == "13667 — Deli Bacon No Nitrate Added"
-    assert presentation.compact_product_label("13667", "Deli Bacon No Nitrate Added Fresh Wholesale Analytics (Retail Case)", max_length=28).startswith("13667 — ")
+    assert presentation.compact_product_label("13667", "Deli Bacon No Nitrate Added Fresh Sliced (Retail Case)", max_length=28).startswith("13667 — ")
 
 
 def test_supplier_drilldown_product_display_uses_sku_and_unnamed_product_fallback():

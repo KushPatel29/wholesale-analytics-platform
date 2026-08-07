@@ -28,7 +28,7 @@ test.describe('Returns Enterprise Workflow', () => {
       });
     }
 
-    await page.selectOption('#company', { label: 'the distributor Meats' });
+    await page.selectOption('#company', { label: 'Wholesale Provisions' });
     await page.fill('#additional_notes', 'Enterprise E2E Test - Order 462640');
     
     // Line items

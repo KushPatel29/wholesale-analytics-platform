@@ -124,7 +124,7 @@ class Config:
     SMTP_PORT: int = _get_int("SMTP_PORT", 25)
     SMTP_USE_TLS: bool = _get_bool("SMTP_USE_TLS", False)
     SMTP_TIMEOUT_SECONDS: int = _get_int("SMTP_TIMEOUT_SECONDS", 20)
-    MAIL_FROM: str = (os.getenv("MAIL_FROM", "Wholesale Analytics <no-reply@the distributormeats.com>") or "").strip()
+    MAIL_FROM: str = (os.getenv("MAIL_FROM", "Wholesale Analytics <no-reply@wholesaleprovisions.example.com>") or "").strip()
     MAIL_SUPPRESS_SEND: bool = _get_bool("MAIL_SUPPRESS_SEND", False)
     INVITES_ENABLED: bool = _get_bool("INVITES_ENABLED", True)
     NOTIFICATIONS_MAX_EMAILS_PER_HOUR: int = _get_int("NOTIFICATIONS_MAX_EMAILS_PER_HOUR", 10)

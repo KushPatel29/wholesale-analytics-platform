@@ -28,7 +28,7 @@ def app():
         SMTP_SERVER="relay.example.com",
         SMTP_PORT=25,
         SMTP_USE_TLS=True,
-        MAIL_FROM="Wholesale Analytics <no-reply@the distributormeats.com>",
+        MAIL_FROM="Wholesale Analytics <no-reply@wholesaleprovisions.example.com>",
         APP_PUBLIC_BASE_URL="https://analytics.example.com",
         RESET_TOKEN_TTL_SECONDS=86400,
     )

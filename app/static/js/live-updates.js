@@ -26,7 +26,7 @@
   const handlers = new Set();
 
   function ensureGlobalNamespace() {
-    const global = window.Wholesale Analytics || (window.Wholesale Analytics = {});
+    const global = window.WholesaleAnalytics || (window.WholesaleAnalytics = {});
 
     global.registerRefreshHandler = (handler) => {
       if (typeof handler !== 'function') return () => {};

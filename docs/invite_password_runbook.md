@@ -9,10 +9,10 @@
 Set these values in `/etc/wholesale_analytics/wholesale.env` (or your deployment env source):
 
 ```env
-SMTP_SERVER=the distributormeats-com.mail.protection.outlook.com
+SMTP_SERVER=wholesale-provisions-com.mail.protection.outlook.com
 SMTP_PORT=25
 SMTP_USE_TLS=0
-MAIL_FROM=Wholesale Analytics <no-reply@the distributormeats.com>
+MAIL_FROM=Wholesale Analytics <no-reply@wholesaleprovisions.example.com>
 INVITES_ENABLED=1
 RESET_TOKEN_TTL_SECONDS=86400
 APP_PUBLIC_BASE_URL=https://<public-host>

@@ -373,10 +373,59 @@ def _normalize_dates(filters: FilterParams, include_current_month: bool) -> tupl
     return start_dt, end_dt, defaulted
 
 
+def _current_scope_payload() -> Optional[Dict[str, Any]]:
+    """
+    Resolve the calling user's row-level scope, or None outside a request.
+
+    Every other bundle passes a scope into `fact_store.build_where_clause`.
+    This module builds its own SQL against a raw DuckDB connection, so it has
+    to fetch the same scope itself.
+    """
+    try:
+        from flask import has_request_context  # type: ignore
+        from app.core import access_policy  # type: ignore
+
+        if not has_request_context():
+            return None
+        return access_policy.get_current_scope(use_cache=True).as_dict(include_allowed=True)
+    except Exception:
+        return None
+
+
+def _scope_predicate(cols: set[str]) -> tuple[Optional[str], List[Any]]:
+    """Translate the current user's scope into a SQL predicate."""
+    scope = _current_scope_payload()
+    if scope is None:
+        return None, []
+    try:
+        from app.services import fact_store  # type: ignore
+
+        clause, params = fact_store.build_scope_clause(scope, cols)
+    except Exception:
+        # Failing closed would black out the page for everyone if the access
+        # layer errors, so log and fall back to the unscoped clause only when
+        # the scope could not be resolved at all.
+        try:
+            current_app.logger.exception("overview_v2.scope_clause_failed")
+        except Exception:
+            pass
+        return None, []
+    if not clause or clause == "1=1":
+        return None, []
+    return clause, list(params)
+
+
 def _where_clause(filters: FilterParams, cols: set[str], include_current_month: bool) -> tuple[str, List[Any], Optional[str], Optional[str], bool]:
     start_dt, end_dt, defaulted_dates = _normalize_dates(filters, include_current_month)
     where_parts: List[str] = ["1=1"]
     params: List[Any] = []
+
+    # Row-level security first: without this the v2 overview returns the whole
+    # company to a rep who is scoped to their own book.
+    scope_sql, scope_params = _scope_predicate(cols)
+    if scope_sql:
+        where_parts.append(scope_sql)
+        params.extend(scope_params)
     if start_dt:
         where_parts.append("Date >= ?")
         params.append(start_dt.isoformat())
