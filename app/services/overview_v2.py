@@ -43,7 +43,47 @@ _BUNDLE_REV = "2026-03-28-v4"
 _DRIVER_DECOMP_REV = "2026-02-23-v2"
 _DRIVER_DECOMP_TOLERANCE = 0.01
 _DRIVER_DECOMP_TOP_N = 5
-_bundle_cache = TTLCache(maxsize=128, ttl=BUNDLE_CACHE_TTL)
+
+# The margin-risk watchlist is annotated by `margin_rules.annotate_margin_frame`,
+# which returns 80-odd columns of pricing intermediates. The overview only ever
+# renders a dozen of them, so shipping the rest cost 459 KB per copy - and the
+# same list is reachable from three places in the payload (`profitability`,
+# `insights.margin_risk`, `overview_metrics.profitability`), so json.dumps wrote
+# it three times: 1.38 MB of a 1.44 MB response. Project to what the front end
+# reads and the whole bundle drops to about 45 KB.
+#
+# The drilldown and export paths build their own frame (`_build_margin_risk_table`)
+# and keep every column, so nothing analytical is lost here - only the columns
+# that were being sent to a page that never looked at them.
+MARGIN_RISK_PAYLOAD_FIELDS: tuple[str, ...] = (
+    "entity_id",
+    "label",
+    "product",
+    "supplier",
+    "protein",
+    "family",
+    "revenue",
+    "revenue_share",
+    "profit",
+    "profit_impact",
+    "profit_lost_vs_target",
+    "margin_pct",
+    "margin_delta",
+    "minimum_margin_pct",
+    "target_margin_pct",
+    "gap_to_target",
+    "status_key",
+    "target_status",
+    "risk",
+)
+
+# How many watchlist rows travel to the browser. Every renderer slices the top
+# 5 or 10; the tail only ever fed two aggregates, and those are now computed
+# server-side and sent alongside (`margin_risk_total_count`,
+# `margin_risk_revenue_share_pct`) so the numbers on screen are unchanged.
+MARGIN_RISK_PAYLOAD_LIMIT = max(int(os.getenv("OVERVIEW_MARGIN_RISK_LIMIT", "40") or 40), 1)
+
+_bundle_cache = TTLCache(maxsize=int(os.getenv("OVERVIEW_BUNDLE_CACHE_MAXSIZE", "128") or 128), ttl=BUNDLE_CACHE_TTL)
 _bundle_cache_lock: RLock = RLock()
 _bundle_lock: Lock = Lock()
 _bundle_locks: Dict[str, Lock] = {}
@@ -1703,8 +1743,8 @@ def _compute_window_margin_risk(
         }
     out = []
     for rec in frame.sort_values(["profit_lost_vs_target", "revenue"], ascending=[False, False]).to_dict(orient="records"):
-        row = dict(rec)
-        row["profit_impact"] = _clean_optional_float(row.get("profit"))
+        row = {key: rec[key] for key in MARGIN_RISK_PAYLOAD_FIELDS if key in rec}
+        row["profit_impact"] = _clean_optional_float(rec.get("profit"))
         out.append(row)
     out.sort(key=lambda rec: float(rec.get("profit_impact") or 0.0))
     return {
@@ -3264,6 +3304,20 @@ def _compute_bundle_context(
         "narrative": narrative,
     }
 
+    # Every server-side aggregate over the watchlist has been computed by now,
+    # so the rows themselves can be capped for transport. The two figures the
+    # browser used to derive by walking the whole array travel with it, so the
+    # rendered count and revenue share stay exactly what they were before the
+    # cap - see tests/test_overview_bundle_payload.py.
+    profitability["margin_risk_total_count"] = len(margin_risk_rows)
+    profitability["margin_risk_revenue_share_pct"] = margin_risk_revenue_share
+    if len(margin_risk_rows) > MARGIN_RISK_PAYLOAD_LIMIT:
+        profitability["margin_risk"] = margin_risk_rows[:MARGIN_RISK_PAYLOAD_LIMIT]
+        profitability["margin_risk_truncated"] = True
+    else:
+        profitability["margin_risk_truncated"] = False
+    insights["margin_risk"] = profitability["margin_risk"]
+
     overview_metrics = {
         "window": window,
         "kpis": totals,
@@ -4760,8 +4814,13 @@ def build_overview_context(
             watchouts.append(f"Packs coverage is {float(packs_coverage):.1f}% and may impact weighted metrics.")
 
     margin_risk_rows = profitability.get("margin_risk") or []
+    # The bundle ships a capped watchlist, so count the population rather than
+    # the rows that happened to travel.
+    margin_risk_count = profitability.get("margin_risk_total_count")
+    if margin_risk_count is None:
+        margin_risk_count = len(margin_risk_rows)
     if margin_risk_rows:
-        watchouts.append(f"Margin risk present: {len(margin_risk_rows)} SKU(s) below target margin.")
+        watchouts.append(f"Margin risk present: {int(margin_risk_count)} SKU(s) below target margin.")
     watchouts = watchouts[:4]
 
     context = {

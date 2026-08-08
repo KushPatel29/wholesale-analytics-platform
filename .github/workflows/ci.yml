@@ -81,4 +81,5 @@ jobs:
           pip install pytest pytest-mock
           pytest -q -o addopts="" -rs \
             tests/test_overview_parity.py \
-            tests/test_bundle_endpoints.py
+            tests/test_bundle_endpoints.py \
+            tests/test_overview_bundle_payload.py

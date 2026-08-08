@@ -44,6 +44,15 @@
     return Number.isFinite(num) ? num : null;
   };
   const emptyText = (value, fallback = "-") => (value === null || value === undefined || value === "" ? fallback : value);
+  // How many SKUs are on the margin-risk watchlist. The bundle sends only the
+  // worst N rows, so counting what arrived would under-report; the server sends
+  // the population size alongside. Falling back to the array keeps hand-built
+  // payloads and older cached bundles rendering the same number as before.
+  const marginRiskCount = (profitability) => {
+    const rows = Array.isArray(profitability?.margin_risk) ? profitability.margin_risk : [];
+    const total = asNumber(profitability?.margin_risk_total_count);
+    return total === null ? rows.length : total;
+  };
   const escapeHtml = (value) =>
     String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -1366,7 +1375,7 @@
     }
     const fallbackWatchouts = [];
     if (els.execWatchoutsList) {
-      const risks = Array.isArray(profitability.margin_risk) ? profitability.margin_risk.length : 0;
+      const risks = marginRiskCount(profitability);
       fallbackWatchouts.push(`Margin risk SKUs: ${fmtNumber0.format(risks)}`);
       if (top1Share !== null && Number.isFinite(top1Share)) {
         fallbackWatchouts.push(`Customer concentration: Top 1 ${formatByFmt("percent", top1Share)}${hhi !== null && Number.isFinite(hhi) ? ` | HHI ${fmtNumber0.format(hhi)}` : ""}`);
@@ -1601,18 +1610,18 @@
     });
 
     const overlayMeta = {
-      profit: { label: "Profit", color: "#fd7e14", yAxisID: "y" },
-      margin_pct: { label: "Margin %", color: "#20c997", yAxisID: "y1" },
-      units: { label: "Units", color: "#198754", yAxisID: "y1" },
+      profit: { label: "Profit", color: ChartUtils.seriesColor(5), yAxisID: "y" },
+      margin_pct: { label: "Margin %", color: ChartUtils.seriesColor(0), yAxisID: "y1" },
+      units: { label: "Units", color: ChartUtils.seriesColor(0), yAxisID: "y1" },
     };
     const selectedOverlay = overlayMeta[overlayKey] || overlayMeta.profit;
 
     const datasets = [
-      { type: "line", label: "Revenue", data: revenue, borderColor: "#0d6efd", backgroundColor: "rgba(13,110,253,0.12)", tension: 0.25, yAxisID: "y" },
+      { type: "line", label: "Revenue", data: revenue, borderColor: ChartUtils.seriesColor(1), backgroundColor: ChartUtils.seriesFill(1, 0.12), tension: 0.25, yAxisID: "y" },
       { type: "line", label: selectedOverlay.label, data: overlay, borderColor: selectedOverlay.color, backgroundColor: `${selectedOverlay.color}33`, tension: 0.25, yAxisID: selectedOverlay.yAxisID, borderDash: overlayKey === "margin_pct" ? [5, 4] : undefined },
     ];
     if (state.trend.rolling) {
-      datasets.push({ type: "line", label: "Revenue Rolling Avg", data: rolling, borderColor: "#6f42c1", backgroundColor: "rgba(111,66,193,0.1)", tension: 0.25, yAxisID: "y", borderDash: [6, 4], pointRadius: 0 });
+      datasets.push({ type: "line", label: "Revenue Rolling Avg", data: rolling, borderColor: ChartUtils.seriesColor(4), backgroundColor: ChartUtils.seriesFill(4, 0.1), tension: 0.25, yAxisID: "y", borderDash: [6, 4], pointRadius: 0 });
     }
 
     const ctx = els.trendChart.getContext("2d");
@@ -1662,7 +1671,7 @@
     const ctx = els.mixChart.getContext("2d");
     charts.mix = new Chart(ctx, {
       type: "bar",
-      data: { labels, datasets: [{ label: "Revenue", data: values, backgroundColor: "rgba(13,110,253,0.3)", borderColor: "#0d6efd", borderWidth: 1 }] },
+      data: { labels, datasets: [{ label: "Revenue", data: values, backgroundColor: ChartUtils.seriesFill(1, 0.3), borderColor: ChartUtils.seriesColor(1), borderWidth: 1 }] },
       options: {
         indexAxis: "y",
         responsive: true,
@@ -1702,8 +1711,8 @@
       data: {
         labels,
         datasets: [
-          { type: "bar", label: "Revenue", data: values, backgroundColor: "rgba(13,110,253,0.25)", borderColor: "#0d6efd", borderWidth: 1, yAxisID: "y" },
-          { type: "line", label: "Cumulative %", data: cum, borderColor: "#198754", backgroundColor: "rgba(25,135,84,0.10)", tension: 0.2, yAxisID: "y1" },
+          { type: "bar", label: "Revenue", data: values, backgroundColor: ChartUtils.seriesFill(1, 0.25), borderColor: ChartUtils.seriesColor(1), borderWidth: 1, yAxisID: "y" },
+          { type: "line", label: "Cumulative %", data: cum, borderColor: ChartUtils.seriesColor(0), backgroundColor: ChartUtils.seriesFill(0, 0.10), tension: 0.2, yAxisID: "y1" },
         ],
       },
       options: {
@@ -1864,7 +1873,7 @@
             <td class="text-truncate" title="${r.label || ""}">
               <div class="d-flex flex-column gap-1">
                 ${labelHtml}
-                <span style="display:inline-block;height:4px;background:${delta >= 0 ? "#198754" : "#dc3545"};width:${barWidth}px;border-radius:999px;"></span>
+                <span style="display:inline-block;height:4px;background:${delta >= 0 ? ChartUtils.seriesColor(0) : ChartUtils.seriesColor(3)};width:${barWidth}px;border-radius:999px;"></span>
               </div>
             </td>
             <td class="text-end">${fmtCurrency1.format(r.current || 0)}</td>
@@ -1889,7 +1898,14 @@
     const profitability = insightsPayload.profitability || {};
     const marginRisk = Array.isArray(profitability.margin_risk) ? profitability.margin_risk : [];
     const leadRisk = [...marginRisk].sort((a, b) => Number(a.profit_impact || 0) - Number(b.profit_impact || 0))[0] || null;
-    const riskRevenueShare = marginRisk.reduce((acc, row) => acc + (Number(row.revenue_share || 0) || 0), 0);
+    // The bundle caps the watchlist rows it sends, so prefer the share the
+    // server computed over the whole population and only fall back to summing
+    // the rows on hand (older payloads, and any caller that builds the shape
+    // by hand).
+    const serverRiskRevenueShare = asNumber(profitability.margin_risk_revenue_share_pct);
+    const riskRevenueShare = serverRiskRevenueShare !== null
+      ? serverRiskRevenueShare
+      : marginRisk.reduce((acc, row) => acc + (Number(row.revenue_share || 0) || 0), 0);
     const marginStats = profitability.margin_pct || {};
     const p50 = asNumber(marginStats.p50);
     const p10 = asNumber(marginStats.p10);
@@ -1944,7 +1960,7 @@
       els.focusSkuRiskCountValue,
       els.focusSkuRiskCountDetail,
       "SKU watchlist",
-      fmtNumber0.format(marginRisk.length),
+      fmtNumber0.format(marginRiskCount(profitability)),
       marginRisk.length
         ? `${fmtPercent1(riskRevenueShare)} of visible revenue sits in the current top SKU margin-risk watchlist.`
         : "Visible revenue does not currently require a top-10 SKU margin-risk watchlist."
@@ -2316,7 +2332,7 @@
     if (els.marginRiskSummary) {
       const belowZero = stats && stats.below_zero !== undefined ? Number(stats.below_zero || 0) : null;
       const aboveFifty = stats && stats.above_fifty !== undefined ? Number(stats.above_fifty || 0) : null;
-      const parts = [`${fmtNumber0.format(risks.length)} margin risk items`];
+      const parts = [`${fmtNumber0.format(marginRiskCount(profitability))} margin risk items`];
       if (targetMargin !== null) parts.push(`Target ${formatByFmt("percent", targetMargin)}`);
       if (minimumMargin !== null) parts.push(`Min ${formatByFmt("percent", minimumMargin)}`);
       if (belowZero !== null) parts.push(`Negative margin: ${fmtNumber0.format(belowZero)}`);
@@ -2451,7 +2467,7 @@
     const ctx = els.weekdayChart.getContext("2d");
     charts.weekday = new Chart(ctx, {
       type: "bar",
-      data: { labels, datasets: [{ label: "Revenue", data: values, backgroundColor: "rgba(13,110,253,0.25)", borderColor: "#0d6efd", borderWidth: 1 }] },
+      data: { labels, datasets: [{ label: "Revenue", data: values, backgroundColor: ChartUtils.seriesFill(1, 0.25), borderColor: ChartUtils.seriesColor(1), borderWidth: 1 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -2810,16 +2826,16 @@
     }
 
     const datasets = [
-      { type: "line", label: "Actual", data: actual, borderColor: "#0d6efd", backgroundColor: "rgba(13,110,253,0.12)", tension: 0.25 },
-      { type: "line", label: "Forecast", data: forecast, borderColor: "#6f42c1", backgroundColor: "rgba(111,66,193,0.08)", borderDash: [6, 4], tension: 0.25 },
+      { type: "line", label: "Actual", data: actual, borderColor: ChartUtils.seriesColor(1), backgroundColor: ChartUtils.seriesFill(1, 0.12), tension: 0.25 },
+      { type: "line", label: "Forecast", data: forecast, borderColor: ChartUtils.seriesColor(4), backgroundColor: ChartUtils.seriesFill(4, 0.08), borderDash: [6, 4], tension: 0.25 },
     ];
     if (hasBand) {
       datasets.push({
         type: "line",
         label: "Lower CI",
         data: lower,
-        borderColor: "rgba(111,66,193,0.01)",
-        backgroundColor: "rgba(111,66,193,0.08)",
+        borderColor: ChartUtils.seriesFill(4, 0.01),
+        backgroundColor: ChartUtils.seriesFill(4, 0.08),
         pointRadius: 0,
         fill: false,
         tension: 0.25,
@@ -2828,8 +2844,8 @@
         type: "line",
         label: "Upper CI",
         data: upper,
-        borderColor: "rgba(111,66,193,0.01)",
-        backgroundColor: "rgba(111,66,193,0.08)",
+        borderColor: ChartUtils.seriesFill(4, 0.01),
+        backgroundColor: ChartUtils.seriesFill(4, 0.08),
         pointRadius: 0,
         fill: "-1",
         tension: 0.25,
