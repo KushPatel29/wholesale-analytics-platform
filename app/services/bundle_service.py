@@ -310,14 +310,14 @@ def _bundle_query_budget(page: str, meta: Mapping[str, Any]) -> Optional[int]:
             if str(section).strip()
         }
         if not sections:
-            return 3
+            return 5
         if sections == {"table"}:
-            return 1
+            return 3
         if sections.issubset({"overview", "strategy", "demand"}):
-            return 1
+            return 5
         if "table" in sections:
-            return 2
-        return 2
+            return 5
+        return 5
     if page == "salesreps":
         return 4
     if page in {"regions", "suppliers"}:

@@ -15,7 +15,7 @@
   const isV2 = root.dataset.productsV2 === "1";
   const isV3 = root.dataset.productsV3 === "1";
   const isV4 = root.dataset.productsV4 === "1";
-  const PAGE_CACHE_ID = isV4 ? "products-v4-live4" : "products";
+  const PAGE_CACHE_ID = isV4 ? "products-v4-live5" : "products";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
   const WORKSPACE_STORAGE_KEY = isV4 ? "wholesale:products:v4:workspace" : "";
   const TABLE_PRESET_STORAGE_KEY = isV4 ? "wholesale:products:v4:table-preset" : "";
@@ -920,11 +920,12 @@
   };
 
   const persistSnapshot = (payload = lastPayload) => {
-    if (!pageCache || !payload || !state.qs) return false;
+    const readyGroups = loadedGroups().filter((group) => groupHasData(group, payload));
+    if (!pageCache || !payload || !state.qs || !readyGroups.length) return false;
     return pageCache.saveSnapshot(PAGE_CACHE_ID, {
       qs: state.qs,
       payload,
-      uiState: snapshotUiState(),
+      uiState: { ...snapshotUiState(), loadedGroups: readyGroups },
       scrollY: window.scrollY || 0,
       meta: {
         datasetVersion: payload?.meta?.dataset_version || null,
@@ -936,7 +937,12 @@
     if (!pageCache) return null;
     const snapshot = pageCache.loadSnapshot(PAGE_CACHE_ID, { qs, ...PAGE_CACHE_POLICY });
     if (!snapshot?.payload) return null;
+    const readyGroups = Array.isArray(snapshot.ui_state?.loadedGroups)
+      ? snapshot.ui_state.loadedGroups.filter((group) => groupHasData(group, snapshot.payload))
+      : [];
+    if (!readyGroups.length) return null;
     applySnapshotUiState(snapshot.ui_state || {});
+    restoreLoadedGroups(readyGroups);
     lastPayload = snapshot.payload || {};
     renderSummaryBundle(lastPayload);
     renderDetailBundle(lastPayload);

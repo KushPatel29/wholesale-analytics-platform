@@ -749,71 +749,16 @@ def build_inventory(frame: pd.DataFrame) -> Dict[str, Any]:
     }
 
 # ---------------------------------------------------------------------------
-# The same availability picture, computed in SQL
+# The same availability picture, sourced narrowly from DuckDB
 # ---------------------------------------------------------------------------
 #
 # The products and sales-rep bundles are built from DuckDB rather than a
-# materialised frame, and pulling a whole frame back just to add a service
-# strip would double their memory on a 512 MB box. One aggregate query costs
-# almost nothing and returns the same numbers as `build_inventory`.
+# materialised frame. Read only the eleven fields this scorecard uses, then do
+# the small grouped calculation in pandas; DuckDB's exact string aggregates can
+# otherwise reserve the entire memory allowance on a 512 MB host.
 #
-# `OTIF` is measured on the row here too - `AVG(CASE WHEN NOT late AND NOT
-# short ...)` - and not multiplied out of the two component rates.
-
-_INVENTORY_SQL = """
-    WITH scoped AS (
-        SELECT {group_expr} AS label, *
-        FROM fact
-        WHERE {where_sql}
-    ),
-    -- One inventory position per SKU per group. Each order line carries a
-    -- snapshot of the position it was picked against, so summing the column
-    -- across lines counts the same SKU's stock once per line - the pandas path
-    -- had the same bug and reported $29.3M against a true $206k.
-    sku_positions AS (
-        SELECT
-            label,
-            COALESCE(NULLIF(CAST(ProductId AS VARCHAR), ''), 'Unknown') AS sku,
-            AVG(COALESCE(OnHandValue, 0)) AS sku_on_hand_value,
-            AVG(DaysOfSupply) AS sku_cover_days,
-            0.0 AS sku_below_reorder
-        FROM scoped
-        GROUP BY 1, 2
-    ),
-    stock AS (
-        SELECT
-            label,
-            COUNT(*) AS skus,
-            SUM(sku_on_hand_value) AS on_hand_value,
-            MEDIAN(sku_cover_days) AS cover_days
-        FROM sku_positions
-        GROUP BY 1
-    ),
-    service AS (
-        SELECT
-            label,
-            COUNT(*) AS lines,
-            AVG(CASE WHEN NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS line_fill_pct,
-            AVG(CASE WHEN NOT COALESCE(IsLate, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS on_time_pct,
-            AVG(CASE WHEN NOT COALESCE(IsLate, FALSE)
-                      AND NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS otif_pct,
-            AVG(CASE WHEN COALESCE(IsStockout, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS stockout_pct,
-            AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) * 100 AS below_reorder_pct,
-            (1 - SUM(COALESCE(BackorderQty, 0)) / NULLIF(SUM(COALESCE(QuantityOrdered, 0)), 0)) * 100 AS unit_fill_pct
-        FROM scoped
-        GROUP BY 1
-    )
-    SELECT
-        service.label AS label,
-        service.lines AS lines,
-        service.line_fill_pct, service.on_time_pct, service.otif_pct,
-        service.stockout_pct, service.unit_fill_pct, service.below_reorder_pct,
-        stock.cover_days, stock.on_hand_value, stock.skus
-    FROM service
-    LEFT JOIN stock ON stock.label = service.label
-    ORDER BY service.otif_pct ASC
-    LIMIT {limit}
-"""
+# `OTIF` is measured on the row here too and not multiplied out of the two
+# component rates.
 
 # Columns the query needs. Without them the strip is simply not rendered,
 # rather than reporting perfect service against columns that do not exist.
@@ -836,43 +781,76 @@ def inventory_summary_sql(
     """Per-group availability and inventory position, worst OTIF first."""
     from app.services import fact_store
 
-    sql = _INVENTORY_SQL.format(
-        group_expr=group_expr,
-        where_sql=where_sql or "1=1",
-        limit=int(limit),
-    )
+    sql = f"""
+        SELECT
+            {group_expr} AS label,
+            COALESCE(NULLIF(CAST(ProductId AS VARCHAR), ''), 'Unknown') AS sku,
+            CAST(OnHandValue AS DOUBLE) AS on_hand_value,
+            CAST(DaysOfSupply AS DOUBLE) AS cover_days,
+            COALESCE(IsShortShip, FALSE) AS is_short,
+            COALESCE(IsLate, FALSE) AS is_late,
+            COALESCE(IsStockout, FALSE) AS is_stockout,
+            CAST(OnHandQty AS DOUBLE) AS on_hand_qty,
+            CAST(ReorderPointQty AS DOUBLE) AS reorder_qty,
+            CAST(BackorderQty AS DOUBLE) AS backorder_qty,
+            CAST(QuantityOrdered AS DOUBLE) AS ordered_qty
+        FROM fact
+        WHERE {where_sql or '1=1'}
+    """
     try:
-        frame = fact_store.execute_sql_df(sql, list(where_params or []))
+        frame = fact_store.execute_sql_df(
+            sql,
+            list(where_params or []),
+            tag="inventory.summary_source",
+            cache_key="inventory.summary_source",
+        )
     except Exception:  # pragma: no cover - a missing column must not break a page
         return []
     if frame is None or frame.empty:
         return []
 
     rows: List[Dict[str, Any]] = []
-    for record in frame.to_dict(orient="records"):
-        lines = int(record.get("lines") or 0)
-        on_hand = float(record.get("on_hand_value") or 0.0)
-        otif = record.get("otif_pct")
+    frame["label"] = frame["label"].astype("string").fillna("Unknown")
+    for label, group in frame.groupby("label", sort=False):
+        lines = int(len(group))
+        line_fill = float((~group["is_short"].astype(bool)).mean() * 100)
+        on_time = float((~group["is_late"].astype(bool)).mean() * 100)
+        otif = float((~group["is_short"].astype(bool) & ~group["is_late"].astype(bool)).mean() * 100)
+        stockout = float(group["is_stockout"].astype(bool).mean() * 100)
+        ordered = pd.to_numeric(group["ordered_qty"], errors="coerce").fillna(0.0)
+        backordered = pd.to_numeric(group["backorder_qty"], errors="coerce").fillna(0.0)
+        ordered_total = float(ordered.sum())
+        unit_fill = (1.0 - float(backordered.sum()) / ordered_total) * 100 if ordered_total > 0 else None
+        on_hand_qty = pd.to_numeric(group["on_hand_qty"], errors="coerce").fillna(0.0)
+        reorder_qty = pd.to_numeric(group["reorder_qty"], errors="coerce").fillna(0.0)
+        below_reorder = float((on_hand_qty < reorder_qty).mean() * 100)
+        positions = group.groupby("sku", dropna=False).agg(
+            on_hand_value=("on_hand_value", "mean"),
+            cover_days=("cover_days", "mean"),
+        )
+        on_hand = float(pd.to_numeric(positions["on_hand_value"], errors="coerce").fillna(0.0).sum())
+        cover = pd.to_numeric(positions["cover_days"], errors="coerce").dropna()
         rows.append(
             {
-                "label": str(record.get("label") or "Unknown"),
+                "label": str(label or "Unknown"),
                 "lines": lines,
-                "line_fill_pct": _round_or_none(record.get("line_fill_pct")),
-                "unit_fill_pct": _round_or_none(record.get("unit_fill_pct")),
-                "on_time_pct": _round_or_none(record.get("on_time_pct")),
+                "line_fill_pct": _round_or_none(line_fill),
+                "unit_fill_pct": _round_or_none(unit_fill),
+                "on_time_pct": _round_or_none(on_time),
                 "otif_pct": _round_or_none(otif),
-                "stockout_pct": _round_or_none(record.get("stockout_pct"), 2),
-                "cover_days": _round_or_none(record.get("cover_days")),
+                "stockout_pct": _round_or_none(stockout, 2),
+                "cover_days": _round_or_none(cover.median() if not cover.empty else None),
                 "on_hand_value": on_hand,
-                "skus": int(record.get("skus") or 0),
-                "below_reorder_pct": _round_or_none(record.get("below_reorder_pct")),
+                "skus": int(len(positions)),
+                "below_reorder_pct": _round_or_none(below_reorder),
                 "reliable_estimate": lines >= MIN_ROWS_FOR_RATE,
                 "status": _service_status_otif(
-                    None if otif is None else float(otif), lines
+                    otif, lines
                 ),
             }
         )
-    return rows
+    rows.sort(key=lambda row: row.get("otif_pct") if row.get("otif_pct") is not None else 999)
+    return rows[: int(limit)]
 
 
 def _round_or_none(value, digits: int = 1):

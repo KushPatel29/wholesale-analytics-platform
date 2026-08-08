@@ -4135,9 +4135,13 @@ def index():
         session["products_filters"] = filters
         return redirect(url_for("products.index"))
 
-    payload = _build_overview_from_service(filters)
     status = get_products_parquet_status()
-    payload = _attach_parquet_warning(payload, status, add_empty_data=not status.available)
+    # All current Products templates hydrate through their scoped JSON bundle.
+    # Building the legacy overview here materialised the full fact dataframe
+    # before a single byte of HTML was returned, even though no template reads
+    # `payload`. On a 512 MB worker that duplicate load could kill the process
+    # before the bounded bundle had a chance to run.
+    payload: Dict[str, Any] = {}
     try:
         bubble_url = url_for("products.api_bubble")
     except BuildError:
@@ -4151,7 +4155,7 @@ def index():
         template_name,
         filters=filters,
         payload=payload,
-        products_warning=status.warning or payload.get("warning"),
+        products_warning=status.warning,
         product_intelligence_v2=products_v2,
         products_v3=products_v3,
         products_v4=products_v4,

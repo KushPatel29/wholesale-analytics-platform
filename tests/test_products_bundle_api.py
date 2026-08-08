@@ -128,6 +128,20 @@ def seed_products_protein_fallback(tmp_path, monkeypatch):
     fact_store.reset_duckdb_state()
 
 
+def test_products_page_skips_unused_legacy_overview(app_client, monkeypatch):
+    """The HTML shell must not materialize the fact dataframe before AJAX."""
+    from app.blueprints import products as products_blueprint
+
+    def _unexpected_legacy_load(*_args, **_kwargs):
+        raise AssertionError("legacy overview should not run for the Products HTML shell")
+
+    monkeypatch.setattr(products_blueprint, "_build_overview_from_service", _unexpected_legacy_load)
+    response = app_client.get("/products/")
+
+    assert response.status_code == 200
+    assert b'data-bundle-url="/api/products/bundle"' in response.data
+
+
 def test_products_bundle_has_keys(app_client, seed_products):
     resp = app_client.get("/api/products/bundle")
     assert resp.status_code == 200

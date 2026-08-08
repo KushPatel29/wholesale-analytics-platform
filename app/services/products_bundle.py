@@ -9,6 +9,7 @@ from urllib.parse import quote
 from typing import Any, Dict, List, Sequence, Set
 
 import numpy as np
+import pandas as pd
 
 from app.services import fact_schema as fs
 from app.services import fact_store
@@ -2549,1221 +2550,6 @@ def _default_quick_rec(row: Dict[str, Any]) -> str:
     return "Hold"
 
 
-def _metrics_and_charts(
-    comparison_where_sql: str,
-    comparison_params: List[Any],
-    cols: set[str],
-    *,
-    current_start: str,
-    current_end: str,
-    recent_start: str,
-    recent_end: str,
-    prior_start: str,
-    prior_end: str,
-    price_velocity_limit: int,
-    movers_limit: int,
-) -> Dict[str, Any]:
-    """
-    Single DuckDB query to compute KPIs + charts + price/velocity points + segment summaries.
-    """
-    date_col = _safe_col(cols, fs.CANON.date, "Date")
-    revenue_col = _safe_col(cols, fs.CANON.revenue, "Revenue")
-    cost_expr = _coalesce_expr(cols, (fs.CANON.cost, "Cost", "CostPrice"), "NULL")
-    qty_expr = _coalesce_expr(cols, (fs.CANON.qty_units, "ShippedItems", "QuantityOrdered", "Qty", "Quantity", "Units", "ItemCount"), "0")
-    weight_expr = _coalesce_expr(cols, (fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum"), "0")
-    _weight_col = _safe_col(cols, fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum")
-    sku_col, prod_id_col, prod_name = _resolve_product_columns(cols)
-    cust_id = _safe_col(cols, fs.CANON.customer_id, "CustomerID")
-    cust_name = _safe_col(cols, fs.CANON.customer_name, "CustomerName", "Name")
-    region_col = _safe_col(cols, fs.CANON.region, "Region", "RegionName")
-    order_id = _safe_col(cols, fs.CANON.order_id, "OrderID")
-
-    if not all([date_col, revenue_col, sku_col, prod_name, cust_id, order_id]):
-        return {"error": {"message": "Required columns missing for products bundle"}, "meta": {"cached": False}}
-
-    exprs = _product_exprs(cols)
-    family_exprs = _family_exprs(cols)
-    sku_expr = exprs["sku_expr"]
-    _prod_id_expr = exprs["prod_id_expr"]
-    product_key_expr = exprs["product_key_expr"]
-    product_name_expr = exprs["product_name_expr"]
-    display_name_expr = exprs["display_name_expr"]
-    protein_expr = family_exprs["protein_expr"]
-    category_expr = family_exprs["category_expr"]
-    customer_name_expr = (
-        f"COALESCE({cust_name}, {cust_id})"
-        if cust_name and cust_id
-        else (f"{cust_name}" if cust_name else (f"{cust_id}" if cust_id else "NULL"))
-    )
-    region_expr = region_col or "NULL"
-
-    try:
-        velocity_limit = int(price_velocity_limit)
-    except Exception:
-        velocity_limit = 250
-    velocity_limit = max(50, min(velocity_limit, 5000))
-    try:
-        movers_cap = int(movers_limit)
-    except Exception:
-        movers_cap = 20
-    movers_cap = max(10, min(movers_cap, 500))
-    product_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "product_rollup.protein_family",
-        "product_rollup.product_category",
-        "target_gross_margin_pct",
-    )
-    seg_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "seg_scored.protein_family",
-        "seg_scored.product_category",
-        "target_gross_margin_pct",
-    )
-    _health_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "health_classified.protein_family",
-        "health_classified.product_category",
-        "target_gross_margin_pct",
-    )
-    effective_cost_expr = margin_rules.sql_effective_cost_expr("base_cost", "weight", "qty", fallback="NULL")
-
-    sql = f"""
-        WITH base AS (
-            SELECT
-                {date_col}::DATE AS date,
-                {product_key_expr} AS product_id,
-                {sku_expr} AS sku,
-                {product_name_expr} AS product_name,
-                {display_name_expr} AS display_name,
-                {protein_expr} AS protein_family,
-                {category_expr} AS product_category,
-                {cust_id}::VARCHAR AS customer_id,
-                {customer_name_expr}::VARCHAR AS customer_name,
-                {region_expr}::VARCHAR AS region,
-                {order_id}::VARCHAR AS order_id,
-                CAST({revenue_col} AS DOUBLE) AS revenue,
-                CAST({cost_expr} AS DOUBLE) AS base_cost,
-                CAST({qty_expr} AS DOUBLE) AS qty,
-                CAST({weight_expr} AS DOUBLE) AS weight
-            FROM fact
-            WHERE {comparison_where_sql}
-        ),
-        enriched AS (
-            SELECT
-                *,
-                ({effective_cost_expr}) AS cost,
-                CASE
-                    WHEN ({effective_cost_expr}) IS NULL THEN NULL
-                    ELSE revenue - ({effective_cost_expr})
-                END AS profit,
-                CASE
-                    WHEN weight > 0 THEN revenue / NULLIF(weight, 0)
-                    WHEN qty > 0 THEN revenue / NULLIF(qty, 0)
-                    ELSE NULL
-                END AS unit_price,
-                DATE_TRUNC('month', date)::DATE AS month_date,
-                strftime('%Y-%m', date) AS month_label
-            FROM base
-        ),
-        bounds AS (
-            SELECT
-                ?::DATE AS current_start,
-                ?::DATE AS current_end,
-                ?::DATE AS recent_start,
-                ?::DATE AS recent_end,
-                ?::DATE AS prior_start,
-                ?::DATE AS prior_end
-        ),
-        current_enriched AS (
-            SELECT e.*
-            FROM enriched e
-            CROSS JOIN bounds b
-            WHERE e.date BETWEEN b.current_start AND b.current_end
-        ),
-        current_customer_revenue AS (
-            SELECT
-                product_id,
-                customer_id,
-                any_value(customer_name) AS customer_name,
-                SUM(revenue) AS customer_revenue
-            FROM current_enriched
-            GROUP BY product_id, customer_id
-        ),
-        current_customer_totals AS (
-            SELECT
-                product_id,
-                SUM(customer_revenue) AS total_revenue
-            FROM current_customer_revenue
-            GROUP BY product_id
-        ),
-        current_customer_ranked AS (
-            SELECT
-                ccr.product_id,
-                COALESCE(NULLIF(ccr.customer_name, ''), ccr.customer_id, 'Unknown') AS customer_name,
-                ccr.customer_revenue,
-                CASE
-                    WHEN cct.total_revenue > 0 THEN ccr.customer_revenue / NULLIF(cct.total_revenue, 0) * 100
-                    ELSE NULL
-                END AS customer_revenue_share,
-                CASE
-                    WHEN cct.total_revenue > 0 THEN ccr.customer_revenue / NULLIF(cct.total_revenue, 0)
-                    ELSE 0
-                END AS customer_revenue_ratio,
-                ROW_NUMBER() OVER (
-                    PARTITION BY ccr.product_id
-                    ORDER BY ccr.customer_revenue DESC, COALESCE(NULLIF(ccr.customer_name, ''), ccr.customer_id, 'Unknown')
-                ) AS rn
-            FROM current_customer_revenue ccr
-            LEFT JOIN current_customer_totals cct ON cct.product_id = ccr.product_id
-        ),
-        current_customer_summary AS (
-            SELECT
-                product_id,
-                MAX(CASE WHEN rn = 1 THEN customer_name END) AS top_customer_name,
-                MAX(CASE WHEN rn = 1 THEN customer_revenue_share END) AS top_customer_share,
-                SUM(POWER(COALESCE(customer_revenue_ratio, 0), 2)) * 10000 AS customer_hhi
-            FROM current_customer_ranked
-            GROUP BY product_id
-        ),
-        current_region_revenue AS (
-            SELECT
-                product_id,
-                COALESCE(NULLIF(region, ''), 'Unassigned') AS region_name,
-                SUM(revenue) AS region_revenue
-            FROM current_enriched
-            GROUP BY product_id, region_name
-        ),
-        current_region_totals AS (
-            SELECT
-                product_id,
-                SUM(region_revenue) AS total_revenue
-            FROM current_region_revenue
-            GROUP BY product_id
-        ),
-        current_region_ranked AS (
-            SELECT
-                crr.product_id,
-                crr.region_name,
-                crr.region_revenue,
-                CASE
-                    WHEN crt.total_revenue > 0 THEN crr.region_revenue / NULLIF(crt.total_revenue, 0) * 100
-                    ELSE NULL
-                END AS region_revenue_share,
-                ROW_NUMBER() OVER (
-                    PARTITION BY crr.product_id
-                    ORDER BY crr.region_revenue DESC, crr.region_name
-                ) AS rn
-            FROM current_region_revenue crr
-            LEFT JOIN current_region_totals crt ON crt.product_id = crr.product_id
-        ),
-        current_region_summary AS (
-            SELECT
-                product_id,
-                MAX(CASE WHEN rn = 1 THEN region_name END) AS top_region_name,
-                MAX(CASE WHEN rn = 1 THEN region_revenue_share END) AS top_region_share
-            FROM current_region_ranked
-            GROUP BY product_id
-        ),
-        agg AS (
-            SELECT
-                SUM(revenue) AS revenue,
-                SUM(qty) AS qty,
-                SUM(weight) AS weight,
-                COUNT(DISTINCT product_id) AS products,
-                COUNT(DISTINCT customer_id) AS customers,
-                COUNT(DISTINCT order_id) AS orders,
-                CASE WHEN SUM(cost) IS NULL THEN NULL ELSE SUM(revenue) - SUM(cost) END AS profit,
-                CASE WHEN SUM(revenue) > 0 AND SUM(cost) IS NOT NULL THEN (SUM(revenue) - SUM(cost)) / SUM(revenue) * 100 ELSE NULL END AS margin_pct,
-                AVG(unit_price) AS avg_price,
-                median(unit_price) AS median_price,
-                quantile_cont(unit_price, 0.10) AS up_p10,
-                quantile_cont(unit_price, 0.50) AS up_p50,
-                quantile_cont(unit_price, 0.90) AS up_p90
-            FROM current_enriched
-        ),
-        window_span AS (
-            SELECT
-                MIN(date) AS min_date,
-                MAX(date) AS max_date,
-                date_diff('day', MIN(date), MAX(date)) + 1 AS window_days
-            FROM current_enriched
-        ),
-        trajectory AS (
-            SELECT
-                CASE
-                    WHEN ws.window_days < 120 THEN strftime('%Y-W%W', DATE_TRUNC('week', e.date))
-                    ELSE strftime('%Y-%m', DATE_TRUNC('month', e.date))
-                END AS period_label,
-                CASE
-                    WHEN ws.window_days < 120 THEN DATE_TRUNC('week', e.date)
-                    ELSE DATE_TRUNC('month', e.date)
-                END AS period_start,
-                SUM(e.revenue) AS revenue,
-                SUM(e.qty) AS qty,
-                COUNT(DISTINCT e.order_id) AS orders,
-                CASE WHEN SUM(e.cost) IS NULL THEN NULL ELSE SUM(e.revenue) - SUM(e.cost) END AS profit,
-                CASE WHEN SUM(e.revenue) > 0 AND SUM(e.cost) IS NOT NULL THEN (SUM(e.revenue) - SUM(e.cost)) / SUM(e.revenue) * 100 ELSE NULL END AS margin_pct
-            FROM current_enriched e
-            CROSS JOIN window_span ws
-            GROUP BY period_label, period_start
-            ORDER BY period_start
-        ),
-        product_rollup AS (
-            SELECT
-                product_id,
-                any_value(product_name) AS product_name,
-                any_value(display_name) AS display_name,
-                any_value(sku) AS sku,
-                any_value(protein_family) AS protein_family,
-                any_value(product_category) AS product_category,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) AS qty,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NULL THEN NULL
-                    ELSE SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                END AS profit,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS orders,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN customer_id END) AS customer_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN region END) AS region_breadth,
-                COUNT(*) AS rows,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN month_date END) AS months_active,
-                MIN(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN date END) AS first_sold,
-                MAX(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN date END) AS last_sold,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) > 0
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END), 0)
-                    ELSE NULL
-                END AS unit_price,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END), 0)
-                    ELSE NULL
-                END AS unit_cost,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN (
-                            SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END)
-                            - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                        ) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    ELSE NULL
-                END AS contribution_lb,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) > 0
-                        AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN (
-                            SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END)
-                            - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                        ) / SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) * 100
-                    ELSE NULL
-                END AS margin_pct,
-                quantile_cont(unit_price, 0.10) AS up_p10,
-                quantile_cont(unit_price, 0.50) AS up_p50,
-                quantile_cont(unit_price, 0.90) AS up_p90,
-                CASE
-                    WHEN COUNT(unit_price) >= 2 AND AVG(unit_price) > 0 THEN STDDEV_SAMP(unit_price) / NULLIF(AVG(unit_price), 0) * 100
-                    ELSE NULL
-                END AS price_cv_pct,
-                SUM(CASE WHEN date BETWEEN b.recent_start AND b.recent_end THEN revenue ELSE 0 END) AS rev_recent,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS rev_prior,
-                SUM(CASE WHEN date BETWEEN b.recent_start AND b.recent_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_recent,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_prior,
-                SUM(CASE WHEN date BETWEEN b.recent_start AND b.recent_end THEN qty ELSE 0 END) AS qty_recent,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN qty ELSE 0 END) AS qty_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end AND cost IS NOT NULL THEN revenue ELSE 0 END) AS revenue_with_cost
-            FROM enriched
-            CROSS JOIN bounds b
-            GROUP BY product_id
-        ),
-        product_rollup_enriched AS (
-            SELECT
-                pr.*,
-                ccs.top_customer_name,
-                ccs.top_customer_share,
-                ccs.customer_hhi,
-                crs.top_region_name,
-                crs.top_region_share
-            FROM product_rollup pr
-            LEFT JOIN current_customer_summary ccs ON ccs.product_id = pr.product_id
-            LEFT JOIN current_region_summary crs ON crs.product_id = pr.product_id
-        ),
-        family_rollup AS (
-            SELECT
-                COALESCE(NULLIF(protein_family, ''), 'Unassigned') AS family,
-                COALESCE(NULLIF(product_category, ''), COALESCE(NULLIF(protein_family, ''), 'Unassigned')) AS category,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS revenue_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight_current,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost_current,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN product_id END) AS sku_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN customer_id END) AS customer_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS order_count
-            FROM enriched
-            CROSS JOIN bounds b
-            GROUP BY 1, 2
-        ),
-        family_mix_enriched AS (
-            SELECT
-                family,
-                category,
-                revenue_current AS revenue,
-                revenue_prior,
-                weight_current AS weight,
-                sku_count,
-                customer_count,
-                order_count,
-                CASE
-                    WHEN revenue_current > 0 AND cost_current IS NOT NULL
-                        THEN (revenue_current - cost_current) / revenue_current * 100
-                    ELSE NULL
-                END AS margin_pct,
-                CASE
-                    WHEN weight_current > 0 AND cost_current IS NOT NULL
-                        THEN (revenue_current - cost_current) / NULLIF(weight_current, 0)
-                    ELSE NULL
-                END AS profit_per_lb,
-                CASE WHEN SUM(revenue_current) OVER () > 0 THEN revenue_current / SUM(revenue_current) OVER () * 100 ELSE NULL END AS share_current,
-                CASE WHEN SUM(revenue_prior) OVER () > 0 THEN revenue_prior / SUM(revenue_prior) OVER () * 100 ELSE NULL END AS share_prior,
-                CASE
-                    WHEN SUM(revenue_current) OVER () > 0 AND SUM(revenue_prior) OVER () > 0
-                        THEN (revenue_current / SUM(revenue_current) OVER () * 100) - (revenue_prior / SUM(revenue_prior) OVER () * 100)
-                    ELSE NULL
-                END AS share_delta_pp
-            FROM family_rollup
-            WHERE revenue_current <> 0 OR revenue_prior <> 0
-        ),
-        compare_summary AS (
-            SELECT
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS revenue_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) AS qty_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN qty ELSE 0 END) AS qty_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN weight ELSE 0 END) AS weight_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN cost ELSE NULL END) AS cost_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_prior,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS orders_current,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN order_id END) AS orders_prior
-            FROM enriched
-            CROSS JOIN bounds b
-        ),
-        pareto AS (
-            SELECT
-                product_id,
-                display_name,
-                revenue,
-                SUM(revenue) OVER (ORDER BY revenue DESC) AS cum_revenue,
-                SUM(revenue) OVER () AS total_revenue,
-                ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn
-            FROM product_rollup_enriched
-        ),
-        pareto_limited AS (
-            SELECT
-                display_name,
-                revenue,
-                CASE WHEN total_revenue > 0 THEN cum_revenue / total_revenue * 100 ELSE NULL END AS cum_share
-            FROM pareto
-            WHERE rn <= 200
-        ),
-        top_movers AS (
-            SELECT
-                product_id,
-                display_name,
-                rev_recent,
-                rev_prior,
-                rev_recent - rev_prior AS delta_revenue,
-                profit_recent - profit_prior AS delta_profit,
-                qty_recent - qty_prior AS delta_qty
-            FROM product_rollup_enriched
-            ORDER BY ABS(rev_recent - rev_prior) DESC, rev_recent - rev_prior DESC
-            LIMIT {movers_cap}
-        ),
-        velocity AS (
-            SELECT
-                CASE WHEN COUNT(*) > 0 THEN SUM(qty) / NULLIF(date_diff('week', MIN(date), MAX(date)) + 1, 0) ELSE 0 END AS avg_weekly_qty,
-                CASE WHEN COUNT(*) > 0 THEN SUM(revenue) / NULLIF(date_diff('week', MIN(date), MAX(date)) + 1, 0) ELSE 0 END AS weekly_revenue,
-                COUNT(DISTINCT product_id) AS active_skus
-            FROM current_enriched
-        ),
-        price_dist AS (
-            SELECT
-                bucket,
-                COUNT(*) AS count,
-                MIN(unit_price) AS min_price,
-                MAX(unit_price) AS max_price,
-                AVG(unit_price) AS avg_price
-            FROM (
-                SELECT
-                    CASE
-                        WHEN unit_price IS NULL THEN NULL
-                        WHEN max_price <= min_price THEN 1
-                        ELSE LEAST(20, GREATEST(1, CAST(FLOOR((unit_price - min_price) / NULLIF(max_price - min_price, 0) * 20) + 1 AS INTEGER)))
-                    END AS bucket,
-                    unit_price
-                FROM (
-                    SELECT
-                        unit_price,
-                        MIN(unit_price) OVER () AS min_price,
-                        MAX(unit_price) OVER () AS max_price
-                    FROM current_enriched
-                    WHERE unit_price IS NOT NULL
-                )
-            )
-            WHERE bucket IS NOT NULL
-            GROUP BY bucket
-            ORDER BY bucket
-        ),
-        seg_scored AS (
-            SELECT
-                *,
-                COALESCE(quantile_cont(revenue, 0.80) OVER (), 0) AS rev_p80,
-                COALESCE(quantile_cont(orders, 0.60) OVER (), 0) AS ord_p60,
-                CASE
-                    WHEN revenue >= rev_p80 AND orders >= ord_p60 THEN 'Stars'
-                    WHEN revenue >= rev_p80 THEN 'Cash Cows'
-                    WHEN orders >= ord_p60 THEN 'Volume Drivers'
-                    WHEN margin_pct IS NOT NULL AND margin_pct < 5 THEN 'Margin Risk'
-                    ELSE 'Long Tail'
-                END AS segment
-            FROM product_rollup_enriched
-        ),
-        segment_summary AS (
-            SELECT
-                segment,
-                COUNT(*) AS sku_count,
-                SUM(revenue) AS revenue
-            FROM seg_scored
-            GROUP BY segment
-        ),
-        segment_movers AS (
-            SELECT
-                sm.segment,
-                tm.product_id,
-                tm.display_name,
-                tm.delta_revenue AS delta,
-                tm.delta_profit,
-                tm.delta_qty,
-                tm.rev_recent,
-                tm.rev_prior
-            FROM seg_scored sm
-            JOIN top_movers tm ON sm.product_id = tm.product_id
-            LIMIT 20
-        ),
-        price_velocity AS (
-            SELECT
-                *,
-                CASE WHEN months_active > 0 THEN orders / NULLIF(months_active, 0) ELSE NULL END AS orders_per_month,
-                CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE NULL END AS revenue_share,
-                {seg_target_margin_expr} AS target_margin_pct,
-                {margin_rules.sql_price_from_cost_expr("unit_cost", seg_target_margin_expr, fallback="NULL")} AS target_price,
-                {margin_rules.sql_price_uplift_pct_expr("unit_price", margin_rules.sql_price_from_cost_expr("unit_cost", seg_target_margin_expr, fallback="NULL"), fallback="NULL")} AS uplift_pct,
-                ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn
-            FROM seg_scored
-        ),
-        health_thresholds AS (
-            SELECT
-                quantile_cont(orders_per_month, 0.40) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p40,
-                quantile_cont(orders_per_month, 0.50) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p50,
-                quantile_cont(orders_per_month, 0.60) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p60,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.40) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p40,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.50) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p50,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.60) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p60
-            FROM price_velocity
-        ),
-        health_classified AS (
-            SELECT
-                pv.*,
-                ht.velocity_p40,
-                ht.velocity_p50,
-                ht.velocity_p60,
-                ht.profitability_p40,
-                ht.profitability_p50,
-                ht.profitability_p60,
-                COALESCE(pv.margin_pct, pv.contribution_lb) AS profitability_metric_value,
-                CASE
-                    WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0))
-                        THEN 'high'
-                    WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0))
-                        THEN 'low'
-                    WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0)
-                        THEN 'high'
-                    ELSE 'low'
-                END AS velocity_band,
-                CASE
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0))
-                        THEN 'high'
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0))
-                        THEN 'low'
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0)
-                        THEN 'high'
-                    ELSE 'low'
-                END AS profitability_band,
-                CASE
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0)) THEN 'high'
-                            WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0)) THEN 'low'
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' AND (
-                        CASE
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0)) THEN 'high'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0)) THEN 'low'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'protect'
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0)) THEN 'high'
-                            WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0)) THEN 'low'
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'fix_margin'
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0)) THEN 'high'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0)) THEN 'low'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'grow'
-                    ELSE 'rationalize'
-                END AS quadrant
-            FROM price_velocity pv
-            CROSS JOIN health_thresholds ht
-        ),
-        health_summary AS (
-            SELECT
-                quadrant,
-                COUNT(*) AS sku_count,
-                SUM(revenue) AS revenue,
-                SUM(profit) AS profit
-            FROM health_classified
-            GROUP BY quadrant
-        ),
-        health_top AS (
-            SELECT
-                quadrant,
-                product_id,
-                display_name,
-                revenue,
-                profit,
-                margin_pct,
-                orders_per_month AS velocity_per_month,
-                ROW_NUMBER() OVER (PARTITION BY quadrant ORDER BY revenue DESC) AS rn
-            FROM health_classified
-        ),
-        segment_mix AS (
-            SELECT
-                segment,
-                SUM(rev_recent) AS revenue_current,
-                SUM(rev_prior) AS revenue_prior
-            FROM seg_scored
-            GROUP BY segment
-        ),
-        segment_mix_enriched AS (
-            SELECT
-                segment,
-                revenue_current,
-                revenue_prior,
-                CASE WHEN SUM(revenue_current) OVER () > 0 THEN revenue_current / SUM(revenue_current) OVER () * 100 ELSE NULL END AS share_current,
-                CASE WHEN SUM(revenue_prior) OVER () > 0 THEN revenue_prior / SUM(revenue_prior) OVER () * 100 ELSE NULL END AS share_prior,
-                CASE
-                    WHEN SUM(revenue_current) OVER () > 0 AND SUM(revenue_prior) OVER () > 0
-                        THEN (revenue_current / SUM(revenue_current) OVER () * 100) - (revenue_prior / SUM(revenue_prior) OVER () * 100)
-                    ELSE NULL
-                END AS share_delta_pp
-            FROM segment_mix
-        ),
-        execution_pricing_base AS (
-            SELECT
-                *,
-                COALESCE(quantile_cont(revenue, 0.75) OVER (), 0) AS rev_p75
-            FROM health_classified
-        ),
-        execution_pricing_fixes AS (
-            SELECT
-                product_id,
-                display_name,
-                revenue,
-                profit,
-                margin_pct,
-                orders_per_month,
-                'Increase / Review cost' AS action,
-                'High velocity with below-target gross margin and high revenue exposure.' AS reason,
-                ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn
-            FROM execution_pricing_base
-            WHERE velocity_band = 'high'
-              AND (margin_pct IS NULL OR target_margin_pct IS NULL OR margin_pct < target_margin_pct)
-              AND revenue >= rev_p75
-        ),
-        execution_cost_fixes AS (
-            SELECT
-                product_id,
-                display_name,
-                revenue,
-                profit,
-                margin_pct,
-                orders_per_month,
-                'Review cost data' AS action,
-                'Revenue is material but cost is missing or invalid, reducing trust in margin signals.' AS reason,
-                ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn
-            FROM health_classified
-            WHERE cost IS NULL OR cost <= 0
-        ),
-        execution_promote AS (
-            SELECT
-                product_id,
-                display_name,
-                revenue,
-                profit,
-                margin_pct,
-                orders_per_month,
-                'Promote / Expand distribution' AS action,
-                'High profitability with low velocity indicates growth headroom.' AS reason,
-                ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn
-            FROM health_classified
-            WHERE profitability_band = 'high'
-              AND velocity_band = 'low'
-        )
-        SELECT
-            agg.revenue,
-            agg.qty,
-            agg.weight,
-            agg.products,
-            agg.customers,
-            agg.orders,
-            agg.profit,
-            agg.margin_pct,
-            agg.avg_price,
-            agg.median_price,
-            agg.up_p10,
-            agg.up_p50,
-            agg.up_p90,
-            compare_summary.revenue_current AS compare_revenue_current,
-            compare_summary.revenue_prior AS compare_revenue_prior,
-            compare_summary.qty_current AS compare_qty_current,
-            compare_summary.qty_prior AS compare_qty_prior,
-            compare_summary.weight_current AS compare_weight_current,
-            compare_summary.weight_prior AS compare_weight_prior,
-            compare_summary.cost_current AS compare_cost_current,
-            compare_summary.cost_prior AS compare_cost_prior,
-            compare_summary.profit_current AS compare_profit_current,
-            compare_summary.profit_prior AS compare_profit_prior,
-            compare_summary.orders_current AS compare_orders_current,
-            compare_summary.orders_prior AS compare_orders_prior,
-            velocity.avg_weekly_qty,
-            velocity.weekly_revenue,
-            velocity.active_skus,
-            (SELECT CASE WHEN window_days < 120 THEN 'weekly' ELSE 'monthly' END FROM window_span) AS traj_grain,
-            (SELECT list(period_label) FROM trajectory) AS traj_labels,
-            (SELECT list(revenue) FROM trajectory) AS traj_revenue,
-            (SELECT list(qty) FROM trajectory) AS traj_qty,
-            (SELECT list(orders) FROM trajectory) AS traj_orders,
-            (SELECT list(profit) FROM trajectory) AS traj_profit,
-            (SELECT list(margin_pct) FROM trajectory) AS traj_margin,
-            (SELECT velocity_p40 FROM health_thresholds) AS health_velocity_p40,
-            (SELECT velocity_p60 FROM health_thresholds) AS health_velocity_p60,
-            (SELECT profitability_p40 FROM health_thresholds) AS health_profitability_p40,
-            (SELECT profitability_p60 FROM health_thresholds) AS health_profitability_p60,
-            (
-                SELECT MAX(rev_share)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-                WHERE rn = 1
-            ) AS concentration_top1_share,
-            (
-                SELECT SUM(rev_share)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-                WHERE rn <= 10
-            ) AS concentration_top10_share,
-            (
-                SELECT SUM(POWER(rev_share / 100.0, 2)) * 10000
-                FROM (
-                    SELECT CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-            ) AS concentration_hhi,
-            (
-                SELECT MIN(rn)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE
-                            WHEN SUM(revenue) OVER () > 0
-                                THEN SUM(revenue) OVER (ORDER BY revenue DESC) / SUM(revenue) OVER () * 100
-                            ELSE NULL
-                        END AS cum_share
-                    FROM product_rollup
-                ) ranked
-                WHERE cum_share >= 80
-            ) AS concentration_skus_to_80,
-            (SELECT COUNT(*) FROM family_mix_enriched) AS protein_family_count,
-            (SELECT family FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 1) AS top_protein_family,
-            (SELECT share_current FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 1) AS top_protein_share,
-            (
-                SELECT SUM(POWER(COALESCE(share_current, 0) / 100.0, 2)) * 10000
-                FROM family_mix_enriched
-            ) AS protein_hhi,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-            ) AS risk_below_target_count,
-            (
-                SELECT SUM(revenue)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-            ) AS risk_below_target_revenue,
-            (SELECT COUNT(*) FROM product_rollup WHERE margin_pct IS NOT NULL AND margin_pct < 0) AS risk_negative_margin_count,
-            (
-                SELECT SUM((revenue * (({product_target_margin_expr}) / 100.0)) - profit)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-                  AND profit IS NOT NULL
-            ) AS risk_profit_uplift_target,
-            (
-                SELECT CASE
-                    WHEN SUM(revenue) > 0 THEN SUM(revenue_with_cost) / NULLIF(SUM(revenue), 0) * 100
-                    ELSE NULL
-                END
-                FROM product_rollup
-            ) AS cost_coverage_pct,
-            (SELECT COUNT(*) FROM product_rollup WHERE cost IS NULL OR cost <= 0) AS missing_cost_sku_count,
-            (SELECT quantile_cont(contribution_lb, 0.10) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p10,
-            (SELECT quantile_cont(contribution_lb, 0.50) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p50,
-            (SELECT quantile_cont(contribution_lb, 0.90) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p90,
-            (
-                SELECT SUM(COALESCE(profit, 0))
-                FROM product_rollup
-                WHERE (
-                    margin_pct IS NOT NULL
-                    AND ({product_target_margin_expr}) IS NOT NULL
-                    AND margin_pct < ({product_target_margin_expr})
-                ) OR cost IS NULL
-            ) AS profit_at_risk,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15
-            ) AS high_price_outlier_count,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15
-            ) AS low_price_outlier_count,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND (
-                    (up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15)
-                    OR
-                    (up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15)
-                )
-            ) AS outside_guardrail_count,
-            (
-                SELECT CASE WHEN COUNT(*) > 0 THEN (
-                    COUNT(*) FILTER (
-                        WHERE unit_price IS NOT NULL AND (
-                            (up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15)
-                            OR
-                            (up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15)
-                        )
-                    )::DOUBLE / COUNT(*)::DOUBLE * 100
-                ) ELSE NULL END
-                FROM product_rollup
-            ) AS outside_guardrail_pct,
-            (SELECT list(struct_pack(label:=display_name, revenue:=revenue, cumulative:=cum_share)) FROM pareto_limited) AS pareto,
-            (SELECT list(struct_pack(product_id:=product_id, product_name:=display_name, display_name:=display_name, delta:=delta_revenue, delta_revenue:=delta_revenue, delta_profit:=delta_profit, delta_qty:=delta_qty, recent:=rev_recent, prior:=rev_prior)) FROM top_movers) AS movers,
-            (SELECT list(struct_pack(bucket:=bucket, count:=count, min_price:=min_price, max_price:=max_price, avg_price:=avg_price)) FROM price_dist) AS price_dist,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, revenue_prior:=revenue_prior, weight:=weight, margin_pct:=margin_pct, profit_per_lb:=profit_per_lb, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp, sku_count:=sku_count, customer_count:=customer_count, order_count:=order_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 8)) AS protein_mix,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY ABS(share_delta_pp) DESC NULLS LAST LIMIT 8)) AS protein_mix_shift,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, margin_pct:=margin_pct, profit_per_lb:=profit_per_lb, share_current:=share_current, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY COALESCE(margin_pct, 999999) ASC, revenue DESC NULLS LAST LIMIT 8)) AS protein_margin_watch,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, share_delta_pp:=share_delta_pp, margin_pct:=margin_pct, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY share_delta_pp DESC NULLS LAST, revenue DESC NULLS LAST LIMIT 8)) AS protein_growth_pockets,
-            (SELECT list(struct_pack(segment:=segment, sku_count:=sku_count, revenue:=revenue)) FROM segment_summary) AS segment_summary,
-            (SELECT list(struct_pack(segment:=segment, revenue_current:=revenue_current, revenue_prior:=revenue_prior, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp)) FROM (SELECT * FROM segment_mix_enriched ORDER BY ABS(share_delta_pp) DESC)) AS segment_mix_shift,
-            (SELECT list(struct_pack(segment:=segment, product_id:=product_id, product_name:=display_name, display_name:=display_name, delta:=delta, recent:=rev_recent, prior:=rev_prior)) FROM segment_movers) AS segment_movers,
-            (SELECT list(struct_pack(quadrant:=quadrant, sku_count:=sku_count, revenue:=revenue, profit:=profit)) FROM health_summary) AS health_summary,
-            (SELECT list(struct_pack(quadrant:=quadrant, product_id:=product_id, product_name:=display_name, display_name:=display_name, revenue:=revenue, profit:=profit, margin_pct:=margin_pct, velocity_per_month:=velocity_per_month)) FROM health_top WHERE rn <= 10) AS health_top,
-            (SELECT list(struct_pack(product_id:=product_id, product_name:=display_name, display_name:=display_name, revenue:=revenue, profit:=profit, margin_pct:=margin_pct, orders_per_month:=orders_per_month, action:=action, reason:=reason)) FROM execution_pricing_fixes WHERE rn <= 10) AS execution_pricing_fixes,
-            (SELECT list(struct_pack(product_id:=product_id, product_name:=display_name, display_name:=display_name, revenue:=revenue, profit:=profit, margin_pct:=margin_pct, orders_per_month:=orders_per_month, action:=action, reason:=reason)) FROM execution_cost_fixes WHERE rn <= 10) AS execution_cost_fixes,
-            (SELECT list(struct_pack(product_id:=product_id, product_name:=display_name, display_name:=display_name, revenue:=revenue, profit:=profit, margin_pct:=margin_pct, orders_per_month:=orders_per_month, action:=action, reason:=reason)) FROM execution_promote WHERE rn <= 10) AS execution_promote,
-            (SELECT list(struct_pack(
-                product_id:=product_id,
-                product_name:=product_name,
-                display_name:=display_name,
-                revenue:=revenue,
-                qty:=qty,
-                weight:=weight,
-                profit:=profit,
-                unit_price:=unit_price,
-                current_unit_price:=unit_price,
-                unit_cost:=unit_cost,
-                asp_lb:=unit_price,
-                cost_lb:=unit_cost,
-                target_price:=target_price,
-                uplift_pct:=uplift_pct,
-                margin_pct:=margin_pct,
-                revenue_share:=revenue_share,
-                orders:=orders,
-                customer_count:=customer_count,
-                region_breadth:=region_breadth,
-                months_active:=months_active,
-                orders_per_month:=orders_per_month,
-                segment:=segment,
-                protein_family:=protein_family,
-                product_category:=product_category,
-                top_customer_name:=top_customer_name,
-                top_customer_share:=top_customer_share,
-                customer_hhi:=customer_hhi,
-                top_region_name:=top_region_name,
-                top_region_share:=top_region_share,
-                rev_recent:=rev_recent,
-                rev_prior:=rev_prior,
-                up_p10:=up_p10,
-                up_p50:=up_p50,
-                up_p90:=up_p90,
-                price_cv_pct:=price_cv_pct,
-                contribution_lb:=contribution_lb,
-                first_sold:=first_sold,
-                last_sold:=last_sold
-            )) FROM price_velocity WHERE rn <= {velocity_limit} AND unit_price IS NOT NULL AND orders_per_month IS NOT NULL) AS price_velocity,
-            (SELECT list(struct_pack(product_id:=product_id, product_name:=product_name, display_name:=display_name, revenue:=revenue, qty:=qty, weight:=weight, profit:=profit, unit_price:=unit_price, current_unit_price:=unit_price, asp_lb:=unit_price, cost_lb:=unit_cost, margin_pct:=margin_pct, target_price:=target_price, uplift_pct:=uplift_pct, protein_family:=protein_family, product_category:=product_category, customer_count:=customer_count, region_breadth:=region_breadth, top_customer_name:=top_customer_name, top_customer_share:=top_customer_share, top_region_name:=top_region_name, top_region_share:=top_region_share)) FROM (SELECT * FROM price_velocity WHERE revenue IS NOT NULL ORDER BY revenue DESC LIMIT 150)) AS top_products
-        FROM agg, velocity, compare_summary
-        LIMIT 1
-    """
-
-    args = list(comparison_params) + [
-        current_start,
-        current_end,
-        recent_start,
-        recent_end,
-        prior_start,
-        prior_end,
-    ]
-    df = fact_store.execute_sql_df(
-        sql,
-        args,
-        tag="products.metrics_bundle",
-        cache_key="products.metrics_bundle",
-    )
-    if df.empty:
-        return {}
-    row = df.iloc[0]
-
-    kpis = {
-        "revenue": _clean_num(row.get("revenue")),
-        "qty": _clean_num(row.get("qty")),
-        "weight": _clean_num(row.get("weight")),
-        "products": _clean_int(row.get("products")),
-        "customers": _clean_int(row.get("customers")),
-        "orders": _clean_int(row.get("orders")),
-        "profit": _clean_num(row.get("profit")),
-        "margin_pct": None if row.get("margin_pct") is None or math.isnan(row.get("margin_pct")) else float(row.get("margin_pct")),
-        "avg_price": None if row.get("avg_price") is None or math.isnan(row.get("avg_price")) else float(row.get("avg_price")),
-        "median_price": None if row.get("median_price") is None or math.isnan(row.get("median_price")) else float(row.get("median_price")),
-        "unit_price_p10": None if row.get("up_p10") is None or math.isnan(row.get("up_p10")) else float(row.get("up_p10")),
-        "unit_price_p50": None if row.get("up_p50") is None or math.isnan(row.get("up_p50")) else float(row.get("up_p50")),
-        "unit_price_p90": None if row.get("up_p90") is None or math.isnan(row.get("up_p90")) else float(row.get("up_p90")),
-        "cost_coverage_pct": _safe_float(row.get("cost_coverage_pct")),
-        "missing_cost_sku_count": _clean_int(row.get("missing_cost_sku_count")),
-        "contribution_lb_p10": _safe_float(row.get("contribution_lb_p10")),
-        "contribution_lb_p50": _safe_float(row.get("contribution_lb_p50")),
-        "contribution_lb_p90": _safe_float(row.get("contribution_lb_p90")),
-        "profit_at_risk": _clean_num(row.get("profit_at_risk")),
-        "high_price_outlier_count": _clean_int(row.get("high_price_outlier_count")),
-        "low_price_outlier_count": _clean_int(row.get("low_price_outlier_count")),
-        "outside_guardrail_count": _clean_int(row.get("outside_guardrail_count")),
-        "outside_guardrail_pct": _safe_float(row.get("outside_guardrail_pct")),
-        "concentration_top1_share": _safe_float(row.get("concentration_top1_share")),
-        "concentration_top10_share": _safe_float(row.get("concentration_top10_share")),
-        "concentration_hhi": _safe_float(row.get("concentration_hhi")),
-        "concentration_skus_to_80": _clean_int(row.get("concentration_skus_to_80")),
-        "protein_family_count": _clean_int(row.get("protein_family_count")),
-        "top_protein_family": row.get("top_protein_family"),
-        "top_protein_share": _safe_float(row.get("top_protein_share")),
-        "protein_hhi": _safe_float(row.get("protein_hhi")),
-        "risk_below_target_count": _clean_int(row.get("risk_below_target_count")),
-        "risk_below_target_revenue": _clean_num(row.get("risk_below_target_revenue")),
-        "risk_negative_margin_count": _clean_int(row.get("risk_negative_margin_count")),
-        "risk_profit_uplift_target": _clean_num(row.get("risk_profit_uplift_target")),
-    }
-    kpis["revenue_per_product"] = kpis["revenue"] / kpis["products"] if kpis["products"] else None
-    kpis["revenue_per_customer"] = kpis["revenue"] / kpis["customers"] if kpis["customers"] else None
-
-    comparison_summary = {
-        "revenue_current": _clean_num(row.get("compare_revenue_current")),
-        "revenue_prior": _clean_num(row.get("compare_revenue_prior")),
-        "qty_current": _clean_num(row.get("compare_qty_current")),
-        "qty_prior": _clean_num(row.get("compare_qty_prior")),
-        "weight_current": _clean_num(row.get("compare_weight_current")),
-        "weight_prior": _clean_num(row.get("compare_weight_prior")),
-        "profit_current": _clean_num(row.get("compare_profit_current")),
-        "profit_prior": _clean_num(row.get("compare_profit_prior")),
-        "orders_current": _clean_int(row.get("compare_orders_current")),
-        "orders_prior": _clean_int(row.get("compare_orders_prior")),
-    }
-    comparison_summary["revenue_delta"] = comparison_summary["revenue_current"] - comparison_summary["revenue_prior"]
-    comparison_summary["revenue_delta_pct"] = (
-        ((comparison_summary["revenue_current"] - comparison_summary["revenue_prior"]) / comparison_summary["revenue_prior"] * 100.0)
-        if comparison_summary["revenue_prior"]
-        else None
-    )
-    comparison_summary["profit_delta"] = comparison_summary["profit_current"] - comparison_summary["profit_prior"]
-    current_margin_pct = None
-    if comparison_summary["revenue_current"] and row.get("compare_cost_current") is not None:
-        current_margin_pct = (comparison_summary["profit_current"] / comparison_summary["revenue_current"]) * 100.0
-    prior_margin_pct = None
-    if comparison_summary["revenue_prior"] and row.get("compare_cost_prior") is not None:
-        prior_margin_pct = (comparison_summary["profit_prior"] / comparison_summary["revenue_prior"]) * 100.0
-    comparison_summary["margin_pct_current"] = current_margin_pct
-    comparison_summary["margin_pct_prior"] = prior_margin_pct
-    comparison_summary["margin_delta_pp"] = (
-        (current_margin_pct - prior_margin_pct)
-        if current_margin_pct is not None and prior_margin_pct is not None
-        else None
-    )
-
-    charts = {
-        "trajectory": {
-            "grain": str(row.get("traj_grain") or "monthly"),
-            "labels": _to_list(row.get("traj_labels")),
-            "revenue": _to_list(row.get("traj_revenue")),
-            "qty": _to_list(row.get("traj_qty")),
-            "orders": _to_list(row.get("traj_orders")),
-            "profit": _to_list(row.get("traj_profit")),
-            "margin_pct": _to_list(row.get("traj_margin")),
-        },
-        "pareto": _to_list(row.get("pareto")),
-        "movers": _to_list(row.get("movers")),
-        "unit_price_dist": _to_list(row.get("price_dist")),
-        "segments": {
-            "summary": _to_list(row.get("segment_summary")),
-            "movers": _to_list(row.get("segment_movers")),
-            "mix_shift": _to_list(row.get("segment_mix_shift")),
-        },
-        "price_velocity": _to_list(row.get("price_velocity")),
-        "top_products": _to_list(row.get("top_products")),
-    }
-
-    protein_insights = {
-        "summary": {
-            "family_count": _clean_int(row.get("protein_family_count")),
-            "top_family": row.get("top_protein_family"),
-            "top_family_share": _safe_float(row.get("top_protein_share")),
-            "concentration_hhi": _safe_float(row.get("protein_hhi")),
-        },
-        "mix": _to_list(row.get("protein_mix")),
-        "mix_shift": _to_list(row.get("protein_mix_shift")),
-        "margin_watch": _to_list(row.get("protein_margin_watch")),
-        "growth_pockets": _to_list(row.get("protein_growth_pockets")),
-    }
-
-    movers_enriched: List[Dict[str, Any]] = []
-    for mover in charts.get("movers", []) or []:
-        if not isinstance(mover, dict):
-            continue
-        recent_val = _clean_num(mover.get("recent"))
-        prior_val = _clean_num(mover.get("prior"))
-        status, delta_pct, low_base = _mover_status(recent_val, prior_val)
-        mover_row = dict(mover)
-        mover_row["delta"] = _safe_float(mover.get("delta_revenue"))
-        mover_row["status"] = status
-        mover_row["delta_pct"] = delta_pct
-        mover_row["low_base"] = low_base
-        movers_enriched.append(mover_row)
-    charts["movers"] = movers_enriched
-
-    segment_movers_enriched: List[Dict[str, Any]] = []
-    for mover in (charts.get("segments", {}) or {}).get("movers", []) or []:
-        if not isinstance(mover, dict):
-            continue
-        recent_val = _clean_num(mover.get("recent"))
-        prior_val = _clean_num(mover.get("prior"))
-        status, delta_pct, low_base = _mover_status(recent_val, prior_val)
-        mover_row = dict(mover)
-        mover_row["delta"] = _safe_float(mover.get("delta"))
-        mover_row["status"] = status
-        mover_row["delta_pct"] = delta_pct
-        mover_row["low_base"] = low_base
-        segment_movers_enriched.append(mover_row)
-    if isinstance(charts.get("segments"), dict):
-        charts["segments"]["movers"] = segment_movers_enriched
-
-    velocity = {
-        "avg_weekly": _clean_num(row.get("avg_weekly_qty")),
-        "weekly_revenue": _clean_num(row.get("weekly_revenue")),
-        "active_skus": _clean_int(row.get("active_skus")),
-    }
-
-    monthly_series = []
-    labels = charts.get("trajectory", {}).get("labels") or []
-    rev = charts.get("trajectory", {}).get("revenue") or []
-    qty = charts.get("trajectory", {}).get("qty") or []
-    orders = charts.get("trajectory", {}).get("orders") or []
-    for idx, label in enumerate(labels):
-        monthly_series.append(
-            {
-                "month": label,
-                "revenue": _clean_num(rev[idx] if idx < len(rev) else 0),
-                "units": _clean_num(qty[idx] if idx < len(qty) else 0),
-                "orders": _clean_num(orders[idx] if idx < len(orders) else 0),
-            }
-        )
-
-    sku_rows = _annotate_product_rows(_prepare_visual_pricing_rows([r for r in (charts.get("price_velocity") or []) if isinstance(r, dict)]))
-    charts["price_velocity"] = sku_rows
-    charts["top_products"] = sorted(
-        [dict(r) for r in sku_rows if isinstance(r, dict)],
-        key=lambda item: _clean_num(item.get("revenue")),
-        reverse=True,
-    )[:150]
-    health_matrix = _build_health_matrix_from_rows(
-        sku_rows,
-        total_revenue=kpis.get("revenue") or 0.0,
-        total_profit=kpis.get("profit") or 0.0,
-    )
-    velocity_cutoff = _safe_float(health_matrix.get("velocity_cutoff_high")) or _safe_float(row.get("health_velocity_p60")) or 0.0
-    below_target_rows = [r for r in sku_rows if _row_below_target(r)]
-    below_minimum_rows = [r for r in sku_rows if _row_below_minimum(r)]
-    at_or_above_target_rows = [r for r in sku_rows if _row_above_target(r)]
-    margin_risk_top = sorted(
-        below_target_rows,
-        key=lambda item: _clean_num(item.get("revenue")),
-        reverse=True,
-    )[:10]
-    high_velocity_low_margin = sorted(
-        [
-            r
-            for r in sku_rows
-            if (_safe_float(r.get("orders_per_month")) or 0.0) >= velocity_cutoff
-            and _row_below_target(r)
-        ],
-        key=lambda item: _clean_num(item.get("revenue")),
-        reverse=True,
-    )[:10]
-    high_margin_low_velocity = sorted(
-        [
-            r
-            for r in sku_rows
-            if _row_above_target(r) and (_safe_float(r.get("orders_per_month")) or 0.0) < velocity_cutoff
-        ],
-        key=lambda item: _clean_num(item.get("revenue")),
-        reverse=True,
-    )[:10]
-    guardrail_rows = sorted(
-        sku_rows,
-        key=lambda item: _clean_num(item.get("revenue")),
-        reverse=True,
-    )[:30]
-    pricing_actions: List[Dict[str, Any]] = []
-    for row_item in guardrail_rows:
-        asp = _safe_float(row_item.get("unit_price"))
-        p10 = _safe_float(row_item.get("up_p10"))
-        p90 = _safe_float(row_item.get("up_p90"))
-        margin_pct = _safe_float(row_item.get("margin_pct"))
-        has_cost = _safe_float(row_item.get("unit_cost")) is not None
-        action = "Hold"
-        reason = "Within current pricing guardrails."
-        if not has_cost:
-            action = "Review cost"
-            reason = "Missing cost; margin guardrails are not reliable."
-        elif asp is not None and p90 is not None and p90 > 0 and asp > (p90 * 1.15):
-            action = "Reduce"
-            reason = "ASP is materially above the SKU historical guardrail (P90)."
-        elif asp is not None and p10 is not None and p10 > 0 and asp < (p10 / 1.15):
-            action = "Increase"
-            reason = "ASP is below the SKU guardrail band; recover price where elasticity permits."
-        elif _row_below_target(row_item):
-            action = "Increase"
-            reason = "Below the protein-specific target gross margin with available cost data."
-        pricing_actions.append(
-            {
-                "product_id": row_item.get("product_id"),
-                "display_name": row_item.get("display_name") or row_item.get("product_name"),
-                "unit_price": asp,
-                "p10": p10,
-                "p50": _safe_float(row_item.get("up_p50")),
-                "p90": p90,
-                "price_cv_pct": _safe_float(row_item.get("price_cv_pct")),
-                "revenue": _clean_num(row_item.get("revenue")),
-                "margin_pct": margin_pct,
-                "target_margin_pct": _safe_float(row_item.get("target_margin_pct")),
-                "minimum_margin_pct": _safe_float(row_item.get("minimum_margin_pct")),
-                "status_key": row_item.get("status_key"),
-                "target_status": row_item.get("target_status"),
-                "action": action,
-                "reason": reason,
-            }
-        )
-    execution_lists = _build_execution_lists_from_rows(sku_rows, velocity_cutoff=velocity_cutoff)
-    below_target_revenue = sum(_clean_num(item.get("revenue")) for item in below_target_rows)
-    below_minimum_revenue = sum(_clean_num(item.get("revenue")) for item in below_minimum_rows)
-    at_or_above_target_revenue = sum(_clean_num(item.get("revenue")) for item in at_or_above_target_rows)
-    negative_margin_rows = [item for item in sku_rows if _safe_float(item.get("profit")) is not None and _safe_float(item.get("profit")) < 0]
-    risk_profit_uplift_target = sum(_clean_num(item.get("profit_uplift_target")) for item in below_target_rows)
-
-    return {
-        "kpis": kpis,
-        "comparison_summary": comparison_summary,
-        "charts": charts,
-        "velocity": velocity,
-        "monthly_series": monthly_series,
-        "sku_metrics": charts.get("price_velocity", []),
-        "health_matrix": health_matrix,
-        "concentration": {
-            "top1_share": _safe_float(row.get("concentration_top1_share")),
-            "top10_share": _safe_float(row.get("concentration_top10_share")),
-            "hhi": _safe_float(row.get("concentration_hhi")),
-            "skus_to_80": _clean_int(row.get("concentration_skus_to_80")),
-        },
-        "risk_opportunity": {
-            "below_minimum_count": len(below_minimum_rows),
-            "below_minimum_revenue": below_minimum_revenue,
-            "below_target_count": len(below_target_rows),
-            "below_target_revenue": below_target_revenue,
-            "at_or_above_target_count": len(at_or_above_target_rows),
-            "at_or_above_target_revenue": at_or_above_target_revenue,
-            "negative_margin_count": len(negative_margin_rows),
-            "profit_uplift_target": risk_profit_uplift_target,
-            "margin_risk_top": margin_risk_top,
-            "high_velocity_low_margin": high_velocity_low_margin,
-            "high_margin_low_velocity": high_margin_low_velocity,
-        },
-        "pricing_guardrails": {
-            "high_outlier_count": _clean_int(row.get("high_price_outlier_count")),
-            "low_outlier_count": _clean_int(row.get("low_price_outlier_count")),
-            "outside_count": _clean_int(row.get("outside_guardrail_count")),
-            "outside_pct": _safe_float(row.get("outside_guardrail_pct")),
-            "rows": pricing_actions,
-        },
-        "execution_lists": execution_lists,
-        "protein_insights": protein_insights,
-    }
-
-
 def _summary_metrics_and_context(
     comparison_where_sql: str,
     comparison_params: List[Any],
@@ -3771,8 +2557,6 @@ def _summary_metrics_and_context(
     *,
     current_start: str,
     current_end: str,
-    recent_start: str,
-    recent_end: str,
     prior_start: str,
     prior_end: str,
 ) -> Dict[str, Any]:
@@ -3780,7 +2564,6 @@ def _summary_metrics_and_context(
     revenue_col = _safe_col(cols, fs.CANON.revenue, "Revenue")
     cost_expr = _coalesce_expr(cols, (fs.CANON.cost, "Cost", "CostPrice"), "NULL")
     qty_expr = _coalesce_expr(cols, (fs.CANON.qty_units, "ShippedItems", "QuantityOrdered", "Qty", "Quantity", "Units", "ItemCount"), "0")
-    weight_expr = _coalesce_expr(cols, (fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum"), "0")
     sku_col, _prod_id_col, prod_name = _resolve_product_columns(cols)
     cust_id = _safe_col(cols, fs.CANON.customer_id, "CustomerID")
     order_id = _safe_col(cols, fs.CANON.order_id, "OrderID")
@@ -3788,596 +2571,84 @@ def _summary_metrics_and_context(
     if not all([date_col, revenue_col, sku_col, prod_name, cust_id, order_id]):
         return {"error": {"message": "Required columns missing for products summary"}, "meta": {"cached": False}}
 
-    exprs = _product_exprs(cols)
-    family_exprs = _family_exprs(cols)
-    sku_expr = exprs["sku_expr"]
-    product_key_expr = exprs["product_key_expr"]
-    product_name_expr = exprs["product_name_expr"]
-    display_name_expr = exprs["display_name_expr"]
-    protein_expr = family_exprs["protein_expr"]
-    category_expr = family_exprs["category_expr"]
-    product_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "product_rollup.protein_family",
-        "product_rollup.product_category",
-        "target_gross_margin_pct",
+    lightweight_table = _table_payload(
+        comparison_where_sql,
+        comparison_params,
+        cols,
+        {"page": 1, "page_size": 200, "sort": "revenue", "sort_dir": "desc"},
+        current_start=current_start,
+        current_end=current_end,
+        prior_start=prior_start,
+        prior_end=prior_end,
     )
-    _seg_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "seg_scored.protein_family",
-        "seg_scored.product_category",
-        "target_gross_margin_pct",
+    summary_row = _summary_row_from_product_rows(
+        lightweight_table.get("rows") or [],
+        current_start=current_start,
+        current_end=current_end,
     )
-    health_target_margin_expr = margin_rules.sql_margin_rule_expr(
-        "health_classified.protein_family",
-        "health_classified.product_category",
-        "target_gross_margin_pct",
-    )
-    effective_cost_expr = margin_rules.sql_effective_cost_expr("base_cost", "weight", "qty", fallback="NULL")
-
-    sql = f"""
-        WITH base AS (
-            SELECT
-                {date_col}::DATE AS date,
-                {product_key_expr} AS product_id,
-                {sku_expr} AS sku,
-                {product_name_expr} AS product_name,
-                {display_name_expr} AS display_name,
-                {protein_expr} AS protein_family,
-                {category_expr} AS product_category,
-                {cust_id}::VARCHAR AS customer_id,
-                {order_id}::VARCHAR AS order_id,
-                CAST({revenue_col} AS DOUBLE) AS revenue,
-                CAST({cost_expr} AS DOUBLE) AS base_cost,
-                CAST({qty_expr} AS DOUBLE) AS qty,
-                CAST({weight_expr} AS DOUBLE) AS weight
-            FROM fact
-            WHERE {comparison_where_sql}
-        ),
-        enriched AS (
-            SELECT
-                *,
-                ({effective_cost_expr}) AS cost,
-                CASE
-                    WHEN ({effective_cost_expr}) IS NULL THEN NULL
-                    ELSE revenue - ({effective_cost_expr})
-                END AS profit,
-                CASE
-                    WHEN weight > 0 THEN revenue / NULLIF(weight, 0)
-                    WHEN qty > 0 THEN revenue / NULLIF(qty, 0)
-                    ELSE NULL
-                END AS unit_price,
-                DATE_TRUNC('month', date)::DATE AS month_date
-            FROM base
-        ),
-        bounds AS (
-            SELECT
-                ?::DATE AS current_start,
-                ?::DATE AS current_end,
-                ?::DATE AS recent_start,
-                ?::DATE AS recent_end,
-                ?::DATE AS prior_start,
-                ?::DATE AS prior_end
-        ),
-        current_enriched AS (
-            SELECT e.*
-            FROM enriched e
-            CROSS JOIN bounds b
-            WHERE e.date BETWEEN b.current_start AND b.current_end
-        ),
-        agg AS (
-            SELECT
-                SUM(revenue) AS revenue,
-                SUM(qty) AS qty,
-                SUM(weight) AS weight,
-                COUNT(DISTINCT product_id) AS products,
-                COUNT(DISTINCT customer_id) AS customers,
-                COUNT(DISTINCT order_id) AS orders,
-                CASE WHEN SUM(cost) IS NULL THEN NULL ELSE SUM(revenue) - SUM(cost) END AS profit,
-                CASE WHEN SUM(revenue) > 0 AND SUM(cost) IS NOT NULL THEN (SUM(revenue) - SUM(cost)) / SUM(revenue) * 100 ELSE NULL END AS margin_pct,
-                AVG(unit_price) AS avg_price,
-                median(unit_price) AS median_price,
-                quantile_cont(unit_price, 0.10) AS up_p10,
-                quantile_cont(unit_price, 0.50) AS up_p50,
-                quantile_cont(unit_price, 0.90) AS up_p90
-            FROM current_enriched
-        ),
-        window_span AS (
-            SELECT
-                date_diff('day', MIN(date), MAX(date)) + 1 AS window_days
-            FROM current_enriched
-        ),
-        trajectory AS (
-            SELECT
-                CASE
-                    WHEN ws.window_days < 120 THEN strftime('%Y-W%W', DATE_TRUNC('week', e.date))
-                    ELSE strftime('%Y-%m', DATE_TRUNC('month', e.date))
-                END AS period_label,
-                CASE
-                    WHEN ws.window_days < 120 THEN DATE_TRUNC('week', e.date)
-                    ELSE DATE_TRUNC('month', e.date)
-                END AS period_start,
-                SUM(e.revenue) AS revenue,
-                SUM(e.qty) AS qty,
-                COUNT(DISTINCT e.order_id) AS orders,
-                CASE WHEN SUM(e.cost) IS NULL THEN NULL ELSE SUM(e.revenue) - SUM(e.cost) END AS profit,
-                CASE WHEN SUM(e.revenue) > 0 AND SUM(e.cost) IS NOT NULL THEN (SUM(e.revenue) - SUM(e.cost)) / SUM(e.revenue) * 100 ELSE NULL END AS margin_pct
-            FROM current_enriched e
-            CROSS JOIN window_span ws
-            GROUP BY period_label, period_start
-            ORDER BY period_start
-        ),
-        product_rollup AS (
-            SELECT
-                product_id,
-                any_value(product_name) AS product_name,
-                any_value(display_name) AS display_name,
-                any_value(sku) AS sku,
-                any_value(protein_family) AS protein_family,
-                any_value(product_category) AS product_category,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) AS qty,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NULL THEN NULL
-                    ELSE SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                END AS profit,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS orders,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN month_date END) AS months_active,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) > 0
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END), 0)
-                    ELSE NULL
-                END AS unit_price,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END), 0)
-                    ELSE NULL
-                END AS unit_cost,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) > 0 AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN (
-                            SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END)
-                            - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                        ) / NULLIF(SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END), 0)
-                    ELSE NULL
-                END AS contribution_lb,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) > 0
-                        AND SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) IS NOT NULL
-                        THEN (
-                            SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END)
-                            - SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END)
-                        ) / SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) * 100
-                    ELSE NULL
-                END AS margin_pct,
-                quantile_cont(unit_price, 0.10) AS up_p10,
-                quantile_cont(unit_price, 0.50) AS up_p50,
-                quantile_cont(unit_price, 0.90) AS up_p90,
-                SUM(CASE WHEN date BETWEEN b.recent_start AND b.recent_end THEN revenue ELSE 0 END) AS rev_recent,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS rev_prior,
-                SUM(CASE WHEN date BETWEEN b.recent_start AND b.recent_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_recent,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end AND cost IS NOT NULL THEN revenue ELSE 0 END) AS revenue_with_cost
-            FROM enriched
-            CROSS JOIN bounds b
-            GROUP BY product_id
-        ),
-        family_rollup AS (
-            SELECT
-                COALESCE(NULLIF(protein_family, ''), 'Unassigned') AS family,
-                COALESCE(NULLIF(product_category, ''), COALESCE(NULLIF(protein_family, ''), 'Unassigned')) AS category,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS revenue_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight_current,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost_current,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN product_id END) AS sku_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN customer_id END) AS customer_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS order_count
-            FROM enriched
-            CROSS JOIN bounds b
-            GROUP BY 1, 2
-        ),
-        family_mix_enriched AS (
-            SELECT
-                family,
-                category,
-                revenue_current AS revenue,
-                revenue_prior,
-                weight_current AS weight,
-                sku_count,
-                customer_count,
-                order_count,
-                CASE
-                    WHEN revenue_current > 0 AND cost_current IS NOT NULL
-                        THEN (revenue_current - cost_current) / revenue_current * 100
-                    ELSE NULL
-                END AS margin_pct,
-                CASE
-                    WHEN weight_current > 0 AND cost_current IS NOT NULL
-                        THEN (revenue_current - cost_current) / NULLIF(weight_current, 0)
-                    ELSE NULL
-                END AS profit_per_lb,
-                CASE WHEN SUM(revenue_current) OVER () > 0 THEN revenue_current / SUM(revenue_current) OVER () * 100 ELSE NULL END AS share_current,
-                CASE WHEN SUM(revenue_prior) OVER () > 0 THEN revenue_prior / SUM(revenue_prior) OVER () * 100 ELSE NULL END AS share_prior,
-                CASE
-                    WHEN SUM(revenue_current) OVER () > 0 AND SUM(revenue_prior) OVER () > 0
-                        THEN (revenue_current / SUM(revenue_current) OVER () * 100) - (revenue_prior / SUM(revenue_prior) OVER () * 100)
-                    ELSE NULL
-                END AS share_delta_pp
-            FROM family_rollup
-            WHERE revenue_current <> 0 OR revenue_prior <> 0
-        ),
-        compare_summary AS (
-            SELECT
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN revenue ELSE 0 END) AS revenue_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN revenue ELSE 0 END) AS revenue_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN qty ELSE 0 END) AS qty_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN qty ELSE 0 END) AS qty_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN weight ELSE 0 END) AS weight_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN weight ELSE 0 END) AS weight_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end THEN cost ELSE NULL END) AS cost_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN cost ELSE NULL END) AS cost_prior,
-                SUM(CASE WHEN date BETWEEN b.current_start AND b.current_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_current,
-                SUM(CASE WHEN date BETWEEN b.prior_start AND b.prior_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_prior,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.current_start AND b.current_end THEN order_id END) AS orders_current,
-                COUNT(DISTINCT CASE WHEN date BETWEEN b.prior_start AND b.prior_end THEN order_id END) AS orders_prior
-            FROM enriched
-            CROSS JOIN bounds b
-        ),
-        velocity AS (
-            SELECT
-                CASE WHEN COUNT(*) > 0 THEN SUM(qty) / NULLIF(date_diff('week', MIN(date), MAX(date)) + 1, 0) ELSE 0 END AS avg_weekly_qty,
-                CASE WHEN COUNT(*) > 0 THEN SUM(revenue) / NULLIF(date_diff('week', MIN(date), MAX(date)) + 1, 0) ELSE 0 END AS weekly_revenue,
-                COUNT(DISTINCT product_id) AS active_skus
-            FROM current_enriched
-        ),
-        seg_scored AS (
-            SELECT
-                *,
-                COALESCE(quantile_cont(revenue, 0.80) OVER (), 0) AS rev_p80,
-                COALESCE(quantile_cont(orders, 0.60) OVER (), 0) AS ord_p60,
-                CASE
-                    WHEN revenue >= rev_p80 AND orders >= ord_p60 THEN 'Stars'
-                    WHEN revenue >= rev_p80 THEN 'Cash Cows'
-                    WHEN orders >= ord_p60 THEN 'Volume Drivers'
-                    WHEN margin_pct IS NOT NULL AND margin_pct < 5 THEN 'Margin Risk'
-                    ELSE 'Long Tail'
-                END AS segment
-            FROM product_rollup
-        ),
-        segment_summary AS (
-            SELECT
-                segment,
-                COUNT(*) AS sku_count,
-                SUM(revenue) AS revenue
-            FROM seg_scored
-            GROUP BY segment
-        ),
-        segment_mix AS (
-            SELECT
-                segment,
-                SUM(rev_recent) AS revenue_current,
-                SUM(rev_prior) AS revenue_prior
-            FROM seg_scored
-            GROUP BY segment
-        ),
-        segment_mix_enriched AS (
-            SELECT
-                segment,
-                revenue_current,
-                revenue_prior,
-                CASE WHEN SUM(revenue_current) OVER () > 0 THEN revenue_current / SUM(revenue_current) OVER () * 100 ELSE NULL END AS share_current,
-                CASE WHEN SUM(revenue_prior) OVER () > 0 THEN revenue_prior / SUM(revenue_prior) OVER () * 100 ELSE NULL END AS share_prior,
-                CASE
-                    WHEN SUM(revenue_current) OVER () > 0 AND SUM(revenue_prior) OVER () > 0
-                        THEN (revenue_current / SUM(revenue_current) OVER () * 100) - (revenue_prior / SUM(revenue_prior) OVER () * 100)
-                    ELSE NULL
-                END AS share_delta_pp
-            FROM segment_mix
-        ),
-        price_velocity AS (
-            SELECT
-                *,
-                CASE WHEN months_active > 0 THEN orders / NULLIF(months_active, 0) ELSE NULL END AS orders_per_month
-            FROM seg_scored
-        ),
-        health_thresholds AS (
-            SELECT
-                quantile_cont(orders_per_month, 0.40) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p40,
-                quantile_cont(orders_per_month, 0.50) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p50,
-                quantile_cont(orders_per_month, 0.60) FILTER (WHERE orders_per_month IS NOT NULL) AS velocity_p60,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.40) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p40,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.50) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p50,
-                quantile_cont(COALESCE(margin_pct, contribution_lb), 0.60) FILTER (WHERE COALESCE(margin_pct, contribution_lb) IS NOT NULL) AS profitability_p60
-            FROM price_velocity
-        ),
-        health_classified AS (
-            SELECT
-                pv.*,
-                CASE
-                    WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0)) THEN 'high'
-                    WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0)) THEN 'low'
-                    WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0) THEN 'high'
-                    ELSE 'low'
-                END AS velocity_band,
-                CASE
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0)) THEN 'high'
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0)) THEN 'low'
-                    WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0) THEN 'high'
-                    ELSE 'low'
-                END AS profitability_band,
-                CASE
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0)) THEN 'high'
-                            WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0)) THEN 'low'
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' AND (
-                        CASE
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0)) THEN 'high'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0)) THEN 'low'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'protect'
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p60, COALESCE(ht.velocity_p50, 0)) THEN 'high'
-                            WHEN COALESCE(pv.orders_per_month, 0) <= COALESCE(ht.velocity_p40, COALESCE(ht.velocity_p50, 0)) THEN 'low'
-                            WHEN COALESCE(pv.orders_per_month, 0) >= COALESCE(ht.velocity_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'fix_margin'
-                    WHEN (
-                        CASE
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p60, COALESCE(ht.profitability_p50, 0)) THEN 'high'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) <= COALESCE(ht.profitability_p40, COALESCE(ht.profitability_p50, 0)) THEN 'low'
-                            WHEN COALESCE(COALESCE(pv.margin_pct, pv.contribution_lb), -999999) >= COALESCE(ht.profitability_p50, 0) THEN 'high'
-                            ELSE 'low'
-                        END
-                    ) = 'high' THEN 'grow'
-                    ELSE 'rationalize'
-                END AS quadrant
-            FROM price_velocity pv
-            CROSS JOIN health_thresholds ht
-        ),
-        health_summary AS (
-            SELECT
-                quadrant,
-                COUNT(*) AS sku_count,
-                SUM(revenue) AS revenue,
-                SUM(profit) AS profit
-            FROM health_classified
-            GROUP BY quadrant
-        ),
-        health_top AS (
-            SELECT
-                quadrant,
-                product_id,
-                display_name,
-                revenue,
-                profit,
-                margin_pct,
-                orders_per_month AS velocity_per_month,
-                ROW_NUMBER() OVER (PARTITION BY quadrant ORDER BY revenue DESC) AS rn
-            FROM health_classified
-        ),
-        top_product AS (
-            SELECT product_id, display_name, revenue
-            FROM product_rollup
-            ORDER BY revenue DESC NULLS LAST
-            LIMIT 1
-        )
+    identity_sql = f"""
         SELECT
-            agg.revenue,
-            agg.qty,
-            agg.weight,
-            agg.products,
-            agg.customers,
-            agg.orders,
-            agg.profit,
-            agg.margin_pct,
-            agg.avg_price,
-            agg.median_price,
-            agg.up_p10,
-            agg.up_p50,
-            agg.up_p90,
-            compare_summary.revenue_current AS compare_revenue_current,
-            compare_summary.revenue_prior AS compare_revenue_prior,
-            compare_summary.qty_current AS compare_qty_current,
-            compare_summary.qty_prior AS compare_qty_prior,
-            compare_summary.weight_current AS compare_weight_current,
-            compare_summary.weight_prior AS compare_weight_prior,
-            compare_summary.cost_current AS compare_cost_current,
-            compare_summary.cost_prior AS compare_cost_prior,
-            compare_summary.profit_current AS compare_profit_current,
-            compare_summary.profit_prior AS compare_profit_prior,
-            compare_summary.orders_current AS compare_orders_current,
-            compare_summary.orders_prior AS compare_orders_prior,
-            velocity.avg_weekly_qty,
-            velocity.weekly_revenue,
-            velocity.active_skus,
-            (SELECT CASE WHEN window_days < 120 THEN 'weekly' ELSE 'monthly' END FROM window_span) AS traj_grain,
-            (SELECT list(period_label) FROM trajectory) AS traj_labels,
-            (SELECT list(revenue) FROM trajectory) AS traj_revenue,
-            (SELECT list(qty) FROM trajectory) AS traj_qty,
-            (SELECT list(orders) FROM trajectory) AS traj_orders,
-            (SELECT list(profit) FROM trajectory) AS traj_profit,
-            (SELECT list(margin_pct) FROM trajectory) AS traj_margin,
-            (SELECT velocity_p40 FROM health_thresholds) AS health_velocity_p40,
-            (SELECT velocity_p60 FROM health_thresholds) AS health_velocity_p60,
-            (SELECT profitability_p40 FROM health_thresholds) AS health_profitability_p40,
-            (SELECT profitability_p60 FROM health_thresholds) AS health_profitability_p60,
-            (SELECT list(struct_pack(segment:=segment, sku_count:=sku_count, revenue:=revenue)) FROM segment_summary) AS segment_summary,
-            (SELECT list(struct_pack(segment:=segment, revenue_current:=revenue_current, revenue_prior:=revenue_prior, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp)) FROM (SELECT * FROM segment_mix_enriched ORDER BY ABS(share_delta_pp) DESC)) AS segment_mix_shift,
-            (SELECT list(struct_pack(quadrant:=quadrant, sku_count:=sku_count, revenue:=revenue, profit:=profit)) FROM health_summary) AS health_summary,
-            (SELECT list(struct_pack(quadrant:=quadrant, product_id:=product_id, product_name:=display_name, display_name:=display_name, revenue:=revenue, profit:=profit, margin_pct:=margin_pct, velocity_per_month:=velocity_per_month)) FROM health_top WHERE rn <= 10) AS health_top,
-            (SELECT product_id FROM top_product LIMIT 1) AS top_product_id,
-            (SELECT display_name FROM top_product LIMIT 1) AS top_product_display_name,
-            (SELECT revenue FROM top_product LIMIT 1) AS top_product_revenue,
-            (
-                SELECT MAX(rev_share)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-                WHERE rn = 1
-            ) AS concentration_top1_share,
-            (
-                SELECT SUM(rev_share)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-                WHERE rn <= 10
-            ) AS concentration_top10_share,
-            (
-                SELECT SUM(POWER(rev_share / 100.0, 2)) * 10000
-                FROM (
-                    SELECT CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE 0 END AS rev_share
-                    FROM product_rollup
-                ) ranked
-            ) AS concentration_hhi,
-            (
-                SELECT MIN(rn)
-                FROM (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY revenue DESC) AS rn,
-                        CASE
-                            WHEN SUM(revenue) OVER () > 0
-                                THEN SUM(revenue) OVER (ORDER BY revenue DESC) / SUM(revenue) OVER () * 100
-                            ELSE NULL
-                        END AS cum_share
-                    FROM product_rollup
-                ) ranked
-                WHERE cum_share >= 80
-            ) AS concentration_skus_to_80,
-            (SELECT COUNT(*) FROM family_mix_enriched) AS protein_family_count,
-            (SELECT family FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 1) AS top_protein_family,
-            (SELECT share_current FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 1) AS top_protein_share,
-            (
-                SELECT SUM(POWER(COALESCE(share_current, 0) / 100.0, 2)) * 10000
-                FROM family_mix_enriched
-            ) AS protein_hhi,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, revenue_prior:=revenue_prior, weight:=weight, margin_pct:=margin_pct, profit_per_lb:=profit_per_lb, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp, sku_count:=sku_count, customer_count:=customer_count, order_count:=order_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY revenue DESC NULLS LAST LIMIT 8)) AS protein_mix,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, share_current:=share_current, share_prior:=share_prior, share_delta_pp:=share_delta_pp, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY ABS(share_delta_pp) DESC NULLS LAST LIMIT 6)) AS protein_mix_shift,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, margin_pct:=margin_pct, profit_per_lb:=profit_per_lb, share_current:=share_current, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY COALESCE(margin_pct, 999999) ASC, revenue DESC NULLS LAST LIMIT 6)) AS protein_margin_watch,
-            (SELECT list(struct_pack(family:=family, category:=category, revenue:=revenue, share_delta_pp:=share_delta_pp, margin_pct:=margin_pct, customer_count:=customer_count, sku_count:=sku_count)) FROM (SELECT * FROM family_mix_enriched ORDER BY share_delta_pp DESC NULLS LAST, revenue DESC NULLS LAST LIMIT 6)) AS protein_growth_pockets,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-            ) AS risk_below_target_count,
-            (
-                SELECT SUM(revenue)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-            ) AS risk_below_target_revenue,
-            (SELECT COUNT(*) FROM product_rollup WHERE margin_pct IS NOT NULL AND margin_pct < 0) AS risk_negative_margin_count,
-            (
-                SELECT SUM((revenue * (({product_target_margin_expr}) / 100.0)) - profit)
-                FROM product_rollup
-                WHERE margin_pct IS NOT NULL
-                  AND ({product_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({product_target_margin_expr})
-                  AND profit IS NOT NULL
-            ) AS risk_profit_uplift_target,
-            (
-                SELECT COUNT(*)
-                FROM health_classified
-                WHERE velocity_band = 'high'
-                  AND margin_pct IS NOT NULL
-                  AND ({health_target_margin_expr}) IS NOT NULL
-                  AND margin_pct < ({health_target_margin_expr})
-            ) AS high_velocity_low_margin_count,
-            (
-                SELECT COUNT(*)
-                FROM health_classified
-                WHERE profitability_band = 'high' AND velocity_band = 'low'
-            ) AS high_margin_low_velocity_count,
-            (
-                SELECT CASE
-                    WHEN SUM(revenue) > 0 THEN SUM(revenue_with_cost) / NULLIF(SUM(revenue), 0) * 100
-                    ELSE NULL
-                END
-                FROM product_rollup
-            ) AS cost_coverage_pct,
-            (SELECT COUNT(*) FROM product_rollup WHERE cost IS NULL OR cost <= 0) AS missing_cost_sku_count,
-            (SELECT quantile_cont(contribution_lb, 0.10) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p10,
-            (SELECT quantile_cont(contribution_lb, 0.50) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p50,
-            (SELECT quantile_cont(contribution_lb, 0.90) FROM product_rollup WHERE contribution_lb IS NOT NULL) AS contribution_lb_p90,
-            (
-                SELECT SUM(COALESCE(profit, 0))
-                FROM product_rollup
-                WHERE (
-                    margin_pct IS NOT NULL
-                    AND ({product_target_margin_expr}) IS NOT NULL
-                    AND margin_pct < ({product_target_margin_expr})
-                ) OR cost IS NULL
-            ) AS profit_at_risk,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15
-            ) AS high_price_outlier_count,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15
-            ) AS low_price_outlier_count,
-            (
-                SELECT COUNT(*)
-                FROM product_rollup
-                WHERE unit_price IS NOT NULL AND (
-                    (up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15)
-                    OR
-                    (up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15)
-                )
-            ) AS outside_guardrail_count,
-            (
-                SELECT CASE WHEN COUNT(*) > 0 THEN (
-                    COUNT(*) FILTER (
-                        WHERE unit_price IS NOT NULL AND (
-                            (up_p90 IS NOT NULL AND up_p90 > 0 AND unit_price > up_p90 * 1.15)
-                            OR
-                            (up_p10 IS NOT NULL AND up_p10 > 0 AND unit_price < up_p10 / 1.15)
-                        )
-                    )::DOUBLE / COUNT(*)::DOUBLE * 100
-                ) ELSE NULL END
-                FROM product_rollup
-            ) AS outside_guardrail_pct
-        FROM agg, velocity, compare_summary
-        LIMIT 1
+            {date_col}::DATE AS date,
+            {cust_id}::VARCHAR AS customer_id,
+            {order_id}::VARCHAR AS order_id,
+            CAST({revenue_col} AS DOUBLE) AS revenue,
+            CAST({cost_expr} AS DOUBLE) AS cost,
+            CAST({qty_expr} AS DOUBLE) AS qty
+        FROM fact
+        WHERE {comparison_where_sql}
     """
-
-    args = list(comparison_params) + [
-        current_start,
-        current_end,
-        recent_start,
-        recent_end,
-        prior_start,
-        prior_end,
-    ]
-    df = fact_store.execute_sql_df(
-        sql,
-        args,
-        tag="products.summary_bundle",
-        cache_key="products.summary_bundle",
+    identity_frame = fact_store.execute_sql_df(
+        identity_sql,
+        comparison_params,
+        tag="products.summary_identities",
+        cache_key="products.summary_identities",
     )
+    if not identity_frame.empty:
+        identity_frame["date"] = pd.to_datetime(identity_frame["date"], errors="coerce")
+        current_identity = identity_frame.loc[
+            identity_frame["date"].between(pd.Timestamp(current_start), pd.Timestamp(current_end), inclusive="both")
+        ]
+        prior_identity = identity_frame.loc[
+            identity_frame["date"].between(pd.Timestamp(prior_start), pd.Timestamp(prior_end), inclusive="both")
+        ]
+        summary_row["customers"] = int(current_identity["customer_id"].nunique(dropna=True))
+        summary_row["orders"] = int(current_identity["order_id"].nunique(dropna=True))
+        summary_row["compare_orders_current"] = int(current_identity["order_id"].nunique(dropna=True))
+        summary_row["compare_orders_prior"] = int(prior_identity["order_id"].nunique(dropna=True))
+        window_days = max((pd.Timestamp(current_end) - pd.Timestamp(current_start)).days + 1, 1)
+        grain = "weekly" if window_days < 120 else "monthly"
+        period_code = "W-SUN" if grain == "weekly" else "M"
+        trajectory_source = current_identity.copy()
+        trajectory_source["period"] = trajectory_source["date"].dt.to_period(period_code).dt.start_time
+        for column in ("revenue", "cost", "qty"):
+            trajectory_source[column] = pd.to_numeric(trajectory_source[column], errors="coerce")
+        trajectory = trajectory_source.groupby("period", sort=True).agg(
+            revenue=("revenue", "sum"),
+            qty=("qty", "sum"),
+            orders=("order_id", "nunique"),
+            cost=("cost", "sum"),
+        )
+        trajectory["profit"] = trajectory["revenue"] - trajectory["cost"]
+        trajectory["margin_pct"] = np.where(
+            trajectory["revenue"] > 0,
+            trajectory["profit"] / trajectory["revenue"] * 100,
+            np.nan,
+        )
+        summary_row.update(
+            {
+                "traj_grain": grain,
+                "traj_labels": [
+                    value.strftime("%Y-W%W") if grain == "weekly" else value.strftime("%Y-%m")
+                    for value in trajectory.index
+                ],
+                "traj_revenue": trajectory["revenue"].fillna(0.0).tolist(),
+                "traj_qty": trajectory["qty"].fillna(0.0).tolist(),
+                "traj_orders": trajectory["orders"].fillna(0).astype(int).tolist(),
+                "traj_profit": trajectory["profit"].where(trajectory["cost"].notna()).tolist(),
+                "traj_margin": trajectory["margin_pct"].where(trajectory["margin_pct"].notna()).tolist(),
+            }
+        )
+    df = pd.DataFrame([summary_row]) if summary_row else pd.DataFrame()
     if df.empty:
         return {}
 
@@ -4476,6 +2747,39 @@ def _summary_metrics_and_context(
         "price_velocity": [],
         "top_products": [],
     }
+    lightweight_rows = [dict(item) for item in (lightweight_table.get("rows") or []) if isinstance(item, dict)]
+    ranked_rows = sorted(lightweight_rows, key=lambda item: float(item.get("revenue") or 0.0), reverse=True)
+    charts["top_products"] = [
+        {
+            "product_id": item.get("product_id"),
+            "sku": item.get("sku"),
+            "product_name": item.get("product_name"),
+            "display_name": item.get("display_name"),
+            "revenue": item.get("revenue"),
+            "profit": item.get("profit"),
+            "margin_pct": item.get("margin_pct"),
+        }
+        for item in ranked_rows[:12]
+    ]
+    charts["price_velocity"] = lightweight_rows[:250]
+    charts["movers"] = sorted(
+        lightweight_rows,
+        key=lambda item: abs(float(item.get("revenue_delta") or 0.0)),
+        reverse=True,
+    )[:20]
+    cumulative_revenue = 0.0
+    total_revenue = float(kpis.get("revenue") or 0.0)
+    for item in ranked_rows:
+        cumulative_revenue += float(item.get("revenue") or 0.0)
+        charts["pareto"].append(
+            {
+                "product_id": item.get("product_id"),
+                "sku": item.get("sku"),
+                "display_name": item.get("display_name"),
+                "revenue": item.get("revenue"),
+                "cumulative_share": cumulative_revenue / total_revenue * 100 if total_revenue > 0 else None,
+            }
+        )
 
     velocity = {
         "avg_weekly": _clean_num(row.get("avg_weekly_qty")),
@@ -4534,7 +2838,7 @@ def _summary_metrics_and_context(
         "charts": charts,
         "velocity": velocity,
         "monthly_series": monthly_series,
-        "sku_metrics": [],
+        "sku_metrics": lightweight_rows,
         "health_matrix": health_matrix,
         "concentration": {
             "top1_share": _safe_float(row.get("concentration_top1_share")),
@@ -4585,6 +2889,596 @@ def _summary_metrics_and_context(
                 "revenue": _clean_num(row.get("top_product_revenue")),
             },
         ],
+    }
+
+
+def _product_table_frame(
+    sales_df: pd.DataFrame,
+    metadata_df: pd.DataFrame,
+    *,
+    current_start: str,
+    current_end: str,
+    prior_start: str,
+    prior_end: str,
+    search: str,
+    segments: List[str],
+    quick_filters: List[str],
+    sort_col: str,
+    sort_dir: str,
+    page_size: int,
+    offset: int,
+) -> tuple[pd.DataFrame, int]:
+    """Build the products table in bounded pandas work over the demo-sized cut."""
+
+    if sales_df.empty:
+        return pd.DataFrame(), 0
+
+    frame = sales_df.copy()
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    for column in ("revenue", "cost", "qty", "weight"):
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame["product_id"] = frame["product_id"].astype("string")
+
+    current_mask = frame["date"].between(pd.Timestamp(current_start), pd.Timestamp(current_end), inclusive="both")
+    prior_mask = frame["date"].between(pd.Timestamp(prior_start), pd.Timestamp(prior_end), inclusive="both")
+    current = frame.loc[current_mask].copy()
+    prior = frame.loc[prior_mask].copy()
+
+    product_ids = frame["product_id"].dropna().drop_duplicates().tolist()
+    records: Dict[str, Dict[str, Any]] = {str(product_id): {"product_id": str(product_id)} for product_id in product_ids}
+
+    if not metadata_df.empty:
+        metadata = metadata_df.copy()
+        metadata["product_id"] = metadata["product_id"].astype("string")
+        metadata = metadata.dropna(subset=["product_id"]).drop_duplicates("product_id", keep="first")
+        for item in metadata.to_dict("records"):
+            product_id = str(item.get("product_id"))
+            if product_id in records:
+                records[product_id].update(item)
+
+    def _sum(series: pd.Series) -> float | None:
+        value = series.sum(min_count=1)
+        return None if pd.isna(value) else float(value)
+
+    if not current.empty:
+        current_grouped = current.groupby("product_id", dropna=True, sort=False)
+        for product_id, group in current_grouped:
+            item = records[str(product_id)]
+            revenue = _sum(group["revenue"]) or 0.0
+            base_cost = _sum(group["cost"])
+            qty = _sum(group["qty"]) or 0.0
+            weight = _sum(group["weight"]) or 0.0
+            basis = weight if weight > 0 else qty
+            item.update(
+                {
+                    "first_sold": group["date"].min(),
+                    "last_sold": group["date"].max(),
+                    "revenue": revenue,
+                    "revenue_current": revenue,
+                    "base_cost": base_cost,
+                    "base_cost_current": base_cost,
+                    "qty": qty,
+                    "weight": weight,
+                    "orders": int(group["order_id"].nunique(dropna=True)),
+                    "orders_current": int(group["order_id"].nunique(dropna=True)),
+                    "customer_count": int(group["customer_id"].nunique(dropna=True)),
+                    "supplier_count": int(group["supplier_name"].nunique(dropna=True)),
+                    "region_breadth": int(group["region_name"].nunique(dropna=True)),
+                    "months_active": int(group["date"].dt.to_period("M").nunique()),
+                    "unit_price": (revenue / basis) if basis > 0 else None,
+                    "base_unit_cost": (base_cost / basis) if base_cost is not None and basis > 0 else None,
+                    "supplier_name": next((value for value in group["supplier_name"] if pd.notna(value) and str(value)), None),
+                }
+            )
+
+        monthly = (
+            current.assign(month_bucket=current["date"].dt.to_period("M"))
+            .groupby(["product_id", "month_bucket"], dropna=True)["revenue"]
+            .sum()
+            .reset_index()
+        )
+        for product_id, group in monthly.groupby("product_id", sort=False):
+            mean = float(group["revenue"].mean()) if not group.empty else 0.0
+            records[str(product_id)]["volatility_score"] = (
+                float(group["revenue"].std(ddof=1) / mean * 100)
+                if len(group) >= 2 and mean > 0
+                else None
+            )
+
+        customer_rollup = (
+            current.groupby(["product_id", "customer_id"], dropna=False, sort=False)
+            .agg(customer_name=("customer_name", "first"), customer_revenue=("revenue", "sum"))
+            .reset_index()
+        )
+        for product_id, group in customer_rollup.groupby("product_id", sort=False):
+            total_revenue = float(group["customer_revenue"].sum())
+            ordered = group.sort_values(["customer_revenue", "customer_name"], ascending=[False, True], na_position="last")
+            top = ordered.iloc[0] if not ordered.empty else None
+            shares = group["customer_revenue"] / total_revenue if total_revenue > 0 else pd.Series(dtype=float)
+            records[str(product_id)].update(
+                {
+                    "top_customer_name": (
+                        str(top.get("customer_name") or top.get("customer_id") or "Unknown") if top is not None else None
+                    ),
+                    "top_customer_share": (float(top["customer_revenue"] / total_revenue * 100) if top is not None and total_revenue > 0 else None),
+                    "customer_hhi": (float((shares.pow(2).sum()) * 10000) if total_revenue > 0 else None),
+                }
+            )
+
+        region_rollup = (
+            current.assign(region_name=current["region_name"].fillna("Unassigned").replace("", "Unassigned"))
+            .groupby(["product_id", "region_name"], dropna=False, sort=False)["revenue"]
+            .sum()
+            .reset_index(name="region_revenue")
+        )
+        for product_id, group in region_rollup.groupby("product_id", sort=False):
+            total_revenue = float(group["region_revenue"].sum())
+            top = group.sort_values(["region_revenue", "region_name"], ascending=[False, True]).iloc[0]
+            records[str(product_id)].update(
+                {
+                    "top_region_name": str(top["region_name"]),
+                    "top_region_share": (float(top["region_revenue"] / total_revenue * 100) if total_revenue > 0 else None),
+                }
+            )
+
+    if not prior.empty:
+        for product_id, group in prior.groupby("product_id", dropna=True, sort=False):
+            item = records[str(product_id)]
+            item.update(
+                {
+                    "revenue_prior": _sum(group["revenue"]) or 0.0,
+                    "base_cost_prior": _sum(group["cost"]),
+                    "qty_prior": _sum(group["qty"]) or 0.0,
+                    "weight_prior": _sum(group["weight"]) or 0.0,
+                    "orders_prior": int(group["order_id"].nunique(dropna=True)),
+                }
+            )
+
+    rows = []
+    for item in records.values():
+        item.setdefault("revenue", 0.0)
+        item.setdefault("revenue_current", 0.0)
+        item.setdefault("revenue_prior", 0.0)
+        item.setdefault("qty", 0.0)
+        item.setdefault("weight", 0.0)
+        item.setdefault("orders", 0)
+        item.setdefault("orders_current", 0)
+        item.setdefault("orders_prior", 0)
+        item.setdefault("customer_count", 0)
+        item.setdefault("supplier_count", 0)
+        item.setdefault("region_breadth", 0)
+        item.setdefault("months_active", 0)
+        annotated = margin_rules.evaluate_margin_record(
+            protein=item.get("protein_family"),
+            category=item.get("category"),
+            revenue=item.get("revenue_current"),
+            cost=item.get("base_cost"),
+            unit_cost=item.get("base_unit_cost"),
+            unit_price=item.get("unit_price"),
+            weight_lb=item.get("weight"),
+            qty=item.get("qty"),
+            base_cost=item.get("base_cost"),
+            base_unit_cost=item.get("base_unit_cost"),
+        )
+        item.update(annotated)
+        prior_cost = margin_rules.effective_cost_from_values(
+            item.get("base_cost_prior"),
+            weight_lb=item.get("weight_prior"),
+            qty=item.get("qty_prior"),
+        )
+        prior_revenue = float(item.get("revenue_prior") or 0.0)
+        prior_profit = (prior_revenue - prior_cost) if prior_cost is not None else None
+        prior_margin = (prior_profit / prior_revenue * 100) if prior_profit is not None and prior_revenue > 0 else None
+        current_margin = _safe_float(item.get("margin_pct"))
+        current_profit = _safe_float(item.get("profit"))
+        item.update(
+            {
+                "cost_current": item.get("cost"),
+                "cost_prior": prior_cost,
+                "profit_current": current_profit,
+                "profit_prior": prior_profit,
+                "profit_delta": (current_profit - prior_profit) if current_profit is not None and prior_profit is not None else None,
+                "margin_pct_current": current_margin,
+                "margin_pct_prior": prior_margin,
+                "margin_delta_pp": (current_margin - prior_margin) if current_margin is not None and prior_margin is not None else None,
+                "revenue_delta": float(item.get("revenue_current") or 0.0) - prior_revenue,
+                "revenue_delta_pct": ((float(item.get("revenue_current") or 0.0) - prior_revenue) / prior_revenue * 100) if prior_revenue > 0 else None,
+                "revenue_low_base": bool(0 < prior_revenue < LOW_BASE_REVENUE),
+                "velocity_per_month": (float(item.get("orders") or 0) / float(item.get("months_active") or 1)) if item.get("months_active") else None,
+            }
+        )
+        rows.append(item)
+
+    def _quantile(key: str, value: float) -> float:
+        clean = [_safe_float(row.get(key)) for row in rows]
+        return float(np.quantile([number for number in clean if number is not None], value)) if any(number is not None for number in clean) else 0.0
+
+    rev_p80, rev_p90 = _quantile("revenue", 0.80), _quantile("revenue", 0.90)
+    ord_p60, vel_p75 = _quantile("orders", 0.60), _quantile("velocity_per_month", 0.75)
+    unit_prices = [_safe_float(row.get("unit_price")) for row in rows]
+    median_price = float(np.median([value for value in unit_prices if value is not None])) if any(value is not None for value in unit_prices) else None
+
+    for item in rows:
+        revenue = float(item.get("revenue") or 0.0)
+        orders = float(item.get("orders") or 0.0)
+        margin = _safe_float(item.get("margin_pct"))
+        if revenue >= rev_p80 and orders >= ord_p60:
+            segment = "Stars"
+        elif revenue >= rev_p80:
+            segment = "Cash Cows"
+        elif orders >= ord_p60:
+            segment = "Volume Drivers"
+        elif margin is not None and margin < 5:
+            segment = "Margin Risk"
+        else:
+            segment = "Long Tail"
+        item.update(
+            {
+                "segment": segment,
+                "rev_p80": rev_p80,
+                "rev_p90": rev_p90,
+                "vel_p75": vel_p75,
+                "median_unit_price": median_price,
+                "contribution_margin_lb": (float(item.get("profit")) / float(item.get("weight"))) if item.get("profit") is not None and float(item.get("weight") or 0) > 0 else None,
+                "price_variance_vs_median": (_safe_float(item.get("unit_price")) - median_price) if _safe_float(item.get("unit_price")) is not None and median_price is not None else None,
+            }
+        )
+
+    search_key = search.casefold()
+
+    def _matches(item: Dict[str, Any]) -> bool:
+        if search_key and not any(
+            search_key in str(item.get(key) or "").casefold()
+            for key in ("product_name", "product_id", "protein_family", "category")
+        ):
+            return False
+        if segments and item.get("segment") not in segments:
+            return False
+        margin = _safe_float(item.get("margin_pct"))
+        minimum = _safe_float(item.get("minimum_margin_pct"))
+        target = _safe_float(item.get("target_margin_pct"))
+        unit_price = _safe_float(item.get("unit_price"))
+        revenue = float(item.get("revenue") or 0.0)
+        velocity = _safe_float(item.get("velocity_per_month"))
+        top_share = _safe_float(item.get("top_customer_share"))
+        revenue_delta_pct = _safe_float(item.get("revenue_delta_pct"))
+        if "below_target_margin" in quick_filters and not (margin is not None and target is not None and margin < target): return False
+        if "below_minimum_margin" in quick_filters and not (margin is not None and minimum is not None and margin < minimum): return False
+        if "negative_margin" in quick_filters and not (_safe_float(item.get("profit")) is not None and float(item["profit"]) < 0): return False
+        if "high_velocity" in quick_filters and not (velocity is not None and velocity >= vel_p75): return False
+        if "top_revenue_20" in quick_filters and revenue < rev_p80: return False
+        if "high_revenue_share" in quick_filters and revenue < rev_p90: return False
+        if "missing_cost" in quick_filters and item.get("base_cost") is not None: return False
+        if "high_customer_dependency" in quick_filters and not (top_share is not None and top_share >= 50): return False
+        price_gap_ratio = abs(unit_price - median_price) / median_price if unit_price is not None and median_price not in (None, 0) else None
+        if "high_price_outlier" in quick_filters and not (price_gap_ratio is not None and price_gap_ratio >= 0.35): return False
+        if "outside_guardrail" in quick_filters and not (price_gap_ratio is not None and price_gap_ratio >= 0.25): return False
+        if "elastic_risk" in quick_filters and not (margin is not None and minimum is not None and margin >= minimum and unit_price is not None and median_price is not None and unit_price >= median_price * 1.08 and revenue_delta_pct is not None and revenue_delta_pct <= -6): return False
+        if "protect_core" in quick_filters and not (velocity is not None and velocity >= vel_p75 and revenue >= rev_p80 and margin is not None and target is not None and margin >= target): return False
+        if "recover_margin" in quick_filters and not (velocity is not None and velocity >= vel_p75 and margin is not None and target is not None and margin < target): return False
+        if "at_or_above_target" in quick_filters and not (margin is not None and target is not None and margin >= target): return False
+        if "promote_candidate" in quick_filters and not (velocity is not None and velocity < vel_p75 and margin is not None and target is not None and margin >= target): return False
+        if "rationalize_candidate" in quick_filters and not (velocity is not None and velocity < vel_p75 and (margin is None or target is None or margin < target)): return False
+        return True
+
+    filtered = [item for item in rows if _matches(item)]
+    total_revenue = sum(float(item.get("revenue") or 0.0) for item in filtered)
+    total_qty = sum(float(item.get("qty") or 0.0) for item in filtered)
+    total_profit = sum(float(item.get("profit") or 0.0) for item in filtered)
+    for item in filtered:
+        item["revenue_share"] = float(item.get("revenue") or 0.0) / total_revenue * 100 if total_revenue > 0 else None
+        item["qty_share"] = float(item.get("qty") or 0.0) / total_qty * 100 if total_qty > 0 else None
+        item["profit_share"] = float(item.get("profit") or 0.0) / total_profit * 100 if item.get("profit") is not None and abs(total_profit) > 0 else None
+
+    non_null = [item for item in filtered if item.get(sort_col) is not None]
+    null_rows = [item for item in filtered if item.get(sort_col) is None]
+    non_null.sort(
+        key=lambda item: str(item.get(sort_col)).casefold() if isinstance(item.get(sort_col), str) else item.get(sort_col),
+        reverse=sort_dir == "DESC",
+    )
+    ordered = non_null + null_rows
+    total = len(ordered)
+    page_rows = ordered[offset : offset + page_size]
+    for item in page_rows:
+        item["total_rows"] = total
+    return pd.DataFrame(page_rows), total
+
+
+def _serialize_product_table_rows(frame: pd.DataFrame) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for raw in frame.to_dict("records"):
+        item: Dict[str, Any] = {}
+        for key, value in raw.items():
+            try:
+                if pd.isna(value):
+                    value = None
+            except (TypeError, ValueError):
+                pass
+            if isinstance(value, np.generic):
+                value = value.item()
+            item[key] = value
+
+        product_id = item.get("product_id")
+        pid_safe = _encode_path_segment(product_id)
+        unit_price = _safe_float(item.get("unit_price"))
+        unit_cost = _safe_float(item.get("unit_cost"))
+        profit = _safe_float(item.get("profit"))
+        item.update(
+            {
+                "key": product_id,
+                "sku": item.get("sku") or product_id,
+                "label": item.get("display_name") or item.get("product_name"),
+                "display_name": item.get("display_name") or item.get("product_name"),
+                "protein_type": item.get("protein_family"),
+                "protein_name": item.get("protein_family"),
+                "product_category": item.get("category"),
+                "supplier": item.get("supplier_name"),
+                "current_unit_price": unit_price,
+                "effective_unit_cost": unit_cost,
+                "effective_cost": _safe_float(item.get("cost")),
+                "margin": profit,
+                "asp_lb": unit_price,
+                "base_cost_lb": _safe_float(item.get("base_unit_cost")),
+                "effective_cost_lb": unit_cost,
+                "cost_lb": unit_cost,
+                "contribution_lb": _safe_float(item.get("contribution_margin_lb")),
+                "margin_risk": _margin_risk_label(
+                    _safe_float(item.get("margin_pct")),
+                    _safe_float(item.get("target_margin_pct")),
+                    _safe_float(item.get("minimum_margin_pct")),
+                ),
+                "recommendation": None,
+                "quick_rec": None,
+                "intel_url": f"/products/{pid_safe}/drilldown" if pid_safe else None,
+            }
+        )
+        for key in (
+            "supplier_count",
+            "customer_count",
+            "region_breadth",
+            "orders",
+            "orders_current",
+            "orders_prior",
+        ):
+            item[key] = int(item.get(key) or 0)
+        for key in ("first_sold", "last_sold"):
+            item[key] = str(item[key]) if item.get(key) is not None else None
+        rows.append(item)
+    return rows
+
+
+def _summary_row_from_product_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    current_start: str,
+    current_end: str,
+) -> Dict[str, Any]:
+    def _numbers(key: str) -> List[float]:
+        values = [_safe_float(item.get(key)) for item in rows]
+        return [value for value in values if value is not None]
+
+    def _total(key: str) -> float:
+        return float(sum(_safe_float(item.get(key)) or 0.0 for item in rows))
+
+    revenue = _total("revenue")
+    qty = _total("qty")
+    weight = _total("weight")
+    profit = _total("profit")
+    cost_values = _numbers("cost")
+    cost = float(sum(cost_values)) if cost_values else None
+    unit_prices = _numbers("unit_price")
+    contributions = _numbers("contribution_margin_lb")
+    sorted_rows = sorted(rows, key=lambda item: float(item.get("revenue") or 0.0), reverse=True)
+    shares = [float(item.get("revenue") or 0.0) / revenue * 100 if revenue > 0 else 0.0 for item in sorted_rows]
+    cumulative = 0.0
+    skus_to_80 = 0
+    for index, share in enumerate(shares, start=1):
+        cumulative += share
+        if cumulative >= 80:
+            skus_to_80 = index
+            break
+
+    segment_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    family_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for item in rows:
+        segment_groups[str(item.get("segment") or "Long Tail")].append(item)
+        family_groups[str(item.get("protein_family") or "Unassigned")].append(item)
+
+    segment_summary = [
+        {
+            "segment": segment,
+            "sku_count": len(items),
+            "revenue": float(sum(float(item.get("revenue") or 0.0) for item in items)),
+        }
+        for segment, items in segment_groups.items()
+    ]
+    segment_mix_shift = []
+    for segment, items in segment_groups.items():
+        current_value = float(sum(float(item.get("revenue_current") or 0.0) for item in items))
+        prior_value = float(sum(float(item.get("revenue_prior") or 0.0) for item in items))
+        prior_total = _total("revenue_prior")
+        current_share = current_value / revenue * 100 if revenue > 0 else None
+        prior_share = prior_value / prior_total * 100 if prior_total > 0 else None
+        segment_mix_shift.append(
+            {
+                "segment": segment,
+                "revenue_current": current_value,
+                "revenue_prior": prior_value,
+                "share_current": current_share,
+                "share_prior": prior_share,
+                "share_delta_pp": (current_share - prior_share) if current_share is not None and prior_share is not None else None,
+            }
+        )
+
+    protein_mix = []
+    prior_total = _total("revenue_prior")
+    for family, items in family_groups.items():
+        family_revenue = float(sum(float(item.get("revenue") or 0.0) for item in items))
+        family_prior = float(sum(float(item.get("revenue_prior") or 0.0) for item in items))
+        family_profit = float(sum(float(item.get("profit") or 0.0) for item in items))
+        family_weight = float(sum(float(item.get("weight") or 0.0) for item in items))
+        share_current = family_revenue / revenue * 100 if revenue > 0 else None
+        share_prior = family_prior / prior_total * 100 if prior_total > 0 else None
+        protein_mix.append(
+            {
+                "family": family,
+                "category": family,
+                "revenue": family_revenue,
+                "revenue_prior": family_prior,
+                "weight": family_weight,
+                "margin_pct": family_profit / family_revenue * 100 if family_revenue > 0 else None,
+                "profit_per_lb": family_profit / family_weight if family_weight > 0 else None,
+                "share_current": share_current,
+                "share_prior": share_prior,
+                "share_delta_pp": (share_current - share_prior) if share_current is not None and share_prior is not None else None,
+                "sku_count": len(items),
+                "customer_count": max((int(item.get("customer_count") or 0) for item in items), default=0),
+                "order_count": sum(int(item.get("orders") or 0) for item in items),
+            }
+        )
+    protein_mix.sort(key=lambda item: item["revenue"], reverse=True)
+
+    velocities = _numbers("velocity_per_month")
+    profitability = []
+    for item in rows:
+        value = _safe_float(item.get("margin_pct"))
+        if value is None:
+            value = _safe_float(item.get("contribution_margin_lb"))
+        if value is not None:
+            profitability.append(value)
+    velocity_p40 = float(np.quantile(velocities, 0.40)) if velocities else None
+    velocity_p60 = float(np.quantile(velocities, 0.60)) if velocities else None
+    profitability_p40 = float(np.quantile(profitability, 0.40)) if profitability else None
+    profitability_p60 = float(np.quantile(profitability, 0.60)) if profitability else None
+    health_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for item in rows:
+        velocity = _safe_float(item.get("velocity_per_month")) or 0.0
+        score = _safe_float(item.get("margin_pct"))
+        if score is None:
+            score = _safe_float(item.get("contribution_margin_lb")) or -999999.0
+        high_velocity = velocity >= (velocity_p60 or 0.0)
+        high_profitability = score >= (profitability_p60 or 0.0)
+        quadrant = "protect" if high_velocity and high_profitability else "fix_margin" if high_velocity else "grow" if high_profitability else "rationalize"
+        health_groups[quadrant].append(item)
+    health_summary = [
+        {
+            "quadrant": quadrant,
+            "sku_count": len(items),
+            "revenue": sum(float(item.get("revenue") or 0.0) for item in items),
+            "profit": sum(float(item.get("profit") or 0.0) for item in items),
+        }
+        for quadrant, items in health_groups.items()
+    ]
+    health_top = []
+    for quadrant, items in health_groups.items():
+        for item in sorted(items, key=lambda value: float(value.get("revenue") or 0.0), reverse=True)[:10]:
+            health_top.append(
+                {
+                    "quadrant": quadrant,
+                    "product_id": item.get("product_id"),
+                    "product_name": item.get("display_name") or item.get("product_name"),
+                    "display_name": item.get("display_name") or item.get("product_name"),
+                    "revenue": item.get("revenue"),
+                    "profit": item.get("profit"),
+                    "margin_pct": item.get("margin_pct"),
+                    "velocity_per_month": item.get("velocity_per_month"),
+                }
+            )
+
+    below_target = [
+        item
+        for item in rows
+        if _safe_float(item.get("margin_pct")) is not None
+        and _safe_float(item.get("target_margin_pct")) is not None
+        and float(item["margin_pct"]) < float(item["target_margin_pct"])
+    ]
+    missing_cost = [item for item in rows if _safe_float(item.get("base_cost")) in (None, 0.0)]
+    at_risk_ids = {str(item.get("product_id")) for item in below_target + missing_cost}
+    median_price = float(np.median(unit_prices)) if unit_prices else None
+    high_outliers = [item for item in rows if median_price and _safe_float(item.get("unit_price")) is not None and float(item["unit_price"]) > median_price * 1.15]
+    low_outliers = [item for item in rows if median_price and _safe_float(item.get("unit_price")) is not None and float(item["unit_price"]) < median_price / 1.15]
+    outside_ids = {str(item.get("product_id")) for item in high_outliers + low_outliers}
+    current_profit = _total("profit_current")
+    prior_profit = _total("profit_prior")
+    days = max((pd.Timestamp(current_end) - pd.Timestamp(current_start)).days + 1, 1)
+    weeks = max(days / 7.0, 1.0)
+
+    top = sorted_rows[0] if sorted_rows else {}
+    return {
+        "revenue": revenue,
+        "qty": qty,
+        "weight": weight,
+        "products": len(rows),
+        "customers": max((int(item.get("customer_count") or 0) for item in rows), default=0),
+        "orders": sum(int(item.get("orders") or 0) for item in rows),
+        "profit": profit,
+        "margin_pct": profit / revenue * 100 if revenue > 0 and cost is not None else None,
+        "avg_price": float(np.mean(unit_prices)) if unit_prices else None,
+        "median_price": median_price,
+        "up_p10": float(np.quantile(unit_prices, 0.10)) if unit_prices else None,
+        "up_p50": median_price,
+        "up_p90": float(np.quantile(unit_prices, 0.90)) if unit_prices else None,
+        "compare_revenue_current": _total("revenue_current"),
+        "compare_revenue_prior": _total("revenue_prior"),
+        "compare_qty_current": qty,
+        "compare_qty_prior": _total("qty_prior"),
+        "compare_weight_current": weight,
+        "compare_weight_prior": _total("weight_prior"),
+        "compare_cost_current": cost,
+        "compare_cost_prior": sum(_safe_float(item.get("cost_prior")) or 0.0 for item in rows),
+        "compare_profit_current": current_profit,
+        "compare_profit_prior": prior_profit,
+        "compare_orders_current": sum(int(item.get("orders_current") or 0) for item in rows),
+        "compare_orders_prior": sum(int(item.get("orders_prior") or 0) for item in rows),
+        "avg_weekly_qty": qty / weeks,
+        "weekly_revenue": revenue / weeks,
+        "active_skus": sum(1 for item in rows if float(item.get("revenue") or 0.0) > 0),
+        "traj_grain": "monthly",
+        "traj_labels": [],
+        "traj_revenue": [],
+        "traj_qty": [],
+        "traj_orders": [],
+        "traj_profit": [],
+        "traj_margin": [],
+        "health_velocity_p40": velocity_p40,
+        "health_velocity_p60": velocity_p60,
+        "health_profitability_p40": profitability_p40,
+        "health_profitability_p60": profitability_p60,
+        "segment_summary": segment_summary,
+        "segment_mix_shift": segment_mix_shift,
+        "health_summary": health_summary,
+        "health_top": health_top,
+        "top_product_id": top.get("product_id"),
+        "top_product_display_name": top.get("display_name") or top.get("product_name"),
+        "top_product_revenue": top.get("revenue"),
+        "concentration_top1_share": shares[0] if shares else None,
+        "concentration_top10_share": sum(shares[:10]) if shares else None,
+        "concentration_hhi": sum((share / 100.0) ** 2 for share in shares) * 10000 if shares else None,
+        "concentration_skus_to_80": skus_to_80,
+        "protein_family_count": len(protein_mix),
+        "top_protein_family": protein_mix[0]["family"] if protein_mix else None,
+        "top_protein_share": protein_mix[0]["share_current"] if protein_mix else None,
+        "protein_hhi": sum(((item.get("share_current") or 0.0) / 100.0) ** 2 for item in protein_mix) * 10000 if protein_mix else None,
+        "protein_mix": protein_mix[:8],
+        "protein_mix_shift": sorted(protein_mix, key=lambda item: abs(item.get("share_delta_pp") or 0.0), reverse=True)[:6],
+        "protein_margin_watch": sorted(protein_mix, key=lambda item: item.get("margin_pct") if item.get("margin_pct") is not None else 999999)[:6],
+        "protein_growth_pockets": sorted(protein_mix, key=lambda item: item.get("share_delta_pp") or 0.0, reverse=True)[:6],
+        "risk_below_target_count": len(below_target),
+        "risk_below_target_revenue": sum(float(item.get("revenue") or 0.0) for item in below_target),
+        "risk_negative_margin_count": sum(1 for item in rows if _safe_float(item.get("margin_pct")) is not None and float(item["margin_pct"]) < 0),
+        "risk_profit_uplift_target": sum(_safe_float(item.get("profit_uplift_to_target")) or 0.0 for item in below_target),
+        "high_velocity_low_margin_count": sum(1 for item in below_target if (_safe_float(item.get("velocity_per_month")) or 0.0) >= (velocity_p60 or 0.0)),
+        "high_margin_low_velocity_count": sum(1 for item in rows if (_safe_float(item.get("velocity_per_month")) or 0.0) < (velocity_p40 or 0.0) and (_safe_float(item.get("margin_pct")) or -999999) >= (profitability_p60 or 0.0)),
+        "cost_coverage_pct": sum(float(item.get("revenue") or 0.0) for item in rows if item not in missing_cost) / revenue * 100 if revenue > 0 else None,
+        "missing_cost_sku_count": len(missing_cost),
+        "contribution_lb_p10": float(np.quantile(contributions, 0.10)) if contributions else None,
+        "contribution_lb_p50": float(np.quantile(contributions, 0.50)) if contributions else None,
+        "contribution_lb_p90": float(np.quantile(contributions, 0.90)) if contributions else None,
+        "profit_at_risk": sum(float(item.get("profit") or 0.0) for item in rows if str(item.get("product_id")) in at_risk_ids),
+        "high_price_outlier_count": len(high_outliers),
+        "low_price_outlier_count": len(low_outliers),
+        "outside_guardrail_count": len(outside_ids),
+        "outside_guardrail_pct": len(outside_ids) / len(rows) * 100 if rows else None,
     }
 
 
@@ -4680,143 +3574,10 @@ def _table_payload(
     }
     sort_col = sort_map.get(sort_raw, "revenue")
     sort_dir = "ASC" if sort_dir_raw in {"asc", "ascending", "up", "1"} else "DESC"
-
-    where_parts: List[str] = ["1=1"]
-    filter_sql_params: List[Any] = []
-    if search:
-        where_parts.append("(product_name ILIKE ? OR product_id ILIKE ? OR protein_family ILIKE ? OR category ILIKE ?)")
-        like = f"%{search}%"
-        filter_sql_params.extend([like, like, like, like])
-
-    if segments:
-        placeholders = ", ".join("?" for _ in segments)
-        where_parts.append(f"segment IN ({placeholders})")
-        filter_sql_params.extend(segments)
-
-    if "below_target_margin" in quick_filters:
-        where_parts.append("(margin_pct IS NOT NULL AND target_margin_pct IS NOT NULL AND margin_pct < target_margin_pct)")
-    if "below_minimum_margin" in quick_filters:
-        where_parts.append("(margin_pct IS NOT NULL AND minimum_margin_pct IS NOT NULL AND margin_pct < minimum_margin_pct)")
-    if "negative_margin" in quick_filters:
-        where_parts.append("(profit IS NOT NULL AND profit < 0)")
-    if "high_velocity" in quick_filters:
-        where_parts.append("(velocity_per_month IS NOT NULL AND velocity_per_month >= vel_p75)")
-    if "top_revenue_20" in quick_filters:
-        where_parts.append("(revenue >= rev_p80)")
-    if "high_revenue_share" in quick_filters:
-        where_parts.append("(revenue >= rev_p90)")
-    if "high_price_outlier" in quick_filters:
-        where_parts.append("(unit_price IS NOT NULL AND median_unit_price IS NOT NULL AND ABS(unit_price - median_unit_price) / NULLIF(median_unit_price, 0) >= 0.35)")
-    if "missing_cost" in quick_filters:
-        where_parts.append("(cost IS NULL)")
-    if "elastic_risk" in quick_filters:
-        where_parts.append(
-            "(margin_pct IS NOT NULL AND minimum_margin_pct IS NOT NULL AND margin_pct >= minimum_margin_pct "
-            "AND unit_price IS NOT NULL AND median_unit_price IS NOT NULL AND unit_price >= median_unit_price * 1.08 "
-            "AND revenue_delta_pct IS NOT NULL AND revenue_delta_pct <= -6)"
-        )
-    if "high_customer_dependency" in quick_filters:
-        where_parts.append("(top_customer_share IS NOT NULL AND top_customer_share >= 50)")
-    if "outside_guardrail" in quick_filters:
-        where_parts.append("(unit_price IS NOT NULL AND median_unit_price IS NOT NULL AND ABS(unit_price - median_unit_price) / NULLIF(median_unit_price, 0) >= 0.25)")
-    if "protect_core" in quick_filters:
-        where_parts.append("(velocity_per_month IS NOT NULL AND velocity_per_month >= vel_p75 AND revenue >= rev_p80 AND margin_pct IS NOT NULL AND target_margin_pct IS NOT NULL AND margin_pct >= target_margin_pct)")
-    if "recover_margin" in quick_filters:
-        where_parts.append("(velocity_per_month IS NOT NULL AND velocity_per_month >= vel_p75 AND margin_pct IS NOT NULL AND target_margin_pct IS NOT NULL AND margin_pct < target_margin_pct)")
-    if "at_or_above_target" in quick_filters:
-        where_parts.append("(margin_pct IS NOT NULL AND target_margin_pct IS NOT NULL AND margin_pct >= target_margin_pct)")
-    if "promote_candidate" in quick_filters:
-        where_parts.append("(velocity_per_month IS NOT NULL AND velocity_per_month < vel_p75 AND margin_pct IS NOT NULL AND target_margin_pct IS NOT NULL AND margin_pct >= target_margin_pct)")
-    if "rationalize_candidate" in quick_filters:
-        where_parts.append("(velocity_per_month IS NOT NULL AND velocity_per_month < vel_p75 AND (margin_pct IS NULL OR target_margin_pct IS NULL OR margin_pct < target_margin_pct))")
-
-    where_clause = " AND ".join(where_parts)
     offset = (page - 1) * page_size
-
-    unit_price_expr = """
-        CASE
-            WHEN weight > 0 THEN revenue / NULLIF(weight, 0)
-            WHEN qty > 0 THEN revenue / NULLIF(qty, 0)
-            ELSE NULL
-        END
-    """
-    unit_cost_expr = """
-        CASE
-            WHEN weight > 0 AND cost IS NOT NULL THEN cost / NULLIF(weight, 0)
-            WHEN qty > 0 AND cost IS NOT NULL THEN cost / NULLIF(qty, 0)
-            ELSE NULL
-        END
-    """
-    _basis_qty_expr = """
-        CASE
-            WHEN weight > 0 THEN weight
-            WHEN qty > 0 THEN qty
-            ELSE 0
-        END
-    """
-    _prior_basis_qty_expr = """
-        CASE
-            WHEN weight_prior > 0 THEN weight_prior
-            WHEN qty_prior > 0 THEN qty_prior
-            ELSE 0
-        END
-    """
-    effective_unit_cost_expr = margin_rules.sql_effective_unit_cost_expr("base_unit_cost", fallback="NULL")
-    effective_cost_expr = margin_rules.sql_effective_cost_expr("base_cost", "weight", "qty", fallback="NULL")
-    effective_cost_prior_expr = margin_rules.sql_effective_cost_expr("base_cost_prior", "weight_prior", "qty_prior", fallback="NULL")
-    effective_profit_expr = f"""
-        CASE
-            WHEN ({effective_cost_expr}) IS NOT NULL THEN revenue - ({effective_cost_expr})
-            ELSE NULL
-        END
-    """
-    effective_profit_prior_expr = f"""
-        CASE
-            WHEN ({effective_cost_prior_expr}) IS NOT NULL THEN revenue_prior - ({effective_cost_prior_expr})
-            ELSE NULL
-        END
-    """
-    effective_margin_expr = f"""
-        CASE
-            WHEN revenue > 0 AND ({effective_cost_expr}) IS NOT NULL THEN ({effective_profit_expr}) / revenue * 100
-            ELSE NULL
-        END
-    """
-    effective_margin_prior_expr = f"""
-        CASE
-            WHEN revenue_prior > 0 AND ({effective_cost_prior_expr}) IS NOT NULL THEN ({effective_profit_prior_expr}) / revenue_prior * 100
-            ELSE NULL
-        END
-    """
-    effective_minimum_price_expr = margin_rules.sql_price_from_cost_expr(
-        f"({effective_unit_cost_expr})",
-        "minimum_margin_pct",
-        fallback="NULL",
-    )
-    effective_target_price_expr = margin_rules.sql_price_from_cost_expr(
-        f"({effective_unit_cost_expr})",
-        "target_margin_pct",
-        fallback="NULL",
-    )
-    effective_uplift_pct_expr = margin_rules.sql_price_uplift_pct_expr(
-        unit_price_expr,
-        f"({effective_target_price_expr})",
-        fallback="NULL",
-    )
 
     exprs = _product_exprs(cols)
     family_exprs = _family_exprs(cols)
-    sku_expr = exprs["sku_expr"]
-    product_key_expr = exprs["product_key_expr"]
-    product_name_expr = exprs["product_name_expr"]
-    display_name_expr = exprs["display_name_expr"]
-    protein_expr = family_exprs["protein_expr"]
-    category_expr = family_exprs["category_expr"]
-    target_margin_pct_expr = margin_rules.sql_margin_rule_expr("rollup.protein_family", "rollup.category", "target_gross_margin_pct")
-    minimum_margin_pct_expr = margin_rules.sql_margin_rule_expr("rollup.protein_family", "rollup.category", "min_gross_margin_pct")
-    target_product_margin_pct_expr = margin_rules.sql_margin_rule_expr("rollup.protein_family", "rollup.category", "target_product_margin_pct")
-    minimum_product_margin_pct_expr = margin_rules.sql_margin_rule_expr("rollup.protein_family", "rollup.category", "min_product_margin_pct")
-    rule_family_expr = margin_rules.sql_rule_family_expr("rollup.protein_family", "rollup.category")
     customer_expr = f"{customer_col}" if customer_col else "NULL"
     customer_name_expr = (
         f"COALESCE({customer_name_col}, {customer_col})"
@@ -4826,410 +3587,61 @@ def _table_payload(
     supplier_expr = f"{supplier_col}" if supplier_col else "NULL"
     region_expr = f"{region_col}" if region_col else "NULL"
 
-    sql = f"""
-        WITH base AS (
-            SELECT
-                {date_col}::DATE AS date,
-                {product_key_expr} AS product_id,
-                {sku_expr} AS sku,
-                {product_name_expr} AS product_name,
-                {display_name_expr} AS display_name,
-                {protein_expr} AS protein_family,
-                {category_expr} AS category,
-                {customer_expr}::VARCHAR AS customer_id,
-                {customer_name_expr}::VARCHAR AS customer_name,
-                {supplier_expr}::VARCHAR AS supplier_name,
-                {region_expr}::VARCHAR AS region_name,
-                CAST({revenue_col} AS DOUBLE) AS revenue,
-                CAST({cost_expr} AS DOUBLE) AS cost,
-                CAST({qty_expr} AS DOUBLE) AS qty,
-                CAST({weight_expr} AS DOUBLE) AS weight,
-                {order_id}::VARCHAR AS order_id
-            FROM fact
-            WHERE {comparison_where_sql}
-        ),
-        bounds AS (
-            SELECT
-                ?::DATE AS current_start,
-                ?::DATE AS current_end,
-                ?::DATE AS prior_start,
-                ?::DATE AS prior_end
-        ),
-        current_base AS (
-            SELECT b0.*
-            FROM base b0
-            CROSS JOIN bounds wb
-            WHERE b0.date BETWEEN wb.current_start AND wb.current_end
-        ),
-        rollup AS (
-            SELECT
-                product_id,
-                any_value(product_name) AS product_name,
-                any_value(display_name) AS display_name,
-                any_value(sku) AS sku,
-                any_value(supplier_name) AS supplier_name,
-                any_value(protein_family) AS protein_family,
-                any_value(category) AS category,
-                MIN(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN date END) AS first_sold,
-                MAX(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN date END) AS last_sold,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN revenue ELSE 0 END) AS revenue,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN cost ELSE NULL END) AS cost,
-                CASE
-                    WHEN SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN cost ELSE NULL END) IS NULL THEN NULL
-                    ELSE SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN revenue ELSE 0 END) - SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN cost ELSE NULL END)
-                END AS profit,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN qty ELSE 0 END) AS qty,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN weight ELSE 0 END) AS weight,
-                SUM(CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end THEN qty ELSE 0 END) AS qty_prior,
-                SUM(CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end THEN weight ELSE 0 END) AS weight_prior,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN order_id END) AS orders,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN customer_id END) AS customer_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN supplier_name END) AS supplier_count,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN region_name END) AS region_breadth,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN revenue ELSE 0 END) AS revenue_current,
-                SUM(CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end THEN revenue ELSE 0 END) AS revenue_prior,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN cost ELSE NULL END) AS cost_current,
-                SUM(CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end THEN cost ELSE NULL END) AS cost_prior,
-                SUM(CASE WHEN date BETWEEN wb.current_start AND wb.current_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_current,
-                SUM(CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end AND cost IS NOT NULL THEN revenue - cost ELSE NULL END) AS profit_prior,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN order_id END) AS orders_current,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.prior_start AND wb.prior_end THEN order_id END) AS orders_prior,
-                COUNT(*) AS rows,
-                COUNT(DISTINCT CASE WHEN date BETWEEN wb.current_start AND wb.current_end THEN DATE_TRUNC('month', date) END) AS months_active
-            FROM base
-            CROSS JOIN bounds wb
-            GROUP BY product_id
-        ),
-        monthly_revenue AS (
-            SELECT
-                product_id,
-                DATE_TRUNC('month', date) AS month_bucket,
-                SUM(revenue) AS month_revenue
-            FROM current_base
-            GROUP BY product_id, month_bucket
-        ),
-        volatility AS (
-            SELECT
-                product_id,
-                CASE
-                    WHEN COUNT(*) >= 2 AND AVG(month_revenue) > 0 THEN STDDEV_SAMP(month_revenue) / NULLIF(AVG(month_revenue), 0) * 100
-                    ELSE NULL
-                END AS volatility_score
-            FROM monthly_revenue
-            GROUP BY product_id
-        ),
-        product_customer AS (
-            SELECT
-                product_id,
-                customer_id,
-                any_value(customer_name) AS customer_name,
-                SUM(revenue) AS customer_revenue
-            FROM current_base
-            GROUP BY product_id, customer_id
-        ),
-        product_customer_totals AS (
-            SELECT
-                product_id,
-                SUM(customer_revenue) AS total_revenue
-            FROM product_customer
-            GROUP BY product_id
-        ),
-        product_customer_share AS (
-            SELECT
-                pc.product_id,
-                pc.customer_id,
-                COALESCE(NULLIF(pc.customer_name, ''), pc.customer_id, 'Unknown') AS customer_name,
-                pc.customer_revenue,
-                CASE
-                    WHEN pct.total_revenue > 0 THEN pc.customer_revenue / NULLIF(pct.total_revenue, 0)
-                    ELSE 0
-                END AS customer_revenue_ratio,
-                CASE
-                    WHEN pct.total_revenue > 0 THEN pc.customer_revenue / NULLIF(pct.total_revenue, 0) * 100
-                    ELSE NULL
-                END AS customer_revenue_share,
-                ROW_NUMBER() OVER (
-                    PARTITION BY pc.product_id
-                    ORDER BY pc.customer_revenue DESC, COALESCE(NULLIF(pc.customer_name, ''), pc.customer_id, 'Unknown')
-                ) AS rn
-            FROM product_customer pc
-            LEFT JOIN product_customer_totals pct ON pct.product_id = pc.product_id
-        ),
-        customer_concentration AS (
-            SELECT
-                product_id,
-                MAX(CASE WHEN rn = 1 THEN customer_name END) AS top_customer_name,
-                MAX(CASE WHEN rn = 1 THEN customer_revenue_share END) AS top_customer_share,
-                SUM(POWER(COALESCE(customer_revenue_ratio, 0), 2)) * 10000 AS customer_hhi
-            FROM product_customer_share
-            GROUP BY product_id
-        ),
-        product_region AS (
-            SELECT
-                product_id,
-                COALESCE(NULLIF(region_name, ''), 'Unassigned') AS region_name,
-                SUM(revenue) AS region_revenue
-            FROM current_base
-            GROUP BY product_id, region_name
-        ),
-        product_region_totals AS (
-            SELECT
-                product_id,
-                SUM(region_revenue) AS total_revenue
-            FROM product_region
-            GROUP BY product_id
-        ),
-        product_region_share AS (
-            SELECT
-                pr.product_id,
-                pr.region_name,
-                CASE
-                    WHEN prt.total_revenue > 0 THEN pr.region_revenue / NULLIF(prt.total_revenue, 0) * 100
-                    ELSE NULL
-                END AS region_revenue_share,
-                ROW_NUMBER() OVER (
-                    PARTITION BY pr.product_id
-                    ORDER BY pr.region_revenue DESC, pr.region_name
-                ) AS rn
-            FROM product_region pr
-            LEFT JOIN product_region_totals prt ON prt.product_id = pr.product_id
-        ),
-        region_concentration AS (
-            SELECT
-                product_id,
-                MAX(CASE WHEN rn = 1 THEN region_name END) AS top_region_name,
-                MAX(CASE WHEN rn = 1 THEN region_revenue_share END) AS top_region_share
-            FROM product_region_share
-            GROUP BY product_id
-        ),
-        with_metrics_base AS (
-            SELECT
-                rollup.*,
-                CASE WHEN revenue > 0 AND cost IS NOT NULL THEN profit / revenue * 100 ELSE NULL END AS margin_pct,
-                CASE WHEN revenue_current > 0 AND cost_current IS NOT NULL THEN profit_current / revenue_current * 100 ELSE NULL END AS margin_pct_current,
-                CASE WHEN revenue_prior > 0 AND cost_prior IS NOT NULL THEN profit_prior / revenue_prior * 100 ELSE NULL END AS margin_pct_prior,
-                revenue_current - revenue_prior AS revenue_delta,
-                CASE WHEN revenue_prior > 0 THEN (revenue_current - revenue_prior) / revenue_prior * 100 ELSE NULL END AS revenue_delta_pct,
-                CASE WHEN revenue_prior > 0 AND revenue_prior < {LOW_BASE_REVENUE} THEN TRUE ELSE FALSE END AS revenue_low_base,
-                CASE WHEN profit_current IS NOT NULL AND profit_prior IS NOT NULL THEN profit_current - profit_prior ELSE NULL END AS profit_delta,
-                CASE WHEN revenue_current > 0 AND cost_current IS NOT NULL THEN (profit_current / revenue_current * 100) - (CASE WHEN revenue_prior > 0 AND cost_prior IS NOT NULL THEN profit_prior / revenue_prior * 100 ELSE NULL END) ELSE NULL END AS margin_delta_pp,
-                {unit_price_expr} AS unit_price,
-                {unit_cost_expr} AS unit_cost,
-                cost AS base_cost,
-                cost_current AS base_cost_current,
-                cost_prior AS base_cost_prior,
-                {unit_cost_expr} AS base_unit_cost,
-                {rule_family_expr} AS rule_family,
-                {minimum_margin_pct_expr} AS minimum_margin_pct,
-                {target_margin_pct_expr} AS target_margin_pct,
-                {minimum_product_margin_pct_expr} AS min_product_margin_pct,
-                {target_product_margin_pct_expr} AS target_product_margin_pct,
-                {margin_rules.sql_price_from_cost_expr(unit_cost_expr, minimum_margin_pct_expr, fallback="NULL")} AS minimum_price,
-                {margin_rules.sql_price_from_cost_expr(unit_cost_expr, target_margin_pct_expr, fallback="NULL")} AS target_price,
-                {margin_rules.sql_price_uplift_pct_expr(unit_price_expr, margin_rules.sql_price_from_cost_expr(unit_cost_expr, target_margin_pct_expr, fallback="NULL"), fallback="NULL")} AS uplift_pct,
-                CASE WHEN months_active > 0 THEN orders / NULLIF(months_active, 0) ELSE NULL END AS velocity_per_month,
-                volatility.volatility_score,
-                customer_concentration.top_customer_name,
-                customer_concentration.top_customer_share,
-                customer_concentration.customer_hhi,
-                region_concentration.top_region_name,
-                region_concentration.top_region_share
-            FROM rollup
-            LEFT JOIN volatility ON volatility.product_id = rollup.product_id
-            LEFT JOIN customer_concentration ON customer_concentration.product_id = rollup.product_id
-            LEFT JOIN region_concentration ON region_concentration.product_id = rollup.product_id
-        ),
-        with_metrics AS (
-            SELECT
-                * REPLACE(
-                    ({effective_cost_expr}) AS cost,
-                    ({effective_cost_expr}) AS cost_current,
-                    ({effective_cost_prior_expr}) AS cost_prior,
-                    ({effective_profit_expr}) AS profit,
-                    ({effective_profit_expr}) AS profit_current,
-                    ({effective_profit_prior_expr}) AS profit_prior,
-                    CASE
-                        WHEN ({effective_profit_expr}) IS NOT NULL AND ({effective_profit_prior_expr}) IS NOT NULL
-                            THEN ({effective_profit_expr}) - ({effective_profit_prior_expr})
-                        ELSE NULL
-                    END AS profit_delta,
-                    ({effective_margin_expr}) AS margin_pct,
-                    ({effective_margin_expr}) AS margin_pct_current,
-                    ({effective_margin_prior_expr}) AS margin_pct_prior,
-                    CASE
-                        WHEN ({effective_margin_expr}) IS NOT NULL AND ({effective_margin_prior_expr}) IS NOT NULL
-                            THEN ({effective_margin_expr}) - ({effective_margin_prior_expr})
-                        ELSE NULL
-                    END AS margin_delta_pp,
-                    ({effective_unit_cost_expr}) AS unit_cost,
-                    ({effective_minimum_price_expr}) AS minimum_price,
-                    ({effective_target_price_expr}) AS target_price,
-                    ({effective_uplift_pct_expr}) AS uplift_pct
-                )
-            FROM with_metrics_base
-        ),
-        with_segment AS (
-            SELECT
-                *,
-                COALESCE(quantile_cont(revenue, 0.80) OVER (), 0) AS rev_p80,
-                COALESCE(quantile_cont(revenue, 0.90) OVER (), 0) AS rev_p90,
-                COALESCE(quantile_cont(orders, 0.60) OVER (), 0) AS ord_p60,
-                COALESCE(quantile_cont(velocity_per_month, 0.75) OVER (), 0) AS vel_p75,
-                quantile_cont(unit_price, 0.50) OVER () AS median_unit_price,
-                CASE
-                    WHEN revenue >= rev_p80 AND orders >= ord_p60 THEN 'Stars'
-                    WHEN revenue >= rev_p80 THEN 'Cash Cows'
-                    WHEN orders >= ord_p60 THEN 'Volume Drivers'
-                    WHEN margin_pct IS NOT NULL AND margin_pct < 5 THEN 'Margin Risk'
-                    ELSE 'Long Tail'
-                END AS segment
-            FROM with_metrics
-        ),
-        filtered AS (
-            SELECT
-                *,
-                CASE WHEN weight > 0 AND profit IS NOT NULL THEN profit / NULLIF(weight, 0) ELSE NULL END AS contribution_margin_lb,
-                CASE WHEN median_unit_price IS NOT NULL AND unit_price IS NOT NULL THEN unit_price - median_unit_price ELSE NULL END AS price_variance_vs_median
-            FROM with_segment
-            WHERE {where_clause}
-        ),
-        ranked AS (
-            SELECT
-                *,
-                COUNT(*) OVER () AS total_rows,
-                SUM(revenue) OVER () AS total_revenue,
-                SUM(qty) OVER () AS total_qty,
-                CASE
-                    WHEN ABS(SUM(COALESCE(profit, 0)) OVER ()) > 0 AND profit IS NOT NULL
-                        THEN profit / NULLIF(SUM(COALESCE(profit, 0)) OVER (), 0) * 100
-                    ELSE NULL
-                END AS profit_share,
-                CASE WHEN SUM(revenue) OVER () > 0 THEN revenue / SUM(revenue) OVER () * 100 ELSE NULL END AS revenue_share,
-                CASE WHEN SUM(qty) OVER () > 0 THEN qty / SUM(qty) OVER () * 100 ELSE NULL END AS qty_share
-            FROM filtered
-        )
-        SELECT *
-        FROM ranked
-        ORDER BY {sort_col} {sort_dir}
-        LIMIT ? OFFSET ?
+    sales_sql = f"""
+        SELECT
+            {date_col}::DATE AS date,
+            {exprs['product_key_expr']} AS product_id,
+            {customer_expr}::VARCHAR AS customer_id,
+            {customer_name_expr}::VARCHAR AS customer_name,
+            {supplier_expr}::VARCHAR AS supplier_name,
+            {region_expr}::VARCHAR AS region_name,
+            CAST({revenue_col} AS DOUBLE) AS revenue,
+            CAST({cost_expr} AS DOUBLE) AS cost,
+            CAST({qty_expr} AS DOUBLE) AS qty,
+            CAST({weight_expr} AS DOUBLE) AS weight,
+            {order_id}::VARCHAR AS order_id
+        FROM fact
+        WHERE {comparison_where_sql}
     """
-    sql_params = list(comparison_params) + [
-        current_start,
-        current_end,
-        prior_start,
-        prior_end,
-    ] + filter_sql_params + [page_size, offset]
-
-    df = fact_store.execute_sql_df(
-        sql,
-        sql_params,
-        tag="products.table_bundle",
-        cache_key="products.table_bundle",
+    metadata_sql = f"""
+        SELECT
+            {exprs['product_key_expr']} AS product_id,
+            {exprs['sku_expr']} AS sku,
+            {exprs['product_name_expr']} AS product_name,
+            {exprs['display_name_expr']} AS display_name,
+            {family_exprs['protein_expr']} AS protein_family,
+            {family_exprs['category_expr']} AS category
+        FROM fact
+        WHERE {comparison_where_sql}
+    """
+    sales_df = fact_store.execute_sql_df(
+        sales_sql,
+        comparison_params,
+        tag="products.table_source",
+        cache_key="products.table_source",
     )
-    rows: List[Dict[str, Any]] = []
-    total = 0
-    if not df.empty:
-        total = int(df.iloc[0].get("total_rows", len(df)) or 0)
-        for _, r in df.iterrows():
-            def _num(field: str) -> float | None:
-                val = r.get(field)
-                if val is None:
-                    return None
-                try:
-                    f = float(val)
-                    return None if math.isnan(f) else f
-                except Exception:
-                    return None
-
-            product_id = r.get("product_id")
-            pid_safe = _encode_path_segment(product_id)
-            margin_pct = _num("margin_pct")
-            profit = _num("profit")
-            unit_price = _num("unit_price")
-            rows.append(
-                {
-                    "key": product_id,
-                    "product_id": product_id,
-                    "sku": r.get("sku") or product_id,
-                    "product_name": r.get("product_name"),
-                    "label": r.get("display_name") or r.get("product_name"),
-                    "display_name": r.get("display_name") or r.get("product_name"),
-                    "protein_family": r.get("protein_family"),
-                    "protein_type": r.get("protein_family"),
-                    "protein_name": r.get("protein_family"),
-                    "category": r.get("category"),
-                    "product_category": r.get("category"),
-                    "segment": r.get("segment"),
-                    "supplier": r.get("supplier_name"),
-                    "supplier_count": int(r.get("supplier_count") or 0),
-                    "customer_count": int(r.get("customer_count") or 0),
-                    "region_breadth": int(r.get("region_breadth") or 0),
-                    "revenue": _clean_num(r.get("revenue")),
-                    "revenue_current": _clean_num(r.get("revenue_current")),
-                    "revenue_prior": _clean_num(r.get("revenue_prior")),
-                    "revenue_delta": _num("revenue_delta"),
-                    "revenue_delta_pct": _num("revenue_delta_pct"),
-                    "revenue_low_base": bool(r.get("revenue_low_base")),
-                    "revenue_share": _num("revenue_share"),
-                    "weight": _clean_num(r.get("weight")),
-                    "orders": int(r.get("orders") or 0),
-                    "orders_current": int(r.get("orders_current") or 0),
-                    "orders_prior": int(r.get("orders_prior") or 0),
-                    "velocity_per_month": _num("velocity_per_month"),
-                    "qty": _clean_num(r.get("qty")),
-                    "qty_share": _num("qty_share"),
-                    "unit_price": unit_price,
-                    "current_unit_price": unit_price,
-                    "unit_cost": _num("unit_cost"),
-                    "base_unit_cost": _num("base_unit_cost"),
-                    "effective_unit_cost": _num("unit_cost"),
-                    "minimum_price": _num("minimum_price"),
-                    "target_price": _num("target_price"),
-                    "uplift_pct": _num("uplift_pct"),
-                    "cost": _num("cost"),
-                    "base_cost": _num("base_cost"),
-                    "effective_cost": _num("cost"),
-                    "profit": profit,
-                    "profit_current": _num("profit_current"),
-                    "profit_prior": _num("profit_prior"),
-                    "profit_delta": _num("profit_delta"),
-                    "profit_share": _num("profit_share"),
-                    "margin_pct": margin_pct,
-                    "minimum_margin_pct": _num("minimum_margin_pct"),
-                    "target_margin_pct": _num("target_margin_pct"),
-                    "min_product_margin_pct": _num("min_product_margin_pct"),
-                    "target_product_margin_pct": _num("target_product_margin_pct"),
-                    "rule_family": r.get("rule_family"),
-                    "margin_pct_current": _num("margin_pct_current"),
-                    "margin_pct_prior": _num("margin_pct_prior"),
-                    "margin_delta_pp": _num("margin_delta_pp"),
-                    "margin": profit,
-                    "contribution_margin_lb": _num("contribution_margin_lb"),
-                    "asp_lb": unit_price,
-                    "base_cost_lb": _num("base_unit_cost"),
-                    "effective_cost_lb": _num("unit_cost"),
-                    "cost_lb": _num("unit_cost"),
-                    "contribution_lb": _num("contribution_margin_lb"),
-                    "top_customer_name": r.get("top_customer_name"),
-                    "top_customer_share": _num("top_customer_share"),
-                    "customer_hhi": _num("customer_hhi"),
-                    "top_region_name": r.get("top_region_name"),
-                    "top_region_share": _num("top_region_share"),
-                    "price_variance_vs_median": _num("price_variance_vs_median"),
-                    "volatility_score": _num("volatility_score"),
-                    "margin_risk": _margin_risk_label(
-                        margin_pct,
-                        _num("target_margin_pct"),
-                        _num("minimum_margin_pct"),
-                    ),
-                    "first_sold": str(r.get("first_sold")) if r.get("first_sold") is not None else None,
-                    "last_sold": str(r.get("last_sold")) if r.get("last_sold") is not None else None,
-                    "recommendation": None,
-                    "quick_rec": None,
-                    "intel_url": f"/products/{pid_safe}/drilldown" if pid_safe else None,
-                }
-            )
-
+    metadata_df = fact_store.execute_sql_df(
+        metadata_sql,
+        comparison_params,
+        tag="products.table_metadata",
+        cache_key="products.table_metadata",
+    )
+    table_frame, total = _product_table_frame(
+        sales_df,
+        metadata_df,
+        current_start=current_start,
+        current_end=current_end,
+        prior_start=prior_start,
+        prior_end=prior_end,
+        search=search,
+        segments=segments,
+        quick_filters=quick_filters,
+        sort_col=sort_col,
+        sort_dir=sort_dir,
+        page_size=page_size,
+        offset=offset,
+    )
+    rows = _serialize_product_table_rows(table_frame)
     return {
         "rows": rows,
         "page": page,
@@ -5241,7 +3653,6 @@ def _table_payload(
         "segments": segments,
         "quick_filters": quick_filters,
     }
-
 
 def _empty_products_metrics() -> Dict[str, Any]:
     return {
@@ -5359,45 +3770,19 @@ def build_products_bundle(
         if requested and requested.isdisjoint(PRODUCT_TABLE_SECTIONS)
         else "hybrid"
     )
-    try:
-        bubble_top_n = int((args.get("bubble_top_n") if hasattr(args, "get") else None) or 250)
-    except Exception:
-        bubble_top_n = 250
-    bubble_top_n = max(50, min(bubble_top_n, 5000))
-    try:
-        movers_limit = int((args.get("movers_limit") if hasattr(args, "get") else None) or 20)
-    except Exception:
-        movers_limit = 20
-    movers_limit = max(10, min(movers_limit, 500))
     recent_start = str(comparison.get("current_start") or start_iso or end_dt.date().isoformat())
     recent_end = str(comparison.get("current_end") or end_dt.date().isoformat())
     prior_start = str(comparison.get("prior_start") or recent_start)
     prior_end = str(comparison.get("prior_end") or recent_end)
 
     metrics: Dict[str, Any]
-    if want_detail:
-        metrics = _metrics_and_charts(
-            comparison_where_sql,
-            comparison_where_params,
-            cols,
-            current_start=recent_start,
-            current_end=recent_end,
-            recent_start=recent_start,
-            recent_end=recent_end,
-            prior_start=prior_start,
-            prior_end=prior_end,
-            price_velocity_limit=bubble_top_n,
-            movers_limit=movers_limit,
-        )
-    elif want_summary:
+    if want_detail or want_summary:
         metrics = _summary_metrics_and_context(
             comparison_where_sql,
             comparison_where_params,
             cols,
             current_start=recent_start,
             current_end=recent_end,
-            recent_start=recent_start,
-            recent_end=recent_end,
             prior_start=prior_start,
             prior_end=prior_end,
         )
@@ -5459,7 +3844,7 @@ def build_products_bundle(
     # same where-clause the rest of the bundle already uses - a merchandising
     # page that shows margin without showing whether the item is on the shelf
     # is only telling half the story.
-    if planning.inventory_available(cols):
+    if (want_summary or want_detail) and planning.inventory_available(cols):
         inventory_rows = planning.inventory_summary_sql(where_sql, where_params)
         payload["inventory"] = {
             "by_department": inventory_rows,

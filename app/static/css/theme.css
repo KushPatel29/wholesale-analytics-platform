@@ -39,6 +39,8 @@
   --wa-text-dim: #9aa8b4;
   --wa-text-faint: #6c7a86;
   --wa-text-inverse: #0f1419;
+  --wa-on-dark: #f4f8fb;
+  --wa-on-dark-muted: rgba(230, 237, 243, 0.74);
 
   /* --- accent: the logo's green, cooled toward the cold room ----------- */
   --wa-accent: #54c9a0;
@@ -152,6 +154,8 @@
   --wa-text-dim: #55635f;
   --wa-text-faint: #7d8a86;
   --wa-text-inverse: #ffffff;
+  --wa-on-dark: #ffffff;
+  --wa-on-dark-muted: rgba(255, 255, 255, 0.76);
 
   --wa-accent: #1f8a67;
   --wa-accent-bright: #16775a;
@@ -3230,10 +3234,10 @@ body.theme-wa-future {
    ============================================ */
 
 body.theme-wa-future {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 47, 124, 255;
-  --page-accent-alt: var(--wa-accent-deep);
-  --page-accent-alt-rgb: 143, 36, 54;
+  --page-accent: #54c9a0;
+  --page-accent-rgb: 84, 201, 160;
+  --page-accent-alt: #6aa9d8;
+  --page-accent-alt-rgb: 106, 169, 216;
   --page-positive: var(--wa-good);
   --page-warning: var(--wa-warn);
   --page-danger: var(--wa-bad);
@@ -3244,60 +3248,245 @@ body.theme-wa-future {
 }
 
 body.theme-wa-future[data-page-tone="customers"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 25, 127, 149;
-  --page-accent-alt: var(--wa-info);
-  --page-accent-alt-rgb: 47, 124, 255;
+  --page-accent: #b67bef;
+  --page-accent-rgb: 182, 123, 239;
+  --page-accent-alt: #e78ac3;
+  --page-accent-alt-rgb: 231, 138, 195;
+  --wa-accent: #b67bef;
+  --wa-accent-bright: #c99cf4;
+  --wa-accent-deep: #8052ba;
+  --wa-accent-wash: rgba(182, 123, 239, 0.13);
+  --wa-accent-line: rgba(182, 123, 239, 0.34);
+  --bs-primary-rgb: 182, 123, 239;
+}
+
+body.theme-wa-future[data-page-tone="planning"] {
+  --page-accent: #8f9ff5;
+  --page-accent-rgb: 143, 159, 245;
+  --page-accent-alt: #58c7cf;
+  --page-accent-alt-rgb: 88, 199, 207;
+  --wa-accent: #8f9ff5;
+  --wa-accent-bright: #aab6f8;
+  --wa-accent-deep: #5868bd;
+  --wa-accent-wash: rgba(143, 159, 245, 0.13);
+  --wa-accent-line: rgba(143, 159, 245, 0.34);
+  --bs-primary-rgb: 143, 159, 245;
 }
 
 body.theme-wa-future[data-page-tone="products"] {
-  --page-accent: var(--wa-accent-deep);
-  --page-accent-rgb: 143, 36, 54;
-  --page-accent-alt: var(--wa-info);
-  --page-accent-alt-rgb: 71, 111, 216;
+  --page-accent: #e0a548;
+  --page-accent-rgb: 224, 165, 72;
+  --page-accent-alt: #e2765b;
+  --page-accent-alt-rgb: 226, 118, 91;
+  --wa-accent: #e0a548;
+  --wa-accent-bright: #edbd6b;
+  --wa-accent-deep: #a96c10;
+  --wa-accent-wash: rgba(224, 165, 72, 0.13);
+  --wa-accent-line: rgba(224, 165, 72, 0.34);
+  --bs-primary-rgb: 224, 165, 72;
 }
 
 body.theme-wa-future[data-page-tone="regions"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 38, 101, 214;
-  --page-accent-alt: var(--wa-info);
-  --page-accent-alt-rgb: 23, 124, 112;
+  --page-accent: #63aaf2;
+  --page-accent-rgb: 99, 170, 242;
+  --page-accent-alt: #58c7bd;
+  --page-accent-alt-rgb: 88, 199, 189;
+  --wa-accent: #63aaf2;
+  --wa-accent-bright: #84bcf4;
+  --wa-accent-deep: #2b6ca3;
+  --wa-accent-wash: rgba(99, 170, 242, 0.13);
+  --wa-accent-line: rgba(99, 170, 242, 0.34);
+  --bs-primary-rgb: 99, 170, 242;
 }
 
 body.theme-wa-future[data-page-tone="suppliers"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 35, 120, 141;
-  --page-accent-alt: var(--wa-warn);
-  --page-accent-alt-rgb: 200, 138, 73;
+  --page-accent: #58c98b;
+  --page-accent-rgb: 88, 201, 139;
+  --page-accent-alt: #b7c85b;
+  --page-accent-alt-rgb: 183, 200, 91;
+  --wa-accent: #58c98b;
+  --wa-accent-bright: #78dca4;
+  --wa-accent-deep: #287d53;
+  --wa-accent-wash: rgba(88, 201, 139, 0.13);
+  --wa-accent-line: rgba(88, 201, 139, 0.34);
+  --bs-primary-rgb: 88, 201, 139;
 }
 
-body.theme-wa-future[data-page-tone="labor"],
+body.theme-wa-future[data-page-tone="labor"] {
+  --page-accent: #d49a52;
+  --page-accent-rgb: 212, 154, 82;
+  --page-accent-alt: #9f8df5;
+  --page-accent-alt-rgb: 159, 141, 245;
+  --wa-accent: #d49a52;
+  --wa-accent-bright: #e3b271;
+  --wa-accent-deep: #97621f;
+  --wa-accent-wash: rgba(212, 154, 82, 0.13);
+  --wa-accent-line: rgba(212, 154, 82, 0.34);
+  --bs-primary-rgb: 212, 154, 82;
+}
+
 body.theme-wa-future[data-page-tone="operations"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 15, 118, 110;
-  --page-accent-alt: var(--wa-warn);
-  --page-accent-alt-rgb: 200, 138, 73;
+  --page-accent: #58c7cf;
+  --page-accent-rgb: 88, 199, 207;
+  --page-accent-alt: #6aa9d8;
+  --page-accent-alt-rgb: 106, 169, 216;
+  --wa-accent: #58c7cf;
+  --wa-accent-bright: #79d9df;
+  --wa-accent-deep: #237d84;
+  --wa-accent-wash: rgba(88, 199, 207, 0.13);
+  --wa-accent-line: rgba(88, 199, 207, 0.34);
+  --bs-primary-rgb: 88, 199, 207;
 }
 
 body.theme-wa-future[data-page-tone="salesreps"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 62, 106, 224;
-  --page-accent-alt: var(--wa-accent-deep);
-  --page-accent-alt-rgb: 143, 36, 54;
+  --page-accent: #ef7d78;
+  --page-accent-rgb: 239, 125, 120;
+  --page-accent-alt: #9f8df5;
+  --page-accent-alt-rgb: 159, 141, 245;
+  --wa-accent: #ef7d78;
+  --wa-accent-bright: #f29a96;
+  --wa-accent-deep: #b94d4b;
+  --wa-accent-wash: rgba(239, 125, 120, 0.13);
+  --wa-accent-line: rgba(239, 125, 120, 0.34);
+  --bs-primary-rgb: 239, 125, 120;
 }
 
 body.theme-wa-future[data-page-tone="returns"] {
-  --page-accent: var(--wa-warn);
-  --page-accent-rgb: 179, 93, 53;
-  --page-accent-alt: var(--wa-accent-deep);
-  --page-accent-alt-rgb: 143, 36, 54;
+  --page-accent: #e78650;
+  --page-accent-rgb: 231, 134, 80;
+  --page-accent-alt: #e2685f;
+  --page-accent-alt-rgb: 226, 104, 95;
+  --wa-accent: #e78650;
+  --wa-accent-bright: #f0a071;
+  --wa-accent-deep: #a94f26;
+  --wa-accent-wash: rgba(231, 134, 80, 0.13);
+  --wa-accent-line: rgba(231, 134, 80, 0.34);
+  --bs-primary-rgb: 231, 134, 80;
 }
 
 body.theme-wa-future[data-page-tone="assistant"] {
-  --page-accent: var(--wa-info);
-  --page-accent-rgb: 73, 110, 240;
-  --page-accent-alt: var(--wa-info);
-  --page-accent-alt-rgb: 31, 138, 161;
+  --page-accent: #9f8df5;
+  --page-accent-rgb: 159, 141, 245;
+  --page-accent-alt: #58c7cf;
+  --page-accent-alt-rgb: 88, 199, 207;
+  --wa-accent: #9f8df5;
+  --wa-accent-bright: #b6a8f8;
+  --wa-accent-deep: #6555bd;
+  --wa-accent-wash: rgba(159, 141, 245, 0.13);
+  --wa-accent-line: rgba(159, 141, 245, 0.34);
+  --bs-primary-rgb: 159, 141, 245;
+}
+
+/* Brighter accents belong on the dark canvas. The paper theme uses the same
+   page identities at a deeper value so links and controls retain AA contrast. */
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="customers"] {
+  --page-accent: #7046af;
+  --page-accent-rgb: 112, 70, 175;
+  --wa-accent: #7046af;
+  --wa-accent-bright: #5d359b;
+  --wa-accent-deep: #4f2c86;
+  --wa-accent-wash: rgba(112, 70, 175, 0.1);
+  --wa-accent-line: rgba(112, 70, 175, 0.28);
+  --bs-primary-rgb: 112, 70, 175;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="planning"] {
+  --page-accent: #5366bd;
+  --page-accent-rgb: 83, 102, 189;
+  --wa-accent: #5366bd;
+  --wa-accent-bright: #4054aa;
+  --wa-accent-deep: #35458e;
+  --wa-accent-wash: rgba(83, 102, 189, 0.1);
+  --wa-accent-line: rgba(83, 102, 189, 0.28);
+  --bs-primary-rgb: 83, 102, 189;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="products"] {
+  --page-accent: #9a620f;
+  --page-accent-rgb: 154, 98, 15;
+  --wa-accent: #9a620f;
+  --wa-accent-bright: #825109;
+  --wa-accent-deep: #714506;
+  --wa-accent-wash: rgba(154, 98, 15, 0.1);
+  --wa-accent-line: rgba(154, 98, 15, 0.28);
+  --bs-primary-rgb: 154, 98, 15;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="regions"] {
+  --page-accent: #286ca7;
+  --page-accent-rgb: 40, 108, 167;
+  --wa-accent: #286ca7;
+  --wa-accent-bright: #205d92;
+  --wa-accent-deep: #194c79;
+  --wa-accent-wash: rgba(40, 108, 167, 0.1);
+  --wa-accent-line: rgba(40, 108, 167, 0.28);
+  --bs-primary-rgb: 40, 108, 167;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="suppliers"] {
+  --page-accent: #1e7950;
+  --page-accent-rgb: 30, 121, 80;
+  --wa-accent: #1e7950;
+  --wa-accent-bright: #176744;
+  --wa-accent-deep: #115538;
+  --wa-accent-wash: rgba(30, 121, 80, 0.1);
+  --wa-accent-line: rgba(30, 121, 80, 0.28);
+  --bs-primary-rgb: 30, 121, 80;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="labor"] {
+  --page-accent: #95601f;
+  --page-accent-rgb: 149, 96, 31;
+  --wa-accent: #95601f;
+  --wa-accent-bright: #7d4f17;
+  --wa-accent-deep: #693f10;
+  --wa-accent-wash: rgba(149, 96, 31, 0.1);
+  --wa-accent-line: rgba(149, 96, 31, 0.28);
+  --bs-primary-rgb: 149, 96, 31;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="operations"] {
+  --page-accent: #146f77;
+  --page-accent-rgb: 20, 111, 119;
+  --wa-accent: #146f77;
+  --wa-accent-bright: #0e5e65;
+  --wa-accent-deep: #084e54;
+  --wa-accent-wash: rgba(20, 111, 119, 0.1);
+  --wa-accent-line: rgba(20, 111, 119, 0.28);
+  --bs-primary-rgb: 20, 111, 119;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="salesreps"] {
+  --page-accent: #af4549;
+  --page-accent-rgb: 175, 69, 73;
+  --wa-accent: #af4549;
+  --wa-accent-bright: #98383c;
+  --wa-accent-deep: #802d31;
+  --wa-accent-wash: rgba(175, 69, 73, 0.1);
+  --wa-accent-line: rgba(175, 69, 73, 0.28);
+  --bs-primary-rgb: 175, 69, 73;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="returns"] {
+  --page-accent: #a94f26;
+  --page-accent-rgb: 169, 79, 38;
+  --wa-accent: #a94f26;
+  --wa-accent-bright: #923f1c;
+  --wa-accent-deep: #7a3214;
+  --wa-accent-wash: rgba(169, 79, 38, 0.1);
+  --wa-accent-line: rgba(169, 79, 38, 0.28);
+  --bs-primary-rgb: 169, 79, 38;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="assistant"] {
+  --page-accent: #634db4;
+  --page-accent-rgb: 99, 77, 180;
+  --wa-accent: #634db4;
+  --wa-accent-bright: #513ca0;
+  --wa-accent-deep: #423085;
+  --wa-accent-wash: rgba(99, 77, 180, 0.1);
+  --wa-accent-line: rgba(99, 77, 180, 0.28);
+  --bs-primary-rgb: 99, 77, 180;
 }
 
 .theme-wa-future .navbar-wholesale {
@@ -3314,7 +3503,7 @@ body.theme-wa-future[data-page-tone="assistant"] {
 .theme-wa-future .navbar-wholesale .navbar-brand,
 .theme-wa-future .navbar-wholesale .nav-link,
 .theme-wa-future .navbar-wholesale .dropdown-toggle {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
 }
 
 .theme-wa-future .navbar-wholesale .navbar-nav .nav-link {
@@ -3324,13 +3513,13 @@ body.theme-wa-future[data-page-tone="assistant"] {
 
 .theme-wa-future .navbar-wholesale .navbar-nav .nav-link:hover,
 .theme-wa-future .navbar-wholesale .navbar-nav .nav-link:focus {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
   border-color: var(--wa-hairline);
   background: var(--wa-surface-2);
 }
 
 .theme-wa-future .navbar-wholesale .navbar-nav .nav-link.active {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
   border-color: rgba(var(--page-accent-rgb), 0.24);
   background: linear-gradient(135deg, rgba(var(--page-accent-rgb), 0.2), rgba(var(--page-accent-alt-rgb), 0.16));
   box-shadow: 0 16px 28px -22px rgba(var(--page-accent-rgb), 0.92), inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -3805,7 +3994,7 @@ body.theme-wa-future .assistant-header,
 body.theme-wa-future .suppliers-hero,
 body.theme-wa-future .filters-shell__header,
 body.theme-wa-future .filters-panel-header {
-  color: var(--color-text-inverse);
+  color: var(--wa-on-dark);
 }
 
 body.theme-wa-future .navbar-wholesale h1,
@@ -3852,7 +4041,7 @@ body.theme-wa-future .labor-command-link__detail,
 body.theme-wa-future .filters-shell__meta,
 body.theme-wa-future .filters-shell__date,
 body.theme-wa-future #filtersLastAppliedLabel {
-  color: var(--color-header-subtitle-inverse) !important;
+  color: var(--wa-on-dark-muted) !important;
 }
 
 body.theme-wa-future .navbar-wholesale .nav-link.disabled {
@@ -3865,7 +4054,7 @@ body.theme-wa-future .suppliers-panel-value,
 body.theme-wa-future .suppliers-mini-stat .value,
 body.theme-wa-future .labor-command-link,
 body.theme-wa-future .labor-command-link__title {
-  color: var(--color-text-inverse);
+  color: var(--wa-on-dark);
 }
 
 body.theme-wa-future .ciw-hero,
@@ -4273,12 +4462,12 @@ body.theme-wa-future .navbar-wholesale {
 body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link,
 body.theme-wa-future .navbar-wholesale .dropdown-toggle,
 body.theme-wa-future .navbar-wholesale .navbar-brand {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
 }
 
 body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link:hover,
 body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link:focus {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
   border-color: var(--wa-hairline);
   background: var(--wa-surface-2);
 }
@@ -4649,7 +4838,10 @@ body.theme-wa-future {
 
 body.app-shell.theme-wa-future,
 body.theme-wa-future.app-shell {
-  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface-2) 48%, var(--wa-surface) 100%);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(var(--page-accent-rgb), 0.07), transparent 26rem),
+    radial-gradient(circle at 92% 4%, rgba(var(--page-accent-alt-rgb), 0.055), transparent 22rem),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface-2) 48%, var(--wa-surface) 100%);
 }
 
 body.app-shell.theme-wa-future::before,
@@ -4762,11 +4954,11 @@ body.theme-wa-future .card:not(.page-header):not(.page-header-futuristic):not(.h
 }
 
 body.theme-wa-future :is(.page-header, .page-header-futuristic, .hero-card, .hero-card-futuristic, .products-hero, .suppliers-hero) :is(h1, h2, h3, h4, h5, h6, .fw-bold, .fs-3, .fs-4, .fs-5, .fs-6, strong) {
-  color: var(--color-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
 }
 
 body.theme-wa-future :is(.page-header, .page-header-futuristic, .hero-card, .hero-card-futuristic, .products-hero, .suppliers-hero) :is(.text-muted, .small, .text-white-50, .products-context-label, .products-hero-summary-label, .suppliers-panel-label, .suppliers-mini-stat .label) {
-  color: var(--color-text-inverse-muted) !important;
+  color: var(--wa-on-dark-muted) !important;
 }
 
 body.theme-wa-future .products-hero .products-context-value,
@@ -4775,7 +4967,36 @@ body.theme-wa-future .products-hero .products-hero-summary-value,
 body.theme-wa-future .suppliers-hero .suppliers-command-headline,
 body.theme-wa-future .suppliers-hero .suppliers-command-note,
 body.theme-wa-future .suppliers-hero .suppliers-command-point-copy {
-  color: var(--color-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
+}
+
+/* One shared visual signature across workspaces: page identity is carried by
+   a slim keyline, while the content surface and spacing remain consistent. */
+body.theme-wa-future :is(
+  .overview-hero .hero-main,
+  .overview-hero .hero-side,
+  .products-hero,
+  .ciw-hero,
+  .regions-v2-hero,
+  .suppliers-hero,
+  .labor-hero,
+  .sr-hero,
+  .assistant-header
+) {
+  border-top: 3px solid rgba(var(--page-accent-rgb), 0.88) !important;
+}
+
+/* The decorative Product gloss is the last child of the card. Without an
+   explicit stacking order it paints over the copy and makes otherwise valid
+   contrast look disabled. */
+body.theme-wa-future .products-hero > .card-body {
+  position: relative;
+  z-index: 1;
+}
+
+body.theme-wa-future .products-hero > .hero-gloss {
+  z-index: 0;
+  opacity: 0.42;
 }
 
 body.theme-wa-future .badge.bg-info.bg-opacity-10.text-info {
