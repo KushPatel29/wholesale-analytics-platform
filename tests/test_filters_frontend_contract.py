@@ -12,7 +12,19 @@ def test_filters_enhanced_frontend_contract(app):
         assert "const filters = getAppliedFilters();" in body
         assert "APPLY_ACK_TIMEOUT_MS" in body
         assert "dispatchGlobalFiltersApply" in body
-        assert 'const BOOTSTRAP_OPTIONS_TIMEOUT_MS = 7000;' in body
+        # Pin that the budgets exist and stand in the right relation, not the
+        # numbers themselves. These are tuning values for whatever box the demo
+        # is on - a cold free-tier container needs far longer than a warm one -
+        # and asserting the literal turned a deliberate retune into a failure.
+        import re as _re
+
+        bootstrap_ms = int(_re.search(r"BOOTSTRAP_OPTIONS_TIMEOUT_MS = (\d+)", body).group(1))
+        deferred_ms = int(_re.search(r"DEFERRED_OPTIONS_TIMEOUT_MS = (\d+)", body).group(1))
+        assert bootstrap_ms >= 5000, "the bootstrap budget must survive a cold container"
+        assert deferred_ms > bootstrap_ms, (
+            "the deferred call fetches every dimension and is the expensive one, "
+            "so it must not be given a tighter budget than the bootstrap call"
+        )
         assert 'const BOOTSTRAP_OPTION_DIMENSIONS = ["statuses", "regions", "methods"];' in body
         assert 'const FISCAL_PRESETS = new Set([' in body
         assert '"current_fy"' in body

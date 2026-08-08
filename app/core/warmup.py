@@ -209,20 +209,44 @@ def _warm(app) -> None:
     # The documented demo login goes first: every page, then the XHRs those
     # pages fire, using the same arguments the front end sends.
     window = _default_window_query()
-    primary_paths = (
-        WARMUP_PATHS
-        + tuple(f"{endpoint}?{window}&{extra}" for endpoint, extra in BUNDLE_ENDPOINTS)
-        + tuple(
-            (
+    def _options_path(page: str, dimensions: str, phase: str, with_window: bool) -> str:
+        if with_window:
+            return (
                 f"/api/filters/options?{window}&date_type=fiscal&_gf=1"
                 f"&dimensions={dimensions}&page={page}&phase={phase}"
-                if with_window
-                else f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
             )
-            for page in PAGES_WITH_FILTER_OPTIONS
-            for dimensions, phase, with_window in FILTER_OPTION_PHASES
-        )
+        return f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
+
+    # Order matters more than coverage.
+    #
+    # The filter options used to be warmed last, after eleven pages and six
+    # bundles - about thirty-five seconds of paced requests. Every page blocks
+    # on that endpoint before it renders a number, and the front end gives up
+    # on it after 7s (bootstrap) and 15s (deferred), so a visitor arriving in
+    # the first minute got `filters.init.degraded` and a page with no filters
+    # while the warm-up was busy priming things nobody had asked for yet.
+    #
+    # Warm what the landing page blocks on first: its filter options, then its
+    # bundle, then the page itself. Everything else follows.
+    landing_options = tuple(
+        _options_path("overview", dimensions, phase, with_window)
+        for dimensions, phase, with_window in FILTER_OPTION_PHASES
     )
+    landing = ("/overview/api/bundle?" + window + "&date_type=fiscal&_gf=1", "/")
+    other_options = tuple(
+        _options_path(page, dimensions, phase, with_window)
+        for page in PAGES_WITH_FILTER_OPTIONS
+        if page != "overview"
+        for dimensions, phase, with_window in FILTER_OPTION_PHASES
+    )
+    other_bundles = tuple(
+        f"{endpoint}?{window}&{extra}"
+        for endpoint, extra in BUNDLE_ENDPOINTS
+        if not endpoint.startswith("/overview/")
+    )
+    remaining_pages = tuple(path for path in WARMUP_PATHS if path not in landing)
+
+    primary_paths = landing_options + landing + other_options + other_bundles + remaining_pages
     _warm_user(app, primary, primary_paths)
 
     # Then the rest, so whichever account a visitor picks is already warm.

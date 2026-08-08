@@ -114,8 +114,17 @@
 
   const INIT_RETRY_MS = 2000;
   const INIT_RETRY_INTERVAL = 100;
-  const BOOTSTRAP_OPTIONS_TIMEOUT_MS = 7000;
-  const DEFERRED_OPTIONS_TIMEOUT_MS = 15000;
+  // These are client-side aborts, so a timeout here reports as a filter
+  // failure even when the server answered fine a moment later - a flat
+  // 7003ms in the timings is this giving up, not the backend being slow.
+  //
+  // The old values assumed a warm process. On a free-tier container that has
+  // just come back from idle, the first request also pays the container start
+  // and a cold DuckDB, and both phases blew through their budget: the page
+  // rendered with `filters.init.degraded` and no filters at all. Being slow
+  // once is better than being broken once.
+  const BOOTSTRAP_OPTIONS_TIMEOUT_MS = 20000;
+  const DEFERRED_OPTIONS_TIMEOUT_MS = 45000;
   const SCHEMA_REQUEST_TIMEOUT_MS = 2200;
   const APPLY_ACK_TIMEOUT_MS = 12000;
   const OPTIONS_FAILURE_COOLDOWN_MS = 15000;

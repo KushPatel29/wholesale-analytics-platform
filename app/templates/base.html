@@ -325,7 +325,7 @@
     {# Keep filters boot sequence predictable: FilterState -> adapter -> filters UI #}
     <script src="{{ url_for('static', filename='js/global_filters.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/bundle-adapter.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='js/filters-enhanced.js') }}?v=20260408-fiscal-quick-ranges-1" defer></script>
+    <script src="{{ url_for('static', filename='js/filters-enhanced.js') }}?v=20260809-filter-timeouts-1" defer></script>
     {% endif %}
     {% if current_user.is_authenticated %}
     <script src="{{ url_for('static', filename='js/page-state-cache.js') }}?v=20260401-page-state-cache-1" defer></script>

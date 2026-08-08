@@ -255,3 +255,69 @@ class TestHealthCheck:
         """The detailed probe reports data and config state, so it stays shut."""
         resp = app.test_client().get("/readyz")
         assert resp.status_code in (301, 302, 401, 403)
+
+class TestWarmupOrder:
+    """
+    Order matters more than coverage on a cold container.
+
+    Every page blocks on /api/filters/options before it renders a number, and
+    the front end aborts that request client-side. Warming it last - after
+    eleven pages and six bundles, each paced two seconds apart - meant a
+    visitor arriving in the first minute got `filters.init.degraded` and a
+    page with no filters, while the warm-up primed things nobody had asked for.
+    """
+
+    @staticmethod
+    def _primary_paths(monkeypatch):
+        import app.core.warmup as warmup
+
+        captured = {}
+
+        def fake_warm_user(_app, username, paths):
+            captured.setdefault(username, paths)
+            return True
+
+        monkeypatch.setattr(warmup, "_warm_user", fake_warm_user)
+        monkeypatch.setattr(warmup.time, "sleep", lambda *_a, **_k: None)
+        monkeypatch.setenv("DEMO_WARMUP_SECONDARY", "0")
+        warmup._warm(object())
+        return captured["gm"]
+
+    def test_filter_options_are_warmed_before_any_page(self, monkeypatch):
+        paths = self._primary_paths(monkeypatch)
+        first_options = next(i for i, p in enumerate(paths) if p.startswith("/api/filters/options"))
+        first_page = next(i for i, p in enumerate(paths) if not p.startswith("/api/") and not p.startswith("/overview/api/"))
+        assert first_options < first_page, (
+            "the endpoint every page blocks on must be warmed before the pages themselves"
+        )
+
+    def test_both_option_phases_for_the_landing_page_come_first(self, monkeypatch):
+        paths = self._primary_paths(monkeypatch)
+        assert "phase=bootstrap" in paths[0] and "page=overview" in paths[0]
+        assert "phase=deferred" in paths[1] and "page=overview" in paths[1]
+
+    def test_the_landing_bundle_precedes_the_other_bundles(self, monkeypatch):
+        paths = self._primary_paths(monkeypatch)
+        overview_bundle = next(i for i, p in enumerate(paths) if p.startswith("/overview/api/bundle"))
+        other_bundle = next(i for i, p in enumerate(paths) if p.startswith("/api/products/bundle"))
+        assert overview_bundle < other_bundle
+
+    def test_nothing_is_dropped_by_the_reordering(self, monkeypatch):
+        paths = self._primary_paths(monkeypatch)
+        for page in ("/products/", "/customers/", "/suppliers/", "/regions/", "/salesreps/"):
+            assert page in paths, f"{page} fell out of the warm-up"
+        assert len(paths) == len(set(paths)), "a path is warmed twice"
+
+
+class TestSecurityHeaders:
+    def test_data_uri_fonts_are_allowed(self, app):
+        """
+        `img-src` was the only directive naming `data:`, and CSP does not
+        inherit per-type allowances - anything unnamed falls back to
+        `default-src`, which does not include it. Fonts inlined as data URIs
+        were blocked outright.
+        """
+        csp = app.test_client().get("/healthz").headers.get("Content-Security-Policy", "")
+        assert "font-src" in csp, "font-src must be named or default-src decides for it"
+        font_src = next(part for part in csp.split(";") if "font-src" in part)
+        assert "data:" in font_src
