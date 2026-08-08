@@ -4735,6 +4735,28 @@
       node.setAttribute("data-bundle-group", group);
       sectionObserver.observe(node);
     });
+
+    // Backstop. The observer's root is the viewport, and this page scrolls
+    // inside a container rather than the document, so on some layouts the
+    // pricing and table sections never intersect and their groups never load -
+    // leaving a grid of em-dashes on screen permanently rather than briefly.
+    //
+    // Load them on idle instead of relying on the scroll. First paint still
+    // only waits for the summary group; this just guarantees the rest arrives
+    // rather than hoping an intersection fires.
+    const loadRemaining = () => {
+      targets.forEach(({ group, selector }) => {
+        if (requestState[group]?.loaded || requestState[group]?.loading) return;
+        ensureGroupLoaded(group);
+        const node = document.querySelector(selector);
+        if (node) sectionObserver?.unobserve(node);
+      });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(loadRemaining, { timeout: 2500 });
+    } else {
+      window.setTimeout(loadRemaining, 1200);
+    }
   };
 
   const refreshSummaryBundle = () => {
