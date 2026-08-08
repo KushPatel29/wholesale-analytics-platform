@@ -2,7 +2,7 @@
 {% extends 'base.html' %}
 {% import 'products/_components.html' as products_ui %}
 {% set filters_handler = 'ajax' %}
-{% set products_v4_rev = config.get('STATIC_REV', '20260408') ~ '-products-live6' %}
+{% set products_v4_rev = config.get('STATIC_REV', '20260408') ~ '-products-live7' %}
 {% block head_extras %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/products_workspace_v4.css', v=products_v4_rev) }}">

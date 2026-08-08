@@ -856,6 +856,27 @@ def test_products_bundle_supports_summary_section_requests(app_client, seed_prod
     assert ((data.get("table") or {}).get("total") or 0) == 0
     assert (((data.get("charts") or {}).get("trajectory") or {}).get("labels") or [])
     assert isinstance(((data.get("protein_insights") or {}).get("portfolio") or []), list)
+    assert "sku_metrics" not in data
+    assert "price_vs_velocity" not in data
+    assert "performance_bubble" not in data
+    assert "price_velocity" not in (data.get("charts") or {})
+    assert len(((data.get("charts") or {}).get("top_products") or [])) <= 1
+
+
+def test_products_bundle_deduplicates_detail_section_rows(app_client, seed_products):
+    resp = app_client.get(
+        "/api/products/bundle",
+        query_string={"sections": "pricing,execution,assortment", "start": "2025-12-01", "end": "2026-01-31"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    assert data.get("meta", {}).get("bundle_mode") == "detail"
+    assert (data.get("performance_bubble") or {}).get("points")
+    assert data.get("price_vs_velocity")
+    assert "sku_metrics" not in data
+    assert "price_velocity" not in (data.get("charts") or {})
+    assert "top_products" not in (data.get("charts") or {})
 
 
 def test_products_bundle_supports_table_section_requests(app_client, seed_products):

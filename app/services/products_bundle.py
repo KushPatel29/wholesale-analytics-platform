@@ -4078,6 +4078,34 @@ def build_products_bundle(
                 future_points.append({"month": label, "revenue": base_val})
             payload["forecast_overlay"] = future_points
 
+    # Section responses are merged in the browser, so repeating the same 180
+    # product rows under several aliases only increases transfer, JSON parsing,
+    # cache size, and peak memory. The rich rows are still used above to build
+    # every scorecard and signal; only redundant wire representations are
+    # removed here.
+    if not full_bundle:
+        charts = dict(payload.get("charts") or {})
+        payload.pop("sku_metrics", None)
+        charts.pop("price_velocity", None)
+
+        if want_summary and not want_detail:
+            # Summary renders trajectory, segment strategy, health, and mover
+            # context. Keep one top-product row for the hero insight, but the
+            # pricing plots arrive with the detail section instead of being
+            # sent three times during first paint.
+            top_products = charts.get("top_products") or []
+            charts["top_products"] = top_products[:1]
+            charts.pop("pareto", None)
+            charts.pop("unit_price_dist", None)
+            payload.pop("price_vs_velocity", None)
+            payload.pop("performance_bubble", None)
+        elif want_detail and not want_summary:
+            # The performance-bubble rows contain the fields used by the Top
+            # Products chart, so products.js falls back to that canonical set.
+            charts.pop("top_products", None)
+
+        payload["charts"] = charts
+
     try:
         from flask import current_app, has_request_context  # type: ignore
 

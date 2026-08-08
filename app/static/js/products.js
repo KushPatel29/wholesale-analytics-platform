@@ -15,7 +15,7 @@
   const isV2 = root.dataset.productsV2 === "1";
   const isV3 = root.dataset.productsV3 === "1";
   const isV4 = root.dataset.productsV4 === "1";
-  const PAGE_CACHE_ID = isV4 ? "products-v4-live5" : "products";
+  const PAGE_CACHE_ID = isV4 ? "products-v4-live6" : "products";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
   const WORKSPACE_STORAGE_KEY = isV4 ? "wholesale:products:v4:workspace" : "";
   const TABLE_PRESET_STORAGE_KEY = isV4 ? "wholesale:products:v4:table-preset" : "";
@@ -243,8 +243,14 @@
     };
     if (window.filtersReady && typeof window.filtersReady.then === "function") {
       try {
-        const timeout = new Promise((resolve) => setTimeout(() => resolve(fallbackState()), 1500));
-        return await Promise.race([window.filtersReady, timeout]);
+        // The filters bootstrap owns its own bounded request timeout and always
+        // publishes a ready (or degraded-ready) state. Racing it with a 1.5s
+        // fallback started an unfiltered Products bundle on a cold host, then
+        // aborted and restarted it as soon as the real filter state arrived.
+        // Aborting fetch does not cancel work already running in gunicorn, so
+        // the single hosted worker spent minutes draining requests nobody
+        // needed before it could answer the correct one.
+        return await window.filtersReady;
       } catch (err) {
         console.warn("[products] filtersReady rejected", err);
       }
@@ -262,7 +268,7 @@
       const timer = setTimeout(() => {
         cleanup();
         resolve(fallbackState());
-      }, 1200);
+      }, 8000);
       document.addEventListener("globalFilters:ready", handler, { once: true });
       window.addEventListener("globalFilters:ready", handler, { once: true });
     });
@@ -4249,7 +4255,15 @@
     safeRender("performance bubble", () => renderPerformanceBubble(payload.performance_bubble || {}));
     safeRender("price distribution", () => renderPriceDist(chartsPayload.unit_price_dist || []));
     safeRender("movers", () => renderMovers(chartsPayload.movers || []));
-    safeRender("top products", () => renderTopProducts(chartsPayload.top_products || []));
+    safeRender(
+      "top products",
+      () => renderTopProducts(
+        chartsPayload.top_products
+        || (payload.performance_bubble || {}).points
+        || payload.price_vs_velocity
+        || []
+      )
+    );
     safeRender("pareto", () => renderPareto(chartsPayload.pareto || []));
     const segments = chartsPayload.segments || {};
     safeRender("segment summary", () => renderSegmentSummary(segments.summary || []));
