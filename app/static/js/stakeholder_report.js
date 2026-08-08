@@ -9,28 +9,22 @@ class ReportWorkspace {
 
     this.bundleUrl = this.container.getAttribute('data-bundle-url');
     this.state = {
-      type: 'executive',
-      audience: 'executive',
-      detail: 'standard',
-      sections: [
-        'overview', 'signals', 'sales', 'customers', 'suppliers', 
-        'products', 'regions', 'portfolio', 'ai', 'scenarios', 'actions'
-      ],
+      type: 'full',
+      sections: ['plan', 'demand', 'service', 'matrix', 'exposure', 'actions'],
       data: null
     };
 
+    // The planner owns five sections and no more. Sales Performance, Customer
+    // Portfolio, Product Intelligence and Regional Momentum each have their own
+    // page and were duplicated here; "AI Insights" and "Strategic Scenarios"
+    // were template prose that asserted rather than measured. All removed.
     this.sectionRegistry = {
-      overview: { label: 'Executive Summary', icon: 'bi-lightning-charge', render: this.renderOverview.bind(this) },
-      signals: { label: 'Core Signals', icon: 'bi-activity', render: this.renderSignals.bind(this) },
-      sales: { label: 'Sales Performance', icon: 'bi-person-badge', render: this.renderSales.bind(this) },
-      customers: { label: 'Customer Portfolio', icon: 'bi-people', render: this.renderCustomers.bind(this) },
-      suppliers: { label: 'Supplier Exposure', icon: 'bi-truck', render: this.renderSuppliers.bind(this) },
-      products: { label: 'Product Intelligence', icon: 'bi-box-seam', render: this.renderProducts.bind(this) },
-      regions: { label: 'Regional Momentum', icon: 'bi-geo-alt', render: this.renderRegions.bind(this) },
-      portfolio: { label: 'Retention & Risk', icon: 'bi-shield-check', render: this.renderPortfolio.bind(this) },
-      ai: { label: 'AI Insights', icon: 'bi-cpu', render: this.renderAI.bind(this) },
-      scenarios: { label: 'Strategic Scenarios', icon: 'bi-diagram-3', render: this.renderScenarios.bind(this) },
-      actions: { label: 'Action Priority', icon: 'bi-check2-circle', render: this.renderActions.bind(this) }
+      plan: { label: 'Planning Position', icon: 'bi-speedometer2', render: this.renderPlanningPosition.bind(this) },
+      demand: { label: 'Demand Signal', icon: 'bi-graph-up-arrow', render: this.renderDemand.bind(this) },
+      service: { label: 'Service Level', icon: 'bi-truck', render: this.renderService.bind(this) },
+      matrix: { label: 'Demand vs Service', icon: 'bi-grid-3x3-gap', render: this.renderMatrix.bind(this) },
+      exposure: { label: 'Vendor Exposure', icon: 'bi-diagram-2', render: this.renderExposure.bind(this) },
+      actions: { label: 'What To Do', icon: 'bi-check2-circle', render: this.renderPlanActions.bind(this) }
     };
 
     this.init();
@@ -44,22 +38,10 @@ class ReportWorkspace {
 
   setupEventListeners() {
     const typeSelect = document.getElementById('reportTypeSelect');
-    const audienceSelect = document.getElementById('audienceSelect');
-    const detailSelect = document.getElementById('detailSelect');
 
     typeSelect?.addEventListener('change', (e) => {
       this.state.type = e.target.value;
       this.handleTypeChange();
-      this.render();
-    });
-
-    audienceSelect?.addEventListener('change', (e) => {
-      this.state.audience = e.target.value;
-      this.render();
-    });
-
-    detailSelect?.addEventListener('change', (e) => {
-      this.state.detail = e.target.value;
       this.render();
     });
 
@@ -74,11 +56,14 @@ class ReportWorkspace {
     } else {
       toggles.style.display = 'none';
       // Preset sections based on type
+      // Views, not "audiences". Each one is a real subset of the planner:
+      // what you look at depends on whether you are deciding what to buy,
+      // where the network is failing, or just what to do this week.
       const presets = {
-        executive: ['overview', 'signals', 'ai', 'scenarios', 'actions'],
-        sales: ['overview', 'sales', 'customers', 'regions', 'actions'],
-        commercial: ['overview', 'sales', 'customers', 'suppliers', 'products'],
-        operational: ['overview', 'signals', 'products', 'suppliers', 'actions']
+        full: ['plan', 'demand', 'service', 'matrix', 'exposure', 'actions'],
+        demand: ['plan', 'demand', 'matrix', 'actions'],
+        supply: ['plan', 'service', 'exposure', 'actions'],
+        actions: ['plan', 'actions']
       };
       this.state.sections = presets[this.state.type] || Object.keys(this.sectionRegistry);
     }
@@ -114,6 +99,10 @@ class ReportWorkspace {
       const bundle = await response.json();
       this.state.data = bundle.data || {};
       this.render();
+      // The header said "Loading…" for the life of the page because nothing
+      // ever cleared it. Report what the reader actually wants to know: how
+      // old the figures are.
+      this.setFreshness(bundle.meta || {});
       this.container.classList.remove('is-loading');
     } catch (err) {
       console.error(err);
@@ -121,13 +110,25 @@ class ReportWorkspace {
     }
   }
 
+  setFreshness(meta) {
+    const el = document.getElementById('lastSyncTime');
+    if (!el) return;
+    const ageSeconds = Number(meta.cache_age_seconds);
+    let note;
+    if (!Number.isFinite(ageSeconds) || ageSeconds < 60) {
+      note = 'Just now';
+    } else if (ageSeconds < 3600) {
+      note = `${Math.round(ageSeconds / 60)} min ago`;
+    } else {
+      note = `${(ageSeconds / 3600).toFixed(1)} h ago`;
+    }
+    el.innerHTML = `<i class="bi bi-clock-history me-1"></i>Data as of ${note}`;
+  }
+
   render() {
     this.renderNavigation();
     this.renderContent();
     this.setupScrollSpy();
-    if (this.state.sections.includes('overview')) {
-      setTimeout(() => this.renderCharts(), 50);
-    }
   }
 
   renderNavigation() {
@@ -162,17 +163,12 @@ class ReportWorkspace {
 
   createSectionHeader(id, title) {
     const eyebrows = {
-      overview: 'Strategic Intelligence',
-      signals: 'Operational Pulse',
-      sales: 'Commercial Audit',
-      customers: 'Portfolio Health',
-      suppliers: 'Supply Chain Sensitivity',
-      products: 'Yield & Mix Management',
-      regions: 'Geographic Velocity',
-      portfolio: 'Retention Diagnostic',
-      ai: 'Intelligent Optimization',
-      scenarios: 'Strategic Scenarios',
-      actions: 'Tactical Directives'
+      plan: 'Where the plan stands',
+      demand: 'Which way demand is moving',
+      service: 'How reliably we can supply it',
+      matrix: 'Where the two disagree',
+      exposure: 'Who we depend on',
+      actions: 'Ranked by what it costs to ignore'
     };
     return `
       <div class="section-header">
@@ -185,432 +181,291 @@ class ReportWorkspace {
   }
 
   // --- Section Renderers ---
+  //
+  // Every figure below comes from `data.planning`, computed in
+  // app/services/planning.py. Nothing on this page is written by a template
+  // that did not read the data first.
 
-  renderOverview(data) {
-    const overview = data.overview || {};
-    return `
-      <div class="report-hero">
-        <h1 class="hero-headline">${overview.headline || 'Market Pulse'}</h1>
-        <p class="lead text-muted mb-4" style="font-size: 1.25rem;">${overview.summary || 'Synthesizing market signals...'}</p>
-        
-        <div class="row g-4 mb-5">
-          ${(overview.kpis || []).map(kpi => `
-            <div class="col-md-4">
-              <div class="p-3 bg-white rounded-3 shadow-sm border">
-                <div class="card-label">${kpi.label}</div>
-                <div class="card-value">${kpi.value}</div>
-                <div class="card-trend ${kpi.trend >= 0 ? 'trend-up' : 'trend-down'}">
-                  ${kpi.trend >= 0 ? '↑' : '↓'} ${Math.abs(kpi.trend).toFixed(1)}% vs Target
-                </div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="bg-white rounded-3 shadow-sm border p-4">
-          <h6 class="fw-black text-uppercase small text-muted mb-3">6-Month Trailing Performance</h6>
-          <div style="height: 250px;">
-            <canvas id="overviewTrendChart"></canvas>
-          </div>
-        </div>
-      </div>
-    `;
+  _plan() {
+    return this.state.data?.planning || {};
   }
 
-  renderCharts() {
-    const trendCanvas = document.getElementById('overviewTrendChart');
-    if (trendCanvas) {
-      const chartData = this.state.data?.charts?.trend || { labels: [], revenue: [], margin: [] };
-      if (this._overviewChart) this._overviewChart.destroy();
-      this._overviewChart = new Chart(trendCanvas, {
-        type: 'line',
-        data: {
-          labels: chartData.labels,
-          datasets: [
-            {
-              label: 'Revenue ($)',
-              data: chartData.revenue,
-              borderColor: '#0f172a',
-              backgroundColor: 'rgba(15, 23, 42, 0.05)',
-              borderWidth: 3,
-              tension: 0.4,
-              fill: true,
-              yAxisID: 'y'
-            },
-            {
-              label: 'Margin (%)',
-              data: chartData.margin,
-              borderColor: '#3b82f6',
-              backgroundColor: 'transparent',
-              borderWidth: 2,
-              borderDash: [5, 5],
-              tension: 0.4,
-              yAxisID: 'y1'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 6 } } },
-          scales: {
-            x: { grid: { display: false } },
-            y: { type: 'linear', display: true, position: 'left', ticks: { callback: function(value) { return '$' + (value/1000).toFixed(0) + 'k'; } } },
-            y1: { type: 'linear', display: true, position: 'right', grid: { display: false }, ticks: { callback: function(value) { return value + '%'; } } }
-          }
-        }
-      });
-    }
-
-    const mixCanvas = document.getElementById('productMixChart');
-    if (mixCanvas) {
-      const mixData = this.state.data?.charts?.product_mix || { labels: [], values: [] };
-      if (this._mixChart) this._mixChart.destroy();
-      this._mixChart = new Chart(mixCanvas, {
-        type: 'doughnut',
-        data: {
-          labels: mixData.labels,
-          datasets: [{
-            data: mixData.values,
-            backgroundColor: ['#0f172a', '#3b82f6', '#10b981', '#f59e0b', '#64748b', '#e2e8f0'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '75%',
-          plugins: {
-            legend: { position: 'right', labels: { usePointStyle: true, padding: 20 } },
-            tooltip: { callbacks: { label: function(context) { return ' $' + context.raw.toLocaleString(); } } }
-          }
-        }
-      });
-    }
-
-    const riskCanvas = document.getElementById('customerRiskChart');
-    if (riskCanvas) {
-      const riskData = this.state.data?.charts?.customer_risk || [];
-      if (this._riskChart) this._riskChart.destroy();
-      this._riskChart = new Chart(riskCanvas, {
-        type: 'bubble',
-        data: {
-          datasets: [{
-            label: 'Accounts',
-            data: riskData,
-            backgroundColor: 'rgba(59, 130, 246, 0.6)',
-            borderColor: '#3b82f6',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const pt = context.raw;
-                  return pt.label + ': Margin ' + pt.x.toFixed(1) + '%, Rev $' + pt.y.toLocaleString();
-                }
-              }
-            }
-          },
-          scales: {
-            x: { title: { display: true, text: 'Contribution Margin (%)' } },
-            y: { title: { display: true, text: 'MTD Revenue ($)' }, ticks: { callback: function(value) { return '$' + (value/1000).toFixed(0) + 'k'; } } }
-          }
-        }
-      });
-    }
+  _money(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+    if (Math.abs(n) >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
+    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   }
 
-  renderSignals(data) {
-    const signals = data.signals || [];
-    return `
-      <div class="report-grid">
-        ${signals.map(s => `
-          <div class="report-card">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-              <span class="card-label">${s.label}</span>
-              <span class="badge ${s.status === 'success' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'} border-0">${s.status.toUpperCase()}</span>
-            </div>
-            <div class="card-value" style="font-size: 1.5rem;">${s.value}</div>
-            <p class="small text-muted mt-3 mb-0">${s.explanation}</p>
-          </div>
-        `).join('')}
-      </div>
-    `;
+  _pct(value, digits = 1) {
+    const n = Number(value);
+    return Number.isFinite(n) ? `${n.toFixed(digits)}%` : '—';
   }
 
-  renderSales(data) {
-    const sales = data.sales || {};
-    return `
-      <div class="row g-4">
-        <div class="col-md-7">
-          <div class="report-card h-100">
-            <span class="card-label">Commercial Readiness Index</span>
-            <div class="table-responsive mt-3">
-              <table class="exec-table">
-                <thead>
-                  <tr>
-                    <th>SalesRep (BC)</th>
-                    <th>MTD Rev</th>
-                    <th>Margin</th>
-                    <th>Health</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${(sales.watchlist || []).map(r => `
-                    <tr>
-                      <td class="fw-bold">${r.name}</td>
-                      <td>${r.revenue}</td>
-                      <td>${r.margin}</td>
-                      <td>
-                        <div class="d-flex align-items-center gap-2">
-                          <div class="progress flex-grow-1" style="height: 6px;">
-                            <div class="progress-bar ${r.health > 80 ? 'bg-success' : 'bg-primary'}" style="width: ${r.health}%"></div>
-                          </div>
-                          <span class="small">${r.health}%</span>
-                        </div>
-                      </td>
-                      <td>
-                        <a href="/salesreps/rep/${r.id}" class="text-primary text-decoration-none small fw-bold">
-                          AUDIT <i class="bi bi-chevron-right"></i>
-                        </a>
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-5">
-          <div class="report-card h-100" style="background: #f8fafc;">
-            <span class="card-label">Strategic Narrative</span>
-            <p class="mt-3 fw-bold" style="line-height: 1.6;">${sales.risk_summary || 'Territory velocity remains consistent with monthly projections.'}</p>
-            <hr>
-            <h6 class="fw-black text-uppercase small mb-3">Top Momentum Drivers</h6>
-            ${(sales.top_reps || []).map(r => `
-              <div class="d-flex justify-content-between py-1 small fw-bold">
-                <span>${r.name}</span>
-                <span class="text-primary">${r.revenue}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-    `;
+  _delta(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '<span class="plan-delta plan-delta--new">new this window</span>';
+    const cls = n >= 8 ? 'plan-delta--up' : n <= -8 ? 'plan-delta--down' : 'plan-delta--flat';
+    const arrow = n >= 8 ? '↑' : n <= -8 ? '↓' : '→';
+    return `<span class="plan-delta ${cls}">${arrow} ${Math.abs(n).toFixed(1)}%</span>`;
   }
 
-  renderCustomers(data) {
-    const customers = data.customers || [];
-    return `
-      <div class="report-grid">
-        ${customers.map(c => `
-          <div class="report-card">
-            <span class="card-label">${c.segment}</span>
-            <div class="card-value">${c.count}</div>
-            <p class="small text-muted mt-3 mb-0" style="line-height: 1.4;">
-              <i class="bi bi-info-circle me-1"></i> ${c.insight}
-            </p>
-          </div>
-        `).join('')}
-      </div>
-    `;
+  _statusChip(status) {
+    const map = {
+      ok: ['plan-chip--ok', 'On target'],
+      watch: ['plan-chip--watch', 'Below target'],
+      critical: ['plan-chip--critical', 'Critical'],
+      unknown: ['plan-chip--muted', 'Too few lines']
+    };
+    const [cls, label] = map[status] || map.unknown;
+    return `<span class="plan-chip ${cls}">${label}</span>`;
   }
 
-  renderSuppliers(data) {
-    const suppliers = data.suppliers || {};
+  _empty(message) {
+    return `<div class="plan-empty">${message}</div>`;
+  }
+
+  renderPlanningPosition() {
+    const plan = this._plan();
+    const head = plan.headline || {};
+    const window = plan.window || {};
+    const target = head.service_target_pct ?? 92;
+    const onTime = head.on_time_pct;
+    const meetsTarget = Number.isFinite(onTime) && onTime >= target;
+
+    const comparison = window.comparable
+      ? `Comparing <strong>${window.recent_label}</strong> against <strong>${window.prior_label}</strong>.`
+      : (window.reason || 'The active window is too short to split into two halves for a demand trend.');
+
     return `
       <div class="report-card">
-        <span class="card-label">Supply Chain Exposure (Top 5)</span>
-        <div class="row g-5 mt-2">
-          <div class="col-md-7">
-            <div class="table-responsive">
-              <table class="exec-table">
-                <thead>
-                  <tr>
-                    <th>Vendor</th>
-                    <th>Wallet Share</th>
-                    <th>Risk Factor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${(suppliers.top_exposure || []).map(s => `
-                    <tr>
-                      <td class="fw-bold">${s.name}</td>
-                      <td>${s.share}%</td>
-                      <td><span class="badge bg-light text-dark">Stable</span></td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
+        <p class="plan-lede">
+          Demand direction and delivery reliability, read together. ${comparison}
+        </p>
+
+        <div class="plan-kpis">
+          <div class="plan-kpi ${meetsTarget ? '' : 'plan-kpi--warn'}">
+            <div class="plan-kpi__label">Lines on time</div>
+            <div class="plan-kpi__value">${this._pct(onTime)}</div>
+            <div class="plan-kpi__note">${target}% target · ${meetsTarget ? 'meeting it' : 'below it'}</div>
           </div>
-          <div class="col-md-5">
-            <div class="p-4 rounded" style="background: #f1f5f9; border-left: 4px solid var(--report-accent);">
-              <h6 class="fw-black text-uppercase small mb-2">Concentration Note</h6>
-              <p class="small mb-0">${suppliers.summary || 'Supplier concentration is within acceptable risk corridors for the Vancouver operations.'}</p>
-            </div>
+          <div class="plan-kpi ${head.at_risk_departments > 0 ? 'plan-kpi--danger' : ''}">
+            <div class="plan-kpi__label">Departments at risk</div>
+            <div class="plan-kpi__value">${head.at_risk_departments ?? 0}</div>
+            <div class="plan-kpi__note">Growing demand into a lane already missing dates</div>
+          </div>
+          <div class="plan-kpi">
+            <div class="plan-kpi__label">Revenue exposed</div>
+            <div class="plan-kpi__value">${this._money(head.at_risk_revenue)}</div>
+            <div class="plan-kpi__note">${this._pct(head.at_risk_revenue_share_pct, 0)} of the window</div>
+          </div>
+          <div class="plan-kpi ${head.lanes_below_target > 0 ? 'plan-kpi--warn' : ''}">
+            <div class="plan-kpi__label">Lanes below target</div>
+            <div class="plan-kpi__value">${head.lanes_below_target ?? 0}</div>
+            <div class="plan-kpi__note">Fulfilment methods under ${target}% on time</div>
+          </div>
+          <div class="plan-kpi">
+            <div class="plan-kpi__label">Single-sourced</div>
+            <div class="plan-kpi__value">${head.single_sourced_departments ?? 0}</div>
+            <div class="plan-kpi__note">Departments over ${plan.thresholds?.concentration_warn_pct ?? 45}% from one vendor</div>
           </div>
         </div>
       </div>
     `;
   }
 
-  renderProducts(data) {
-    const products = data.products || [];
-    return `
-      <div class="row g-4">
-        ${products.map(p => `
-          <div class="col-md-6">
-            <div class="report-card h-100">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="fw-black text-uppercase small text-muted">${p.category}</span>
-                <span class="badge bg-primary px-2">${p.momentum}</span>
-              </div>
-              <p class="fw-bold mb-0" style="font-size: 1.1rem; line-height: 1.4;">${p.summary}</p>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
+  renderDemand() {
+    const rows = this._plan().demand || [];
+    if (!rows.length) return this._empty('No demand to report for the active filters.');
 
-  renderRegions(data) {
-    const regions = (data.regions || {}).performance || [];
-    if (regions.length === 0) {
-      return `
-        <div class="report-card">
-          <div class="text-center py-4">
-            <p class="text-muted mb-0">No regional variance detected in the current filter context.</p>
-          </div>
-        </div>
-      `;
-    }
+    const max = Math.max(...rows.map(r => Number(r.revenue) || 0), 1);
     return `
       <div class="report-card">
-        <span class="card-label">Top Performing Territories (BC)</span>
-        <div class="table-responsive mt-3">
-          <table class="exec-table">
-            <thead>
+        <p class="plan-lede">
+          Revenue in the recent half of the window against the prior half, by department.
+          Half-and-half rather than a fitted trend, because the window is yours to change
+          and a slope through four points claims more than it knows.
+        </p>
+        <table class="plan-table">
+          <thead>
+            <tr><th>Department</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Change</th><th>Direction</th></tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
               <tr>
-                <th>Region</th>
-                <th>MTD Revenue</th>
-                <th>Contribution Margin</th>
+                <td>
+                  <div class="plan-bar" style="--w:${((Number(r.revenue) || 0) / max * 100).toFixed(1)}%"></div>
+                  <span class="plan-label">${r.label}</span>
+                </td>
+                <td class="num">${this._money(r.revenue)}</td>
+                <td class="num">${this._pct(r.share_pct, 1)}</td>
+                <td class="num">${this._delta(r.change_pct)}</td>
+                <td><span class="plan-dir plan-dir--${r.direction}">${r.direction.replace('_', ' ')}</span></td>
               </tr>
-            </thead>
-            <tbody>
-              ${regions.map(r => `
-                <tr>
-                  <td class="fw-bold">${r.name}</td>
-                  <td>${r.revenue}</td>
-                  <td class="text-primary">${r.margin}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     `;
   }
 
-  renderPortfolio(data) {
-    const portfolio = data.portfolio || {};
+  _serviceTable(rows, caption) {
+    if (!rows.length) return this._empty('No delivery history for the active filters.');
+    const target = this._plan().thresholds?.service_target_pct ?? 92;
     return `
-      <div class="report-grid">
-        <div class="report-card">
-          <span class="card-label">Churn Risk Probability</span>
-          <div class="card-value">${portfolio.churn_risk || 0}%</div>
-          <div class="progress mt-3" style="height: 4px;">
-            <div class="progress-bar ${portfolio.churn_risk > 15 ? 'bg-danger' : 'bg-success'}" style="width: ${portfolio.churn_risk || 0}%"></div>
-          </div>
-          <p class="small text-muted mt-2 mb-0">Calculated based on 30-day silent accounts.</p>
-        </div>
-        <div class="report-card">
-          <span class="card-label">Portfolio Stability Index</span>
-          <div class="card-value">${portfolio.retention_pct || 100}%</div>
-          <div class="progress mt-3" style="height: 4px;">
-            <div class="progress-bar bg-primary" style="width: ${Math.min(100, portfolio.retention_pct || 100)}%"></div>
-          </div>
-          <p class="small text-muted mt-2 mb-0">Net account movement for the current period.</p>
-        </div>
-        <div class="report-card">
-          <span class="card-label">High-Risk Recovery Rate</span>
-          <div class="card-value">${portfolio.recovery_stat || '0 / 0'}</div>
-          <div class="progress mt-3" style="height: 4px;">
-            <div class="progress-bar bg-warning" style="width: 50%"></div>
-          </div>
-          <p class="small text-muted mt-2 mb-0">Accounts reactivated vs total silent cohort.</p>
-        </div>
+      <table class="plan-table">
+        <caption class="plan-caption">${caption}</caption>
+        <thead>
+          <tr><th>Name</th><th class="num">On time</th><th class="num">Lines</th><th class="num">Revenue</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr class="${r.status === 'critical' ? 'is-critical' : ''}">
+              <td>
+                <div class="plan-bar plan-bar--service" style="--w:${Math.max(0, Math.min(100, Number(r.on_time_pct) || 0))}%; --target:${target}%"></div>
+                <span class="plan-label">${r.label}</span>
+              </td>
+              <td class="num">${this._pct(r.on_time_pct)}</td>
+              <td class="num">${(Number(r.lines) || 0).toLocaleString()}</td>
+              <td class="num">${this._money(r.revenue)}</td>
+              <td>${this._statusChip(r.status)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  renderService() {
+    const plan = this._plan();
+    const target = plan.thresholds?.service_target_pct ?? 92;
+    const minRows = plan.thresholds?.min_rows_for_rate ?? 25;
+    return `
+      <div class="report-card">
+        <p class="plan-lede">
+          The share of order lines that arrived on or before the date they were promised.
+          Anything under ${target}% is below target. Groups with fewer than ${minRows} lines
+          are shown but not ranked — a lane with four deliveries that missed one is not
+          &ldquo;25% late&rdquo; in any useful sense.
+        </p>
+        ${this._serviceTable(plan.service_by_lane || [], 'By fulfilment lane')}
+        <div class="plan-spacer"></div>
+        ${this._serviceTable(plan.service_by_vendor || [], 'By vendor — worst service first')}
       </div>
     `;
   }
 
-  renderAI(data) {
-    const solutions = data.ai_solutions || [];
+  renderMatrix() {
+    const plan = this._plan();
+    const points = plan.matrix || [];
+    if (!points.length) {
+      return this._empty(
+        plan.window?.comparable
+          ? 'Not enough delivery history in this window to place departments.'
+          : 'Widen the date window to at least two weeks to compare demand against service.'
+      );
+    }
+
+    const quadrantCopy = {
+      at_risk: ['Growing, unreliable', 'Demand is rising into a lane that already misses its dates. Doing nothing makes this bigger, not the same size.'],
+      scale: ['Growing, reliable', 'Demand is rising and the network is keeping up. Room to push.'],
+      fix_service: ['Flat, unreliable', 'Service is below target but demand is not compounding the problem.'],
+      steady: ['Flat, reliable', 'No action indicated.'],
+      insufficient_data: ['Too few lines', 'Not enough delivery history to judge.']
+    };
+
+    const groups = {};
+    points.forEach(p => { (groups[p.quadrant] = groups[p.quadrant] || []).push(p); });
+    const order = ['at_risk', 'fix_service', 'scale', 'steady', 'insufficient_data'];
+
     return `
-      <div class="ai-insight-block">
-        <div class="d-flex align-items-center gap-2 mb-4">
-          <i class="bi bi-stars text-primary" style="font-size: 1.5rem;"></i>
-          <span class="fw-black text-uppercase small" style="letter-spacing: 0.1em;">Intelligent Optimization Engine</span>
-        </div>
-        <div class="row g-4">
-          ${solutions.map(s => `
-            <div class="col-md-4">
-              <div class="p-4 h-100 rounded" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s;">
-                <h6 class="fw-bold text-white mb-3" style="font-size: 1.1rem;">${s.title}</h6>
-                <p class="small mb-0" style="color: #cbd5e1; line-height: 1.5;">${s.description}</p>
-              </div>
-            </div>
+      <div class="report-card">
+        <p class="plan-lede">
+          Demand growth against service level. Only one quadrant gets a colour, because
+          only one of them means the problem grows while you look at it.
+        </p>
+        <div class="plan-quadrants">
+          ${order.filter(q => groups[q]).map(q => `
+            <section class="plan-quadrant plan-quadrant--${q}">
+              <header>
+                <h4>${quadrantCopy[q][0]}</h4>
+                <p>${quadrantCopy[q][1]}</p>
+              </header>
+              <ul>
+                ${groups[q].map(p => `
+                  <li>
+                    <span class="plan-label">${p.label}</span>
+                    <span class="plan-quadrant__metrics">
+                      ${this._delta(p.change_pct)}
+                      <span class="plan-sep">·</span>
+                      <span>${this._pct(p.on_time_pct, 0)} on time</span>
+                      <span class="plan-sep">·</span>
+                      <span>${this._money(p.revenue)}</span>
+                    </span>
+                  </li>
+                `).join('')}
+              </ul>
+            </section>
           `).join('')}
         </div>
       </div>
     `;
   }
 
-  renderScenarios(data) {
-    const scenarios = data.scenarios || [];
+  renderExposure() {
+    const rows = this._plan().concentration || [];
+    if (!rows.length) return this._empty('No vendor data for the active filters.');
+    const warn = this._plan().thresholds?.concentration_warn_pct ?? 45;
     return `
-      <div class="report-grid">
-        ${scenarios.map(s => `
-          <div class="report-card" style="border-left: 4px solid #334155;">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="badge bg-light text-dark">${s.type}</span>
-              <span class="small fw-bold text-primary">${s.signal}</span>
-            </div>
-            <h5 class="fw-bold">${s.title}</h5>
-            <p class="small text-muted mb-3">${s.description}</p>
-            <div class="p-3 rounded small" style="background: #f8fafc; font-weight: 500;">
-              <span class="d-block fw-black text-uppercase mb-1" style="font-size: 0.65rem;">Analyst Insight</span>
-              ${s.explanation}
-            </div>
-          </div>
-        `).join('')}
+      <div class="report-card">
+        <p class="plan-lede">
+          The largest vendor in each department, and how much of it they carry.
+          Over ${warn}% is single-sourced in practice, whatever the contract says —
+          and it only matters next to that vendor's service record.
+        </p>
+        <table class="plan-table">
+          <thead>
+            <tr><th>Department</th><th>Largest vendor</th><th class="num">Share</th><th class="num">Vendors</th><th class="num">Their on-time</th></tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr class="${r.concentrated ? 'is-critical' : ''}">
+                <td><span class="plan-label">${r.department}</span></td>
+                <td>${r.vendor}</td>
+                <td class="num">${this._pct(r.share_pct, 0)}${r.concentrated ? ' <span class="plan-chip plan-chip--watch">single-sourced</span>' : ''}</td>
+                <td class="num">${r.vendor_count}</td>
+                <td class="num">${this._pct(r.vendor_on_time_pct, 0)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     `;
   }
 
-  renderActions(data) {
-    const actions = data.actions || [];
+  renderPlanActions() {
+    const actions = this._plan().actions || [];
+    if (!actions.length) {
+      return this._empty('Nothing is below target under the active filters. Widen the window or clear a filter to look further.');
+    }
     return `
-      <div class="report-card" style="background: var(--report-accent); color: white; border: none;">
-        <div class="d-flex flex-column gap-4">
-          ${actions.map((a, idx) => `
-            <div class="d-flex gap-4 align-items-start">
-              <div class="bg-white text-dark rounded-circle d-flex align-items-center justify-content-center fw-black" style="width: 28px; height: 28px; flex-shrink: 0; font-size: 0.85rem;">
-                ${idx + 1}
+      <div class="report-card">
+        <p class="plan-lede">
+          Every line here points at a figure elsewhere on this page. Ranked by what it
+          costs to ignore, and deliberately short — a list of twenty actions is a list of none.
+        </p>
+        <ol class="plan-actions">
+          ${actions.map(a => `
+            <li class="plan-action plan-action--${a.severity}">
+              <div class="plan-action__head">
+                <span class="plan-action__sev">${a.severity}</span>
+                <h5>${a.title}</h5>
               </div>
-              <div>
-                <h5 class="text-white fw-bold mb-1" style="font-size: 1.15rem;">${a.title}</h5>
-                <p class="mb-0 small" style="color: #94a3b8; font-weight: 500;">${a.description}</p>
-              </div>
-            </div>
+              <p>${a.detail}</p>
+            </li>
           `).join('')}
-        </div>
+        </ol>
       </div>
     `;
   }
@@ -654,14 +509,10 @@ class ReportWorkspace {
       try {
         const parsed = JSON.parse(saved);
         this.state.type = parsed.type || this.state.type;
-        this.state.audience = parsed.audience || this.state.audience;
-        this.state.detail = parsed.detail || this.state.detail;
         this.state.sections = parsed.sections || this.state.sections;
         
         // Update UI
         document.getElementById('reportTypeSelect').value = this.state.type;
-        document.getElementById('audienceSelect').value = this.state.audience;
-        document.getElementById('detailSelect').value = this.state.detail;
         this.handleTypeChange();
       } catch (e) {
         console.warn('Failed to load saved report prefs');

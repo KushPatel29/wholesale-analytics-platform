@@ -25,11 +25,11 @@
     --report-shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
     
     background: var(--report-bg);
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(210,100%,97%,1) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, hsla(210,100%,97%,1) 0px, transparent 50%);
+    background-image:
+      radial-gradient(at 0% 0%, var(--wa-accent-wash) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, var(--wa-info-wash) 0px, transparent 50%);
     min-height: 100vh;
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: var(--wa-font-ui);
     color: var(--report-ink);
     line-height: 1.6;
   }
@@ -37,7 +37,8 @@
   .report-branding {
     padding: 2.5rem 0 1rem 0;
     text-align: center;
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.03) 0%, transparent 100%);
+    background: transparent;
+    border-bottom: 1px solid var(--wa-hairline);
   }
 
   .report-branding h1 {
@@ -404,6 +405,289 @@
     .report-card, .ai-insight-block { box-shadow: none; border: 1px solid var(--wa-hairline-soft); color: black; background: white; }
     .ai-insight-block .text-white { color: black !important; }
   }
+
+/* ==========================================================================
+   Demand & Supply Planner
+   --------------------------------------------------------------------------
+   Everything here reads the theme tokens, so the page follows the light/dark
+   toggle like the rest of the app. The only colour that is allowed to be loud
+   is the at-risk quadrant, because it is the one thing on the page that means
+   the problem grows while you look at it.
+   ========================================================================== */
+
+.plan-lede {
+  color: var(--wa-text-dim);
+  max-width: 74ch;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+/* ---- headline figures ---------------------------------------------------- */
+.plan-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--wa-hairline);
+  border: 1px solid var(--wa-hairline);
+  border-radius: var(--wa-radius);
+  overflow: hidden;
+}
+
+.plan-kpi {
+  background: var(--wa-surface);
+  padding: 1.1rem 1.15rem;
+  border-top: 2px solid transparent;
+}
+
+.plan-kpi--warn { border-top-color: var(--wa-warn); }
+.plan-kpi--danger { border-top-color: var(--wa-bad); }
+
+.plan-kpi__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--wa-text-faint);
+}
+
+.plan-kpi__value {
+  font-family: var(--wa-font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0.3rem 0 0.25rem;
+  color: var(--wa-text);
+}
+
+.plan-kpi__note {
+  font-size: 0.78rem;
+  color: var(--wa-text-dim);
+  line-height: 1.35;
+}
+
+/* ---- tables -------------------------------------------------------------- */
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--wa-text-faint);
+  padding-bottom: 0.6rem;
+}
+
+.plan-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--wa-text-faint);
+  border-bottom: 1px solid var(--wa-hairline-strong);
+  padding: 0.5rem 0.75rem;
+}
+
+.plan-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--wa-hairline-soft);
+  color: var(--wa-text);
+  position: relative;
+}
+
+.plan-table .num { text-align: right; }
+.plan-table tbody tr:hover td { background: var(--wa-accent-wash); }
+.plan-table tr.is-critical td:first-child { box-shadow: inset 2px 0 0 var(--wa-bad); }
+
+.plan-label { font-weight: 600; position: relative; }
+
+/* A bar behind the label rather than a column of its own - the magnitude is
+   context for the name, not a number to read off. */
+.plan-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--w, 0%);
+  background: var(--wa-accent-wash);
+  pointer-events: none;
+}
+
+.plan-bar--service { background: var(--wa-info-wash); }
+
+/* The service target, drawn where it actually falls. */
+.plan-bar--service::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background: var(--wa-hairline-strong);
+}
+
+.plan-spacer { height: 2rem; }
+
+/* ---- deltas and chips ---------------------------------------------------- */
+.plan-delta { font-variant-numeric: tabular-nums; font-weight: 600; }
+.plan-delta--up { color: var(--wa-good); }
+.plan-delta--down { color: var(--wa-bad); }
+.plan-delta--flat { color: var(--wa-text-dim); }
+.plan-delta--new { color: var(--wa-text-faint); font-weight: 500; font-size: 0.82rem; }
+
+.plan-chip {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.plan-chip--ok { background: var(--wa-good-wash); color: var(--wa-good); }
+.plan-chip--watch { background: var(--wa-warn-wash); color: var(--wa-warn); }
+.plan-chip--critical { background: var(--wa-bad-wash); color: var(--wa-bad); }
+.plan-chip--muted { background: var(--wa-surface-3); color: var(--wa-text-faint); }
+
+.plan-dir {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--wa-text-dim);
+}
+.plan-dir--growing { color: var(--wa-good); }
+.plan-dir--declining { color: var(--wa-bad); }
+
+/* ---- quadrants ----------------------------------------------------------- */
+.plan-quadrants {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.plan-quadrant {
+  border: 1px solid var(--wa-hairline);
+  border-radius: var(--wa-radius);
+  padding: 1rem 1.1rem;
+  background: var(--wa-surface);
+}
+
+.plan-quadrant header h4 {
+  font-family: var(--wa-font-display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+  color: var(--wa-text);
+}
+
+.plan-quadrant header p {
+  font-size: 0.8rem;
+  color: var(--wa-text-dim);
+  line-height: 1.45;
+  margin: 0 0 0.85rem;
+}
+
+.plan-quadrant ul { list-style: none; margin: 0; padding: 0; }
+
+.plan-quadrant li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--wa-hairline-soft);
+}
+
+.plan-quadrant__metrics {
+  font-size: 0.8rem;
+  color: var(--wa-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-sep { opacity: 0.45; margin: 0 0.35rem; }
+
+/* The one loud thing on the page. */
+.plan-quadrant--at_risk {
+  border-color: var(--wa-bad);
+  box-shadow: inset 3px 0 0 var(--wa-bad);
+}
+.plan-quadrant--at_risk header h4 { color: var(--wa-bad); }
+.plan-quadrant--fix_service { border-left: 3px solid var(--wa-warn); }
+.plan-quadrant--scale { border-left: 3px solid var(--wa-good); }
+
+/* ---- actions ------------------------------------------------------------- */
+.plan-actions { list-style: none; margin: 0; padding: 0; }
+
+.plan-action {
+  border: 1px solid var(--wa-hairline);
+  border-left-width: 3px;
+  border-radius: var(--wa-radius-sm);
+  padding: 0.9rem 1.05rem;
+  margin-bottom: 0.75rem;
+  background: var(--wa-surface);
+}
+
+.plan-action--critical { border-left-color: var(--wa-bad); }
+.plan-action--warning { border-left-color: var(--wa-warn); }
+.plan-action--info { border-left-color: var(--wa-info); }
+
+.plan-action__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+}
+
+.plan-action__sev {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--wa-text-faint);
+}
+
+.plan-action--critical .plan-action__sev { color: var(--wa-bad); }
+.plan-action--warning .plan-action__sev { color: var(--wa-warn); }
+.plan-action--info .plan-action__sev { color: var(--wa-info); }
+
+.plan-action h5 {
+  font-family: var(--wa-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--wa-text);
+}
+
+.plan-action p {
+  margin: 0;
+  font-size: 0.87rem;
+  color: var(--wa-text-dim);
+  line-height: 1.55;
+}
+
+/* ---- empty states -------------------------------------------------------- */
+/* An empty screen is an invitation to act, so it says what to change. */
+.plan-empty {
+  border: 1px dashed var(--wa-hairline-strong);
+  border-radius: var(--wa-radius);
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: var(--wa-text-dim);
+  background: var(--wa-surface);
+}
+
+@media (max-width: 720px) {
+  .plan-table th:nth-child(4),
+  .plan-table td:nth-child(4) { display: none; }
+  .plan-kpi__value { font-size: 1.55rem; }
+}
 </style>
 {% endblock %}
 
@@ -418,41 +702,28 @@
   <!-- Config Layer -->
   <div class="report-controls">
     <div class="max-width-container d-flex justify-content-between align-items-center">
+      {# One control, and it does something. "Audience Focus" and "Data
+         Density" were two more selects that reshuffled the same sections
+         without changing a number, so they are gone. #}
       <div class="control-group">
         <div class="control-item">
-          <span class="control-label">Perspective</span>
+          <span class="control-label">View</span>
           <select id="reportTypeSelect" class="control-select">
-            <option value="executive" selected>Executive Briefing</option>
-            <option value="sales">Sales Performance</option>
-            <option value="commercial">Commercial Review</option>
-            <option value="operational">Operational Mixed</option>
-            <option value="custom">Custom Configuration</option>
-          </select>
-        </div>
-        <div class="control-item">
-          <span class="control-label">Audience Focus</span>
-          <select id="audienceSelect" class="control-select">
-            <option value="executive" selected>C-Suite / Leadership</option>
-            <option value="manager">Management Routine</option>
-            <option value="analyst">Deep Analytics</option>
-          </select>
-        </div>
-        <div class="control-item">
-          <span class="control-label">Data Density</span>
-          <select id="detailSelect" class="control-select">
-            <option value="summary">Summary Insights</option>
-            <option value="standard" selected>Standard Reporting</option>
-            <option value="deep">Comprehensive</option>
+            <option value="full" selected>Everything</option>
+            <option value="demand">Demand only</option>
+            <option value="supply">Supply only</option>
+            <option value="actions">Just what to do</option>
+            <option value="custom">Choose sections</option>
           </select>
         </div>
       </div>
       
       <div class="d-flex gap-2 align-items-center">
-        <span class="small text-muted fw-bold me-3" id="lastSyncTime"><i class="bi bi-arrow-repeat spin"></i> Syncing Live Models...</span>
-        <button class="btn btn-outline-dark btn-sm fw-bold px-3" id="savePresetBtn">
+        <span class="small text-muted me-3" id="lastSyncTime"><i class="bi bi-arrow-repeat spin"></i> Loading…</span>
+        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" id="savePresetBtn">
           <i class="bi bi-bookmark-plus me-1"></i> SAVE VIEW
         </button>
-        <button class="btn btn-dark btn-sm fw-bold px-3" onclick="window.print()">
+        <button class="btn btn-primary btn-sm fw-bold px-3" onclick="window.print()">
           <i class="bi bi-file-earmark-pdf me-1"></i> GENERATE PDF
         </button>
       </div>
@@ -472,7 +743,7 @@
       <!-- Sidebar Nav -->
       <div>
         <nav class="report-nav" id="reportStickyNav">
-          <span class="section-eyebrow ps-2 mb-2">Report Hierarchy</span>
+          <span class="section-eyebrow ps-2 mb-2">Sections</span>
           <div id="dynamicNavItems">
             <!-- Dynamic Nav Items -->
           </div>
@@ -485,8 +756,8 @@
           <!-- Sections will be rendered here dynamically -->
           <div class="text-center py-5 mt-5">
             <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
-            <h4 class="fw-bold">Synthesizing Northgate Retail Analytics Intelligence...</h4>
-            <p class="text-muted fw-bold small">Running AI models, formatting multidimensional arrays, and preparing visuals.</p>
+            <h4 class="fw-bold">Reading demand and delivery history…</h4>
+            <p class="text-muted small">Comparing the two halves of the active window.</p>
           </div>
         </div>
       </div>
@@ -497,5 +768,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260414-v3"></script>
+<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260808-planner-1"></script>
 {% endblock %}

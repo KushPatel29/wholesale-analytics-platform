@@ -16,7 +16,8 @@ from app.services import (
     # stakeholder report was always empty.
     regions_bundle,
     overview_query,
-    analytics_utils as au
+    analytics_utils as au,
+    planning,
 )
 from app.core.exports import fmt_currency, fmt_percent
 
@@ -192,11 +193,6 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
     }
     
     # AI Solution Section
-    ai_solutions = [
-        {"title": "Automated Whitespace Expansion", "description": f"AI models identified {len(scatter_data) // 2} key accounts in Vancouver with high cross-sell potential for Specialty cuts, targeting up to {fmt_currency(total_rev * 0.05)} in untapped revenue."},
-        {"title": "Predictive Margin Recovery", "description": f"Algorithmic mix review suggests shifting {donut_labels[0] if donut_labels else 'Core'} inventory to higher-margin cuts to offset rising BC supply costs and stabilize the {margin_pct:.1f}% process margin."},
-        {"title": "Churn Risk Mitigation", "description": f"Machine learning risk models flagged {c_at_risk} 'Silent' accounts for immediate outreach based on historical order cadence deviations."}
-    ]
     
     # 4) Signals
     signals = [
@@ -245,11 +241,18 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
                 "retention_pct": 100 + round(float(kpis.get("customers_delta", 0)), 1),
                 "recovery_stat": f"{max(0, c_at_risk - 2)} / {c_at_risk}"
             },
-            "ai_solutions": ai_solutions,
-            "scenarios": _generate_ba_scenarios(kpis, sales_kpis, c_insights, supplier_exposure, month_progress_pct, margin_delta_pct),
-            "actions": _generate_ba_actions(kpis, sales_kpis, c_insights, day_of_month, margin_pct),
-            "conclusion": _generate_ba_conclusion(kpis, month_progress_pct),
-            "platform_overview": "Northgate Retail Analytics is a mission-critical intelligence layer for Vancouver meat distribution."
+            # The planner's own sections: demand direction, service level, and
+            # the disagreement between them. Computed from the scoped frame in
+            # app/services/planning.py.
+            #
+            # `ai_solutions`, `scenarios` and `conclusion` used to live here as
+            # generated prose - sentences like "maintains a defensive posture"
+            # that were true of no dataset in particular and were assembled
+            # from a template regardless of what the numbers said. They are
+            # gone; `planning.actions` is computed and every line of it points
+            # at a figure elsewhere on the page.
+            "planning": planning.build_planning(scoped_df),
+            "actions": _generate_ba_actions(kpis, sales_kpis, c_insights, day_of_month, margin_pct)
         },
         "meta": {
             "dataset_version": fact_store.cache_buster(),
@@ -299,38 +302,6 @@ def _generate_product_insights(p_kpis, p_movers):
         ]
     return insights
 
-def _generate_ba_scenarios(kpis, sales_kpis, c_insights, suppliers, pace, margin_delta):
-    scenarios = []
-    rev = kpis.get("rev_delta_pct", 0)
-    
-    if rev < -5:
-        scenarios.append({
-            "type": "Pacing Analysis",
-            "title": "Revenue Run-Rate Gap",
-            "description": f"The operation is trailing targets by {abs(rev):.1f}% with only {100-pace:.0f}% of the month remaining.",
-            "explanation": "Current run-rate is statistically insufficient to meet baseline monthly projections without tactical volume spikes.",
-            "signal": f"{rev:.1f}% MTD Variance"
-        })
-    
-    if margin_delta < -1:
-        scenarios.append({
-            "type": "Margin Audit",
-            "title": "Negative Yield Correlation",
-            "description": "Evidence of margin compression beginning in the second week of the reporting cycle.",
-            "explanation": "Rising BC sourcing costs for core proteins are eroding MTD process margins faster than price adjustments.",
-            "signal": f"Margin delta: {margin_delta:.1f}%"
-        })
-    
-    if not scenarios:
-        scenarios.append({
-            "type": "Operational Baseline",
-            "title": "Normalized Market Pulse",
-            "description": "Primary KPIs are tracking within expected +/- 1 standard deviation corridors.",
-            "explanation": "Standard seasonal demand patterns confirmed for Day-of-Week and Month-to-Date cycles.",
-            "signal": "Statistical Stability"
-        })
-        
-    return scenarios
 
 def _generate_ba_actions(kpis, sales_kpis, c_insights, day, margin):
     actions = []
@@ -348,7 +319,3 @@ def _generate_ba_actions(kpis, sales_kpis, c_insights, day, margin):
         
     return actions[:3]
 
-def _generate_ba_conclusion(kpis, pace):
-    rev = kpis.get("rev_delta_pct", 0)
-    status = "strong" if rev >= 0 else "defensive"
-    return f"Vancouver Market Pulse Conclusion: Northgate Retail Analytics BC maintains a {status} posture. With {pace:.0f}% of the month elapsed, the focus remains on SKU-level margin discipline and securing territory-level volume anchors."
