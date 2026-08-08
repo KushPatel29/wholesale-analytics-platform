@@ -40,6 +40,13 @@ RUN cp .env.demo .env \
 
 # Two threads rather than four: each in-flight request materialises pandas
 # frames, so thread count multiplies peak memory directly.
+#
+# One worker, and gunicorn_conf.py therefore does NOT preload. Preloading built
+# the app in the arbiter (~185 MB) and forked a worker whose pages stopped being
+# shared as soon as CPython touched a refcount, so the container carried two
+# copies of the app before serving anything. It also stranded the warm-up
+# thread in the arbiter - threads do not survive fork - so the worker answered
+# every request from caches nothing had warmed. See gunicorn_conf.py.
 ENV PORT=10000 \
     GUNICORN_WORKERS=1 \
     GUNICORN_THREADS=2 \

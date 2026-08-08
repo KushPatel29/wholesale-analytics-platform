@@ -15,6 +15,18 @@ work is already done.
 
 Off unless DEMO_WARMUP is set, because it only makes sense where the dataset
 ships with the image.
+
+**This must run in the process that serves requests.** `start_warmup` is called
+from `create_app`, so under `gunicorn --preload` the app is built in the arbiter
+and this thread starts there - and threads do not survive `fork()`. The workers
+were forking from a still-cold arbiter, then serving visitors from caches
+nothing ever warmed, while the arbiter quietly built a full set of caches it
+would never answer a request from. Every visitor paid full price and the box
+paid twice the memory.
+
+`gunicorn_conf.py` therefore only preloads when running more than one worker,
+which is the only case where preloading buys anything. `tests/test_demo_experience.py`
+pins that relationship.
 """
 
 from __future__ import annotations

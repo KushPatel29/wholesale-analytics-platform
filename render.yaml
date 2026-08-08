@@ -4,7 +4,17 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /healthz
-    autoDeployTrigger: checksPass
+
+    # `checksPass` waits for GitHub to report a commit status back to Render
+    # before building. That handshake never fired here - every push since the
+    # service was created sat undeployed while the dashboard showed auto-deploy
+    # as enabled - so the live demo silently ran whatever was current the day it
+    # was first created.
+    #
+    # `commit` builds on push, which is the right trade for a demo: CI runs on
+    # the same commit anyway, and a red build is more visible than no build.
+    autoDeployTrigger: commit
+
     envVars:
       - key: SECRET_KEY
         generateValue: true

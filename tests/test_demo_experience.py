@@ -181,6 +181,60 @@ class TestWarmup:
         assert "session_transaction" in source
 
 
+class TestWorkerModel:
+    """
+    The warm-up runs in a thread started by `create_app`, and threads do not
+    survive `fork()`. Under `gunicorn --preload` that means the arbiter builds
+    the app, starts the warm-up, warms its own caches, and then forks workers
+    that begin cold and stay cold - while the box carries two resident copies
+    of a ~185 MB app. That combination is what OOM-killed the hosted demo.
+
+    Preloading only pays for itself with several workers sharing one import, so
+    these pin the rule rather than the symptom.
+    """
+
+    @staticmethod
+    def _load_conf(monkeypatch, **env):
+        import importlib
+
+        for key in ("GUNICORN_WORKERS", "GUNICORN_PRELOAD", "GUNICORN_THREADS"):
+            monkeypatch.delenv(key, raising=False)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        import gunicorn_conf
+
+        return importlib.reload(gunicorn_conf)
+
+    def test_single_worker_does_not_preload(self, monkeypatch):
+        conf = self._load_conf(monkeypatch, GUNICORN_WORKERS="1")
+        assert conf.preload_app is False, (
+            "One worker plus --preload means two resident copies of the app and "
+            "a warm-up thread stranded in a process that never serves a request."
+        )
+
+    def test_multiple_workers_still_preload(self, monkeypatch):
+        conf = self._load_conf(monkeypatch, GUNICORN_WORKERS="4")
+        assert conf.preload_app is True
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("1", True), ("true", True), ("0", False), ("off", False)],
+    )
+    def test_explicit_override_wins(self, monkeypatch, value, expected):
+        conf = self._load_conf(monkeypatch, GUNICORN_WORKERS="1", GUNICORN_PRELOAD=value)
+        assert conf.preload_app is expected
+
+    def test_hosted_demo_runs_one_worker(self):
+        """
+        The Dockerfile is what the hosted demo actually runs, and the whole
+        memory argument above depends on it staying at one worker.
+        """
+        from pathlib import Path
+
+        dockerfile = Path(__file__).resolve().parent.parent / "Dockerfile"
+        assert "GUNICORN_WORKERS=1" in dockerfile.read_text(encoding="utf-8")
+
+
 class TestHealthCheck:
     def test_healthz_is_reachable_without_a_session(self, app):
         """
