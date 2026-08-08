@@ -250,6 +250,11 @@ def _init_duck_pragmas(conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute(f"PRAGMA memory_limit='{mem_limit}';")
     except Exception:
         logger.debug("labor_store.memory_limit_failed", exc_info=True)
+    # Same connection-per-thread, same in-memory database, so the same cliff -
+    # share fact_store's spill setup rather than let the two drift apart.
+    from .fact_store import _init_spill_directory
+
+    _init_spill_directory(conn, logger, "labor_store")
 
 
 def _register_views(conn: duckdb.DuckDBPyConnection, *, dataset_path: Optional[Path] = None) -> None:

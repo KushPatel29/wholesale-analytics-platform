@@ -48,17 +48,36 @@ RUN cp .env.demo .env \
 # copies of the app before serving anything. It also stranded the warm-up
 # thread in the arbiter - threads do not survive fork - so the worker answered
 # every request from caches nothing had warmed. See gunicorn_conf.py.
+#
+# One request thread, not two. `fact_store` keeps its DuckDB connection in a
+# `threading.local`, so the memory limit below is charged *per thread*, not per
+# process - two request threads plus the warm-up thread meant three in-memory
+# databases and three times the cap. Serialising requests costs latency on a
+# page that fires several XHRs at once; it is the cheaper half of the trade
+# against an OOM kill, which restarts the container and takes every warmed
+# cache with it.
 ENV PORT=10000 \
     GUNICORN_WORKERS=1 \
-    GUNICORN_THREADS=2 \
+    GUNICORN_THREADS=1 \
     GUNICORN_TIMEOUT=180
 
 # DuckDB defaults to a 2 GB memory limit, which on a 512 MB container means the
 # platform kills the container instead of DuckDB spilling. Cap it well under
 # the container limit and keep it single-threaded so query threads do not
 # multiply peak memory.
-ENV DUCKDB_MEMORY_LIMIT=128MB \
-    DUCKDB_THREADS=1
+#
+# The cap is charged per connection and there is one per thread, so the number
+# that matters is this times the thread count above, not this on its own.
+#
+# It also only behaves like a cap if DuckDB can spill. It defaults to spilling
+# into `.tmp` relative to the working directory - `/app` here, the application's
+# own directory - and when that is not writable a query that crosses the limit
+# raises OutOfMemoryException rather than slowing down. Pin it to /tmp so the
+# limit is a budget, which is what the comment above always assumed it was.
+ENV DUCKDB_MEMORY_LIMIT=112MB \
+    DUCKDB_THREADS=1 \
+    DUCKDB_TEMP_DIRECTORY=/tmp/duckdb \
+    DUCKDB_MAX_TEMP_DIRECTORY_SIZE=2GB
 
 # Build the caches in the background at boot so no visitor pays for the first
 # render of a page. Paced so the warm-up never starves a real request on a

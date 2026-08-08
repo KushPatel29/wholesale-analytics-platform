@@ -15,6 +15,9 @@ credentials or warms anything.
 from __future__ import annotations
 
 
+import logging
+import os
+
 import pytest
 
 from app import create_app
@@ -233,6 +236,116 @@ class TestWorkerModel:
 
         dockerfile = Path(__file__).resolve().parent.parent / "Dockerfile"
         assert "GUNICORN_WORKERS=1" in dockerfile.read_text(encoding="utf-8")
+
+
+class TestDuckMemoryBudget:
+    """
+    `fact_store` holds its DuckDB connection in a `threading.local`, so
+    `DUCKDB_MEMORY_LIMIT` is charged once per thread, not once per process. The
+    hosted demo ran two request threads plus the warm-up thread against a
+    128 MB limit and a ~185 MB resident app, which is ~569 MB on a 512 MB
+    container: opening Products OOM-killed it, and the restart wiped every
+    warmed cache, so the *next* visitor got the degraded filters that made this
+    look like a front-end timeout.
+
+    These pin the relationship rather than the numbers, so the limit stays
+    tunable but cannot quietly be multiplied past the container again.
+    """
+
+    CONTAINER_MB = 512
+    APP_RESIDENT_MB = 185
+
+    @staticmethod
+    def _docker_env():
+        import re
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text(encoding="utf-8")
+        return dict(re.findall(r"([A-Z_][A-Z0-9_]*)=([^\s\\]+)", text))
+
+    @staticmethod
+    def _to_mb(value):
+        import re
+
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(KB|MB|GB)", value.strip(), re.I)
+        assert m, f"unparseable size {value!r}"
+        return float(m.group(1)) * {"kb": 1 / 1024, "mb": 1.0, "gb": 1024.0}[m.group(2).lower()]
+
+    def test_total_duck_budget_fits_the_container(self):
+        env = self._docker_env()
+        per_conn = self._to_mb(env["DUCKDB_MEMORY_LIMIT"])
+        # One connection per request thread, plus the warm-up thread, which
+        # holds its own for the whole warm-up and overlaps real traffic.
+        connections = int(env["GUNICORN_THREADS"]) * int(env["GUNICORN_WORKERS"]) + 1
+        budget = per_conn * connections + self.APP_RESIDENT_MB
+        assert budget < self.CONTAINER_MB, (
+            f"{connections} DuckDB connections x {per_conn:.0f} MB plus a "
+            f"{self.APP_RESIDENT_MB} MB app is {budget:.0f} MB on a "
+            f"{self.CONTAINER_MB} MB container - this is an OOM kill, and the "
+            "restart costs every warmed cache, not just the request."
+        )
+
+    def test_headroom_is_left_for_result_materialisation(self):
+        """
+        `_execute_df` takes up to three `df.copy()` of a result - request
+        cache, query cache, and the in-flight future - so the frame peaks at
+        several times its own size outside DuckDB's accounting.
+        """
+        env = self._docker_env()
+        per_conn = self._to_mb(env["DUCKDB_MEMORY_LIMIT"])
+        connections = int(env["GUNICORN_THREADS"]) * int(env["GUNICORN_WORKERS"]) + 1
+        headroom = self.CONTAINER_MB - (per_conn * connections + self.APP_RESIDENT_MB)
+        assert headroom >= 64, (
+            f"only {headroom:.0f} MB left for pandas copies and the JSON "
+            "response; DuckDB's limit does not cover either."
+        )
+
+    def test_spill_directory_is_absolute(self):
+        """
+        DuckDB defaults to `.tmp` relative to the working directory, which in
+        the image is the application's own `/app`. A relative default is what
+        turned the memory limit into an OutOfMemoryException instead of a
+        slower query, so the image has to name an absolute scratch path.
+        """
+        env = self._docker_env()
+        temp_dir = env.get("DUCKDB_TEMP_DIRECTORY", "")
+        assert temp_dir.startswith("/"), (
+            f"DUCKDB_TEMP_DIRECTORY={temp_dir!r} must be absolute; a relative "
+            "path resolves against /app and may not be writable"
+        )
+        assert "DUCKDB_MAX_TEMP_DIRECTORY_SIZE" in env, "an unbounded spill just moves the outage to the disk"
+
+    def test_spill_directory_is_applied_to_the_connection(self, tmp_path, monkeypatch):
+        """The pragma has to reach DuckDB, not just the environment."""
+        import duckdb
+
+        from app.services.fact_store import _init_spill_directory
+
+        target = tmp_path / "duckspill"
+        monkeypatch.setenv("DUCKDB_TEMP_DIRECTORY", str(target))
+        monkeypatch.setenv("DUCKDB_MAX_TEMP_DIRECTORY_SIZE", "1GB")
+        conn = duckdb.connect(":memory:")
+        try:
+            _init_spill_directory(conn, logging.getLogger(__name__), "test")
+            applied = conn.execute("SELECT current_setting('temp_directory')").fetchone()[0]
+        finally:
+            conn.close()
+        assert os.path.normcase(os.path.normpath(applied)) == os.path.normcase(os.path.normpath(str(target)))
+        assert target.exists(), "the directory has to exist before DuckDB needs to spill into it"
+
+    def test_spill_config_is_optional(self, monkeypatch):
+        """Unset means leave DuckDB's own default alone, not crash."""
+        import duckdb
+
+        from app.services.fact_store import _init_spill_directory
+
+        monkeypatch.delenv("DUCKDB_TEMP_DIRECTORY", raising=False)
+        monkeypatch.delenv("DUCKDB_TEMP_DIR", raising=False)
+        conn = duckdb.connect(":memory:")
+        try:
+            _init_spill_directory(conn, logging.getLogger(__name__), "test")
+        finally:
+            conn.close()
 
 
 class TestHealthCheck:

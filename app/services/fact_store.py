@@ -211,6 +211,53 @@ def _init_duck_pragmas(conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute(f"PRAGMA memory_limit='{mem_limit}';")
     except Exception:
         logger.debug("duckdb.memory_limit_failed", exc_info=True)
+    _init_spill_directory(conn, logger, "duckdb")
+
+
+def _init_spill_directory(
+    conn: duckdb.DuckDBPyConnection, log: logging.Logger, tag: str
+) -> None:
+    """
+    Pin DuckDB's spill directory somewhere that is certain to be writable.
+
+    DuckDB does spill by default, but to `.tmp` - a path relative to the
+    process working directory, which in the image is `/app`. That is the
+    application's own directory, not scratch space, and whether it is writable
+    is a property of how the container happens to be run rather than anything
+    this code controls. When it is not, the fallback is not a slower query: the
+    buffer manager has nowhere to evict to and raises OutOfMemoryException, so
+    `memory_limit` stops being a budget and becomes a cliff.
+
+    The products bundle is the one that finds the edge - it ran the cap to
+    121.9/122.0 MiB and threw. Naming an absolute path under `/tmp` removes the
+    question, and lets the limit sit low enough for a 512 MB container without
+    the low limit turning into failed queries.
+
+    Bounded, because the container's disk is as finite as its memory and an
+    unbounded spill just relocates the outage.
+    """
+    temp_dir = (
+        os.getenv("DUCKDB_TEMP_DIRECTORY") or os.getenv("DUCKDB_TEMP_DIR") or ""
+    ).strip()
+    if not temp_dir:
+        return
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+    except Exception:
+        log.debug("%s.temp_directory_mkdir_failed", tag, exc_info=True)
+        return
+    try:
+        conn.execute(f"PRAGMA temp_directory='{temp_dir}';")
+    except Exception:
+        log.debug("%s.temp_directory_failed", tag, exc_info=True)
+        return
+    max_spill = (os.getenv("DUCKDB_MAX_TEMP_DIRECTORY_SIZE") or "").strip()
+    if not max_spill:
+        return
+    try:
+        conn.execute(f"PRAGMA max_temp_directory_size='{max_spill}';")
+    except Exception:
+        log.debug("%s.max_temp_directory_size_failed", tag, exc_info=True)
 
 
 def _register_fact_view(conn: duckdb.DuckDBPyConnection) -> None:
