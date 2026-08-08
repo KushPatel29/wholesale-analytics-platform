@@ -271,14 +271,32 @@ class TestInventoryPosition:
         assert planning._cover_target(fresh) == planning.COVER_TARGET_DAYS_PERISHABLE
         assert planning._cover_target(ambient) == planning.COVER_TARGET_DAYS_AMBIENT
 
-    def test_excess_is_measured_against_that_target(self):
-        # Ambient target is 45 days; 1.6x that is 72. Half the lines sit above it.
-        rows = [_supply_line(cover=120.0, on_hand_value=1000.0) for _ in range(5)]
-        rows += [_supply_line(cover=30.0, on_hand_value=1000.0) for _ in range(5)]
-        position = planning._inventory_position(_frame(rows))
-        assert position["on_hand_value"] == pytest.approx(10_000.0)
-        assert position["excess_value"] == pytest.approx(5_000.0)
-        assert position["excess_share_pct"] == pytest.approx(50.0)
+    def test_stock_value_is_one_position_per_sku_not_a_sum_of_line_snapshots(self):
+        """
+        Every line carries a snapshot of the position it was picked against, so
+        summing the column counts the same SKU's stock once per line. One SKU
+        on ten lines holding $1,000 is $1,000 of inventory, not $10,000 -
+        summing it reported 0.16 annual turns for a grocery chain.
+        """
+        rows = [_supply_line(on_hand_value=1000.0, cover=30.0) for _ in range(10)]
+        frame = _frame(rows)
+        frame["ProductId"] = "P1"
+        assert planning._inventory_position(frame)["on_hand_value"] == pytest.approx(1000.0)
+
+        frame2 = _frame([_supply_line(on_hand_value=1000.0, cover=30.0) for _ in range(10)])
+        frame2["ProductId"] = [f"P{i}" for i in range(10)]
+        assert planning._inventory_position(frame2)["on_hand_value"] == pytest.approx(10_000.0)
+
+    def test_turns_are_annualised_from_the_window(self):
+        """A ten-month window must not report ten months of turns as a year."""
+        rows = [_supply_line(on_hand_value=1000.0, cover=30.0) for _ in range(10)]
+        frame = _frame(rows)
+        frame["ProductId"] = "P1"
+        frame["CostPrice"] = 500.0                      # 10 lines x 500 = 5,000 COGS
+        frame["Date"] = pd.date_range("2026-01-01", periods=10, freq="D")
+        position = planning._inventory_position(frame)
+        # 9 days of window, 5,000 COGS, 1,000 average inventory.
+        assert position["turns"] == pytest.approx(5_000 * (365 / 9) / 1000, rel=0.02)
 
     def test_below_reorder_counts_lines_under_their_own_reorder_point(self):
         rows = [_supply_line(on_hand=10.0, reorder=50.0) for _ in range(3)]

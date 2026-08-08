@@ -1143,7 +1143,24 @@
       });
       if (pageCache) pageCache.rememberResponse(url, res);
       if (res.status === 304) {
-        if (!lastPayload && snapshot?.payload) renderPayload(snapshot.payload || {}, { append: false });
+      // A 304 says "your copy is current", but the page cache stores only the
+      // ETag - the body lives in a separate snapshot that may be absent,
+      // expired, or too large to have been kept. With neither a rendered
+      // payload nor a snapshot there is nothing to be current, so re-request
+      // unconditionally rather than leaving the page on its placeholders.
+        if (!lastPayload && !snapshot?.payload) {
+          const retry = await fetch(url, {
+            credentials: "same-origin",
+            signal: inflight.signal,
+            headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+          });
+          if (pageCache) pageCache.rememberResponse(url, retry);
+          const retryRaw = await retry.json();
+          const retryPayload = window.normalizeBundlePayload ? window.normalizeBundlePayload(retryRaw) : retryRaw;
+          if (requestId === state.requestId && retry.ok) renderPayload(retryPayload || {}, { append: false });
+        } else if (!lastPayload && snapshot?.payload) {
+          renderPayload(snapshot.payload || {}, { append: false });
+        }
         setText(els.tableStatus, "Loaded");
         return;
       }

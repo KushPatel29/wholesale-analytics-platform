@@ -934,7 +934,21 @@
       });
       if (pageCache) pageCache.rememberResponse(url, response);
       if (response.status === 304) {
-        if (!lastPayload && snapshot?.payload) applyPayload(snapshot.payload);
+      // A 304 says "your copy is current", but the page cache stores only the
+      // ETag - the body lives in a separate snapshot that may be absent,
+      // expired, or too large to have been kept. With neither a rendered
+      // payload nor a snapshot there is nothing to be current, so re-request
+      // unconditionally rather than leaving the page on its placeholders.
+        if (lastPayload) return;
+        if (snapshot?.payload) { applyPayload(snapshot.payload); return; }
+        const retry = await fetch(url, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+        });
+        if (pageCache) pageCache.rememberResponse(url, retry);
+        const retryPayload = await retry.json();
+        if (!retry.ok) throw new Error(retryPayload?.error?.message || `HTTP ${retry.status}`);
+        applyPayload(retryPayload);
         return;
       }
       const payload = await response.json();

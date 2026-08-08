@@ -2823,35 +2823,45 @@ def _analysis_sql(cte_sql: str) -> str:
                 SUM(
                     CASE
                         WHEN is_current_window = 1
-                             AND LOWER(COALESCE(protein_family, category_name, '')) LIKE '%beef%'
-                        THEN revenue
-                        ELSE 0
-                    END
-                ) AS beef_revenue,
-                SUM(
-                    CASE
-                        WHEN is_current_window = 1
                              AND (
-                                 LOWER(COALESCE(protein_family, category_name, '')) LIKE '%poultry%'
-                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%chicken%'
-                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%turkey%'
+                                 LOWER(COALESCE(protein_family, category_name, '')) LIKE '%fresh%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%produce%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%meat%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%seafood%'
                              )
                         THEN revenue
                         ELSE 0
                     END
-                ) AS poultry_revenue,
+                ) AS fresh_revenue,
                 SUM(
                     CASE
                         WHEN is_current_window = 1
                              AND (
-                                 LOWER(COALESCE(protein_family, category_name, '')) LIKE '%pork%'
-                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%ham%'
-                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%bacon%'
+                                 LOWER(COALESCE(protein_family, category_name, '')) LIKE '%grocery%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%dairy%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%frozen%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%household%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%health%'
                              )
                         THEN revenue
                         ELSE 0
                     END
-                ) AS pork_revenue,
+                ) AS consumables_revenue,
+                SUM(
+                    CASE
+                        WHEN is_current_window = 1
+                             AND (
+                                 LOWER(COALESCE(protein_family, category_name, '')) LIKE '%apparel%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%electronics%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%home%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%kitchen%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%toys%'
+                                 OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%seasonal%'
+                             )
+                        THEN revenue
+                        ELSE 0
+                    END
+                ) AS gm_revenue,
                 SUM(CASE WHEN ab.is_current_window = 1 THEN ab.profit END) AS profit,
                 SUM(CASE WHEN ab.is_yoy_window = 1 THEN ab.profit END) AS yoy_profit,
                 COUNT(DISTINCT CASE WHEN ab.is_current_window = 1 THEN ab.order_id END) AS orders,
@@ -2866,9 +2876,9 @@ def _analysis_sql(cte_sql: str) -> str:
                 END AS is_overdue,
                 -- 🎯 God Level Opportunity Score: (Protein Gap + Momentum Loss) * Account Size
                 (
-                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND LOWER(COALESCE(protein_family, category_name, '')) LIKE '%beef%' THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 20 ELSE 0 END) +
-                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND (LOWER(COALESCE(protein_family, category_name, '')) LIKE '%poultry%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%chicken%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%turkey%') THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 15 ELSE 0 END) +
-                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND (LOWER(COALESCE(protein_family, category_name, '')) LIKE '%pork%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%ham%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%bacon%') THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 15 ELSE 0 END) +
+                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND LOWER(COALESCE(protein_family, category_name, '')) LIKE '%fresh%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%meat%' THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 20 ELSE 0 END) +
+                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND (LOWER(COALESCE(protein_family, category_name, '')) LIKE '%grocery%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%dairy%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%household%') THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 15 ELSE 0 END) +
+                    (CASE WHEN SUM(CASE WHEN ab.is_current_window = 1 AND (LOWER(COALESCE(protein_family, category_name, '')) LIKE '%apparel%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%electronics%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%home%') THEN revenue ELSE 0 END) = 0 AND SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) > 0 THEN 15 ELSE 0 END) +
                     (CASE WHEN SUM(CASE WHEN is_current_window = 1 THEN revenue ELSE 0 END) < SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END) THEN 10 ELSE 0 END)
                 ) * (LOG(NULLIF(SUM(CASE WHEN is_prior_window = 1 THEN revenue ELSE 0 END), 0)) + 1) AS opportunity_score,
                 LIST(DISTINCT ab.protein_family) FILTER (WHERE ab.protein_family IS NOT NULL AND ab.protein_family <> 'Unassigned') AS historical_proteins
@@ -2993,9 +3003,9 @@ def _analysis_sql(cte_sql: str) -> str:
             CASE WHEN yoy_revenue > 0 THEN (revenue - yoy_revenue) / yoy_revenue * 100 ELSE NULL END AS metric_4,
             CASE WHEN prior_revenue > 0 THEN (revenue - prior_revenue) / prior_revenue * 100 ELSE NULL END AS metric_5,
             CAST(orders AS DOUBLE) AS metric_6,
-            beef_revenue AS metric_7,
-            poultry_revenue AS metric_8,
-            pork_revenue AS metric_9,
+            fresh_revenue AS metric_7,
+            consumables_revenue AS metric_8,
+            gm_revenue AS metric_9,
             CASE WHEN is_overdue THEN 1.0 ELSE 0.0 END AS metric_10,
             avg_days_between_orders AS metric_11,
             delivery_lat AS metric_12,
@@ -3423,9 +3433,9 @@ def _build_analysis_sections(analysis_df, rollup_rows: List[Dict[str, Any]]) -> 
                     "mom_revenue_pct": metric_5,
                     "vs_prior_pct": metric_5,
                     "orders": _clean_int(metric_6),
-                    "beef_revenue": metric_7,
-                    "poultry_revenue": metric_8,
-                    "pork_revenue": metric_9,
+                    "fresh_revenue": metric_7,
+                    "consumables_revenue": metric_8,
+                    "gm_revenue": metric_9,
                     "is_overdue": bool(metric_10),
                     "avg_days_between_orders": metric_11,
                     "delivery_lat": metric_12,
@@ -3450,9 +3460,9 @@ def _build_analysis_sections(analysis_df, rollup_rows: List[Dict[str, Any]]) -> 
                     "mom_revenue_pct": metric_4,
                     "yoy_revenue_pct": metric_5,
                     "orders": _clean_int(metric_6),
-                    "beef_revenue": metric_7,
-                    "poultry_revenue": metric_8,
-                    "pork_revenue": metric_9,
+                    "fresh_revenue": metric_7,
+                    "consumables_revenue": metric_8,
+                    "gm_revenue": metric_9,
                     "territory_name": text_1,
                     "delivery_lat": _clean_optional(rec.get("delivery_lat", metric_12)),
                     "delivery_lng": _clean_optional(rec.get("delivery_lng", metric_13)),
@@ -4648,9 +4658,9 @@ def build_salesreps_drilldown(rep_id: str, filters: Any, scope: Dict[str, Any], 
         )
         row["delivery_lat"] = _clean_optional(row.get("delivery_lat"))
         row["delivery_lng"] = _clean_optional(row.get("delivery_lng"))
-        row["beef_revenue"] = _clean_float(row.get("beef_revenue"))
-        row["poultry_revenue"] = _clean_float(row.get("poultry_revenue"))
-        row["pork_revenue"] = _clean_float(row.get("pork_revenue"))
+        row["fresh_revenue"] = _clean_float(row.get("fresh_revenue"))
+        row["consumables_revenue"] = _clean_float(row.get("consumables_revenue"))
+        row["gm_revenue"] = _clean_float(row.get("gm_revenue"))
 
     for row in products_records:
         row["margin_pct"] = _clean_optional(row.get("margin_pct"))
@@ -4948,9 +4958,9 @@ def build_salesreps_drilldown(rep_id: str, filters: Any, scope: Dict[str, Any], 
     lost_accounts = _salesrep_lost_accounts(customers_records, ref_date)
 
     gap_columns = [
-        {"key": "beef", "label": "Beef"},
-        {"key": "poultry", "label": "Poultry"},
-        {"key": "pork", "label": "Pork"},
+        {"key": "fresh", "label": "Fresh & Meat"},
+        {"key": "consumables", "label": "Consumables"},
+        {"key": "gm", "label": "Gen. Merch"},
     ]
     gap_summary = {column["key"]: 0 for column in gap_columns}
     gap_rows: List[Dict[str, Any]] = []
@@ -5628,27 +5638,27 @@ def _salesrep_customers_frame(scoped_sql: str, params_rep: list[Any]) -> Any:
             MAX(inherited_flag) AS inherited_flag,
             SUM(
                 CASE WHEN is_current_window = 1
-                          AND LOWER(COALESCE(protein_family, category_name, '')) LIKE '%beef%'
+                          AND LOWER(COALESCE(protein_family, category_name, '')) LIKE '%fresh%' OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%meat%'
                      THEN revenue ELSE 0 END
-            ) AS beef_revenue,
+            ) AS fresh_revenue,
             SUM(
                 CASE WHEN is_current_window = 1
                           AND (
-                              LOWER(COALESCE(protein_family, category_name, '')) LIKE '%poultry%'
+                              LOWER(COALESCE(protein_family, category_name, '')) LIKE '%grocery%'
                               OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%chicken%'
                               OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%turkey%'
                           )
                      THEN revenue ELSE 0 END
-            ) AS poultry_revenue,
+            ) AS consumables_revenue,
             SUM(
                 CASE WHEN is_current_window = 1
                           AND (
-                              LOWER(COALESCE(protein_family, category_name, '')) LIKE '%pork%'
+                              LOWER(COALESCE(protein_family, category_name, '')) LIKE '%apparel%'
                               OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%ham%'
                               OR LOWER(COALESCE(protein_family, category_name, '')) LIKE '%bacon%'
                           )
                      THEN revenue ELSE 0 END
-            ) AS pork_revenue,
+            ) AS gm_revenue,
             SUM(CASE WHEN is_yoy_window = 1 THEN revenue ELSE 0 END) AS yoy_revenue,
             SUM(CASE WHEN is_current_window = 1 AND order_date > ref.ref_date - INTERVAL 30 DAY THEN revenue ELSE 0 END) AS revenue_last_30,
             SUM(CASE WHEN is_current_window = 1 AND order_date <= ref.ref_date - INTERVAL 30 DAY AND order_date > ref.ref_date - INTERVAL 60 DAY THEN revenue ELSE 0 END) AS revenue_prev_30,

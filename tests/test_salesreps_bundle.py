@@ -337,8 +337,8 @@ def test_analysis_sections_use_readable_owner_names(monkeypatch):
     assert sections["top_customers"][0]["yoy_revenue_pct"] == pytest.approx(12.5, abs=0.01)
     assert sections["top_customers"][0]["mom_revenue_pct"] == pytest.approx(-8.0, abs=0.01)
     assert sections["top_customers"][0]["orders"] == pytest.approx(4.0, abs=0.01)
-    assert sections["top_customers"][0]["beef_revenue"] == pytest.approx(600.0, abs=0.01)
-    assert sections["top_customers"][0]["poultry_revenue"] == pytest.approx(0.0, abs=0.01)
+    assert sections["top_customers"][0]["fresh_revenue"] == pytest.approx(600.0, abs=0.01)
+    assert sections["top_customers"][0]["consumables_revenue"] == pytest.approx(0.0, abs=0.01)
     assert sections["map_customers"][0]["customer_name"] == "Mapped Customer"
     assert sections["map_customers"][0]["account_owner_name"] == "Scott Switzer"
     assert sections["map_customers"][0]["delivery_lat"] == pytest.approx(48.4284, abs=0.0001)

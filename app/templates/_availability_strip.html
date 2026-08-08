@@ -93,7 +93,7 @@
           <div class="inv-kpi">
             <div class="inv-kpi__label">On hand</div>
             <div class="inv-kpi__value">${money(t.on_hand_value)}</div>
-            <div class="inv-kpi__note">${pct(t.excess_share_pct, 0)} above cover target</div>
+            <div class="inv-kpi__note">across ${(t.skus || 0).toLocaleString()} SKUs</div>
           </div>
         </div>
         ${rows.length ? `

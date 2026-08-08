@@ -4213,34 +4213,50 @@
     renderHealthMatrix(payload.health_matrix || {});
   };
 
+  // One renderer throwing used to take out every renderer after it in this
+  // chain, which is how the pricing guardrails, margin-risk counts and
+  // concentration figures ended up permanently on their placeholders while the
+  // payload that fed them was complete. A section that fails should cost its
+  // own section and nothing else, and it should say which one it was.
+  const safeRender = (label, fn) => {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`products: ${label} failed to render`, err);
+    }
+  };
+
   const renderDetailBundle = (payload = {}) => {
     const chartsPayload = payload.charts || {};
-    const elasticWatch = buildElasticGuardrailWatch(payload);
-    const alertCandidates = buildAlertCandidates(payload, elasticWatch);
-    renderSectionBriefs(payload);
-    renderVelocity(payload.velocity || {});
-    renderInsights(payload.insights || [], payload.projected_next_month || null, payload.comparison || {});
-    bindInsightCards();
-    renderHealthMatrix(payload.health_matrix || {});
-    renderProteinIntelligence(payload.protein_insights || {});
-    renderPriceVelocity(payload.price_vs_velocity || chartsPayload.price_velocity || []);
-    renderPerformanceBubble(payload.performance_bubble || {});
-    renderPriceDist(chartsPayload.unit_price_dist || []);
-    renderMovers(chartsPayload.movers || []);
-    renderTopProducts(chartsPayload.top_products || []);
-    renderPareto(chartsPayload.pareto || []);
+    let elasticWatch = [];
+    let alertCandidates = [];
+    safeRender("elastic guardrail watch", () => { elasticWatch = buildElasticGuardrailWatch(payload); });
+    safeRender("alert candidates", () => { alertCandidates = buildAlertCandidates(payload, elasticWatch); });
+
+    safeRender("section briefs", () => renderSectionBriefs(payload));
+    safeRender("velocity", () => renderVelocity(payload.velocity || {}));
+    safeRender("insights", () => renderInsights(payload.insights || [], payload.projected_next_month || null, payload.comparison || {}));
+    safeRender("insight cards", () => bindInsightCards());
+    safeRender("health matrix", () => renderHealthMatrix(payload.health_matrix || {}));
+    safeRender("department intelligence", () => renderProteinIntelligence(payload.protein_insights || {}));
+    safeRender("price vs velocity", () => renderPriceVelocity(payload.price_vs_velocity || chartsPayload.price_velocity || []));
+    safeRender("performance bubble", () => renderPerformanceBubble(payload.performance_bubble || {}));
+    safeRender("price distribution", () => renderPriceDist(chartsPayload.unit_price_dist || []));
+    safeRender("movers", () => renderMovers(chartsPayload.movers || []));
+    safeRender("top products", () => renderTopProducts(chartsPayload.top_products || []));
+    safeRender("pareto", () => renderPareto(chartsPayload.pareto || []));
     const segments = chartsPayload.segments || {};
-    renderSegmentSummary(segments.summary || []);
-    renderSegmentMovers(segments.movers || []);
-    renderSegmentMixShift(segments.mix_shift || []);
-    renderRecommendations(payload.recommendations || []);
-    renderRiskOpportunity(payload.concentration || {}, payload.risk_opportunity || {});
-    renderPricingGuardrails(payload.pricing_guardrails || {});
-    renderElasticGuardrails(elasticWatch);
-    renderAlertCandidates("pricingAlertCandidateList", alertCandidates);
-    renderExecutionLists(payload.execution_lists || {});
-    renderDecisionWorkbench();
-    renderStagedActions();
+    safeRender("segment summary", () => renderSegmentSummary(segments.summary || []));
+    safeRender("segment movers", () => renderSegmentMovers(segments.movers || []));
+    safeRender("segment mix shift", () => renderSegmentMixShift(segments.mix_shift || []));
+    safeRender("recommendations", () => renderRecommendations(payload.recommendations || []));
+    safeRender("risk and opportunity", () => renderRiskOpportunity(payload.concentration || {}, payload.risk_opportunity || {}));
+    safeRender("pricing guardrails", () => renderPricingGuardrails(payload.pricing_guardrails || {}));
+    safeRender("elastic guardrails", () => renderElasticGuardrails(elasticWatch));
+    safeRender("alert candidate list", () => renderAlertCandidates("pricingAlertCandidateList", alertCandidates));
+    safeRender("execution lists", () => renderExecutionLists(payload.execution_lists || {}));
+    safeRender("decision workbench", () => renderDecisionWorkbench());
+    safeRender("staged actions", () => renderStagedActions());
   };
 
   const renderTableBundle = (payload = {}) => {
@@ -4309,6 +4325,41 @@
     });
   };
 
+  // Which payload keys prove a group has actually been rendered into. Used to
+  // decide whether a 304 is trustworthy: the page cache stores ETags only, so
+  // "not modified" is meaningless for a group whose body we never kept.
+  const GROUP_PAYLOAD_KEYS = {
+    summary: ["kpis", "trend"],
+    detail: ["risk_opportunity", "concentration", "pricing_guardrails"],
+    table: ["table"],
+  };
+
+  const groupHasData = (group, payload) => {
+    const keys = GROUP_PAYLOAD_KEYS[group] || [];
+    if (!keys.length || !payload) return false;
+    return keys.some((key) => {
+      const value = payload[key];
+      if (value == null) return false;
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === "object") return Object.keys(value).length > 0;
+      return true;
+    });
+  };
+
+  const renderGroup = (group, payload) => {
+    if (window.renderAvailabilityStrip) {
+      window.renderAvailabilityStrip("productsAvailability", payload.inventory, {
+        eyebrow: "Availability and stock position",
+        rowsKey: "by_department",
+        rowLabel: "Department",
+        note: "On-time and in-full for the active filters, with the cover behind it. Departments below target sort first."
+      });
+    }
+    if (group === "summary") renderSummaryBundle(payload);
+    if (group === "detail") renderDetailBundle(payload);
+    if (group === "table") renderTableBundle(payload);
+  };
+
   const fetchBundleSection = async (group, { force = false } = {}) => {
     const groupState = requestState[group];
     if (!groupState) return null;
@@ -4332,8 +4383,36 @@
       });
       if (pageCache) pageCache.rememberResponse(url, res);
       if (res.status === 304) {
+        // A 304 means "your copy is current" - but the page cache only ever
+        // stored the ETag, never the body, so for a group we have not rendered
+        // yet there is no copy to be current. Marking it loaded and returning
+        // left the pricing guardrails, margin-risk counts and concentration
+        // figures on their em-dash placeholders permanently.
+        //
+        // If we genuinely already hold this group's data, the 304 is correct
+        // and there is nothing to do. If we do not, re-request unconditionally
+        // and render the body.
+        if (groupHasData(group, lastPayload)) {
+          groupState.loaded = true;
+          if (group === "summary" && pendingGlobalApplyAck) dispatchGlobalApplyAck();
+          return lastPayload;
+        }
+        const retry = await authFetch(url, {
+          signal: controller.signal,
+          credentials: "same-origin",
+          headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+        });
+        if (pageCache) pageCache.rememberResponse(url, retry);
+        if (reqId !== groupState.reqId) return null;
+        const retryRaw = await retry.json();
+        const retryPayload = window.normalizeBundlePayload ? window.normalizeBundlePayload(retryRaw) : retryRaw;
+        if (!retry.ok) throw new Error(retryPayload?.error?.message || `HTTP ${retry.status}`);
+        lastPayload = mergePayload(lastPayload || {}, retryPayload || {});
+        renderGroup(group, lastPayload);
+        finalizeBundleRender();
         groupState.loaded = true;
-        if (group === "summary" && pendingGlobalApplyAck) dispatchGlobalApplyAck();
+        persistSnapshot(lastPayload);
+        if (group === "summary") dispatchGlobalApplyAck();
         return lastPayload;
       }
       const raw = await res.json();
@@ -4341,19 +4420,7 @@
       const partialPayload = window.normalizeBundlePayload ? window.normalizeBundlePayload(raw) : raw;
       if (!res.ok) throw new Error(partialPayload?.error?.message || `HTTP ${res.status}`);
       lastPayload = mergePayload(lastPayload || {}, partialPayload || {});
-      // Availability, above the merchandising layers. A page that shows margin
-      // without showing whether the item is on the shelf tells half the story.
-      if (window.renderAvailabilityStrip) {
-        window.renderAvailabilityStrip("productsAvailability", lastPayload.inventory, {
-          eyebrow: "Availability and stock position",
-          rowsKey: "by_department",
-          rowLabel: "Department",
-          note: "On-time and in-full for the active filters, with the cover behind it. Departments below target sort first."
-        });
-      }
-      if (group === "summary") renderSummaryBundle(lastPayload);
-      if (group === "detail") renderDetailBundle(lastPayload);
-      if (group === "table") renderTableBundle(lastPayload);
+      renderGroup(group, lastPayload);
       finalizeBundleRender();
       groupState.loaded = true;
       persistSnapshot(lastPayload);
@@ -4702,6 +4769,7 @@
     if (!group) return Promise.resolve(lastPayload);
     return ensureGroupLoaded(group, options);
   };
+
 
   const setupLazySectionObserver = () => {
     if (sectionObserver?.disconnect) sectionObserver.disconnect();

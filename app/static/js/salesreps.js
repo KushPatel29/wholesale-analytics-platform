@@ -2052,10 +2052,10 @@
     // Executive Narrative Logic (Performance Story)
     let storyHtml = "";
     const revMoM = opt(kpis.revenue_mom_pct);
-    const beefRow = (analysis.proteins || []).find(p => p.protein_family === "Beef");
-    if (beefRow && revMoM !== null && revMoM < -10) {
-      const beefMargin = opt(beefRow.margin_pct);
-      if (beefMargin !== null && beefMargin < 22) {
+    const freshRow = (analysis.proteins || []).find(p => p.protein_family === "Fresh & Produce");
+    if (freshRow && revMoM !== null && revMoM < -10) {
+      const freshMargin = opt(freshRow.margin_pct);
+      if (freshMargin !== null && freshMargin < 22) {
         storyHtml = `
           <div class="alert alert-danger border-0 shadow-sm mb-3 py-3 px-4" style="background: #fff5f5; border-left: 5px solid #ef4444 !important;">
             <div class="d-flex align-items-center gap-2 mb-1">
@@ -2063,7 +2063,7 @@
               <span class="fw-bold text-danger">Executive Briefing</span>
             </div>
             <div class="fs-5 text-dark fw-semibold">
-              ${money(kpis.revenue)} Portfolio showing ${Math.abs(revMoM).toFixed(1)}% momentum loss driven by Beef margin compression (${beefMargin.toFixed(1)}% avg margin).
+              ${money(kpis.revenue)} Portfolio showing ${Math.abs(revMoM).toFixed(1)}% momentum loss driven by Fresh margin compression (${freshMargin.toFixed(1)}% avg margin).
             </div>
           </div>
         `;
@@ -3360,22 +3360,22 @@
     `<span class="sr-gap-icon${extraClass ? ` ${extraClass}` : ""}" title="${escapeHtml(title || label)}">${escapeHtml(label)}</span>`;
 
   const _customerGapAnalysisHtml = (row) => {
-    const beefRevenue = num(row.beef_revenue);
-    const poultryRevenue = num(row.poultry_revenue);
-    const porkRevenue = num(row.pork_revenue);
+    const freshRevenue = num(row.fresh_revenue);
+    const consumablesRevenue = num(row.consumables_revenue);
+    const gmRevenue = num(row.gm_revenue);
     const highValueThreshold = num(row._gapHighValueThreshold);
     const isHighValue = highValueThreshold > 0 && num(row.revenue) >= highValueThreshold;
     const icons = [];
-    if (beefRevenue > 0) {
-      icons.push(_customerGapIcon("BF", "is-anchor", `Beef active: ${money(beefRevenue)}`));
+    if (freshRevenue > 0) {
+      icons.push(_customerGapIcon("FR", "is-anchor", `Fresh active: ${money(freshRevenue)}`));
     }
-    if (poultryRevenue > 0) {
-      icons.push(_customerGapIcon("PT", "is-owned", `Poultry active: ${money(poultryRevenue)}`));
-    } else if (isHighValue && beefRevenue > 0) {
-      icons.push(_customerGapIcon("PT", "is-gap", "Cross-sell gap: high-value beef customer with no poultry"));
+    if (consumablesRevenue > 0) {
+      icons.push(_customerGapIcon("CN", "is-owned", `Consumables active: ${money(consumablesRevenue)}`));
+    } else if (isHighValue && freshRevenue > 0) {
+      icons.push(_customerGapIcon("CN", "is-gap", "Cross-sell gap: strong fresh buyer with no consumables"));
     }
-    if (porkRevenue > 0) {
-      icons.push(_customerGapIcon("PK", "is-owned", `Pork active: ${money(porkRevenue)}`));
+    if (gmRevenue > 0) {
+      icons.push(_customerGapIcon("GM", "is-owned", `Gen. merch active: ${money(gmRevenue)}`));
     }
     if (!icons.length) return `<span class="sr-gap-dash">${NA}</span>`;
     return icons.join("");
@@ -3424,9 +3424,9 @@
         revenue: row.revenue,
         profit: row.profit,
         orders: row.orders,
-        beef_revenue: row.beef_revenue,
-        poultry_revenue: row.poultry_revenue,
-        pork_revenue: row.pork_revenue,
+        fresh_revenue: row.fresh_revenue,
+        consumables_revenue: row.consumables_revenue,
+        gm_revenue: row.gm_revenue,
         last_order_date: row.last_order_date,
         days_since_order: row.days_since_order,
         mom_revenue_pct: row.mom_revenue_pct,
@@ -3463,13 +3463,13 @@
     const daysSilent = customerSilentDays(row);
     const momPct = customerMoMValue(row);
     const yoyPct = customerYoYValue(row);
-    const beefRevenue = num(row.beef_revenue);
-    const poultryRevenue = num(row.poultry_revenue);
-    const porkRevenue = num(row.pork_revenue);
+    const freshRevenue = num(row.fresh_revenue);
+    const consumablesRevenue = num(row.consumables_revenue);
+    const gmRevenue = num(row.gm_revenue);
     const opportunities = [];
-    if (beefRevenue > 0 && poultryRevenue <= 0) opportunities.push("Open poultry cross-sell");
-    if (beefRevenue > 0 && porkRevenue <= 0) opportunities.push("Add pork mix");
-    if (!opportunities.length && beefRevenue > 0) opportunities.push("Department mix is already attached");
+    if (freshRevenue > 0 && consumablesRevenue <= 0) opportunities.push("Open consumables cross-sell");
+    if (freshRevenue > 0 && gmRevenue <= 0) opportunities.push("Add general merchandise mix");
+    if (!opportunities.length && freshRevenue > 0) opportunities.push("Department mix is already attached");
     if (!opportunities.length) opportunities.push("No protein anchor in the visible window");
 
     title.textContent = row.customer_name || row.customer_id || TEXT_EMPTY;
@@ -3501,7 +3501,7 @@
       },
       {
         label: "Department Mix",
-        value: `${money(beefRevenue)} BF | ${money(poultryRevenue)} PT | ${money(porkRevenue)} PK`,
+        value: `${money(freshRevenue)} BF | ${money(consumablesRevenue)} PT | ${money(gmRevenue)} PK`,
         note: row.shipping_method ? `Ship via ${row.shipping_method}` : "Ship method None",
       },
       {
@@ -4159,7 +4159,7 @@
 
       const proteinBadges = (a.historical_proteins || []).slice(0, 3).map(p => {
         const lower = String(p).toLowerCase();
-        const color = lower.includes("beef") ? "bg-danger" : lower.includes("pork") ? "bg-warning text-dark" : lower.includes("poultry") || lower.includes("chicken") ? "bg-success" : "bg-info";
+        const color = lower.includes("fresh") || lower.includes("meat") ? "bg-danger" : lower.includes("apparel") || lower.includes("electronics") ? "bg-warning text-dark" : lower.includes("grocery") || lower.includes("dairy") ? "bg-success" : "bg-info";
         return `<span class="badge ${color}" style="font-size:0.6rem;padding:0.2em 0.4em">${escapeHtml(p.slice(0,4))}</span>`;
       }).join(" ");
 
@@ -5434,7 +5434,24 @@
       });
       if (pageCache) pageCache.rememberResponse(url, res);
       if (res.status === 304) {
-        if (!lastPayload && snapshot?.payload) renderBundle(snapshot.payload);
+      // A 304 says "your copy is current", but the page cache stores only the
+      // ETag - the body lives in a separate snapshot that may be absent,
+      // expired, or too large to have been kept. With neither a rendered
+      // payload nor a snapshot there is nothing to be current, so re-request
+      // unconditionally rather than leaving the page on its placeholders.
+        if (lastPayload) return;
+        if (snapshot?.payload) { renderBundle(snapshot.payload); return; }
+        const retry = await fetch(url, {
+          method: "GET",
+          credentials: "same-origin",
+          signal: currentAbort.signal,
+          headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+        });
+        if (pageCache) pageCache.rememberResponse(url, retry);
+        const retryPayload = await retry.json();
+        if (thisReq !== reqId) return;
+        if (!retry.ok) throw new Error(retryPayload?.error?.message || `HTTP ${retry.status}`);
+        renderBundle(retryPayload);
         return;
       }
       const payload = await res.json();
@@ -6251,9 +6268,9 @@
           province: row.delivery_province || "",
           shipping_method: row.shipping_method || "",
           revenue: num(row.revenue),
-          beef_revenue: num(row.beef_revenue || row.metric_7),
-          poultry_revenue: num(row.poultry_revenue || row.metric_8),
-          pork_revenue: num(row.pork_revenue || row.metric_9),
+          fresh_revenue: num(row.fresh_revenue || row.metric_7),
+          consumables_revenue: num(row.consumables_revenue || row.metric_8),
+          gm_revenue: num(row.gm_revenue || row.metric_9),
           is_overdue: Number(row.is_overdue || row.metric_10 || 0),
           avg_days: num(row.avg_days_between_orders || row.metric_11),
           opportunity_score: num(row.opportunity_score || row.metric_14 || 0),
@@ -6283,9 +6300,9 @@
       "customers-heatmap", 
       "opportunity-heatmap", 
       "risk-heatmap",
-      "beef-heatmap",
-      "poultry-heatmap",
-      "pork-heatmap",
+      "fresh-heatmap",
+      "consumables-heatmap",
+      "gm-heatmap",
       "customers-risk-clusters"
     ].forEach((id) => {
       if (_liveMap.getLayer(id)) _liveMap.removeLayer(id);
@@ -6367,39 +6384,39 @@
       layout: { visibility: "none" }
     });
 
-    // 4. Beef Penetration Heatmap (Red)
+    // 4. Fresh penetration heatmap
     _liveMap.addLayer({
-      id: "beef-heatmap",
+      id: "fresh-heatmap",
       type: "heatmap",
       source: "customers",
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "beef_revenue"], 0, 0, 10000, 1],
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "fresh_revenue"], 0, 0, 10000, 1],
         "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.2, "#fee2e2", 0.5, "#ef4444", 0.9, "#7f1d1d"],
         "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 2, 9, 30],
       },
       layout: { visibility: "none" }
     });
 
-    // 5. Poultry Penetration Heatmap (Green)
+    // 5. Consumables penetration heatmap
     _liveMap.addLayer({
-      id: "poultry-heatmap",
+      id: "consumables-heatmap",
       type: "heatmap",
       source: "customers",
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "poultry_revenue"], 0, 0, 5000, 1],
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "consumables_revenue"], 0, 0, 5000, 1],
         "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.2, "#f0fdf4", 0.5, "#22c55e", 0.9, "#14532d"],
         "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 2, 9, 30],
       },
       layout: { visibility: "none" }
     });
 
-    // 6. Pork Penetration Heatmap (Orange)
+    // 6. General merchandise penetration heatmap
     _liveMap.addLayer({
-      id: "pork-heatmap",
+      id: "gm-heatmap",
       type: "heatmap",
       source: "customers",
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "pork_revenue"], 0, 0, 5000, 1],
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "gm_revenue"], 0, 0, 5000, 1],
         "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.2, "#fff7ed", 0.5, "#f97316", 0.9, "#7c2d12"],
         "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 2, 9, 30],
       },
@@ -6592,9 +6609,9 @@
       "customers-heatmap", 
       "opportunity-heatmap", 
       "risk-heatmap",
-      "beef-heatmap",
-      "poultry-heatmap",
-      "pork-heatmap"
+      "fresh-heatmap",
+      "consumables-heatmap",
+      "gm-heatmap"
     ];
     layers.forEach(id => {
       if (_liveMap.getLayer(id)) {
@@ -6605,12 +6622,12 @@
           visible = (id === "opportunity-heatmap");
         } else if (mode === "risk") {
           visible = (id === "risk-heatmap");
-        } else if (mode === "beef") {
-          visible = (id === "beef-heatmap");
-        } else if (mode === "poultry") {
-          visible = (id === "poultry-heatmap");
-        } else if (mode === "pork") {
-          visible = (id === "pork-heatmap");
+        } else if (mode === "fresh") {
+          visible = (id === "fresh-heatmap");
+        } else if (mode === "consumables") {
+          visible = (id === "consumables-heatmap");
+        } else if (mode === "gm") {
+          visible = (id === "gm-heatmap");
         } else if (mode === "hybrid") {
           visible = (id === "opportunity-heatmap" || id === "customers-bubbles");
         }

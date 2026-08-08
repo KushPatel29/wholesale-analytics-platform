@@ -418,7 +418,7 @@ class ReportWorkspace {
           <div class="plan-kpi">
             <div class="plan-kpi__label">On hand</div>
             <div class="plan-kpi__value">${this._money(head.on_hand_value)}</div>
-            <div class="plan-kpi__note">${this._pct(head.excess_share_pct, 0)} above cover target</div>
+            <div class="plan-kpi__note">${Number.isFinite(Number(head.turns)) ? Number(head.turns).toFixed(1) + ' turns a year' : 'turns unavailable'}</div>
           </div>
         </div>
 

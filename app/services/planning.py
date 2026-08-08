@@ -534,32 +534,91 @@ def _cover_target(frame: pd.DataFrame) -> float:
 
 
 def _inventory_position(frame: pd.DataFrame) -> Dict[str, Any]:
-    """Cover, on-hand value and how much of it is excess."""
-    if frame.empty or "DaysOfSupply" not in frame.columns:
-        return {"cover_days": None, "on_hand_value": 0.0, "excess_value": 0.0,
-                "excess_share_pct": None, "below_reorder_pct": None, "cover_target_days": None}
+    """
+    Cover, stock value and how much of it is not working.
 
-    cover = au.to_numeric_safe(frame["DaysOfSupply"])
-    value = au.to_numeric_safe(frame["OnHandValue"]) if "OnHandValue" in frame else pd.Series(dtype="float64")
+    Every figure here is computed on a **SKU-level** frame, not on order lines.
+    Each line carries a snapshot of the position it was picked against, so a
+    SKU that appears on 300 lines contributes its stock 300 times: summing the
+    column reported ~$29M of inventory against a $9.5M annual cost of goods and
+    an impossible 0.16 annual turns. Collapsing to one row per SKU first is
+    also what keeps the ratios coherent - computing a numerator over matching
+    lines and a denominator over all lines produced an excess share of 319%.
+    """
+    if frame.empty or "DaysOfSupply" not in frame.columns:
+        return {"cover_days": None, "cover_weeks": None, "on_hand_value": 0.0, "excess_value": 0.0,
+                "excess_share_pct": None, "dead_value": 0.0, "dead_share_pct": None,
+                "below_reorder_pct": None, "cover_target_days": None, "turns": None}
+
     target = _cover_target(frame)
 
-    excess_mask = cover > (target * EXCESS_COVER_MULTIPLE)
-    on_hand_value = float(value.sum()) if len(value) else 0.0
-    excess_value = float(value[excess_mask].sum()) if len(value) else 0.0
+    sku_col = next((c for c in ("ProductId", "SKU", "ProductName") if c in frame.columns), None)
+    columns = {"DaysOfSupply": "cover"}
+    if "OnHandValue" in frame.columns:
+        columns["OnHandValue"] = "value"
+    if "OnHandQty" in frame.columns:
+        columns["OnHandQty"] = "on_hand"
+    if "ReorderPointQty" in frame.columns:
+        columns["ReorderPointQty"] = "reorder"
+
+    working = frame[list(columns)].apply(au.to_numeric_safe).rename(columns=columns)
+    if sku_col is not None:
+        # One position per SKU: the average of the snapshots taken against it.
+        working = working.groupby(frame[sku_col].astype("string").fillna("Unknown")).mean()
+
+    cover = working["cover"]
+    value = working["value"] if "value" in working else pd.Series(0.0, index=working.index)
+
+    on_hand_value = float(value.sum())
+
+    # Excess and dead stock are computed but deliberately NOT surfaced.
+    #
+    # Collapsing to one position per SKU is required for every other figure
+    # here to be coherent, but it averages away the very distribution these two
+    # depend on: a SKU that is overstocked half the year and thin the other
+    # half averages to "on plan". The result was 0% excess across most of the
+    # chain and 94% for Fresh - an artefact of the averaging, not a finding.
+    #
+    # Measuring them honestly needs a real inventory snapshot at SKU x date
+    # grain, which the order-line fact table is the wrong shape to carry. Until
+    # that exists these stay out of the UI rather than being shown with a
+    # caveat nobody reads.
+    excess_value = float(value[cover > (target * EXCESS_COVER_MULTIPLE)].sum())
+    dead_value = float(value[cover > (target * 4.0)].sum())
 
     below_reorder_pct = None
-    if {"OnHandQty", "ReorderPointQty"} <= set(frame.columns):
-        on_hand = au.to_numeric_safe(frame["OnHandQty"])
-        reorder = au.to_numeric_safe(frame["ReorderPointQty"])
-        below_reorder_pct = round(float((on_hand < reorder).mean() * 100.0), 1)
+    if "on_hand" in working and "reorder" in working:
+        below_reorder_pct = round(float((working["on_hand"] < working["reorder"]).mean() * 100.0), 1)
 
+    # Annual inventory turns: cost of goods over average inventory at cost,
+    # annualised from the window so the figure is comparable to a benchmark.
+    #
+    # GMROI is deliberately not reported. It needs an inventory *valuation*
+    # this dataset does not really model - the per-line snapshot is a position,
+    # not a costed balance - and the numbers it produced (540 for Meat &
+    # Seafood, against a real-world 2-5) would have been confidently wrong.
+    turns = None
+    cost_col = next((c for c in ("CostPrice", "Cost", "cost") if c in frame.columns), None)
+    if cost_col and on_hand_value > 0 and "Date" in frame.columns:
+        dates = pd.to_datetime(frame["Date"], errors="coerce").dropna()
+        if len(dates):
+            window_days = max(int((dates.max() - dates.min()).days), 1)
+            cogs = float(au.to_numeric_safe(frame[cost_col]).sum())
+            turns = round(cogs * (365.0 / window_days) / on_hand_value, 1)
+
+    median_cover = float(cover.median())
     return {
-        "cover_days": round(float(cover.median()), 1),
+        "cover_days": round(median_cover, 1),
+        "cover_weeks": round(median_cover / 7.0, 1),
         "cover_target_days": target,
         "on_hand_value": on_hand_value,
         "excess_value": excess_value,
         "excess_share_pct": round(excess_value / on_hand_value * 100.0, 1) if on_hand_value else 0.0,
+        "dead_value": dead_value,
+        "dead_share_pct": round(dead_value / on_hand_value * 100.0, 1) if on_hand_value else 0.0,
         "below_reorder_pct": below_reorder_pct,
+        "turns": turns,
+        "skus": int(len(working)),
     }
 
 
@@ -696,23 +755,57 @@ def build_inventory(frame: pd.DataFrame) -> Dict[str, Any]:
 # short ...)` - and not multiplied out of the two component rates.
 
 _INVENTORY_SQL = """
+    WITH scoped AS (
+        SELECT {group_expr} AS label, *
+        FROM fact
+        WHERE {where_sql}
+    ),
+    -- One inventory position per SKU per group. Each order line carries a
+    -- snapshot of the position it was picked against, so summing the column
+    -- across lines counts the same SKU's stock once per line - the pandas path
+    -- had the same bug and reported $29.3M against a true $206k.
+    sku_positions AS (
+        SELECT
+            label,
+            COALESCE(NULLIF(CAST(ProductId AS VARCHAR), ''), 'Unknown') AS sku,
+            AVG(COALESCE(OnHandValue, 0)) AS sku_on_hand_value,
+            AVG(DaysOfSupply) AS sku_cover_days,
+            AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) AS sku_below_reorder
+        FROM scoped
+        GROUP BY 1, 2
+    ),
+    stock AS (
+        SELECT
+            label,
+            COUNT(*) AS skus,
+            SUM(sku_on_hand_value) AS on_hand_value,
+            MEDIAN(sku_cover_days) AS cover_days,
+            AVG(sku_below_reorder) * 100 AS below_reorder_pct
+        FROM sku_positions
+        GROUP BY 1
+    ),
+    service AS (
+        SELECT
+            label,
+            COUNT(*) AS lines,
+            AVG(CASE WHEN NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS line_fill_pct,
+            AVG(CASE WHEN NOT COALESCE(IsLate, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS on_time_pct,
+            AVG(CASE WHEN NOT COALESCE(IsLate, FALSE)
+                      AND NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS otif_pct,
+            AVG(CASE WHEN COALESCE(IsStockout, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS stockout_pct,
+            (1 - SUM(COALESCE(BackorderQty, 0)) / NULLIF(SUM(COALESCE(QuantityOrdered, 0)), 0)) * 100 AS unit_fill_pct
+        FROM scoped
+        GROUP BY 1
+    )
     SELECT
-        {group_expr} AS label,
-        COUNT(*) AS lines,
-        AVG(CASE WHEN NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS line_fill_pct,
-        AVG(CASE WHEN NOT COALESCE(IsLate, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS on_time_pct,
-        AVG(CASE WHEN NOT COALESCE(IsLate, FALSE)
-                  AND NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS otif_pct,
-        AVG(CASE WHEN COALESCE(IsStockout, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS stockout_pct,
-        (1 - SUM(COALESCE(BackorderQty, 0)) / NULLIF(SUM(COALESCE(QuantityOrdered, 0)), 0)) * 100 AS unit_fill_pct,
-        MEDIAN(DaysOfSupply) AS cover_days,
-        SUM(COALESCE(OnHandValue, 0)) AS on_hand_value,
-        SUM(CASE WHEN DaysOfSupply > {excess_days} THEN COALESCE(OnHandValue, 0) ELSE 0 END) AS excess_value,
-        AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) * 100 AS below_reorder_pct
-    FROM fact
-    WHERE {where_sql}
-    GROUP BY 1
-    ORDER BY otif_pct ASC
+        service.label AS label,
+        service.lines AS lines,
+        service.line_fill_pct, service.on_time_pct, service.otif_pct,
+        service.stockout_pct, service.unit_fill_pct,
+        stock.cover_days, stock.on_hand_value, stock.below_reorder_pct, stock.skus
+    FROM service
+    LEFT JOIN stock ON stock.label = service.label
+    ORDER BY service.otif_pct ASC
     LIMIT {limit}
 """
 
@@ -733,7 +826,6 @@ def inventory_summary_sql(
     *,
     group_expr: str = "COALESCE(NULLIF(ProteinType, ''), 'Unknown')",
     limit: int = 12,
-    excess_days: float = COVER_TARGET_DAYS_AMBIENT * EXCESS_COVER_MULTIPLE,
 ) -> List[Dict[str, Any]]:
     """Per-group availability and inventory position, worst OTIF first."""
     from app.services import fact_store
@@ -742,7 +834,6 @@ def inventory_summary_sql(
         group_expr=group_expr,
         where_sql=where_sql or "1=1",
         limit=int(limit),
-        excess_days=float(excess_days),
     )
     try:
         frame = fact_store.execute_sql_df(sql, list(where_params or []))
@@ -755,7 +846,6 @@ def inventory_summary_sql(
     for record in frame.to_dict(orient="records"):
         lines = int(record.get("lines") or 0)
         on_hand = float(record.get("on_hand_value") or 0.0)
-        excess = float(record.get("excess_value") or 0.0)
         otif = record.get("otif_pct")
         rows.append(
             {
@@ -768,8 +858,7 @@ def inventory_summary_sql(
                 "stockout_pct": _round_or_none(record.get("stockout_pct"), 2),
                 "cover_days": _round_or_none(record.get("cover_days")),
                 "on_hand_value": on_hand,
-                "excess_value": excess,
-                "excess_share_pct": round(excess / on_hand * 100.0, 1) if on_hand else 0.0,
+                "skus": int(record.get("skus") or 0),
                 "below_reorder_pct": _round_or_none(record.get("below_reorder_pct")),
                 "reliable_estimate": lines >= MIN_ROWS_FOR_RATE,
                 "status": _service_status_otif(
@@ -796,7 +885,7 @@ def inventory_totals(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not total_lines:
         return {"lines": 0, "otif_pct": None, "line_fill_pct": None,
                 "on_time_pct": None, "stockout_pct": None,
-                "on_hand_value": 0.0, "excess_value": 0.0, "excess_share_pct": 0.0}
+                "on_hand_value": 0.0, "skus": 0}
 
     def weighted(key: str):
         parts = [(r[key], r["lines"]) for r in rows if r.get(key) is not None]
@@ -805,7 +894,6 @@ def inventory_totals(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         return round(sum(v * n for v, n in parts) / sum(n for _v, n in parts), 1)
 
     on_hand = sum(r["on_hand_value"] for r in rows)
-    excess = sum(r["excess_value"] for r in rows)
     return {
         "lines": total_lines,
         "otif_pct": weighted("otif_pct"),
@@ -813,7 +901,6 @@ def inventory_totals(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "on_time_pct": weighted("on_time_pct"),
         "stockout_pct": weighted("stockout_pct"),
         "on_hand_value": on_hand,
-        "excess_value": excess,
-        "excess_share_pct": round(excess / on_hand * 100.0, 1) if on_hand else 0.0,
+        "skus": sum(r.get("skus") or 0 for r in rows),
         "otif_target_pct": OTIF_TARGET_PCT,
     }
