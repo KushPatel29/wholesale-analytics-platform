@@ -1,22 +1,22 @@
 .salesrep-drilldown-v2 {
-  --srpd-ink: #142033;
-  --srpd-muted: #51667c;
-  --srpd-border: #d7e2ee;
-  --srpd-border-strong: #c3d2e3;
-  --srpd-surface: #ffffff;
-  --srpd-surface-soft: #f5f8fc;
-  --srpd-surface-muted: #eef3f9;
-  --srpd-accent: #1e5aa6;
-  --srpd-accent-soft: #e9f1fb;
-  --srpd-premium: #5e1f45;
-  --srpd-premium-soft: #f7eaf2;
-  --srpd-positive: #137a50;
-  --srpd-positive-soft: #e2f6ec;
-  --srpd-warning: #b06609;
-  --srpd-warning-soft: #fff0dc;
-  --srpd-danger: #b23a3a;
-  --srpd-danger-soft: #fdebec;
-  --srpd-neutral-soft: #edf2f7;
+  --srpd-ink: var(--wa-text);
+  --srpd-muted: var(--wa-info);
+  --srpd-border: var(--wa-info);
+  --srpd-border-strong: var(--wa-hairline);
+  --srpd-surface: var(--wa-surface);
+  --srpd-surface-soft: var(--wa-surface);
+  --srpd-surface-muted: var(--wa-text-inverse);
+  --srpd-accent: var(--wa-info);
+  --srpd-accent-soft: var(--wa-info-wash);
+  --srpd-premium: var(--wa-info);
+  --srpd-premium-soft: var(--wa-info-wash);
+  --srpd-positive: var(--wa-good);
+  --srpd-positive-soft: var(--wa-good-wash);
+  --srpd-warning: var(--wa-warn);
+  --srpd-warning-soft: var(--wa-warn-wash);
+  --srpd-danger: var(--wa-bad);
+  --srpd-danger-soft: var(--wa-bad-wash);
+  --srpd-neutral-soft: var(--wa-surface-2);
   --srpd-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
   color: var(--srpd-ink);
 }
@@ -30,8 +30,8 @@
 
 .salesrep-drilldown-v2 .card-header {
   padding: 1rem 1.15rem 0.85rem;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafe 100%);
-  border-bottom: 1px solid rgba(215, 226, 238, 0.72);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
+  border-bottom: 1px solid var(--wa-hairline);
 }
 
 .salesrep-drilldown-v2 .card-body {
@@ -43,9 +43,9 @@
   overflow: hidden;
   border: 1px solid var(--srpd-border-strong);
   background:
-    radial-gradient(circle at top right, rgba(30, 90, 166, 0.16), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(94, 31, 69, 0.09), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    radial-gradient(circle at top right, var(--wa-info-wash), transparent 34%),
+    radial-gradient(circle at bottom left, var(--wa-info-wash), transparent 30%),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   box-shadow: var(--srpd-shadow);
 }
 
@@ -54,8 +54,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    linear-gradient(90deg, var(--wa-surface-2) 1px, transparent 1px),
+    linear-gradient(var(--wa-surface-2) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 90%);
   pointer-events: none;
@@ -100,7 +100,7 @@
 }
 
 .salesrep-drilldown-v2 .srpd-hero-subtitle {
-  color: #4b6077;
+  color: var(--wa-info);
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -108,13 +108,13 @@
 .salesrep-drilldown-v2 .srpd-hero-summary {
   margin-top: 0.8rem;
   margin-bottom: 0.6rem;
-  color: #213147;
+  color: var(--wa-text);
   font-size: 0.98rem;
   line-height: 1.6;
 }
 
 .salesrep-drilldown-v2 .srpd-hero-support {
-  color: #53697f;
+  color: var(--wa-info);
   font-size: 0.84rem;
 }
 
@@ -131,9 +131,9 @@
   gap: 0.4rem;
   min-height: 2rem;
   padding: 0.35rem 0.72rem;
-  border: 1px solid rgba(195, 210, 227, 0.95);
+  border: 1px solid var(--wa-hairline);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--wa-surface);
   color: var(--srpd-ink);
   font-size: 0.8rem;
   font-weight: 600;
@@ -146,9 +146,9 @@
 }
 
 .salesrep-drilldown-v2 .srpd-toolbar-card {
-  border: 1px solid rgba(30, 90, 166, 0.14);
+  border: 1px solid var(--wa-info-wash);
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--wa-surface);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
   backdrop-filter: none;
 }
@@ -194,9 +194,9 @@
 
 .salesrep-drilldown-v2 .srpd-highlight {
   padding: 0.85rem 0.95rem;
-  border: 1px solid rgba(195, 210, 227, 0.85);
+  border: 1px solid var(--wa-hairline);
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.98) 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-highlight-value {
@@ -221,9 +221,9 @@
   gap: 0.6rem;
   margin-bottom: 1rem;
   padding: 0.85rem 0.95rem;
-  border: 1px solid rgba(195, 210, 227, 0.85);
+  border: 1px solid var(--wa-hairline);
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--wa-surface);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
   backdrop-filter: none;
 }
@@ -234,8 +234,8 @@
   gap: 0.55rem;
   padding: 0.45rem 0.72rem;
   border-radius: 999px;
-  border: 1px solid rgba(215, 226, 238, 0.95);
-  background: linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%);
+  border: 1px solid var(--wa-hairline);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   color: var(--srpd-ink);
   font-size: 0.83rem;
   font-weight: 600;
@@ -243,7 +243,7 @@
 }
 
 .salesrep-drilldown-v2 .srpd-nav-link:hover {
-  border-color: rgba(30, 90, 166, 0.28);
+  border-color: var(--wa-info-wash);
   color: var(--srpd-accent);
 }
 
@@ -298,21 +298,21 @@
 
 .salesrep-drilldown-v2 .srpd-kpi-card {
   padding: 0.95rem;
-  border: 1px solid rgba(215, 226, 238, 0.95);
+  border: 1px solid var(--wa-hairline);
   border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   min-height: 138px;
 }
 
 .salesrep-drilldown-v2 .srpd-kpi-card.is-featured {
   background:
-    linear-gradient(180deg, rgba(30, 90, 166, 0.08) 0%, rgba(255, 255, 255, 1) 70%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
-  border-color: rgba(30, 90, 166, 0.2);
+    linear-gradient(180deg, var(--wa-info-wash) 0%, var(--wa-surface) 70%),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
+  border-color: var(--wa-info-wash);
 }
 
 .salesrep-drilldown-v2 .srpd-kpi-card .label {
-  color: #53677f;
+  color: var(--wa-info);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -329,7 +329,7 @@
 
 .salesrep-drilldown-v2 .srpd-kpi-card .detail,
 .salesrep-drilldown-v2 .srpd-kpi-card .subdetail {
-  color: #546980;
+  color: var(--wa-info);
   font-size: 0.8rem;
   line-height: 1.45;
 }
@@ -343,7 +343,7 @@
 }
 
 .salesrep-drilldown-v2 .kpi-delta-positive {
-  color: #0f6b47;
+  color: var(--wa-good);
 }
 
 .salesrep-drilldown-v2 .kpi-delta-negative {
@@ -358,9 +358,9 @@
 
 .salesrep-drilldown-v2 .srpd-story-card {
   padding: 0.95rem 1rem;
-  border: 1px solid rgba(215, 226, 238, 0.95);
+  border: 1px solid var(--wa-hairline);
   border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   min-height: 150px;
 }
 
@@ -389,7 +389,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.45rem 0;
-  border-bottom: 1px dashed rgba(195, 210, 227, 0.85);
+  border-bottom: 1px dashed var(--wa-hairline);
   font-size: 0.85rem;
 }
 
@@ -410,8 +410,8 @@
 .salesrep-drilldown-v2 .srpd-owner-card {
   height: 100%;
   background:
-    linear-gradient(180deg, rgba(30, 90, 166, 0.08) 0%, rgba(255, 255, 255, 1) 100%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
+    linear-gradient(180deg, var(--wa-info-wash) 0%, var(--wa-surface) 100%),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-owner-card .srpd-panel-label {
@@ -453,7 +453,7 @@
 
 .salesrep-drilldown-v2 [data-empty-state] {
   color: var(--srpd-muted);
-  background: rgba(247, 250, 254, 0.82);
+  background: var(--wa-surface);
   border-radius: 14px;
   text-align: center;
   padding: 1rem;
@@ -468,7 +468,7 @@
 
 .salesrep-drilldown-v2 .srpd-mini-metric {
   padding: 0.65rem 0.75rem;
-  border: 1px solid rgba(215, 226, 238, 0.92);
+  border: 1px solid var(--wa-hairline);
   border-radius: 14px;
   background: var(--srpd-surface-soft);
 }
@@ -495,11 +495,11 @@
 }
 
 .salesrep-drilldown-v2 .drilldown-alerts .alert {
-  background: linear-gradient(180deg, #fffdf7 0%, #fff6df 100%);
-  border: 1px solid rgba(240, 173, 78, 0.35);
-  border-left: 4px solid #f0ad4e;
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-warn-wash) 100%);
+  border: 1px solid var(--wa-warn-wash);
+  border-left: 4px solid var(--wa-warn);
   border-radius: 16px;
-  color: #5a4300;
+  color: var(--wa-warn);
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
 }
 
@@ -526,9 +526,9 @@
   white-space: nowrap;
   padding: 0.78rem 0.72rem;
   vertical-align: bottom;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef3fa 100%);
-  border-bottom: 1px solid rgba(195, 210, 227, 0.92);
-  color: #405166;
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface-2) 100%);
+  border-bottom: 1px solid var(--wa-hairline);
+  color: var(--wa-text);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -538,11 +538,11 @@
 .salesrep-drilldown-v2 .table tbody td {
   padding: 0.8rem 0.72rem;
   vertical-align: middle;
-  border-color: rgba(215, 226, 238, 0.7);
+  border-color: var(--wa-hairline);
 }
 
 .salesrep-drilldown-v2 .table tbody tr:hover td {
-  background: rgba(30, 90, 166, 0.045);
+  background: var(--wa-info-wash);
 }
 
 .salesrep-drilldown-v2 .srpd-table-wide thead th:first-child,
@@ -600,31 +600,31 @@
 
 .salesrep-drilldown-v2 .srpd-pill--neutral {
   background: var(--srpd-neutral-soft);
-  border-color: rgba(148, 163, 184, 0.22);
-  color: #4b5d72;
+  border-color: var(--wa-hairline);
+  color: var(--wa-text);
 }
 
 .salesrep-drilldown-v2 .srpd-pill--accent {
   background: var(--srpd-accent-soft);
-  border-color: rgba(30, 90, 166, 0.18);
+  border-color: var(--wa-info-wash);
   color: var(--srpd-accent);
 }
 
 .salesrep-drilldown-v2 .srpd-pill--good {
   background: var(--srpd-positive-soft);
-  border-color: rgba(19, 122, 80, 0.16);
+  border-color: var(--wa-good-wash);
   color: var(--srpd-positive);
 }
 
 .salesrep-drilldown-v2 .srpd-pill--warn {
-  background: rgba(255, 240, 220, 0.96);
-  border-color: rgba(138, 73, 0, 0.2);
-  color: #8a4900;
+  background: var(--wa-surface-2);
+  border-color: var(--wa-warn-wash);
+  color: var(--wa-warn);
 }
 
 .salesrep-drilldown-v2 .srpd-pill--risk {
   background: var(--srpd-danger-soft);
-  border-color: rgba(178, 58, 58, 0.16);
+  border-color: var(--wa-bad-wash);
   color: var(--srpd-danger);
 }
 
@@ -647,7 +647,7 @@
 
 .salesrep-drilldown-v2 .srpd-focus-list li {
   padding: 0.55rem 0;
-  border-bottom: 1px dashed rgba(195, 210, 227, 0.92);
+  border-bottom: 1px dashed var(--wa-hairline);
   color: var(--srpd-ink);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -665,7 +665,7 @@
 .salesrep-drilldown-v2 .srpd-risk-list .list-group-item {
   padding-top: 0.6rem;
   padding-bottom: 0.6rem;
-  border-color: rgba(215, 226, 238, 0.72);
+  border-color: var(--wa-hairline);
   background: transparent;
 }
 
@@ -674,7 +674,7 @@
 }
 
 .salesrep-drilldown-v2 .drill-row-link:focus-visible {
-  outline: 2px solid rgba(30, 90, 166, 0.45);
+  outline: 2px solid var(--wa-info-wash);
   outline-offset: -2px;
 }
 
@@ -741,20 +741,20 @@
 .salesrep-drilldown-v2 .srpd-map-shell {
   position: relative;
   min-height: 24rem;
-  border: 1px solid rgba(195, 210, 227, 0.72);
+  border: 1px solid var(--wa-hairline);
   border-radius: 18px;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(30, 90, 166, 0.12), transparent 34%),
-    linear-gradient(180deg, #f9fbfe 0%, #eef4fb 100%);
+    radial-gradient(circle at top right, var(--wa-info-wash), transparent 34%),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-info-wash) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-portfolio-map {
   width: 100%;
   min-height: 24rem;
   background:
-    radial-gradient(circle at top right, rgba(30, 90, 166, 0.08), transparent 32%),
-    linear-gradient(180deg, rgba(249, 251, 254, 0.98), rgba(238, 244, 251, 0.94));
+    radial-gradient(circle at top right, var(--wa-info-wash), transparent 32%),
+    linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .salesrep-drilldown-v2 .srpd-map-empty {
@@ -767,7 +767,7 @@
   color: var(--srpd-muted);
   font-size: 0.85rem;
   text-align: center;
-  background: rgba(248, 251, 255, 0.88);
+  background: var(--wa-surface);
 }
 
 .salesrep-drilldown-v2 .srpd-map-empty.is-visible {
@@ -782,24 +782,24 @@
 .salesrep-drilldown-v2 .srpd-note {
   padding: 0.95rem 1rem;
   border-radius: 16px;
-  border: 1px solid rgba(195, 210, 227, 0.82);
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid var(--wa-hairline);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .salesrep-drilldown-v2 .srpd-note--risk {
-  border-color: rgba(178, 58, 58, 0.2);
-  background: linear-gradient(180deg, #fffafa 0%, #fff1f1 100%);
+  border-color: var(--wa-bad-wash);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-bad-wash) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-note--warn {
-  border-color: rgba(176, 102, 9, 0.2);
-  background: linear-gradient(180deg, #fffdf7 0%, #fff6e7 100%);
+  border-color: var(--wa-warn-wash);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-warn-wash) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-note--good {
-  border-color: rgba(19, 122, 80, 0.18);
-  background: linear-gradient(180deg, #f8fffb 0%, #edf9f2 100%);
+  border-color: var(--wa-good-wash);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface-2) 100%);
 }
 
 .salesrep-drilldown-v2 .srpd-note-kicker {
@@ -819,7 +819,7 @@
 
 .salesrep-drilldown-v2 .srpd-gap-matrix-wrap {
   overflow: auto;
-  border: 1px solid rgba(215, 226, 238, 0.74);
+  border: 1px solid var(--wa-hairline);
   border-radius: 18px;
 }
 
@@ -856,19 +856,19 @@
 .salesrep-drilldown-v2 .srpd-gap-cell.is-owned {
   color: var(--srpd-positive);
   background: var(--srpd-positive-soft);
-  border-color: rgba(19, 122, 80, 0.16);
+  border-color: var(--wa-good-wash);
 }
 
 .salesrep-drilldown-v2 .srpd-gap-cell.is-gap {
   color: var(--srpd-warning);
   background: var(--srpd-warning-soft);
-  border-color: rgba(176, 102, 9, 0.18);
+  border-color: var(--wa-warn-wash);
 }
 
 .salesrep-drilldown-v2 .maplibregl-popup.srpd-map-popup-shell .maplibregl-popup-content {
   padding: 0.9rem 0.95rem;
   border-radius: 16px;
-  border: 1px solid rgba(195, 210, 227, 0.72);
+  border: 1px solid var(--wa-hairline);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
 }
 
@@ -884,7 +884,7 @@
 }
 
 .salesrep-drilldown-v2 .maplibregl-popup.srpd-map-popup-shell .maplibregl-popup-tip {
-  border-top-color: #ffffff;
+  border-top-color: var(--wa-hairline-soft);
 }
 
 .salesrep-drilldown-v2 .srpd-map-popup {
@@ -948,13 +948,13 @@
   font-weight: 700;
 }
 .salesrep-drilldown-v2 .srpd-gap-cell.is-owned {
-  background: rgba(15, 140, 90, 0.12);
-  color: #0a6b45;
+  background: var(--wa-good-wash);
+  color: var(--wa-good);
 }
 .salesrep-drilldown-v2 .srpd-gap-cell.is-gap {
-  background: rgba(31, 95, 154, 0.08);
-  color: #1f5f9a;
-  border: 1.5px dashed rgba(31, 95, 154, 0.4);
+  background: var(--wa-info-wash);
+  color: var(--wa-info);
+  border: 1.5px dashed var(--wa-info-wash);
 }
 
 /* ── Pacing narrative (drilldown) ────────────────────────────────────────── */
@@ -964,8 +964,8 @@
   gap: 0.5rem;
   padding: 0.6rem 1rem;
   border-radius: 0.5rem;
-  background: rgba(31, 95, 154, 0.05);
-  border: 1px solid rgba(31, 95, 154, 0.14);
+  background: var(--wa-info-wash);
+  border: 1px solid var(--wa-info-wash);
   font-size: 0.84rem;
 }
 .salesrep-drilldown-v2 .sr-pacing-narrative--unavailable {
@@ -973,6 +973,6 @@
   color: var(--srpd-muted);
 }
 .salesrep-drilldown-v2 .sr-pacing-delta { font-weight: 600; }
-.salesrep-drilldown-v2 .sr-pacing-delta--positive { color: #0a6b45; }
-.salesrep-drilldown-v2 .sr-pacing-delta--warning  { color: #7a5000; }
-.salesrep-drilldown-v2 .sr-pacing-delta--negative { color: #8b1c1c; }
+.salesrep-drilldown-v2 .sr-pacing-delta--positive { color: var(--wa-good); }
+.salesrep-drilldown-v2 .sr-pacing-delta--warning  { color: var(--wa-warn); }
+.salesrep-drilldown-v2 .sr-pacing-delta--negative { color: var(--wa-bad); }

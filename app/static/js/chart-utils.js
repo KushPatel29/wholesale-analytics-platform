@@ -295,7 +295,32 @@
       border: getCssVar('--color-border-default', 'rgba(29, 42, 67, 0.16)'),
       grid: getCssVar('--color-border-soft', 'rgba(29, 42, 67, 0.1)'),
       surface: getCssVar('--color-surface-card', 'rgba(255, 255, 255, 0.96)'),
+      series: seriesPalette(),
     };
+  }
+
+  // Fixed-order categorical palette, read from the theme tokens so light and
+  // dark each get the steps that were validated against their own surface.
+  // Series colour follows the entity, not its rank, so callers ask for a slot
+  // by index and keep that index for the life of the chart.
+  const SERIES_FALLBACK = ['#199e70', '#3987e5', '#c98500', '#d55181', '#9085e9', '#d95926'];
+
+  function seriesPalette() {
+    return SERIES_FALLBACK.map((fallback, i) => getCssVar(`--wa-cat-${i + 1}`, fallback));
+  }
+
+  // A translucent version of a slot, for area fills under a line and for bar
+  // bodies whose outline carries the identity.
+  function seriesFill(index, alpha = 0.18) {
+    const hex = seriesPalette()[index % 6] || SERIES_FALLBACK[index % 6];
+    const match = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!match) return hex;
+    const int = parseInt(match[1], 16);
+    return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+  }
+
+  function seriesColor(index) {
+    return seriesPalette()[index % 6] || SERIES_FALLBACK[index % 6];
   }
 
   function themedPlotlyAxis(axis = {}, palette = getThemePalette()) {
@@ -401,13 +426,20 @@
     loadSheetJS,
     getThemePalette,
     themedPlotlyLayout,
-    applyChartTheme
+    applyChartTheme,
+    seriesPalette,
+    seriesColor,
+    seriesFill
   };
 
   applyChartTheme();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', applyChartTheme, { once: true });
   }
+
+  // The toggle swaps the tokens; charts hold the values they resolved at draw
+  // time, so re-apply the theme defaults and let each page redraw.
+  window.addEventListener('wa:themechange', () => applyChartTheme());
 
   // Auto-load SheetJS on script load
   loadSheetJS().catch(err => console.warn('Failed to load SheetJS:', err));

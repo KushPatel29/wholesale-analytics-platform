@@ -17,7 +17,7 @@
 }
 
 .returns-page .returns-summary-row {
-  border-top: 1px solid var(--wa-border, #e5e7eb);
+  border-top: 1px solid var(--wa-border, var(--wa-hairline-soft));
   padding-top: 0.75rem;
 }
 
@@ -31,7 +31,7 @@
 .returns-page .returns-scan-video {
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid var(--wa-border, #e5e7eb);
+  border: 1px solid var(--wa-border, var(--wa-hairline-soft));
   background: #000;
   max-height: 320px;
   object-fit: cover;

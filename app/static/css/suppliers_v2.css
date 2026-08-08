@@ -1,15 +1,15 @@
 .suppliers-v2-page {
-  --suppliers-accent: color-mix(in srgb, var(--tone-accent, #7a3452) 80%, #fff 20%);
-  --suppliers-accent-strong: color-mix(in srgb, var(--tone-accent, #7a3452) 82%, #111827 18%);
-  --suppliers-accent-soft: color-mix(in srgb, var(--tone-accent-soft, rgba(122, 52, 82, 0.14)) 74%, #ffffff 26%);
-  --suppliers-border: rgba(92, 108, 135, 0.18);
-  --suppliers-border-strong: rgba(77, 92, 118, 0.28);
-  --suppliers-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 247, 252, 0.97));
-  --suppliers-surface-soft: linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(241, 245, 251, 0.96));
-  --suppliers-surface-muted: rgba(242, 246, 252, 0.9);
-  --suppliers-ink: #0f1d33;
-  --suppliers-muted: rgba(71, 85, 108, 0.9);
-  --suppliers-muted-soft: rgba(84, 99, 126, 0.78);
+  --suppliers-accent: color-mix(in srgb, var(--tone-accent, var(--wa-info)) 80%, var(--wa-surface) 20%);
+  --suppliers-accent-strong: color-mix(in srgb, var(--tone-accent, var(--wa-info)) 82%, var(--wa-canvas-deep) 18%);
+  --suppliers-accent-soft: color-mix(in srgb, var(--tone-accent-soft, var(--wa-info-wash)) 74%, var(--wa-surface) 26%);
+  --suppliers-border: var(--wa-info-wash);
+  --suppliers-border-strong: var(--wa-info-wash);
+  --suppliers-surface: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
+  --suppliers-surface-soft: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
+  --suppliers-surface-muted: var(--wa-text-inverse);
+  --suppliers-ink: var(--wa-text);
+  --suppliers-muted: var(--wa-text);
+  --suppliers-muted-soft: var(--wa-info);
   --suppliers-shadow-sm: 0 14px 30px rgba(15, 23, 42, 0.05);
   --suppliers-shadow-md: 0 18px 40px rgba(15, 23, 42, 0.08);
   --suppliers-shadow-lg: 0 26px 60px rgba(8, 15, 30, 0.16);
@@ -19,10 +19,10 @@
   position: relative;
   border-radius: 1.45rem;
   background:
-    radial-gradient(circle at top right, rgba(169, 64, 89, 0.34), transparent 35%),
-    radial-gradient(circle at 16% 20%, rgba(77, 123, 255, 0.18), transparent 28%),
-    linear-gradient(140deg, rgba(11, 18, 33, 0.98), rgba(21, 33, 53, 0.96), rgba(76, 29, 43, 0.94));
-  color: #f8fbff;
+    radial-gradient(circle at top right, var(--wa-accent-wash), transparent 35%),
+    radial-gradient(circle at 16% 20%, var(--wa-info-wash), transparent 28%),
+    linear-gradient(140deg, rgba(11, 18, 33, 0.98), rgba(21, 33, 53, 0.96), var(--wa-bad));
+  color: var(--wa-text-inverse);
   box-shadow: var(--suppliers-shadow-lg);
 }
 
@@ -31,8 +31,8 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%),
-    linear-gradient(120deg, rgba(255, 255, 255, 0.02), transparent 48%);
+    linear-gradient(180deg, var(--wa-surface-2), transparent 34%),
+    linear-gradient(120deg, var(--wa-surface-2), transparent 48%);
   pointer-events: none;
 }
 
@@ -74,7 +74,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 700;
-  color: rgba(226, 236, 255, 0.78);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-title {
@@ -83,13 +83,13 @@
   font-weight: 700;
   line-height: 1.02;
   letter-spacing: -0.04em;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-subtitle,
 .suppliers-hero-context,
 .suppliers-hero-trust {
-  color: rgba(238, 244, 255, 0.88);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-subtitle {
@@ -108,19 +108,19 @@
 .suppliers-hero-actions .btn {
   border-radius: 999px;
   padding-inline: 0.9rem;
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--wa-hairline);
   box-shadow: 0 12px 22px rgba(8, 14, 26, 0.16);
 }
 
 .suppliers-hero-actions .btn-outline-light {
-  color: rgba(247, 251, 255, 0.94);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-purpose {
   padding: 1rem 1.1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-hairline);
   border-radius: 1.1rem;
-  background: linear-gradient(180deg, rgba(18, 29, 48, 0.5), rgba(30, 42, 64, 0.34));
+  background: linear-gradient(180deg, rgba(18, 29, 48, 0.5), var(--wa-hairline-soft));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -130,18 +130,18 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(238, 244, 255, 0.76);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-purpose p {
-  color: rgba(247, 250, 255, 0.92);
+  color: var(--wa-text-inverse);
   line-height: 1.58;
 }
 
 .suppliers-hero-story {
   font-size: 1rem;
   line-height: 1.55;
-  color: #fff;
+  color: var(--wa-text-inverse);
   max-width: 82ch;
 }
 
@@ -165,9 +165,9 @@
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--wa-hairline);
   background: rgba(18, 29, 48, 0.46);
-  color: #f6fbff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-section-card {
@@ -177,11 +177,11 @@
 }
 
 .suppliers-hero-panel {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-hairline);
   border-radius: 1.15rem;
   padding: 1rem 1.05rem;
   background:
-    linear-gradient(180deg, rgba(18, 29, 48, 0.52), rgba(30, 42, 64, 0.34)),
+    linear-gradient(180deg, rgba(18, 29, 48, 0.52), var(--wa-hairline-soft)),
     rgba(11, 18, 33, 0.22);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
@@ -194,7 +194,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(242, 247, 255, 0.84);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-toolbar-label {
@@ -211,13 +211,13 @@
   font-size: 1.08rem;
   font-weight: 700;
   line-height: 1.35;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-range-note,
 .suppliers-panel-note {
   margin-top: 0.28rem;
-  color: rgba(236, 243, 252, 0.84);
+  color: var(--wa-text-inverse);
   font-size: 0.86rem;
   line-height: 1.5;
 }
@@ -240,7 +240,7 @@
   font-size: clamp(1.2rem, 1.6vw, 1.45rem);
   font-weight: 800;
   line-height: 1.25;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-command-status {
@@ -250,35 +250,35 @@
   min-width: 7.5rem;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-hairline);
+  background: var(--wa-surface-2);
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-command-status.is-healthy {
-  background: rgba(14, 125, 90, 0.2);
-  border-color: rgba(134, 239, 172, 0.28);
-  color: #d1fae5;
+  background: var(--wa-good-wash);
+  border-color: var(--wa-good-wash);
+  color: var(--wa-good);
 }
 
 .suppliers-command-status.is-watch {
-  background: rgba(245, 158, 11, 0.18);
-  border-color: rgba(251, 191, 36, 0.28);
-  color: #fef3c7;
+  background: var(--wa-warn-wash);
+  border-color: var(--wa-warn-wash);
+  color: var(--wa-warn);
 }
 
 .suppliers-command-status.is-risk {
-  background: rgba(190, 24, 60, 0.2);
-  border-color: rgba(251, 113, 133, 0.28);
-  color: #ffe4e6;
+  background: var(--wa-bad-wash);
+  border-color: var(--wa-bad-wash);
+  color: var(--wa-bad);
 }
 
 .suppliers-command-note {
-  color: rgba(241, 246, 255, 0.82);
+  color: var(--wa-text-inverse);
   line-height: 1.55;
 }
 
@@ -291,7 +291,7 @@
 .suppliers-command-point {
   padding: 0.85rem 0.9rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--wa-hairline);
   background: rgba(18, 29, 48, 0.34);
 }
 
@@ -300,12 +300,12 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(238, 244, 255, 0.74);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-command-point-copy {
   margin-top: 0.38rem;
-  color: rgba(248, 251, 255, 0.94);
+  color: var(--wa-text-inverse);
   line-height: 1.55;
 }
 
@@ -323,7 +323,7 @@
 .suppliers-hero-metric {
   padding: 0.9rem 0.95rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-hairline);
   background: rgba(18, 29, 48, 0.34);
 }
 
@@ -333,7 +333,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(238, 244, 255, 0.74);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-metric .value {
@@ -342,7 +342,7 @@
   font-size: 1.18rem;
   font-weight: 800;
   line-height: 1.2;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-hero-metric .meta {
@@ -350,7 +350,7 @@
   margin-top: 0.34rem;
   font-size: 0.79rem;
   line-height: 1.45;
-  color: rgba(236, 243, 252, 0.82);
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-panel-mini-grid {
@@ -362,7 +362,7 @@
 .suppliers-mini-stat {
   padding: 0.88rem 0.95rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-hairline);
   background: rgba(18, 29, 48, 0.34);
 }
 
@@ -371,7 +371,7 @@
   margin-top: 0.3rem;
   font-size: 0.96rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--wa-text-inverse);
 }
 
 .suppliers-subnav {
@@ -385,8 +385,8 @@
   align-items: center;
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(94, 110, 138, 0.16);
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-info-wash);
   color: var(--suppliers-ink);
   text-decoration: none;
   font-weight: 600;
@@ -396,9 +396,9 @@
 
 .suppliers-subnav-link:hover,
 .suppliers-subnav-link:focus {
-  background: #fff;
+  background: var(--wa-surface);
   color: var(--suppliers-accent);
-  border-color: rgba(94, 110, 138, 0.24);
+  border-color: var(--wa-info-wash);
 }
 
 .suppliers-section-intro {
@@ -436,7 +436,7 @@
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 700;
-  color: rgba(78, 95, 122, 0.8);
+  color: var(--wa-info);
 }
 
 .suppliers-kpi-value {
@@ -451,13 +451,13 @@
   margin-top: 0.42rem;
   font-size: 0.84rem;
   line-height: 1.45;
-  color: rgba(66, 79, 102, 0.88);
+  color: var(--wa-text);
 }
 
 .suppliers-section-card > .card-header {
   padding: 1.15rem 1.2rem 0.85rem;
-  border-bottom: 1px solid rgba(94, 110, 138, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 254, 0.32));
+  border-bottom: 1px solid var(--wa-info-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface-2));
   border-top-left-radius: 1.15rem;
   border-top-right-radius: 1.15rem;
 }
@@ -487,7 +487,7 @@
 }
 
 .suppliers-inline-note {
-  color: rgba(67, 81, 103, 0.9);
+  color: var(--wa-text);
   font-size: 0.92rem;
   line-height: 1.5;
 }
@@ -500,8 +500,8 @@
 .suppliers-callout-item {
   padding: 0.9rem 1rem;
   border-radius: 1rem;
-  border: 1px solid rgba(94, 110, 138, 0.16);
-  background: rgba(242, 246, 252, 0.88);
+  border: 1px solid var(--wa-info-wash);
+  background: var(--wa-surface);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
@@ -517,29 +517,29 @@
 .suppliers-action-card {
   padding: 0.9rem 1rem;
   border-radius: 1rem;
-  border: 1px solid rgba(94, 110, 138, 0.18);
-  background: rgba(245, 248, 252, 0.96);
+  border: 1px solid var(--wa-info-wash);
+  background: var(--wa-surface);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
 }
 
 .suppliers-action-card.is-risk {
-  border-color: rgba(151, 41, 58, 0.16);
-  background: linear-gradient(180deg, rgba(255, 245, 247, 0.96), rgba(252, 238, 241, 0.94));
+  border-color: var(--wa-bad-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-action-card.is-growth {
-  border-color: rgba(17, 118, 88, 0.18);
-  background: linear-gradient(180deg, rgba(241, 252, 247, 0.96), rgba(232, 247, 239, 0.94));
+  border-color: var(--wa-good-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface-2));
 }
 
 .suppliers-action-card.is-watch {
-  border-color: rgba(191, 126, 37, 0.18);
-  background: linear-gradient(180deg, rgba(255, 250, 239, 0.98), rgba(248, 241, 222, 0.94));
+  border-color: var(--wa-warn-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface-2));
 }
 
 .suppliers-action-card.is-healthy {
-  border-color: rgba(35, 110, 126, 0.18);
-  background: linear-gradient(180deg, rgba(242, 251, 255, 0.97), rgba(233, 243, 249, 0.94));
+  border-color: var(--wa-info-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-posture-grid {
@@ -556,35 +556,35 @@
   min-height: 100%;
   padding: 0.95rem 1rem;
   border-radius: 1rem;
-  border: 1px solid rgba(94, 110, 138, 0.18);
-  background: linear-gradient(180deg, rgba(248, 250, 253, 0.98), rgba(240, 244, 250, 0.95));
+  border: 1px solid var(--wa-info-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
   box-shadow: var(--suppliers-shadow-sm);
 }
 
 .suppliers-posture-card.is-focus,
 .suppliers-posture-card.is-premium {
-  border-color: color-mix(in srgb, var(--suppliers-accent) 28%, rgba(94, 110, 138, 0.18));
-  background: linear-gradient(180deg, rgba(250, 247, 250, 0.98), rgba(243, 237, 242, 0.95));
+  border-color: color-mix(in srgb, var(--suppliers-accent) 28%, var(--wa-info-wash));
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-posture-card.is-growth {
-  border-color: rgba(17, 118, 88, 0.16);
-  background: linear-gradient(180deg, rgba(242, 252, 247, 0.98), rgba(233, 247, 240, 0.95));
+  border-color: var(--wa-good-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-posture-card.is-watch {
-  border-color: rgba(191, 126, 37, 0.18);
-  background: linear-gradient(180deg, rgba(255, 249, 239, 0.98), rgba(247, 240, 223, 0.95));
+  border-color: var(--wa-warn-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface-2));
 }
 
 .suppliers-posture-card.is-healthy {
-  border-color: rgba(35, 110, 126, 0.16);
-  background: linear-gradient(180deg, rgba(243, 252, 255, 0.98), rgba(233, 244, 248, 0.95));
+  border-color: var(--wa-info-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-posture-card.is-risk {
-  border-color: rgba(151, 41, 58, 0.16);
-  background: linear-gradient(180deg, rgba(255, 245, 247, 0.97), rgba(252, 237, 240, 0.95));
+  border-color: var(--wa-bad-wash);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
 }
 
 .suppliers-posture-label {
@@ -592,7 +592,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(72, 87, 110, 0.84);
+  color: var(--wa-text);
 }
 
 .suppliers-posture-value {
@@ -613,7 +613,7 @@
 .suppliers-posture-meta {
   margin-top: 0.38rem;
   font-size: 0.78rem;
-  color: rgba(64, 78, 99, 0.88);
+  color: var(--wa-text);
 }
 
 .suppliers-action-card.is-clickable {
@@ -625,7 +625,7 @@
 .suppliers-action-card.is-clickable:focus {
   transform: translateY(-1px);
   box-shadow: 0 16px 34px rgba(16, 24, 40, 0.08);
-  border-color: color-mix(in srgb, var(--suppliers-accent) 30%, rgba(94, 110, 138, 0.18));
+  border-color: color-mix(in srgb, var(--suppliers-accent) 30%, var(--wa-info-wash));
 }
 
 .suppliers-action-label {
@@ -633,20 +633,20 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(61, 77, 102, 0.88);
+  color: var(--wa-info);
 }
 
 .suppliers-action-value {
   margin-top: 0.28rem;
   font-size: 1rem;
   font-weight: 700;
-  color: #132036;
+  color: var(--wa-text);
 }
 
 .suppliers-action-note {
   margin-top: 0.3rem;
   font-size: 0.84rem;
-  color: rgba(67, 81, 103, 0.9);
+  color: var(--wa-text);
 }
 
 .suppliers-command-toolbar {
@@ -655,7 +655,7 @@
   justify-content: space-between;
   gap: 0.95rem 1.2rem;
   padding: 0.95rem 1rem;
-  border: 1px solid rgba(94, 110, 138, 0.12);
+  border: 1px solid var(--wa-info-wash);
   border-radius: 1rem;
   background: var(--suppliers-surface-muted);
 }
@@ -690,13 +690,13 @@
 .suppliers-command-toolbar .form-select,
 .suppliers-command-toolbar .input-group-text,
 .suppliers-command-toolbar .form-control {
-  border-color: rgba(94, 110, 138, 0.18);
+  border-color: var(--wa-info-wash);
 }
 
 .supplier-quick-chip.active,
 .supplier-protein-chip.active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--suppliers-accent), color-mix(in srgb, var(--suppliers-accent) 64%, #1c2443 36%));
+  color: var(--wa-text-inverse);
+  background: linear-gradient(135deg, var(--suppliers-accent), color-mix(in srgb, var(--suppliers-accent) 64%, var(--wa-surface-2) 36%));
   border-color: transparent;
   box-shadow: 0 14px 26px rgba(24, 39, 75, 0.14);
 }
@@ -711,9 +711,9 @@
 
 .suppliers-command-table thead th {
   white-space: nowrap;
-  background: linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(238, 243, 250, 0.96));
-  color: #213252;
-  border-bottom-color: rgba(91, 108, 138, 0.2);
+  background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
+  color: var(--wa-info);
+  border-bottom-color: var(--wa-info-wash);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -737,8 +737,8 @@
 }
 
 .suppliers-mini-table .table thead th {
-  color: #2d3f61;
-  background: rgba(245, 248, 252, 0.92);
+  color: var(--wa-info);
+  background: var(--wa-surface);
 }
 
 .suppliers-mini-table .table tbody td {
@@ -746,7 +746,7 @@
 }
 
 .suppliers-mini-table .table tbody tr:hover td {
-  background: rgba(236, 241, 248, 0.74);
+  background: var(--wa-surface);
 }
 
 .suppliers-risk-pill,
@@ -761,23 +761,23 @@
 }
 
 .suppliers-risk-pill {
-  border: 1px solid rgba(94, 110, 138, 0.16);
-  background: rgba(240, 244, 249, 0.92);
+  border: 1px solid var(--wa-info-wash);
+  background: var(--wa-surface);
 }
 
 .suppliers-risk-pill.risk-high {
-  background: rgba(174, 34, 54, 0.1);
-  color: #8f1730;
+  background: var(--wa-bad-wash);
+  color: var(--wa-bad);
 }
 
 .suppliers-risk-pill.risk-medium {
-  background: rgba(193, 120, 28, 0.12);
-  color: #8b5a00;
+  background: var(--wa-warn-wash);
+  color: var(--wa-warn);
 }
 
 .suppliers-risk-pill.risk-low {
-  background: rgba(14, 125, 90, 0.12);
-  color: #0e6b4d;
+  background: var(--wa-good-wash);
+  color: var(--wa-good);
 }
 
 .suppliers-metric-stack {
@@ -796,7 +796,7 @@
   justify-content: flex-end;
   gap: 0.28rem;
   font-size: 0.72rem;
-  color: rgba(54, 68, 92, 0.8);
+  color: var(--wa-text);
 }
 
 .suppliers-status-pill {
@@ -811,45 +811,45 @@
 }
 
 .suppliers-status-pill.is-red {
-  color: #991b1b;
-  background: rgba(239, 68, 68, 0.14);
-  border-color: rgba(185, 28, 28, 0.16);
+  color: var(--wa-bad);
+  background: var(--wa-bad-wash);
+  border-color: var(--wa-bad-wash);
 }
 
 .suppliers-status-pill.is-orange {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.16);
-  border-color: rgba(194, 65, 12, 0.18);
+  color: var(--wa-warn);
+  background: var(--wa-warn-wash);
+  border-color: var(--wa-bad-wash);
 }
 
 .suppliers-status-pill.is-yellow {
-  color: #8a5b00;
-  background: rgba(250, 204, 21, 0.16);
-  border-color: rgba(202, 138, 4, 0.2);
+  color: var(--wa-warn);
+  background: var(--wa-warn-wash);
+  border-color: var(--wa-warn-wash);
 }
 
 .suppliers-status-pill.is-light-green {
-  color: #15803d;
-  background: rgba(134, 239, 172, 0.2);
-  border-color: rgba(34, 197, 94, 0.18);
+  color: var(--wa-good);
+  background: var(--wa-good-wash);
+  border-color: var(--wa-good-wash);
 }
 
 .suppliers-status-pill.is-green {
-  color: #0e6b4d;
-  background: rgba(14, 125, 90, 0.12);
-  border-color: rgba(14, 107, 77, 0.16);
+  color: var(--wa-good);
+  background: var(--wa-good-wash);
+  border-color: var(--wa-good-wash);
 }
 
 .suppliers-status-pill.is-neutral {
-  color: #475569;
-  background: rgba(148, 163, 184, 0.16);
-  border-color: rgba(100, 116, 139, 0.18);
+  color: var(--wa-text);
+  background: var(--wa-surface-2);
+  border-color: var(--wa-hairline);
 }
 
 .suppliers-protein-pill {
-  background: color-mix(in srgb, var(--suppliers-accent-soft) 74%, #fff 26%);
-  color: #1b2a46;
-  border: 1px solid color-mix(in srgb, var(--suppliers-accent) 18%, #dbe2ed 82%);
+  background: color-mix(in srgb, var(--suppliers-accent-soft) 74%, var(--wa-surface) 26%);
+  color: var(--wa-info);
+  border: 1px solid color-mix(in srgb, var(--suppliers-accent) 18%, var(--wa-info) 82%);
 }
 
 .suppliers-command-table th.sortable {
@@ -862,11 +862,11 @@
 }
 
 .suppliers-command-table tbody tr[data-row="supplier"]:hover td {
-  background: rgba(228, 236, 247, 0.74);
+  background: var(--wa-surface-2);
 }
 
 .suppliers-command-table tbody td .text-muted {
-  color: rgba(77, 91, 113, 0.82) !important;
+  color: var(--wa-text) !important;
 }
 
 @media (max-width: 1199.98px) {

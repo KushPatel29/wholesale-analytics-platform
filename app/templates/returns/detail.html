@@ -21,14 +21,14 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: #e9ecef;
+    background: var(--wa-surface-2);
     z-index: 1;
     transform: translateY(-50%);
   }
   .step {
     position: relative;
     z-index: 2;
-    background: #fff;
+    background: var(--wa-surface);
     padding: 0 10px;
     text-align: center;
     flex: 1;
@@ -37,34 +37,34 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #e9ecef;
-    color: #6c757d;
+    background: var(--wa-surface-2);
+    color: var(--wa-text-dim);
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0 auto 8px;
     font-size: 14px;
     font-weight: bold;
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--wa-hairline-soft);
     transition: all 0.3s ease;
   }
   .step.active .step-icon {
-    background: #0d6efd;
-    color: #fff;
-    border-color: #0d6efd;
+    background: var(--wa-info);
+    color: var(--wa-text-inverse);
+    border-color: var(--wa-info);
   }
   .step.completed .step-icon {
-    background: #198754;
-    color: #fff;
-    border-color: #198754;
+    background: var(--wa-good);
+    color: var(--wa-text-inverse);
+    border-color: var(--wa-good);
   }
   .step-label {
     font-size: 12px;
-    color: #6c757d;
+    color: var(--wa-text-dim);
     font-weight: 500;
   }
-  .step.active .step-label { color: #0d6efd; font-weight: 700; }
-  .step.completed .step-label { color: #198754; }
+  .step.active .step-label { color: var(--wa-info); font-weight: 700; }
+  .step.completed .step-label { color: var(--wa-good); }
 </style>
 {% endblock %}
 {% block content %}

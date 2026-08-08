@@ -809,29 +809,29 @@
 
   /* Hero */
   .products-hero {
-    background: linear-gradient(120deg, #7a413a 0%, #9b5f3d 55%, rgba(255,255,255,0.10) 100%);
+    background: linear-gradient(120deg, var(--wa-accent-deep) 0%, var(--wa-warn) 55%, var(--wa-surface-2) 100%);
     position: relative;
     border-radius: 1.1rem;
   }
   .products-hero .hero-gloss {
     position:absolute; inset:0;
-    background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 55%);
+    background: radial-gradient(circle at top right, var(--wa-surface-2), transparent 55%);
     pointer-events:none;
   }
   .hero-badge{
     width: 38px; height: 38px;
     display: inline-flex; align-items:center; justify-content:center;
     border-radius: 12px;
-    background: rgba(255,255,255,.14);
-    border: 1px solid rgba(255,255,255,.18);
+    background: var(--wa-surface-2);
+    border: 1px solid var(--wa-hairline);
   }
 
   /* Subnav */
   .products-subnav { top: 0.75rem; z-index: 1020; }
   .nav-pills-sm .nav-link { padding: .35rem .6rem; font-size: .88rem; }
   .nav-pills .nav-link { border-radius: 999px; }
-  .nav-pills .nav-link:not(.active) { color: #6c757d; background: rgba(108,117,125,.08); }
-  .nav-pills .nav-link:not(.active):hover { background: rgba(108,117,125,.14); }
+  .nav-pills .nav-link:not(.active) { color: var(--wa-text-dim); background: var(--wa-hairline-soft); }
+  .nav-pills .nav-link:not(.active):hover { background: var(--wa-hairline-soft); }
 
   /* Cards */
   @media (prefers-reduced-motion: no-preference) {
@@ -841,25 +841,25 @@
   .shadow-soft { box-shadow: 0 18px 40px rgba(122,65,58,0.15); }
 
   .insight-card {
-    background: #fff;
+    background: var(--wa-surface);
     border-radius: .95rem;
     padding: 1rem 1.1rem;
     border: 1px solid rgba(0,0,0,0.05);
   }
-  .insight-label { color: #6c757d; letter-spacing: .06em; margin-bottom: .35rem; }
-  .insight-value { font-size: 1.35rem; font-weight: 700; color: #1f2933; }
+  .insight-label { color: var(--wa-text-dim); letter-spacing: .06em; margin-bottom: .35rem; }
+  .insight-value { font-size: 1.35rem; font-weight: 700; color: var(--wa-text); }
   .insight-detail { font-weight: 600; min-height: 1.25rem; }
-  .insight-note { font-size: .82rem; color: #6c757d; margin-top: .25rem; }
+  .insight-note { font-size: .82rem; color: var(--wa-text-dim); margin-top: .25rem; }
 
   .metric-card {
-    background: linear-gradient(180deg, rgba(122,65,58,0.07), rgba(122,65,58,0));
+    background: linear-gradient(180deg, var(--wa-accent-wash), var(--wa-accent-wash));
     border-radius: .95rem;
     padding: 1rem 1.2rem;
     border: 1px solid rgba(0,0,0,0.04);
     text-align: center;
   }
-  .metric-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: #6c757d; }
-  .metric-value { font-size: 1.75rem; font-weight: 800; color: #1f2933; }
+  .metric-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--wa-text-dim); }
+  .metric-value { font-size: 1.75rem; font-weight: 800; color: var(--wa-text); }
 
   .mini-kpi {
     background: rgba(0,0,0,0.02);
@@ -867,35 +867,35 @@
     border-radius: .85rem;
     padding: .75rem .85rem;
   }
-  .mini-kpi-label { font-size: .78rem; color: #6c757d; text-transform: uppercase; letter-spacing: .06em; }
-  .mini-kpi-value { font-size: 1.1rem; font-weight: 800; color: #1f2933; }
-  .mini-kpi-note { font-size: .78rem; color: #6c757d; margin-top: .15rem; }
+  .mini-kpi-label { font-size: .78rem; color: var(--wa-text-dim); text-transform: uppercase; letter-spacing: .06em; }
+  .mini-kpi-value { font-size: 1.1rem; font-weight: 800; color: var(--wa-text); }
+  .mini-kpi-note { font-size: .78rem; color: var(--wa-text-dim); margin-top: .15rem; }
 
-  .predictive-card { border-left: 4px solid rgba(13,110,253,.35); }
-  .momentum-card { border-left: 4px solid rgba(255,193,7,.45); }
+  .predictive-card { border-left: 4px solid var(--wa-info-wash); }
+  .momentum-card { border-left: 4px solid var(--wa-warn-wash); }
 
   .products-v2 {
-    --products-accent: #7a413a;
-    --products-accent-soft: rgba(122, 65, 58, 0.10);
-    --products-success: #1f7a4c;
-    --products-warning: #b26a1a;
-    --products-danger: #b13e3e;
-    --products-neutral: #5a6472;
+    --products-accent: var(--wa-accent-deep);
+    --products-accent-soft: var(--wa-accent-wash);
+    --products-success: var(--wa-good);
+    --products-warning: var(--wa-warn);
+    --products-danger: var(--wa-bad);
+    --products-neutral: var(--wa-text-faint);
   }
   .products-v2 .products-hero {
-    background: linear-gradient(126deg, #43211d 0%, #7a413a 50%, #c17d4f 100%);
+    background: linear-gradient(126deg, var(--wa-surface-2) 0%, var(--wa-accent-deep) 50%, var(--wa-warn) 100%);
     box-shadow: 0 22px 44px rgba(67, 33, 29, 0.18);
   }
   .products-v2 .products-subnav .card {
     backdrop-filter: blur(8px);
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--wa-surface);
   }
   .products-v2 .metric-card {
     text-align: left;
     padding: 1rem 1rem 1.1rem;
     background:
-      linear-gradient(180deg, rgba(122, 65, 58, 0.09), rgba(122, 65, 58, 0.01)),
-      linear-gradient(120deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 240, 0.98));
+      linear-gradient(180deg, var(--wa-accent-wash), var(--wa-accent-wash)),
+      linear-gradient(120deg, var(--wa-surface), var(--wa-surface));
   }
   .products-v2 .metric-label,
   .products-v2 .insight-label {
@@ -905,7 +905,7 @@
   }
   .products-v2 .mini-kpi,
   .products-v2 .metric-tile {
-    background: linear-gradient(180deg, rgba(122, 65, 58, 0.05), rgba(255, 255, 255, 0.9));
+    background: linear-gradient(180deg, var(--wa-accent-wash), var(--wa-surface));
   }
   .products-v2 #recPanel {
     max-height: 16rem;
@@ -921,13 +921,13 @@
     border: 1px solid rgba(31, 41, 51, 0.08);
     border-radius: 0.85rem;
     padding: 0.6rem 0.8rem;
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--wa-surface);
   }
   .products-v2 .products-column-chooser summary {
     cursor: pointer;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #364152;
+    color: var(--wa-text);
   }
   .products-v2 .products-column-chooser-grid {
     display: grid;
@@ -939,7 +939,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.84rem;
-    color: #4b5563;
+    color: var(--wa-text);
   }
   .products-v2 .products-table-v2 {
     min-width: 1450px;
@@ -953,16 +953,16 @@
   }
   .products-v2 .products-table-v2 tbody td {
     vertical-align: middle;
-    border-color: rgba(148, 163, 184, 0.16);
+    border-color: var(--wa-hairline);
   }
   .products-v2 .products-table-v2 .sticky-col {
     position: sticky;
     z-index: 3;
-    background: #fff;
+    background: var(--wa-surface);
   }
   .products-v2 .products-table-v2 thead .sticky-col {
     z-index: 4;
-    background: #f8fafc;
+    background: var(--wa-surface);
   }
   .products-v2 .products-table-v2 .sticky-col-1 {
     left: 0;
@@ -995,23 +995,23 @@
     line-height: 1.2;
   }
   .products-v2 .tag-badge {
-    background: rgba(15, 118, 110, 0.10);
-    color: #0f766e;
+    background: var(--wa-info-wash);
+    color: var(--wa-info);
   }
   .products-v2 .risk-badge.tone-danger {
-    background: rgba(177, 62, 62, 0.12);
+    background: var(--wa-bad-wash);
     color: var(--products-danger);
   }
   .products-v2 .risk-badge.tone-warning {
-    background: rgba(178, 106, 26, 0.12);
+    background: var(--wa-warn-wash);
     color: var(--products-warning);
   }
   .products-v2 .risk-badge.tone-neutral {
-    background: rgba(90, 100, 114, 0.12);
+    background: var(--wa-hairline-soft);
     color: var(--products-neutral);
   }
   .products-v2 .recommendation-badge {
-    background: rgba(31, 122, 76, 0.10);
+    background: var(--wa-good-wash);
     color: var(--products-success);
   }
   .products-v2 .products-health-grid {
@@ -1020,30 +1020,30 @@
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
   .products-v2 .health-card {
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    border: 1px solid var(--wa-hairline);
     border-radius: 1rem;
     padding: 1rem;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+    background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
   }
   .products-v2 .health-card.tone-success { border-top: 4px solid var(--products-success); }
   .products-v2 .health-card.tone-warning { border-top: 4px solid var(--products-warning); }
-  .products-v2 .health-card.tone-info { border-top: 4px solid #0f766e; }
+  .products-v2 .health-card.tone-info { border-top: 4px solid var(--wa-info); }
   .products-v2 .health-card.tone-neutral { border-top: 4px solid var(--products-neutral); }
   .products-v2 .health-kicker {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #6b7280;
+    color: var(--wa-text-dim);
   }
   .products-v2 .health-value {
     font-size: 1.7rem;
     font-weight: 800;
-    color: #1f2937;
+    color: var(--wa-text);
     line-height: 1.1;
   }
   .products-v2 .health-meta {
     font-size: 0.82rem;
-    color: #5b6472;
+    color: var(--wa-text-dim);
   }
   .products-v2 .health-card details {
     margin-top: 0.85rem;
@@ -1064,35 +1064,35 @@
     justify-content: space-between;
     gap: 0.75rem;
     font-size: 0.8rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    border-bottom: 1px solid var(--wa-hairline);
     padding-bottom: 0.35rem;
   }
   .products-v2 .info-dot {
-    color: #6c757d;
+    color: var(--wa-text-dim);
     text-decoration: none;
   }
   .products-v3 .products-hero {
-    background: #1f2a37;
+    background: var(--wa-surface-2);
     box-shadow: 0 10px 24px rgba(31, 42, 55, 0.16);
   }
   .products-v3 .products-hero .hero-gloss {
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 60%);
+    background: linear-gradient(120deg, var(--wa-surface-2), transparent 60%);
   }
   .products-v3 .metric-card {
-    background: #fff;
+    background: var(--wa-surface);
     border: 1px solid rgba(15, 23, 42, 0.08);
   }
   .products-v3 .mini-kpi {
-    background: #f8fafc;
-    border-color: rgba(148, 163, 184, 0.25);
+    background: var(--wa-surface);
+    border-color: var(--wa-hairline);
   }
   .products-v3 .insight-card {
     border-color: rgba(15, 23, 42, 0.08);
   }
   .products-v3 .table-chip.is-active {
-    background: rgba(31, 122, 76, 0.10);
-    border-color: #1f7a4c;
-    color: #1f7a4c;
+    background: var(--wa-good-wash);
+    border-color: var(--wa-good);
+    color: var(--wa-good);
   }
   .products-v3 .products-table-v2 {
     min-width: 2200px;
@@ -1113,7 +1113,7 @@
   .skeleton {
     height: 160px;
     border-radius: .6rem;
-    background: linear-gradient(90deg, #f1f3f5 0%, #f8f9fa 50%, #f1f3f5 100%);
+    background: linear-gradient(90deg, var(--wa-surface-2) 0%, var(--wa-surface) 50%, var(--wa-surface-2) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.15s infinite;
     margin-bottom: .6rem;

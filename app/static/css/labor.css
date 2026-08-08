@@ -1,22 +1,22 @@
 
 :root {
-  --labor-ink: #15313b;
-  --labor-muted: #607783;
-  --labor-border: #d9e5ea;
-  --labor-surface: #ffffff;
-  --labor-surface-soft: #f4f9fb;
-  --labor-panel: #eff6f8;
-  --labor-primary: #0d766f;
-  --labor-primary-deep: #0b5550;
-  --labor-primary-soft: #e6f7f3;
-  --labor-blue: #295fa5;
-  --labor-blue-soft: #eaf1fb;
-  --labor-warning: #b67718;
-  --labor-warning-soft: #fff4de;
-  --labor-danger: #bc4935;
-  --labor-danger-soft: #fff1ee;
-  --labor-success: #2d7a4b;
-  --labor-success-soft: #eef9f1;
+  --labor-ink: var(--wa-text);
+  --labor-muted: var(--wa-text-dim);
+  --labor-border: var(--wa-info);
+  --labor-surface: var(--wa-surface);
+  --labor-surface-soft: var(--wa-surface);
+  --labor-panel: var(--wa-surface-2);
+  --labor-primary: var(--wa-info);
+  --labor-primary-deep: var(--wa-info);
+  --labor-primary-soft: var(--wa-good-wash);
+  --labor-blue: var(--wa-info);
+  --labor-blue-soft: var(--wa-info-wash);
+  --labor-warning: var(--wa-warn);
+  --labor-warning-soft: var(--wa-warn-wash);
+  --labor-danger: var(--wa-bad);
+  --labor-danger-soft: var(--wa-bad-wash);
+  --labor-success: var(--wa-good);
+  --labor-success-soft: var(--wa-surface-2);
   --labor-shadow: 0 18px 38px rgba(17, 38, 46, 0.08);
   --labor-shadow-soft: 0 10px 24px rgba(17, 38, 46, 0.05);
 }
@@ -31,12 +31,12 @@
 }
 
 .labor-hero {
-  color: #fff;
+  color: var(--wa-text-inverse);
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(245, 189, 92, 0.28), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(40, 162, 149, 0.24), transparent 30%),
-    linear-gradient(140deg, #0b2127 0%, #12363f 52%, #0a171b 100%);
+    radial-gradient(circle at top right, var(--wa-warn-wash), transparent 28%),
+    radial-gradient(circle at bottom left, var(--wa-info-wash), transparent 30%),
+    linear-gradient(140deg, var(--wa-canvas-deep) 0%, var(--wa-info) 52%, var(--wa-canvas-deep) 100%);
 }
 
 .labor-hero::after {
@@ -46,7 +46,7 @@
   width: 360px;
   height: 360px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--wa-surface-2);
   filter: blur(8px);
 }
 
@@ -87,7 +87,7 @@
 }
 
 .labor-kicker {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--wa-text-inverse);
   margin-bottom: 0.8rem;
 }
 
@@ -100,7 +100,7 @@
 .labor-hero-subtitle {
   max-width: 70ch;
   margin: 0.45rem 0 0.55rem;
-  color: rgba(248, 252, 255, 0.94);
+  color: var(--wa-text-inverse);
   font-size: 1.05rem;
 }
 
@@ -130,16 +130,16 @@
 .labor-hero-purpose {
   max-width: 76ch;
   margin: 0;
-  color: rgba(240, 247, 252, 0.84);
+  color: var(--wa-text-inverse);
 }
 
 .labor-hero-narrative {
   margin-top: 1rem;
   padding: 1.05rem 1.1rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.88);
+  background: var(--wa-surface-2);
+  border: 1px solid var(--wa-hairline);
+  color: var(--wa-text-inverse);
 }
 
 .labor-chip-row {
@@ -158,8 +158,8 @@
   gap: 0.35rem;
   padding: 0.42rem 0.74rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--wa-hairline);
+  background: var(--wa-surface-2);
   color: inherit;
   font-size: 0.82rem;
   text-decoration: none;
@@ -167,13 +167,13 @@
 
 .labor-page .labor-hero .labor-chip {
   background: rgba(18, 35, 53, 0.42);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: #f8fbff !important;
+  border-color: var(--wa-hairline);
+  color: var(--wa-text-inverse) !important;
 }
 
 .labor-chip-dark {
-  background: #eef5f8;
-  border-color: #d7e4ea;
+  background: var(--wa-surface-2);
+  border-color: var(--wa-info);
   color: var(--labor-ink);
 }
 
@@ -185,8 +185,8 @@
 .labor-command-card {
   padding: 1rem;
   border-radius: 1.1rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.09));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
+  border: 1px solid var(--wa-hairline);
 }
 
 .labor-command-list {
@@ -200,9 +200,9 @@
   display: block;
   padding: 0.85rem 0.95rem;
   border-radius: 0.95rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
+  border: 1px solid var(--wa-hairline);
+  color: var(--wa-text-inverse);
   text-decoration: none;
 }
 
@@ -214,20 +214,20 @@
 .labor-command-link__detail {
   display: block;
   margin-top: 0.25rem;
-  color: rgba(240, 247, 252, 0.84);
+  color: var(--wa-text-inverse);
   font-size: 0.9rem;
 }
 
 .labor-command-link:hover,
 .labor-export-menu summary:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--wa-text-inverse);
+  border-color: var(--wa-hairline);
 }
 
 .labor-export-menu {
   border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
+  border: 1px solid var(--wa-hairline);
 }
 
 .labor-export-menu summary {
@@ -235,7 +235,7 @@
   cursor: pointer;
   padding: 0.95rem 1rem;
   font-weight: 700;
-  color: rgba(248, 252, 255, 0.96);
+  color: var(--wa-text-inverse);
 }
 
 .labor-export-menu summary::-webkit-details-marker {
@@ -259,24 +259,24 @@
 .labor-mini-stat {
   padding: 1rem 1.05rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.09));
+  border: 1px solid var(--wa-hairline);
+  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
 }
 
 .labor-mini-stat-info {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--wa-surface-2);
 }
 
 .labor-mini-stat-warning {
-  background: rgba(255, 244, 222, 0.16);
+  background: var(--wa-surface-2);
 }
 
 .labor-mini-stat-success {
-  background: rgba(238, 249, 241, 0.18);
+  background: var(--wa-surface-2);
 }
 
 .labor-mini-stat-primary {
-  background: rgba(230, 247, 243, 0.17);
+  background: var(--wa-surface-2);
 }
 
 .labor-mini-stat__label {
@@ -298,29 +298,29 @@
 }
 
 .labor-export-menu .btn-light {
-  background: #ffffff;
-  color: #132033;
-  border-color: rgba(255, 255, 255, 0.26);
+  background: var(--wa-surface);
+  color: var(--wa-text);
+  border-color: var(--wa-hairline);
 }
 
 .labor-export-menu .btn-outline-light {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fbff;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--wa-surface-2);
+  color: var(--wa-text-inverse);
+  border-color: var(--wa-hairline);
 }
 
 .labor-export-menu .btn-light:hover,
 .labor-export-menu .btn-light:focus {
-  background: #f3f7fb;
-  color: #132033;
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--wa-surface-2);
+  color: var(--wa-text);
+  border-color: var(--wa-hairline);
 }
 
 .labor-export-menu .btn-outline-light:hover,
 .labor-export-menu .btn-outline-light:focus {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--wa-surface-2);
+  color: var(--wa-text-inverse);
+  border-color: var(--wa-hairline);
 }
 
 .labor-page .labor-hero .labor-command-card__label,
@@ -330,11 +330,11 @@
 .labor-page .labor-hero .labor-mini-stat__hint,
 .labor-page .labor-hero .labor-chip,
 .labor-page .labor-hero .labor-chip i {
-  color: #f8fbff !important;
+  color: var(--wa-text-inverse) !important;
 }
 
 .labor-filter-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .labor-context-strip {
@@ -368,7 +368,7 @@
   padding: 0.7rem 0.85rem;
   border-radius: 0.85rem;
   background: var(--labor-warning-soft);
-  color: #946216;
+  color: var(--wa-warn);
 }
 
 .labor-section {
@@ -416,7 +416,7 @@
 
 .labor-score-group {
   height: 100%;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .labor-score-group__title {
@@ -443,19 +443,19 @@
 }
 
 .labor-metric-card-primary {
-  background: linear-gradient(180deg, #eef9f6 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--wa-surface-2) 0%, var(--wa-surface) 100%);
 }
 
 .labor-metric-card-warning {
-  background: linear-gradient(180deg, #fff8eb 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--wa-warn-wash) 0%, var(--wa-surface) 100%);
 }
 
 .labor-metric-card-danger {
-  background: linear-gradient(180deg, #fff2ef 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--wa-bad-wash) 0%, var(--wa-surface) 100%);
 }
 
 .labor-metric-card-success {
-  background: linear-gradient(180deg, #eef8f1 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--wa-surface-2) 0%, var(--wa-surface) 100%);
 }
 
 .labor-metric-label {
@@ -497,12 +497,12 @@
 
 .labor-delta-warning {
   background: var(--labor-warning-soft);
-  color: #8d5e11;
+  color: var(--wa-warn);
 }
 
 .labor-delta-danger {
   background: var(--labor-danger-soft);
-  color: #8d3226;
+  color: var(--wa-bad);
 }
 
 .labor-delta-success {
@@ -526,22 +526,22 @@
 
 .labor-signal-card-primary {
   background: var(--labor-blue-soft);
-  border-color: #cbd9f1;
+  border-color: var(--wa-hairline);
 }
 
 .labor-signal-card-success {
   background: var(--labor-success-soft);
-  border-color: #d0e6d7;
+  border-color: var(--wa-hairline);
 }
 
 .labor-signal-card-warning {
   background: var(--labor-warning-soft);
-  border-color: #f0dcaa;
+  border-color: var(--wa-warn);
 }
 
 .labor-signal-card-danger {
   background: var(--labor-danger-soft);
-  border-color: #efc9c2;
+  border-color: var(--wa-bad);
 }
 
 .labor-signal-copy {
@@ -559,7 +559,7 @@
   gap: 0.3rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  background: rgba(13, 118, 111, 0.12);
+  background: var(--wa-info-wash);
   color: var(--labor-primary-deep);
   text-decoration: none;
   font-size: 0.84rem;
@@ -591,7 +591,7 @@
 }
 
 .labor-chart-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .labor-chart-card-lg {
@@ -637,7 +637,7 @@
 .labor-focus-card {
   border-radius: 1.15rem;
   border: 1px solid var(--labor-border);
-  background: linear-gradient(180deg, #ffffff 0%, #f6fafb 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   box-shadow: var(--labor-shadow);
 }
 
@@ -681,7 +681,7 @@
 }
 
 .labor-watch-panel {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
+  background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
 }
 
 .labor-watch-panel__subtitle {
@@ -699,23 +699,23 @@
   padding: 0.9rem 0.95rem;
   border-radius: 1rem;
   border: 1px solid var(--labor-border);
-  background: #fff;
+  background: var(--wa-surface);
 }
 
 .labor-watch-item-warning {
-  background: #fffaf1;
+  background: var(--wa-warn-wash);
 }
 
 .labor-watch-item-danger {
-  background: #fff4f1;
+  background: var(--wa-bad-wash);
 }
 
 .labor-watch-item-success {
-  background: #f2faf4;
+  background: var(--wa-surface-2);
 }
 
 .labor-watch-item-primary {
-  background: #eff5fd;
+  background: var(--wa-info-wash);
 }
 
 .labor-watch-item__head {
@@ -743,13 +743,13 @@
 .labor-posture-warning,
 .labor-tag-warning {
   background: var(--labor-warning-soft);
-  color: #8f5b0f;
+  color: var(--wa-warn);
 }
 
 .labor-posture-danger,
 .labor-tag-danger {
   background: var(--labor-danger-soft);
-  color: #933024;
+  color: var(--wa-bad);
 }
 
 .labor-posture-success,
@@ -766,7 +766,7 @@
 }
 
 .labor-tag {
-  background: #edf5f7;
+  background: var(--wa-surface-2);
   color: var(--labor-ink);
 }
 
@@ -775,11 +775,11 @@
 }
 
 .labor-data-table tbody tr {
-  border-color: #edf2f4;
+  border-color: var(--wa-hairline-soft);
 }
 
 .labor-data-table tbody tr:hover {
-  background: #f7fbfc;
+  background: var(--wa-surface);
 }
 
 .labor-table-link,
@@ -798,14 +798,14 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #f5f9fb;
+  background: var(--wa-surface);
 }
 
 .labor-empty {
   padding: 1.1rem;
   border-radius: 1rem;
   border: 1px dashed var(--labor-border);
-  background: #f8fbfc;
+  background: var(--wa-surface);
   color: var(--labor-muted);
 }
 

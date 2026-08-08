@@ -622,7 +622,7 @@
                     <td class="text-end"><span class="fw-semibold" style="color: {{ status_color }};">{{ ui.fmt_value(row.get('margin_pct'), 'percent') }}</span></td>
                     <td class="text-end">{{ ui.fmt_value(row.get('target_margin_pct'), 'percent') }}</td>
                     <td class="text-end">{{ ui.fmt_value(row.get('revenue'), 'currency') }}</td>
-                    <td><span class="badge rounded-pill" style="background-color: {{ status_color }}; color: #fff;">{{ row.get('target_status') or 'Status pending' }}</span></td>
+                    <td><span class="badge rounded-pill" style="background-color: {{ status_color }}; color: var(--wa-text-inverse);">{{ row.get('target_status') or 'Status pending' }}</span></td>
                   </tr>
                 {% else %}
                   <tr><td colspan="5" class="text-center text-muted py-3">No protein-family margin watchlist.</td></tr>
@@ -737,7 +737,7 @@
                   <td class="text-end">{{ ui.fmt_value(row.target_margin_pct, 'percent') }}</td>
                   <td class="text-end">{{ ui.fmt_value(row.contribution_lb, 'currency') }}</td>
                   <td class="text-end"><span class="fw-semibold" style="color: {{ status_color }};">{{ ui.fmt_value(row.asp_lb_gap_to_target, 'currency') }}</span></td>
-                  <td><span class="badge rounded-pill" style="background-color: {{ status_color }}; color: #fff;">{{ row.target_status or 'Status pending' }}</span></td>
+                  <td><span class="badge rounded-pill" style="background-color: {{ status_color }}; color: var(--wa-text-inverse);">{{ row.target_status or 'Status pending' }}</span></td>
                 {% endif %}
               </tr>
             {% else %}

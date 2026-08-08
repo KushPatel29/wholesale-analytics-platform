@@ -3,8 +3,8 @@
 {% block head_extras %}
 <style>
   .admin-hero {
-    background: linear-gradient(135deg, #0d6efd 0%, #0b2f6a 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%);
+    color: var(--wa-text-inverse);
     border-radius: 16px;
     padding: 18px 20px;
     box-shadow: 0 10px 30px rgba(13, 110, 253, 0.25);
@@ -14,8 +14,8 @@
     padding: 0.35rem 0.7rem;
   }
   .admin-table thead {
-    background: #f7f9fc;
-    border-bottom: 1px solid #e5e8ec;
+    background: var(--wa-surface);
+    border-bottom: 1px solid var(--wa-hairline-soft);
   }
   .admin-table td, .admin-table th {
     vertical-align: middle;
@@ -23,12 +23,12 @@
   .mini-stat {
     border-radius: 12px;
     padding: 10px 12px;
-    background: #f8fafc;
-    border: 1px solid #e9eef5;
+    background: var(--wa-surface);
+    border: 1px solid var(--wa-hairline-soft);
   }
   .card-ghost {
-    border: 1px dashed #cfd6e4;
-    background: #fbfdff;
+    border: 1px dashed var(--wa-hairline);
+    background: var(--wa-surface);
   }
   #accessModal .modal-dialog.access-modal-dialog {
     width: min(1400px, calc(100vw - 1.5rem));
@@ -56,10 +56,10 @@
     position: relative;
     z-index: 2;
     flex: 0 0 auto;
-    background: #fff;
+    background: var(--wa-surface);
   }
   #accessModal .modal-header.access-modal-header {
-    border-bottom: 1px solid #e6ebf3;
+    border-bottom: 1px solid var(--wa-info);
   }
   #accessModal .modal-body.access-modal-body {
     flex: 1 1 auto;
@@ -73,7 +73,7 @@
   #accessModal .modal-footer.access-modal-footer {
     gap: 0.5rem;
     align-items: center;
-    border-top: 1px solid #e6ebf3;
+    border-top: 1px solid var(--wa-info);
     box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
   }
   .access-grid {
@@ -105,10 +105,10 @@
   }
   .access-shell,
   .access-section {
-    border: 1px solid #e3e8f0;
+    border: 1px solid var(--wa-info);
     border-radius: 14px;
     padding: 0.85rem 0.95rem;
-    background: #fff;
+    background: var(--wa-surface);
   }
   .access-shell h6,
   .access-section h6 {
@@ -119,7 +119,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #667085;
+    color: var(--wa-text-dim);
     margin-bottom: 0.35rem;
   }
   .access-toolbar {
@@ -129,24 +129,24 @@
     align-items: center;
   }
   .access-status-bar {
-    border: 1px solid #d9e2ee;
+    border: 1px solid var(--wa-info);
     border-radius: 12px;
-    background: #f8fbff;
+    background: var(--wa-surface);
     padding: 0.7rem 0.85rem;
   }
   .access-status-bar.is-dirty {
-    border-color: #f0c36d;
-    background: #fff8e8;
+    border-color: var(--wa-warn);
+    background: var(--wa-warn-wash);
   }
   .access-mode-hint {
     border-radius: 12px;
     padding: 0.75rem 0.85rem;
-    background: #f8fafc;
-    border: 1px solid #e4e9f1;
+    background: var(--wa-surface);
+    border: 1px solid var(--wa-info);
   }
   .access-mode-hint.locked {
-    background: #fff8e8;
-    border-color: #f0c36d;
+    background: var(--wa-warn-wash);
+    border-color: var(--wa-warn);
   }
   .access-legend {
     display: flex;
@@ -162,15 +162,15 @@
     gap: 0.75rem;
   }
   .access-mode-option {
-    border: 1px solid #dbe4f0;
+    border: 1px solid var(--wa-info);
     border-radius: 12px;
     padding: 0.8rem 0.9rem;
-    background: #f8fbff;
+    background: var(--wa-surface);
   }
   .access-mode-option.active {
-    border-color: #0d6efd;
+    border-color: var(--wa-info);
     box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.2);
-    background: #eef5ff;
+    background: var(--wa-info-wash);
   }
   .access-pill-row {
     display: flex;
@@ -182,26 +182,26 @@
     align-items: center;
     gap: 0.35rem;
     border-radius: 999px;
-    border: 1px solid #d9e2ee;
-    background: #f8fafc;
-    color: #344054;
+    border: 1px solid var(--wa-info);
+    background: var(--wa-surface);
+    color: var(--wa-text);
     font-size: 0.8rem;
     padding: 0.25rem 0.6rem;
   }
   .access-pill.allow {
-    border-color: #b7dfc8;
-    background: #ecfdf3;
-    color: #05603a;
+    border-color: var(--wa-hairline);
+    background: var(--wa-good-wash);
+    color: var(--wa-good);
   }
   .access-pill.deny {
-    border-color: #f1c0c0;
-    background: #fef3f2;
-    color: #b42318;
+    border-color: var(--wa-bad);
+    background: var(--wa-surface);
+    color: var(--wa-bad);
   }
   .access-pill.inherited {
-    border-color: #d0d8e4;
-    background: #f5f7fa;
-    color: #475467;
+    border-color: var(--wa-hairline);
+    background: var(--wa-surface);
+    color: var(--wa-text);
   }
   .access-matrix {
     display: grid;
@@ -209,9 +209,9 @@
     gap: 0.8rem;
   }
   .access-module-card {
-    border: 1px solid #e4e9f1;
+    border: 1px solid var(--wa-info);
     border-radius: 14px;
-    background: linear-gradient(180deg, #fbfdff 0%, #fff 100%);
+    background: linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
     overflow: hidden;
   }
   .access-module-card > summary {
@@ -227,11 +227,11 @@
     display: none;
   }
   .access-module-meta {
-    color: #667085;
+    color: var(--wa-text-dim);
     font-size: 0.82rem;
   }
   .access-module-body {
-    border-top: 1px solid #edf1f6;
+    border-top: 1px solid var(--wa-hairline-soft);
     padding: 0.85rem 0.95rem;
   }
   .access-module-actions {
@@ -249,10 +249,10 @@
     grid-template-columns: auto 1fr auto;
     gap: 0.6rem;
     align-items: start;
-    border: 1px solid #e8edf4;
+    border: 1px solid var(--wa-hairline-soft);
     border-radius: 12px;
     padding: 0.6rem 0.7rem;
-    background: #fff;
+    background: var(--wa-surface);
   }
   .access-check.is-disabled {
     opacity: 0.6;
@@ -261,7 +261,7 @@
     font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #667085;
+    color: var(--wa-text-dim);
   }
   .access-check-state {
     white-space: nowrap;
@@ -269,20 +269,20 @@
     font-weight: 600;
     border-radius: 999px;
     padding: 0.15rem 0.5rem;
-    background: #f2f4f7;
-    color: #344054;
+    background: var(--wa-surface-2);
+    color: var(--wa-text);
   }
   .access-check-state.allow {
-    background: #ecfdf3;
-    color: #05603a;
+    background: var(--wa-good-wash);
+    color: var(--wa-good);
   }
   .access-check-state.deny {
-    background: #fef3f2;
-    color: #b42318;
+    background: var(--wa-surface);
+    color: var(--wa-bad);
   }
   .access-check-state.inherited {
-    background: #f5f7fa;
-    color: #475467;
+    background: var(--wa-surface);
+    color: var(--wa-text);
   }
   .access-sidebar {
     display: grid;
@@ -298,18 +298,18 @@
   .access-warning-list {
     margin: 0;
     padding-left: 1rem;
-    color: #b54708;
+    color: var(--wa-warn);
   }
   .access-warning-list li + li {
     margin-top: 0.35rem;
   }
   .access-empty-state {
-    border: 1px dashed #d0d8e4;
+    border: 1px dashed var(--wa-hairline);
     border-radius: 12px;
     padding: 1rem;
     text-align: center;
-    color: #667085;
-    background: #fbfcfe;
+    color: var(--wa-text-dim);
+    background: var(--wa-surface);
   }
   .access-footer-status {
     min-width: 0;

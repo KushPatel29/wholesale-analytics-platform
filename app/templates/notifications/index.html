@@ -13,23 +13,23 @@
   }
   .notif-hero {
     background:
-      radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 36%),
-      linear-gradient(135deg, rgba(16, 46, 77, 0.98), rgba(9, 26, 45, 0.98));
+      radial-gradient(circle at top right, var(--wa-info-wash), transparent 36%),
+      linear-gradient(135deg, var(--wa-info), rgba(9, 26, 45, 0.98));
     border-radius: 1.35rem;
     padding: 1.6rem;
-    color: #f8fbff;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--wa-text-inverse);
+    border: 1px solid var(--wa-hairline);
     box-shadow: 0 24px 54px rgba(4, 17, 31, 0.18);
     margin-bottom: 1.5rem;
   }
   .notif-subtle {
-    color: rgba(248, 251, 255, 0.8);
+    color: var(--wa-text-inverse);
   }
   .notif-section {
     margin-bottom: 1.5rem;
   }
   .notif-card {
-    background: #ffffff;
+    background: var(--wa-surface);
     border: 1px solid rgba(9, 26, 45, 0.08);
     border-radius: 1rem;
     box-shadow: 0 14px 32px rgba(9, 26, 45, 0.08);
@@ -37,7 +37,7 @@
     height: 100%;
   }
   .notif-card.config-ready {
-    background: linear-gradient(180deg, #ffffff, #f8fafc);
+    background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
   }
   .notif-badge {
     border-radius: 999px;
@@ -48,16 +48,16 @@
     font-weight: 700;
   }
   .notif-badge.live {
-    background: rgba(22, 163, 74, 0.12);
-    color: #166534;
+    background: var(--wa-good-wash);
+    color: var(--wa-good);
   }
   .notif-badge.config {
-    background: rgba(37, 99, 235, 0.12);
-    color: #1d4ed8;
+    background: var(--wa-info-wash);
+    color: var(--wa-info);
   }
   .notif-badge.planned {
-    background: rgba(148, 163, 184, 0.16);
-    color: #475569;
+    background: var(--wa-surface-2);
+    color: var(--wa-text);
   }
   .notif-grid {
     display: grid;
@@ -71,47 +71,47 @@
   .notif-span-3 { grid-column: span 3; }
   .notif-metric {
     border-radius: 0.95rem;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--wa-surface-2);
+    border: 1px solid var(--wa-hairline);
     padding: 0.95rem 1rem;
   }
   .notif-kpi {
     border-radius: 1rem;
-    background: #ffffff;
+    background: var(--wa-surface);
     border: 1px solid rgba(9, 26, 45, 0.08);
     box-shadow: 0 10px 24px rgba(9, 26, 45, 0.06);
     padding: 1rem;
   }
   .notif-kpi-label {
-    color: #475569;
+    color: var(--wa-text);
     font-size: 0.76rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     font-weight: 700;
   }
   .notif-kpi-value {
-    color: #0f172a;
+    color: var(--wa-text);
     font-size: 1.6rem;
     font-weight: 700;
     line-height: 1.1;
     margin-top: 0.4rem;
   }
   .notif-detail-box {
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--wa-info);
+    background: var(--wa-surface);
     border-radius: 0.9rem;
     padding: 0.85rem 0.95rem;
     height: 100%;
   }
   .notif-detail-box dt {
-    color: #475569;
+    color: var(--wa-text);
     font-size: 0.76rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 0.2rem;
   }
   .notif-detail-box dd {
-    color: #0f172a;
+    color: var(--wa-text);
     margin: 0 0 0.7rem;
     font-size: 0.92rem;
   }
@@ -136,11 +136,11 @@
     gap: 0.55rem;
   }
   .notif-helper {
-    color: #64748b;
+    color: var(--wa-text-dim);
     font-size: 0.85rem;
   }
   .notif-inline-note {
-    color: #64748b;
+    color: var(--wa-text-dim);
     font-size: 0.8rem;
     line-height: 1.5;
   }

@@ -192,7 +192,7 @@
     const text = `${cleanText(label)} ${cleanText(color)}`.toLowerCase();
     if (!text) return "neutral";
     if (
-      ["materially below minimum", "negative", "red", "#c2413b", "#b23a3a", "#dc3545", "#b42318"].some((token) =>
+      ["materially below minimum", "negative", "red", "#c2413b", "#b23a3a", ChartUtils.seriesColor(3), "#b42318"].some((token) =>
         text.includes(token)
       )
     ) {
@@ -792,8 +792,8 @@
       {
         label: "Revenue",
         data: revenue,
-        borderColor: "#0d6efd",
-        backgroundColor: "rgba(13,110,253,0.10)",
+        borderColor: ChartUtils.seriesColor(1),
+        backgroundColor: ChartUtils.seriesFill(1, 0.10),
         borderWidth: 3,
         tension: 0.25,
         pointRadius: labels.length === 1 ? 5 : 2,
@@ -806,8 +806,8 @@
       datasets.push({
         label: "Profit",
         data: profit,
-        borderColor: "#198754",
-        backgroundColor: "rgba(25,135,84,0.10)",
+        borderColor: ChartUtils.seriesColor(0),
+        backgroundColor: ChartUtils.seriesFill(0, 0.10),
         borderWidth: 2.5,
         tension: 0.25,
         pointRadius: labels.length === 1 ? 5 : 2,
@@ -820,8 +820,8 @@
       datasets.push({
         label: "Margin %",
         data: margin,
-        borderColor: "#fd7e14",
-        backgroundColor: "rgba(253,126,20,0.10)",
+        borderColor: ChartUtils.seriesColor(5),
+        backgroundColor: ChartUtils.seriesFill(5, 0.10),
         borderWidth: 2,
         tension: 0.25,
         yAxisID: "y1",
@@ -849,8 +849,8 @@
         datasets.push({
           label: "Profit 3M Avg",
           data: rollingProfit,
-          borderColor: "#20c997",
-          backgroundColor: "rgba(32,201,151,0.08)",
+          borderColor: ChartUtils.seriesColor(0),
+          backgroundColor: ChartUtils.seriesFill(0, 0.08),
           borderWidth: 2,
           borderDash: [6, 4],
           tension: 0.25,
@@ -1021,8 +1021,8 @@
           {
             label: "Revenue",
             data: revenue,
-            borderColor: "#0d6efd",
-            backgroundColor: "rgba(13,110,253,0.10)",
+            borderColor: ChartUtils.seriesColor(1),
+            backgroundColor: ChartUtils.seriesFill(1, 0.10),
             borderWidth: 2,
             tension: 0.25,
           },
@@ -1038,8 +1038,8 @@
           {
             label: "Profit",
             data: profit,
-            borderColor: "#198754",
-            backgroundColor: "rgba(25,135,84,0.08)",
+            borderColor: ChartUtils.seriesColor(0),
+            backgroundColor: ChartUtils.seriesFill(0, 0.08),
             borderWidth: 2,
             tension: 0.25,
             hidden: profit.every((value) => safeOptional(value) == null),
@@ -1047,8 +1047,8 @@
           {
             label: "Profit YoY",
             data: profitYoY,
-            borderColor: "#20c997",
-            backgroundColor: "rgba(32,201,151,0.08)",
+            borderColor: ChartUtils.seriesColor(0),
+            backgroundColor: ChartUtils.seriesFill(0, 0.08),
             borderDash: [4, 4],
             borderWidth: 2,
             tension: 0.25,
@@ -1057,8 +1057,8 @@
           {
             label: "Weight (lb)",
             data: weight,
-            borderColor: "#fd7e14",
-            backgroundColor: "rgba(253,126,20,0.08)",
+            borderColor: ChartUtils.seriesColor(5),
+            backgroundColor: ChartUtils.seriesFill(5, 0.08),
             borderWidth: 2,
             tension: 0.25,
             yAxisID: "y1",
@@ -1164,9 +1164,9 @@
             data,
             backgroundColor: [
               "rgba(148,163,184,0.88)",
-              "rgba(13,110,253,0.86)",
-              "rgba(25,135,84,0.84)",
-              "rgba(220,53,69,0.84)",
+              ChartUtils.seriesFill(1, 0.86),
+              ChartUtils.seriesFill(0, 0.84),
+              ChartUtils.seriesFill(3, 0.84),
             ],
             borderRadius: 10,
             maxBarThickness: 46,
@@ -1218,7 +1218,7 @@
           type: "bar",
           data: {
             labels,
-            datasets: [{ label: "Revenue", data, backgroundColor: "rgba(13,110,253,0.82)", borderRadius: 10 }],
+            datasets: [{ label: "Revenue", data, backgroundColor: ChartUtils.seriesFill(1, 0.82), borderRadius: 10 }],
           },
           options: {
             indexAxis: "y",
@@ -1296,7 +1296,7 @@
       type: "bar",
       data: {
         labels,
-        datasets: [{ label: "Revenue", data, backgroundColor: "#0d6efd" }],
+        datasets: [{ label: "Revenue", data, backgroundColor: ChartUtils.seriesColor(1) }],
       },
       options: {
         responsive: true,
@@ -2474,7 +2474,7 @@
       // At-risk view: highlight rows with mom_revenue_pct < -15
       const momPct = safeOptional(row.mom_revenue_pct);
       if (customerViewMode === "risk" && momPct != null && momPct < -15) {
-        tr.style.backgroundColor = "rgba(220,53,69,0.06)";
+        tr.style.backgroundColor = ChartUtils.seriesFill(3, 0.06);
       }
 
       if (v2Enabled) {
@@ -2834,7 +2834,7 @@
     // Update badge
     if (badgeEl) {
       badgeEl.textContent = String(n);
-      badgeEl.style.background = n > 0 ? "#dc3545" : "#198754";
+      badgeEl.style.background = n > 0 ? ChartUtils.seriesColor(3) : ChartUtils.seriesColor(0);
     }
 
     if (n === 0) {

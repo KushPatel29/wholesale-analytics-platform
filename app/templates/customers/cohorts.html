@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{# Charts are drawn from an inline <script> in the content block, which runs
+   while the page is parsing - so the charting libraries have to be in <head>,
+   not at the end of <body>. See base.html. #}
+{% set needs_early_charts = true %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 <ul class="nav nav-tabs mb-3 cohort-tabs">
@@ -294,13 +298,13 @@ if (typeof XLSX === 'undefined') {
 }
 
 .cohort-tabs .nav-link:hover {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%);
   color: white !important;
   transform: translateY(-3px);
 }
 
 .cohort-tabs .nav-link.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%);
   color: white !important;
   border-color: transparent !important;
   box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);

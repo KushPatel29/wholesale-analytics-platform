@@ -575,11 +575,11 @@
 <style>
   .regions-v2 .regions-v2-hero {
     background:
-      radial-gradient(circle at top right, rgba(13, 110, 253, 0.12), transparent 32%),
-      linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      radial-gradient(circle at top right, var(--wa-info-wash), transparent 32%),
+      linear-gradient(180deg, var(--wa-surface) 0%, var(--wa-surface) 100%);
   }
   .regions-v2 .regions-v2-hero .regions-v2-hero-subtitle {
-    color: #41576f;
+    color: var(--wa-info);
   }
   .regions-v2 .regions-v2-kpi-grid {
     display: grid;
@@ -629,7 +629,7 @@
     justify-content: flex-end;
     gap: 0.28rem;
     font-size: 0.72rem;
-    color: #667085;
+    color: var(--wa-text-dim);
   }
   .regions-v2 .status-pill {
     display: inline-flex;
@@ -642,34 +642,34 @@
     white-space: nowrap;
   }
   .regions-v2 .status-red {
-    color: #b42318;
-    background: rgba(180, 35, 24, 0.08);
-    border-color: rgba(180, 35, 24, 0.16);
+    color: var(--wa-bad);
+    background: var(--wa-bad-wash);
+    border-color: var(--wa-bad-wash);
   }
   .regions-v2 .status-orange {
-    color: #b54708;
-    background: rgba(181, 71, 8, 0.08);
-    border-color: rgba(181, 71, 8, 0.16);
+    color: var(--wa-warn);
+    background: var(--wa-warn-wash);
+    border-color: var(--wa-warn-wash);
   }
   .regions-v2 .status-yellow {
-    color: #8a5b00;
-    background: rgba(250, 204, 21, 0.16);
-    border-color: rgba(202, 138, 4, 0.2);
+    color: var(--wa-warn);
+    background: var(--wa-warn-wash);
+    border-color: var(--wa-warn-wash);
   }
   .regions-v2 .status-light-green {
-    color: #15803d;
-    background: rgba(134, 239, 172, 0.2);
-    border-color: rgba(34, 197, 94, 0.18);
+    color: var(--wa-good);
+    background: var(--wa-good-wash);
+    border-color: var(--wa-good-wash);
   }
   .regions-v2 .status-green {
-    color: #027a48;
-    background: rgba(2, 122, 72, 0.08);
-    border-color: rgba(2, 122, 72, 0.16);
+    color: var(--wa-good);
+    background: var(--wa-good-wash);
+    border-color: var(--wa-good-wash);
   }
   .regions-v2 .status-neutral {
-    color: #475467;
-    background: rgba(71, 84, 103, 0.08);
-    border-color: rgba(71, 84, 103, 0.12);
+    color: var(--wa-text);
+    background: var(--wa-hairline-soft);
+    border-color: var(--wa-hairline);
   }
   .regions-v2 .risk-pill {
     border-radius: 999px;
@@ -679,38 +679,38 @@
     white-space: nowrap;
   }
   .regions-v2 .risk-high {
-    color: #b42318;
-    background: rgba(180, 35, 24, 0.08);
-    border-color: rgba(180, 35, 24, 0.16);
+    color: var(--wa-bad);
+    background: var(--wa-bad-wash);
+    border-color: var(--wa-bad-wash);
   }
   .regions-v2 .risk-medium {
-    color: #b54708;
-    background: rgba(181, 71, 8, 0.08);
-    border-color: rgba(181, 71, 8, 0.16);
+    color: var(--wa-warn);
+    background: var(--wa-warn-wash);
+    border-color: var(--wa-warn-wash);
   }
   .regions-v2 .risk-low,
   .regions-v2 .quality-ok {
-    color: #027a48;
-    background: rgba(2, 122, 72, 0.08);
-    border-color: rgba(2, 122, 72, 0.16);
+    color: var(--wa-good);
+    background: var(--wa-good-wash);
+    border-color: var(--wa-good-wash);
   }
   .regions-v2 .quality-watch {
-    color: #b54708;
-    background: rgba(181, 71, 8, 0.08);
-    border-color: rgba(181, 71, 8, 0.16);
+    color: var(--wa-warn);
+    background: var(--wa-warn-wash);
+    border-color: var(--wa-warn-wash);
   }
   .regions-v2 .quality-critical {
-    color: #b42318;
-    background: rgba(180, 35, 24, 0.08);
-    border-color: rgba(180, 35, 24, 0.16);
+    color: var(--wa-bad);
+    background: var(--wa-bad-wash);
+    border-color: var(--wa-bad-wash);
   }
-  .regions-v2 .delta-up { color: #027a48; }
-  .regions-v2 .delta-down { color: #b42318; }
-  .regions-v2 .delta-stable { color: #475467; }
+  .regions-v2 .delta-up { color: var(--wa-good); }
+  .regions-v2 .delta-down { color: var(--wa-bad); }
+  .regions-v2 .delta-stable { color: var(--wa-text); }
   .regions-v2 .btn[data-quick-filter].active {
-    color: #fff;
-    background: #0d6efd;
-    border-color: #0d6efd;
+    color: var(--wa-text-inverse);
+    background: var(--wa-info);
+    border-color: var(--wa-info);
   }
 </style>
 {% endblock %}

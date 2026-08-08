@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{# Charts are drawn from an inline <script> in the content block, which runs
+   while the page is parsing - so the charting libraries have to be in <head>,
+   not at the end of <body>. See base.html. #}
+{% set needs_early_charts = true %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 <ul class="nav nav-tabs mb-3 clv-tabs">
@@ -11,7 +15,7 @@
 
 <div class="row mb-3">
   <div class="col-12">
-    <div class="card border-0 shadow-lg clv-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); animation: fadeInDown 0.6s ease-out;">
+    <div class="card border-0 shadow-lg clv-card" style="background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%); animation: fadeInDown 0.6s ease-out;">
       <div class="card-body text-white">
         <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
           <span><i class="bi bi-gem me-2"></i>Top 10 High-Value Customers by CLV</span>
@@ -19,7 +23,7 @@
         </h5>
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle clv-table">
-            <thead style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);">
+            <thead style="background: var(--wa-surface-2); backdrop-filter: blur(10px);">
               <tr class="text-white">
                 <th><i class="bi bi-person-fill me-1"></i>Customer</th>
                 <th class="text-end"><i class="bi bi-wallet2 me-1"></i>AOV</th>
@@ -30,7 +34,7 @@
             </thead>
             <tbody class="text-white">
               {% for row in top_rows %}
-              <tr class="clv-customer-row" style="background: rgba(255,255,255,0.1); animation: fadeIn {{ 0.3 + loop.index * 0.05 }}s ease-out;">
+              <tr class="clv-customer-row" style="background: var(--wa-surface-2); animation: fadeIn {{ 0.3 + loop.index * 0.05 }}s ease-out;">
                 <td><a href="/customers/drilldown/{{ row['CustomerId'] }}" class="clv-customer-link text-decoration-none fw-semibold">{{ row['CustomerName'] or row['CustomerId'] }}</a></td>
                 <td class="text-end fw-semibold">{{ row['AvgOrderValue']|currency }}</td>
                 <td class="text-end"><span class="badge bg-success">{{ '%.1f'|format(row['OrdersPerYear']) }}</span></td>
@@ -271,19 +275,19 @@ if (typeof XLSX === 'undefined') {
 <style>
 /* Fix white on white issue for customer links */
 .clv-customer-link {
-  color: #ffeb3b !important; /* Bright yellow for visibility */
+  color: var(--wa-warn) !important; /* Bright yellow for visibility */
   text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* Add subtle shadow for readability */
   transition: all 0.2s ease;
 }
 
 .clv-customer-link:hover {
-  color: #fff !important; /* White on hover */
+  color: var(--wa-text-inverse) !important; /* White on hover */
   text-shadow: 0 2px 4px rgba(0,0,0,0.4);
   transform: translateX(3px);
 }
 
 .clv-customer-link:visited {
-  color: #ffd54f !important; /* Slightly darker yellow for visited links */
+  color: var(--wa-warn) !important; /* Slightly darker yellow for visited links */
 }
 
 .clv-customer-row {
@@ -291,7 +295,7 @@ if (typeof XLSX === 'undefined') {
 }
 
 .clv-customer-row:hover {
-  background: rgba(255,255,255,0.2) !important; /* Lighter on hover */
+  background: var(--wa-surface-2) !important; /* Lighter on hover */
   transform: scale(1.01);
 }
 
@@ -303,13 +307,13 @@ if (typeof XLSX === 'undefined') {
 }
 
 .clv-tabs .nav-link:hover {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%);
   color: white !important;
   transform: translateY(-3px);
 }
 
 .clv-tabs .nav-link.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--wa-info) 0%, var(--wa-info) 100%);
   color: white !important;
   border-color: transparent !important;
   box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
@@ -365,7 +369,7 @@ if (typeof XLSX === 'undefined') {
 
 /* Table styling improvements */
 .clv-table tbody tr {
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid var(--wa-hairline);
 }
 
 .clv-table tbody tr:last-child {

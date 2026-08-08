@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{# Charts are drawn from an inline <script> in the content block, which runs
+   while the page is parsing - so the charting libraries have to be in <head>,
+   not at the end of <body>. See base.html. #}
+{% set needs_early_charts = true %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 <div id="CustomerDrilldownMeta"

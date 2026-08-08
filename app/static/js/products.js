@@ -2665,7 +2665,7 @@
     const qtySeries = [...qty];
     const datasets = [
       { label: "Revenue", data: revSeries, backgroundColor: "#7a413a" },
-      { label: "Demand", data: qtySeries, type: "line", yAxisID: "y1", borderColor: "#0d6efd", backgroundColor: "rgba(13,110,253,.3)", fill: false, tension: 0.2 },
+      { label: "Demand", data: qtySeries, type: "line", yAxisID: "y1", borderColor: ChartUtils.seriesColor(1), backgroundColor: ChartUtils.seriesFill(1, .3), fill: false, tension: 0.2 },
     ];
     if (!isV4) {
       const forecastMap = new Map((forecast || []).map((p) => [p.month || p.label, p.revenue]));
@@ -2683,7 +2683,7 @@
       }
       const forecastSeries = seriesLabels.map((l) => (forecastMap.has(l) ? forecastMap.get(l) : null));
       if (forecastSeries.some((v) => v != null)) {
-        datasets.push({ label: "Forecast", data: forecastSeries, type: "line", borderColor: "#198754", borderDash: [4, 4], fill: false });
+        datasets.push({ label: "Forecast", data: forecastSeries, type: "line", borderColor: ChartUtils.seriesColor(0), borderDash: [4, 4], fill: false });
       }
     }
 
@@ -3018,7 +3018,7 @@
     const traces = [];
     if (colorKey === "segment") {
       const segments = Array.from(new Set(plottedRows.map((row) => row.segment || "Other")));
-      const palette = ["#7a413a", "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#20c997", "#dc3545", "#6c757d"];
+      const palette = ["#7a413a", ChartUtils.seriesColor(1), ChartUtils.seriesColor(0), ChartUtils.seriesColor(5), ChartUtils.seriesColor(4), ChartUtils.seriesColor(0), ChartUtils.seriesColor(3), "#6c757d"];
       segments.forEach((segment, index) => {
         const segmentRows = plottedRows.filter((row) => (row.segment || "Other") === segment);
         if (!segmentRows.length) return;
@@ -3180,7 +3180,7 @@
     const labelTitle = metric === "profit" ? `${DELTA} profit` : (metric === "qty" ? `${DELTA} units` : `${DELTA} revenue`);
     const labels = movers.map((m) => displayName(m));
     const delta = movers.map((m) => m[deltaField] ?? m.delta ?? 0);
-    const colors = movers.map((m) => (((m[deltaField] ?? m.delta ?? 0) >= 0) ? "#0d6efd" : "#dc3545"));
+    const colors = movers.map((m) => (((m[deltaField] ?? m.delta ?? 0) >= 0) ? ChartUtils.seriesColor(1) : ChartUtils.seriesColor(3)));
     charts.movers = new Chart(ctx, {
       type: "bar",
       data: { labels, datasets: [{ label: labelTitle, data: delta, backgroundColor: colors }] },
@@ -3262,7 +3262,7 @@
         labels,
         datasets: [
           { type: "bar", label: "Revenue", data: values, backgroundColor: "#9b5f3d" },
-          { type: "line", label: "Cumulative %", data: cum, borderColor: "#0d6efd", yAxisID: "y1", tension: 0.2 },
+          { type: "line", label: "Cumulative %", data: cum, borderColor: ChartUtils.seriesColor(1), yAxisID: "y1", tension: 0.2 },
           { type: "line", label: "80% threshold", data: labels.map(() => 80), borderColor: "#6c757d", borderDash: [4, 4], yAxisID: "y1", pointRadius: 0 },
         ],
       },

@@ -10,7 +10,7 @@
       <p>Scan the QR code below with your authenticator app (e.g., Google Authenticator, Authy) or enter the secret manually.</p>
 
       {% if ascii_qr %}
-        <pre style="line-height: 0.9; font-size: 10px; background: #111; color: #0f0; padding: 8px;">
+        <pre style="line-height: 0.9; font-size: 10px; background: var(--wa-canvas-deep); color: var(--wa-good); padding: 8px;">
 {{ ascii_qr }}
         </pre>
       {% else %}

@@ -8,7 +8,7 @@
   #overviewPage {
     border-radius: 1rem;
     padding: 1.5rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 40%, #f4f6fb 100%);
+    background: linear-gradient(135deg, var(--wa-surface) 0%, var(--wa-surface) 40%, var(--wa-surface) 100%);
   }
   #overviewPage .kpi-grid {
     display: grid;
@@ -19,9 +19,9 @@
   }
   #overviewPage .kpi-coverage-badge {
     grid-column: 1 / -1;
-    background: #fff3cd;
-    border: 1px solid #ffe8a1;
-    color: #664d03;
+    background: var(--wa-warn-wash);
+    border: 1px solid var(--wa-warn);
+    color: var(--wa-warn);
     border-radius: 0.75rem;
     padding: 0.5rem 0.9rem;
     font-size: 0.85rem;
@@ -40,8 +40,8 @@
   #overviewPage .kpi-card {
     border-radius: 0.85rem;
     padding: 1.4rem 1.54rem;
-    background: #fff;
-    border: 1px solid #e6e9ef;
+    background: var(--wa-surface);
+    border: 1px solid var(--wa-hairline-soft);
     min-height: 195px;
     display: flex;
     flex-direction: column;
@@ -53,7 +53,7 @@
     display: none;
   }
   #overviewPage .kpi-label {
-    color: #6c757d;
+    color: var(--wa-text-dim);
     letter-spacing: 0.02em;
     font-size: 11px;
     letter-spacing: 0.08em;
@@ -83,7 +83,7 @@
     font-variant-numeric: tabular-nums;
   }
   #overviewPage .kpi-value.is-empty {
-    color: #adb5bd;
+    color: var(--wa-text-faint);
   }
   #overviewPage .kpi-deltas {
     flex: 0 0 auto;
@@ -99,7 +99,7 @@
   #overviewPage .kpi-delta-pill {
     padding: 4px 8px;
     border-radius: 999px;
-    background: #f1f5fb;
+    background: var(--wa-surface-2);
   }
   #overviewPage .kpi-sub {
     margin-top: 2px;
@@ -116,31 +116,31 @@
   }
   #overviewPage .card {
     border-radius: 0.9rem;
-    border: 1px solid #e6e9ef;
+    border: 1px solid var(--wa-hairline-soft);
   }
   #overviewPage .badge-soft {
-    background-color: #f1f5fb;
-    color: #0d6efd;
+    background-color: var(--wa-surface-2);
+    color: var(--wa-info);
   }
   #overviewPage .pill-muted {
-    background: #f8f9fa;
-    border: 1px solid #e6e9ef;
+    background: var(--wa-surface);
+    border: 1px solid var(--wa-hairline-soft);
     border-radius: 999px;
     padding: 0.35rem 0.75rem;
     font-size: 0.85rem;
   }
   #overviewPage .insight-item {
-    border: 1px solid #e6e9ef;
+    border: 1px solid var(--wa-hairline-soft);
     border-radius: 0.75rem;
     padding: 0.85rem 1rem;
-    background: #fff;
+    background: var(--wa-surface);
     min-height: 110px;
   }
   #overviewPage .insight-title {
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #6c757d;
+    color: var(--wa-text-dim);
   }
   #overviewPage .insight-value {
     font-size: 1.15rem;
@@ -148,7 +148,7 @@
   }
   #overviewPage .insight-detail {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--wa-text-dim);
   }
   #overviewPage .mini-list li {
     display: flex;

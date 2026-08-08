@@ -552,7 +552,7 @@
       <button id="btnExportFollowUpHeader"
               onclick="openFollowUpDrawer()"
               class="btn btn-sm"
-              style="background:#660000;color:#fff;border:none;border-radius:6px;font-size:0.82rem">
+              style="background:var(--wa-accent-deep);color:var(--wa-text-inverse);border:none;border-radius:6px;font-size:0.82rem">
         &#128203; Daily Priority Queue
       </button>
     </div>
@@ -592,7 +592,7 @@
               <button id="btnExportFollowUp"
                       class="btn btn-sm"
                       onclick="openFollowUpDrawer()"
-                      style="background:#660000;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:0.82rem">
+                      style="background:var(--wa-accent-deep);color:var(--wa-text-inverse);border:none;border-radius:6px;padding:4px 12px;font-size:0.82rem">
                 &#128203; Daily Priority Queue
               </button>
             </div>
@@ -663,7 +663,7 @@
   </section>
 
   <!-- Lost Accounts Panel -->
-  <section class="mb-4" id="lostAccountsPanel" style="border-left:3px solid #C5A059;padding-left:0">
+  <section class="mb-4" id="lostAccountsPanel" style="border-left:3px solid var(--wa-warn);padding-left:0">
     <div class="card shadow-sm border-0">
       <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center"
            style="cursor:pointer" onclick="srToggleLostPanel()" role="button" aria-expanded="false" aria-controls="lostAccountsBody">
@@ -917,14 +917,14 @@
   <div class="modal fade" id="srCompareModal" tabindex="-1" aria-labelledby="srCompareModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
-        <div class="modal-header" style="background:#1A0F0A;color:#FDFBF7;border-bottom:2px solid #660000">
+        <div class="modal-header" style="background:var(--wa-canvas-deep);color:var(--wa-text-inverse);border-bottom:2px solid var(--wa-accent-deep)">
           <h5 class="modal-title" id="srCompareModalLabel">Rep Side-by-Side Comparison</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body p-0" id="srCompareModalBody">
           <p class="text-muted p-3 mb-0">Select 2–4 reps from the table, then click Compare.</p>
         </div>
-        <div class="modal-footer border-0" style="background:#F8FAFC;border-top:1px solid #E2E8F0">
+        <div class="modal-footer border-0" style="background:var(--wa-surface);border-top:1px solid var(--wa-info)">
           <span class="text-muted small me-auto">Gold highlight = leader in that metric</span>
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
         </div>

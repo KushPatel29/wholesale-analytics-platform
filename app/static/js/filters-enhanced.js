@@ -2193,16 +2193,47 @@
     const label = document.getElementById("filtersCollapseLabel");
     const icon = document.getElementById("filtersToggleIcon");
     if (!body) return;
+    const STORAGE_KEY = "wa-filters-expanded";
     const sync = (expanded) => {
-      if (label) label.textContent = expanded ? "Collapse" : "Expand";
+      if (label) label.textContent = expanded ? "Hide filters" : "Filters";
       if (icon) {
         icon.classList.toggle("bi-chevron-up", expanded);
         icon.classList.toggle("bi-chevron-down", !expanded);
       }
     };
+
+    // The panel ships collapsed so the dashboard is the first thing on screen.
+    // Anyone who opens it is working in it, so remember that and stop making
+    // them re-open it on every page.
+    let remembered = null;
+    try {
+      remembered = window.localStorage.getItem(STORAGE_KEY);
+    } catch (err) {
+      remembered = null;
+    }
+    if (remembered === "1" && !body.classList.contains("show")) {
+      body.classList.add("show");
+      const trigger = document.querySelector('[data-bs-target="#filtersBody"]');
+      if (trigger) trigger.setAttribute("aria-expanded", "true");
+    }
+
+    const remember = (expanded) => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, expanded ? "1" : "0");
+      } catch (err) {
+        /* private browsing - the default is fine */
+      }
+    };
+
     sync(body.classList.contains("show"));
-    body.addEventListener("show.bs.collapse", () => sync(true));
-    body.addEventListener("hide.bs.collapse", () => sync(false));
+    body.addEventListener("show.bs.collapse", () => {
+      sync(true);
+      remember(true);
+    });
+    body.addEventListener("hide.bs.collapse", () => {
+      sync(false);
+      remember(false);
+    });
   };
 
   const wirePresetControls = () => {

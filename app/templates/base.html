@@ -1,15 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Wholesale Analytics{% endblock %}</title>
+    <meta name="color-scheme" content="dark light" />
+    {# Resolve the theme before the first paint. Reading localStorage from a
+       deferred script means the page renders dark and then flips, which is
+       worse than either theme on its own. #}
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("wa-theme");
+          if (stored !== "light" && stored !== "dark") {
+            stored = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", stored);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_T_netflix_style.png') }}?v=11">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260409-theme-system-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260808-dark-first-1') }}">
     {% if request.blueprint == 'overview_page' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
     {% endif %}
@@ -17,6 +34,24 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/universal_drilldown.css') }}">
     {% endif %}
     <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}" defer></script>
+    {# Charting libraries load at the end of <body> by default, so the hero
+       paints before a megabyte of Plotly is fetched.
+
+       Eight templates cannot wait for that. The customer and product
+       drilldowns, RFM, CLV and cohorts draw their charts from an inline
+       <script> inside `{% block content %}` rather than a `{% block scripts %}`,
+       and inline scripts run while the document is parsing - before anything
+       at the end of <body> exists. Those pages threw `Plotly is not defined`
+       and rendered empty chart frames. `defer` does not help either: it also
+       runs after parsing.
+
+       So they opt in with `{% set needs_early_charts = true %}` and get the
+       libraries here instead. Everything else keeps the faster order, which is
+       what tests/test_customers_drilldown_v2.py pins. #}
+    {% if current_user.is_authenticated and (needs_early_charts | default(false)) %}
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260808-series-palette-1') }}"></script>
+    {% endif %}
     {% block head_extras %}{% endblock %}
     <script>
       window.__WA_DISABLE_SSE__ = {{ 'false' if config.get('ENABLE_SSE') else 'true' }};
@@ -59,10 +94,20 @@
     <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
-          <img src="{{ url_for('static', filename='img/wa-logo-badge.svg') }}"
-               alt="Wholesale Provisions"
-               height="34"
-               class="navbar-brand-img">
+          {# Inlined rather than an <img>: the wordmark is drawn with
+             `fill="currentColor"` so it follows the theme, and an external SVG
+             cannot see the page's colour - it rendered black on the dark
+             navbar. Inlining also removes a request. #}
+          <svg class="navbar-brand-img" viewBox="0 0 168 40" width="146" height="35"
+               role="img" aria-label="Wholesale Provisions" focusable="false">
+            <rect x="2" y="24" width="9" height="12" rx="2" fill="#7cc4a4"/>
+            <rect x="13.5" y="16" width="9" height="20" rx="2" fill="#4da37e"/>
+            <rect x="25" y="6" width="9" height="30" rx="2" fill="#2f7f5f"/>
+            <text x="42" y="19" font-family="Manrope, Segoe UI, system-ui, sans-serif" font-size="13.5"
+                  font-weight="700" letter-spacing="0.4" fill="currentColor">WHOLESALE</text>
+            <text x="42" y="32" font-family="Manrope, Segoe UI, system-ui, sans-serif" font-size="10.5"
+                  font-weight="500" letter-spacing="2.6" fill="currentColor" opacity="0.66">PROVISIONS</text>
+          </svg>
           <span class="fw-semibold small text-uppercase navbar-brand-copy">Analytics</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -119,7 +164,14 @@
             {% endif %}
           </ul>
           {% endif %}
-          <ul class="navbar-nav">
+          <ul class="navbar-nav align-items-lg-center">
+            <li class="nav-item">
+              <button type="button" class="wa-theme-toggle" data-theme-toggle
+                      aria-label="Switch between dark and light theme">
+                <span class="wa-theme-toggle__icon" aria-hidden="true"></span>
+                <span class="wa-theme-toggle__label" data-theme-label>Dark</span>
+              </button>
+            </li>
             {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -241,13 +293,30 @@
     </style>
     {% endif %}
     {% if current_user.is_authenticated %}
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    {# jQuery was loaded on every page and called from nothing - `$(` does not
+       appear anywhere in app/static/js. Removed outright.
+
+       SheetJS (~1 MB) is deferred: it is only needed when someone exports, and
+       every call site already falls back to CSV when it is not loaded yet.
+
+       Plotly and the local scripts are deliberately NOT deferred. Several
+       templates call `Plotly.newPlot` and `ChartUtils` from inline <script>
+       blocks, which run during parsing - before any deferred script has
+       executed - so deferring them throws `Plotly is not defined` on the
+       drilldown pages. The saving is not worth a broken chart. #}
     <script src="{{ url_for('static', filename='js/auth-fetch.js') }}"></script>
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     <script src="/static/js/live-updates.js?v=20260325-liveupdates-gated-1"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+    {% if not (needs_early_charts | default(false)) %}
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    {% endif %}
+    {# SheetJS (~1 MB) is no longer fetched on every page view. chart-utils.js
+       already has a `loadSheetJS()` that injects it, and every call site falls
+       back to CSV until it arrives, so the tag here was a second copy of a
+       library most visitors never use. #}
     <script src="/static/js/exports.js"></script>
-    <script src="/static/js/chart-utils.js?v=20260326-contrast-hardening-1"></script>
+    {% if not (needs_early_charts | default(false)) %}
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260808-series-palette-1') }}"></script>
+    {% endif %}
     {% if config.get('DEBUG') %}
     <script src="{{ url_for('static', filename='js/dev-bundle-helper.js') }}"></script>
     {% endif %}
@@ -263,6 +332,36 @@
     <script src="{{ url_for('static', filename='js/universal_drilldown.js') }}" defer></script>
     {% endif %}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <script>
+      // Theme toggle. The applied theme is chosen before first paint by the
+      // inline script in <head>; this only handles the switch and persistence.
+      (function () {
+        var root = document.documentElement;
+        function paint() {
+          var theme = root.getAttribute("data-theme") === "light" ? "light" : "dark";
+          document.querySelectorAll("[data-theme-label]").forEach(function (el) {
+            el.textContent = theme === "light" ? "Light" : "Dark";
+          });
+          document.querySelectorAll("[data-theme-toggle]").forEach(function (el) {
+            el.setAttribute("aria-pressed", theme === "light" ? "true" : "false");
+            el.setAttribute("title", theme === "light" ? "Switch to dark" : "Switch to light");
+          });
+        }
+        document.addEventListener("click", function (event) {
+          var button = event.target.closest("[data-theme-toggle]");
+          if (!button) return;
+          var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+          root.setAttribute("data-theme", next);
+          try { localStorage.setItem("wa-theme", next); } catch (e) { /* private mode */ }
+          paint();
+          // Charts read their colours from the tokens at draw time, so tell
+          // anything already on the page to redraw rather than leaving a
+          // light-mode chart on a dark canvas.
+          window.dispatchEvent(new CustomEvent("wa:themechange", { detail: { theme: next } }));
+        });
+        paint();
+      })();
+    </script>
     {% block scripts %}{% endblock %}
   </body>
   </html>

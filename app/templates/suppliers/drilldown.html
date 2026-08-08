@@ -219,10 +219,10 @@
   }
   .chart-container { width: 100%; min-height: 380px; position: relative; }
   /* Skeleton loader */
-  .skeleton { background: #f6f7f8; position: relative; overflow: hidden; border-radius: .25rem; }
+  .skeleton { background: var(--wa-surface-2); position: relative; overflow: hidden; border-radius: .25rem; }
   .skeleton .loading.shimmer {
     position:absolute; inset:0;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+    background: linear-gradient(90deg, var(--wa-surface-2) 0%, var(--wa-surface) 50%, var(--wa-surface-2) 100%);
     transform: translateX(-100%);
     animation: shimmer 1.2s infinite;
   }

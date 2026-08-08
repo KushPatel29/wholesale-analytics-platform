@@ -91,9 +91,14 @@
           <span class="filter-chip filter-chip--muted">+{{ _summary.get('dimension_count', 0) - 2 }} more</span>
         {% endif %}
       </div>
-      <button class="btn filters-collapse-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtersBody" aria-expanded="true" aria-controls="filtersBody">
-        <span id="filtersCollapseLabel">Collapse</span>
-        <i class="bi bi-chevron-up" id="filtersToggleIcon" aria-hidden="true"></i>
+      {# Starts collapsed. The panel is two screens tall, so leaving it open by
+         default meant every visitor landed on a form and had to scroll to
+         reach the dashboard they came for. The header still carries the active
+         scope as chips, so collapsed is informative, not hidden. The choice is
+         remembered per browser for anyone who does work in here. #}
+      <button class="btn filters-collapse-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtersBody" aria-expanded="false" aria-controls="filtersBody">
+        <span id="filtersCollapseLabel">Filters</span>
+        <i class="bi bi-chevron-down" id="filtersToggleIcon" aria-hidden="true"></i>
       </button>
     </div>
   </div>
@@ -108,7 +113,7 @@
     {{ g.effective_filters_meta.notice if g.effective_filters_meta is defined else '' }}
   </div>
 
-  <div class="collapse show" id="filtersBody">
+  <div class="collapse" id="filtersBody">
     <div class="filters-shell__body">
       <div class="filters-context-strip d-none" id="packsCoveragePanel" role="status" aria-live="polite">
         <div>

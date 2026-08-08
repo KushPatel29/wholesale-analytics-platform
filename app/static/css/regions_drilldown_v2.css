@@ -1,10 +1,10 @@
 .region-drilldown-v2 {
-  --region-surface: #f8fafc;
+  --region-surface: var(--wa-surface);
   --region-border: rgba(15, 23, 42, 0.08);
-  --region-ink: #0f172a;
-  --region-muted: #64748b;
-  --region-accent: #0f766e;
-  --region-warn: #c2410c;
+  --region-ink: var(--wa-text);
+  --region-muted: var(--wa-text-dim);
+  --region-accent: var(--wa-info);
+  --region-warn: var(--wa-bad);
 }
 
 .region-drilldown-v2 .card {
@@ -14,8 +14,8 @@
 
 .region-v2-hero {
   background:
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, var(--region-surface) 100%);
+    radial-gradient(circle at top right, var(--wa-info-wash), transparent 28%),
+    linear-gradient(180deg, var(--wa-surface) 0%, var(--region-surface) 100%);
 }
 
 .region-v2-subnav {
@@ -28,7 +28,7 @@
   padding: 0.75rem;
   border: 1px solid var(--region-border);
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--wa-surface);
   backdrop-filter: blur(12px);
 }
 
@@ -44,7 +44,7 @@
 .region-v2-subnav-link.active,
 .region-v2-subnav-link:hover {
   color: var(--region-ink);
-  background: rgba(15, 118, 110, 0.1);
+  background: var(--wa-info-wash);
 }
 
 .region-v2-section-head {
@@ -90,9 +90,9 @@
   text-align: center;
   color: var(--region-muted);
   font-size: 0.9rem;
-  border: 1px dashed rgba(100, 116, 139, 0.35);
+  border: 1px dashed var(--wa-hairline);
   border-radius: 0.85rem;
-  background: rgba(248, 250, 252, 0.7);
+  background: var(--wa-surface);
   padding: 1rem;
 }
 
@@ -119,12 +119,12 @@
 }
 
 .region-pill.is-warning {
-  background: rgba(194, 65, 12, 0.12);
+  background: var(--wa-bad-wash);
   color: var(--region-warn);
 }
 
 .region-pill.is-good {
-  background: rgba(15, 118, 110, 0.12);
+  background: var(--wa-info-wash);
   color: var(--region-accent);
 }
 
@@ -140,22 +140,22 @@
 .region-risk-badge.is-high,
 .region-risk-badge.is-lost,
 .region-risk-badge.is-churned {
-  color: #991b1b;
-  background: rgba(239, 68, 68, 0.14);
+  color: var(--wa-bad);
+  background: var(--wa-bad-wash);
 }
 
 .region-risk-badge.is-medium,
 .region-risk-badge.is-at-risk,
 .region-risk-badge.is-warming {
   color: var(--region-warn);
-  background: rgba(245, 158, 11, 0.16);
+  background: var(--wa-warn-wash);
 }
 
 .region-risk-badge.is-low,
 .region-risk-badge.is-new,
 .region-risk-badge.is-active {
   color: var(--region-accent);
-  background: rgba(15, 118, 110, 0.14);
+  background: var(--wa-info-wash);
 }
 
 .region-metric-stack {
@@ -189,39 +189,39 @@
 }
 
 .region-status-pill.is-red {
-  color: #991b1b;
-  background: rgba(239, 68, 68, 0.14);
-  border-color: rgba(185, 28, 28, 0.16);
+  color: var(--wa-bad);
+  background: var(--wa-bad-wash);
+  border-color: var(--wa-bad-wash);
 }
 
 .region-status-pill.is-orange {
   color: var(--region-warn);
-  background: rgba(245, 158, 11, 0.16);
-  border-color: rgba(194, 65, 12, 0.18);
+  background: var(--wa-warn-wash);
+  border-color: var(--wa-bad-wash);
 }
 
 .region-status-pill.is-yellow {
-  color: #8a5b00;
-  background: rgba(250, 204, 21, 0.16);
-  border-color: rgba(202, 138, 4, 0.2);
+  color: var(--wa-warn);
+  background: var(--wa-warn-wash);
+  border-color: var(--wa-warn-wash);
 }
 
 .region-status-pill.is-light-green {
-  color: #15803d;
-  background: rgba(134, 239, 172, 0.2);
-  border-color: rgba(34, 197, 94, 0.18);
+  color: var(--wa-good);
+  background: var(--wa-good-wash);
+  border-color: var(--wa-good-wash);
 }
 
 .region-status-pill.is-green {
   color: var(--region-accent);
-  background: rgba(15, 118, 110, 0.14);
-  border-color: rgba(15, 118, 110, 0.16);
+  background: var(--wa-info-wash);
+  border-color: var(--wa-info-wash);
 }
 
 .region-status-pill.is-neutral {
-  color: #475569;
-  background: rgba(148, 163, 184, 0.16);
-  border-color: rgba(100, 116, 139, 0.18);
+  color: var(--wa-text);
+  background: var(--wa-surface-2);
+  border-color: var(--wa-hairline);
 }
 
 .insight-card.is-positive {
@@ -233,7 +233,7 @@
 }
 
 .insight-card.is-action {
-  border-top: 3px solid #1d4ed8;
+  border-top: 3px solid var(--wa-info);
 }
 
 @media (max-width: 991.98px) {

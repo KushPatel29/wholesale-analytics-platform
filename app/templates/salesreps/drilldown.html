@@ -700,16 +700,16 @@
   </section>
 
   <!-- Lost Accounts Follow-Up Panel -->
-  <div class="card mb-3" id="drLostAccountsCard" style="border-left: 4px solid #d39c5f;">
+  <div class="card mb-3" id="drLostAccountsCard" style="border-left: 4px solid var(--wa-warn);">
     <div class="card-header border-0 d-flex justify-content-between align-items-center"
-         style="cursor:pointer;background:#fff;"
+         style="cursor:pointer;background:var(--wa-surface);"
          onclick="document.getElementById('drLostAccountsBody').classList.toggle('show');this.querySelector('.bi-chevron-down').classList.toggle('rotated');"
          aria-expanded="false">
       <div>
-        <div class="srpd-table-kicker" style="color:#d39c5f;">Follow-Up Opportunities</div>
+        <div class="srpd-table-kicker" style="color:var(--wa-warn);">Follow-Up Opportunities</div>
         <div class="fw-semibold">
           Lost Accounts — Follow-Up Opportunities
-          <span class="badge ms-2" id="drLostAccountsBadge" style="background:#dc3545;">0</span>
+          <span class="badge ms-2" id="drLostAccountsBadge" style="background:var(--wa-bad);">0</span>
         </div>
         <div class="text-muted small">Customers who bought in the prior 30 days but placed no orders in the current 30-day window.</div>
       </div>
@@ -745,7 +745,7 @@
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center">
               <div class="btn-group btn-group-sm" role="group" aria-label="Customer view toggle" id="drCustomerViewToggle">
-                <button type="button" class="btn btn-sm active" data-customer-view="all" style="background-color:#965951;border-color:#965951;color:#fff;">All Accounts</button>
+                <button type="button" class="btn btn-sm active" data-customer-view="all" style="background-color:var(--wa-accent);border-color:var(--wa-accent);color:var(--wa-text-inverse);">All Accounts</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-customer-view="best">Top 10 Best</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-customer-view="risk">Top 10 At-Risk</button>
               </div>

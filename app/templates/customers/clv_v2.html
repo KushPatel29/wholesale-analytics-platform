@@ -772,24 +772,24 @@ window.addEventListener("load", () => {
 </script>
 <style>
 :root {
-  --clv-primary: #1f4e79;
-  --clv-secondary: #2f6f95;
-  --clv-accent: #0f766e;
-  --clv-warn: #f08c00;
-  --clv-danger: #c92a2a;
-  --clv-muted: #6c757d;
-  --clv-surface: #f7f9fb;
+  --clv-primary: var(--wa-info);
+  --clv-secondary: var(--wa-info);
+  --clv-accent: var(--wa-info);
+  --clv-warn: var(--wa-warn);
+  --clv-danger: var(--wa-bad);
+  --clv-muted: var(--wa-text-dim);
+  --clv-surface: var(--wa-surface);
 }
 
 .segment-badge {
-  background: rgba(31, 78, 121, 0.12);
+  background: var(--wa-info-wash);
   color: var(--clv-primary);
   font-weight: 600;
 }
 
-.risk-low { background: rgba(47, 158, 68, 0.14); color: #2f9e44; }
-.risk-med { background: rgba(240, 140, 0, 0.14); color: var(--clv-warn); }
-.risk-high { background: rgba(201, 42, 42, 0.14); color: var(--clv-danger); }
+.risk-low { background: var(--wa-good-wash); color: var(--wa-good); }
+.risk-med { background: var(--wa-warn-wash); color: var(--clv-warn); }
+.risk-high { background: var(--wa-bad-wash); color: var(--clv-danger); }
 
 .clv-table-v2 tbody tr:nth-child(even) {
   background-color: var(--clv-surface);
