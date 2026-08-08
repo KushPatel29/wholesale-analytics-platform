@@ -13,6 +13,7 @@ import pandas as pd
 
 from app.services import fact_schema as fs
 from app.services import fact_store
+from app.services import planning
 from app.services import filters_service
 from app.services import margin_rules
 from app.services import salesrep_ownership
@@ -4375,6 +4376,36 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         "warning_count": len(dict.fromkeys(warnings)),
     }
 
+    # Service scorecard for each manager's book.
+    #
+    # Grouped by the rep on the line rather than through the ownership
+    # attribution CTE above. That CTE exists to follow accounts through
+    # succession so revenue is credited correctly; delivery performance is a
+    # property of the shipment, not of who owns the account today, so the
+    # simpler grouping is the honest one here.
+    try:
+        _inv_cols = fact_store.list_columns()
+        if planning.inventory_available(_inv_cols):
+            _inv_where, _inv_params, _s, _e = fact_store.build_where_clause(
+                filters, _inv_cols, scope, apply_default_window=True
+            )
+            _inv_rows = planning.inventory_summary_sql(
+                _inv_where,
+                _inv_params,
+                group_expr="COALESCE(NULLIF(SalesRepName, ''), 'Unassigned')",
+                limit=12,
+            )
+            payload_inventory = {
+                "by_rep": _inv_rows,
+                "totals": planning.inventory_totals(_inv_rows),
+                "targets": {"otif_pct": planning.OTIF_TARGET_PCT, "fill_pct": planning.FILL_TARGET_PCT},
+            }
+        else:
+            payload_inventory = None
+    except Exception:
+        payload_inventory = None
+
+
     payload = {
         "kpis": kpis,
         "trend": {
@@ -4405,6 +4436,9 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         "warnings": list(dict.fromkeys(warnings)),
         "meta": meta,
     }
+    if payload_inventory:
+        payload["inventory"] = payload_inventory
+
     return payload
 
 

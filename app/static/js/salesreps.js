@@ -5284,6 +5284,17 @@
   const renderBundle = (rawPayload = {}) => {
     const payload = window.normalizeBundlePayload ? window.normalizeBundlePayload(rawPayload) : rawPayload;
     lastPayload = payload;
+    // Service by manager. Grouped by the rep on the line rather than through
+    // the ownership attribution used for revenue: delivery performance is a
+    // property of the shipment, not of who owns the account today.
+    if (window.renderAvailabilityStrip) {
+      window.renderAvailabilityStrip("salesrepsAvailability", payload.inventory, {
+        eyebrow: "Service behind the book",
+        rowsKey: "by_rep",
+        rowLabel: "Market manager",
+        note: "What each manager's stores actually received. Ranked by OTIF, worst first."
+      });
+    }
     clearDeferredChartWork();
     
     try {

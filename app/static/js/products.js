@@ -4341,6 +4341,16 @@
       const partialPayload = window.normalizeBundlePayload ? window.normalizeBundlePayload(raw) : raw;
       if (!res.ok) throw new Error(partialPayload?.error?.message || `HTTP ${res.status}`);
       lastPayload = mergePayload(lastPayload || {}, partialPayload || {});
+      // Availability, above the merchandising layers. A page that shows margin
+      // without showing whether the item is on the shelf tells half the story.
+      if (window.renderAvailabilityStrip) {
+        window.renderAvailabilityStrip("productsAvailability", lastPayload.inventory, {
+          eyebrow: "Availability and stock position",
+          rowsKey: "by_department",
+          rowLabel: "Department",
+          note: "On-time and in-full for the active filters, with the cover behind it. Departments below target sort first."
+        });
+      }
       if (group === "summary") renderSummaryBundle(lastPayload);
       if (group === "detail") renderDetailBundle(lastPayload);
       if (group === "table") renderTableBundle(lastPayload);

@@ -68,6 +68,15 @@ class Department:
     seasonality: tuple[float, ...]
     # Share of total order lines this department should attract.
     weight: float
+    # Probability a replenishment line cannot be filled complete. Fresh runs
+    # short because it is grown rather than manufactured; seasonal runs short
+    # because the buy is committed months before the demand is known; packaged
+    # grocery almost never does.
+    short_ship_rate: float = 0.04
+    # When a line does go short, the share of the order that typically arrives.
+    # A produce shortfall is usually partial; an electronics allocation is
+    # frequently most of the order or none of it.
+    typical_fill_when_short: float = 0.72
 
 
 # Department mix is roughly a supercenter's: grocery and fresh carry the volume
@@ -92,6 +101,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.985,
         seasonality=(0.97, 0.94, 0.99, 1.00, 1.02, 1.03, 1.04, 1.03, 1.00, 1.01, 1.08, 1.14),
         weight=0.3,
+        short_ship_rate=0.018,
+        typical_fill_when_short=0.8,
     ),
     Department(
         name="Fresh & Produce",
@@ -101,6 +112,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.88,
         seasonality=(0.90, 0.89, 0.95, 1.01, 1.10, 1.18, 1.22, 1.19, 1.06, 0.98, 0.96, 1.02),
         weight=0.16,
+        short_ship_rate=0.115,
+        typical_fill_when_short=0.62,
     ),
     Department(
         name="Dairy & Frozen",
@@ -110,6 +123,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.960,
         seasonality=(0.95, 0.93, 0.97, 1.00, 1.05, 1.12, 1.16, 1.12, 1.01, 0.97, 0.98, 1.06),
         weight=0.13,
+        short_ship_rate=0.035,
+        typical_fill_when_short=0.75,
     ),
     Department(
         name="Meat & Seafood",
@@ -119,6 +134,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.910,
         seasonality=(0.88, 0.87, 0.94, 1.02, 1.14, 1.22, 1.26, 1.18, 1.02, 0.96, 0.96, 1.08),
         weight=0.1,
+        short_ship_rate=0.072,
+        typical_fill_when_short=0.68,
     ),
     Department(
         name="Health & Wellness",
@@ -128,6 +145,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.990,
         seasonality=(1.12, 1.06, 1.00, 0.97, 0.95, 0.94, 0.94, 0.98, 1.02, 1.04, 1.00, 0.98),
         weight=0.09,
+        short_ship_rate=0.026,
+        typical_fill_when_short=0.78,
     ),
     Department(
         name="Household Essentials",
@@ -137,6 +156,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.990,
         seasonality=(1.02, 0.98, 1.02, 1.03, 1.02, 1.00, 0.99, 1.00, 1.01, 1.00, 0.98, 0.95),
         weight=0.09,
+        short_ship_rate=0.022,
+        typical_fill_when_short=0.82,
     ),
     Department(
         name="Apparel",
@@ -146,6 +167,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.820,
         seasonality=(0.82, 0.86, 1.06, 1.14, 1.06, 0.96, 0.92, 1.16, 1.12, 0.94, 0.98, 1.10),
         weight=0.05,
+        short_ship_rate=0.058,
+        typical_fill_when_short=0.7,
     ),
     Department(
         name="Electronics",
@@ -155,6 +178,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.940,
         seasonality=(0.86, 0.82, 0.88, 0.90, 0.92, 0.94, 0.96, 1.02, 1.00, 1.02, 1.46, 1.42),
         weight=0.025,
+        short_ship_rate=0.094,
+        typical_fill_when_short=0.55,
     ),
     Department(
         name="Home & Kitchen",
@@ -164,6 +189,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.930,
         seasonality=(0.94, 0.90, 0.98, 1.04, 1.10, 1.06, 1.00, 0.98, 1.02, 1.02, 1.06, 1.14),
         weight=0.035,
+        short_ship_rate=0.04,
+        typical_fill_when_short=0.74,
     ),
     Department(
         name="Toys & Seasonal",
@@ -173,6 +200,8 @@ DEPARTMENTS: tuple[Department, ...] = (
         sell_through=0.790,
         seasonality=(0.62, 0.60, 0.72, 0.86, 0.92, 1.06, 1.02, 0.94, 0.90, 1.06, 1.72, 2.10),
         weight=0.02,
+        short_ship_rate=0.132,
+        typical_fill_when_short=0.58,
     ),
 )
 

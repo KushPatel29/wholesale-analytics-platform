@@ -428,6 +428,7 @@ def build_planning(frame: pd.DataFrame) -> Dict[str, Any]:
         "service_by_vendor": vendors,
         "matrix": matrix,
         "concentration": concentration,
+        "inventory": build_inventory(frame),
         "actions": _actions(matrix, lanes, concentration),
         "thresholds": {
             "service_target_pct": SERVICE_TARGET_PCT,
@@ -435,4 +436,384 @@ def build_planning(frame: pd.DataFrame) -> Dict[str, Any]:
             "concentration_warn_pct": CONCENTRATION_WARN_PCT,
             "min_rows_for_rate": MIN_ROWS_FOR_RATE,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Availability and inventory
+# ---------------------------------------------------------------------------
+#
+# Four numbers a replenishment team runs on, and they are deliberately not
+# interchangeable:
+#
+#   line fill   the share of order lines that shipped complete
+#   unit fill   the share of ordered units that shipped
+#   on time     the share that arrived by the promised date
+#   OTIF        both at once, which is the only one a store actually feels
+#
+# OTIF is always the lowest of the four and is the one worth putting on the
+# page, because a lane can hit 95% on each of on-time and in-full separately
+# and still miss one delivery in ten.
+
+# Perishable departments run short cover by design, so a single "days of
+# supply" target across the whole chain would flag all of fresh as a problem
+# and none of general merchandise. Split the target by how the item is billed:
+# weighed items are the perishable ones.
+COVER_TARGET_DAYS_PERISHABLE = 14.0
+COVER_TARGET_DAYS_AMBIENT = 45.0
+
+# Above this multiple of the target, stock is excess rather than healthy.
+EXCESS_COVER_MULTIPLE = 1.6
+
+OTIF_TARGET_PCT = 90.0
+FILL_TARGET_PCT = 96.0
+
+
+def _bool_series(frame: pd.DataFrame, column: str) -> pd.Series | None:
+    """A boolean column, however the extract happened to type it."""
+    if frame.empty or column not in frame.columns:
+        return None
+    series = frame[column]
+    if series.dtype == object:
+        series = series.astype("string").str.lower().isin(["true", "1", "yes"])
+    return series.fillna(False).astype(bool)
+
+
+def _availability(frame: pd.DataFrame) -> Dict[str, Any]:
+    """Line fill, unit fill, on-time and OTIF for one frame."""
+    lines = int(len(frame))
+    if not lines:
+        return {"lines": 0, "line_fill_pct": None, "unit_fill_pct": None,
+                "on_time_pct": None, "otif_pct": None, "stockout_pct": None}
+
+    short = _bool_series(frame, "IsShortShip")
+    late = _bool_series(frame, "IsLate")
+    stockout = _bool_series(frame, "IsStockout")
+
+    # Unit fill comes from ordered and backordered, never from
+    # `QuantityShipped`. The DuckDB fact view redefines that column as a
+    # weight-converted unit count, so dividing it by QuantityOrdered reports a
+    # fill rate over 300%. Backorder is a column the view does not touch.
+    ordered = au.to_numeric_safe(frame["QuantityOrdered"]).sum() if "QuantityOrdered" in frame else 0.0
+    if "BackorderQty" in frame.columns:
+        backordered = float(au.to_numeric_safe(frame["BackorderQty"]).sum())
+    elif "pack_item_count_sum" in frame.columns:
+        backordered = max(float(ordered) - float(au.to_numeric_safe(frame["pack_item_count_sum"]).sum()), 0.0)
+    else:
+        backordered = 0.0
+    shipped = max(float(ordered) - backordered, 0.0)
+
+    on_time_pct = None if late is None else float((~late).mean() * 100.0)
+    line_fill_pct = None if short is None else float((~short).mean() * 100.0)
+    unit_fill_pct = float(shipped / ordered * 100.0) if ordered else None
+    # In full AND on time. Computed on the row, never multiplied out of the two
+    # rates - that would assume they are independent, and they are not.
+    otif_pct = (
+        float(((~late) & (~short)).mean() * 100.0)
+        if late is not None and short is not None
+        else None
+    )
+
+    return {
+        "lines": lines,
+        "line_fill_pct": None if line_fill_pct is None else round(line_fill_pct, 1),
+        "unit_fill_pct": None if unit_fill_pct is None else round(unit_fill_pct, 1),
+        "on_time_pct": None if on_time_pct is None else round(on_time_pct, 1),
+        "otif_pct": None if otif_pct is None else round(otif_pct, 1),
+        "stockout_pct": None if stockout is None else round(float(stockout.mean() * 100.0), 2),
+    }
+
+
+def _cover_target(frame: pd.DataFrame) -> float:
+    """Cover target for a group, by whether it is mostly perishable."""
+    if "UnitOfBillingId" in frame.columns and len(frame):
+        weighed = au.to_numeric_safe(frame["UnitOfBillingId"]).eq(3).mean()
+        if weighed >= 0.5:
+            return COVER_TARGET_DAYS_PERISHABLE
+    return COVER_TARGET_DAYS_AMBIENT
+
+
+def _inventory_position(frame: pd.DataFrame) -> Dict[str, Any]:
+    """Cover, on-hand value and how much of it is excess."""
+    if frame.empty or "DaysOfSupply" not in frame.columns:
+        return {"cover_days": None, "on_hand_value": 0.0, "excess_value": 0.0,
+                "excess_share_pct": None, "below_reorder_pct": None, "cover_target_days": None}
+
+    cover = au.to_numeric_safe(frame["DaysOfSupply"])
+    value = au.to_numeric_safe(frame["OnHandValue"]) if "OnHandValue" in frame else pd.Series(dtype="float64")
+    target = _cover_target(frame)
+
+    excess_mask = cover > (target * EXCESS_COVER_MULTIPLE)
+    on_hand_value = float(value.sum()) if len(value) else 0.0
+    excess_value = float(value[excess_mask].sum()) if len(value) else 0.0
+
+    below_reorder_pct = None
+    if {"OnHandQty", "ReorderPointQty"} <= set(frame.columns):
+        on_hand = au.to_numeric_safe(frame["OnHandQty"])
+        reorder = au.to_numeric_safe(frame["ReorderPointQty"])
+        below_reorder_pct = round(float((on_hand < reorder).mean() * 100.0), 1)
+
+    return {
+        "cover_days": round(float(cover.median()), 1),
+        "cover_target_days": target,
+        "on_hand_value": on_hand_value,
+        "excess_value": excess_value,
+        "excess_share_pct": round(excess_value / on_hand_value * 100.0, 1) if on_hand_value else 0.0,
+        "below_reorder_pct": below_reorder_pct,
+    }
+
+
+def _service_status_otif(otif_pct: float | None, lines: int) -> str:
+    if otif_pct is None or lines < MIN_ROWS_FOR_RATE:
+        return "unknown"
+    if otif_pct < OTIF_TARGET_PCT - 8:
+        return "critical"
+    if otif_pct < OTIF_TARGET_PCT:
+        return "watch"
+    return "ok"
+
+
+def _inventory_by(frame: pd.DataFrame, column: str, *, limit: int = 12) -> List[Dict[str, Any]]:
+    """
+    The scorecard, one row per department (or vendor, or lane).
+
+    Availability and inventory position side by side, because they only mean
+    something together: 92% fill on twelve days of cover is a buying problem,
+    and 92% fill on sixty days of cover is a putaway problem.
+    """
+    if frame.empty or column not in frame.columns:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    keys = frame[column].astype("string").fillna("Unknown")
+    for label, group in frame.groupby(keys):
+        availability = _availability(group)
+        position = _inventory_position(group)
+        rows.append(
+            {
+                "label": str(label),
+                "revenue": _revenue(group),
+                **availability,
+                **position,
+                "status": _service_status_otif(availability["otif_pct"], availability["lines"]),
+                "reliable_estimate": availability["lines"] >= MIN_ROWS_FOR_RATE,
+            }
+        )
+
+    rows.sort(key=lambda r: (r["reliable_estimate"] is False, r["otif_pct"] if r["otif_pct"] is not None else 999))
+    return rows[:limit]
+
+
+def _inventory_actions(scorecard: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Availability and stock actions, ranked by what they cost."""
+    actions: List[Dict[str, Any]] = []
+
+    for row in scorecard:
+        if not row["reliable_estimate"]:
+            continue
+
+        if row["status"] == "critical":
+            actions.append(
+                {
+                    "severity": "critical",
+                    "title": f"{row['label']}: {row['otif_pct']:.0f}% OTIF",
+                    "detail": (
+                        f"{row['line_fill_pct']:.0f}% of lines ship complete and "
+                        f"{row['on_time_pct']:.0f}% arrive on time, so {100 - row['otif_pct']:.0f}% of "
+                        f"deliveries disappoint the store on one count or the other. "
+                        f"Median cover is {row['cover_days']:.0f} days against a "
+                        f"{row['cover_target_days']:.0f}-day target."
+                    ),
+                    "metric": row["otif_pct"],
+                    "target": OTIF_TARGET_PCT,
+                }
+            )
+
+        # Excess is only worth raising when it is both a large share and real
+        # money - 80% excess on $4k of stock is not a finding.
+        if (row["excess_share_pct"] or 0) >= 30.0 and (row["excess_value"] or 0) >= 100_000:
+            actions.append(
+                {
+                    "severity": "info",
+                    "title": f"{row['label']} holds {_money(row['excess_value'])} of excess cover",
+                    "detail": (
+                        f"{row['excess_share_pct']:.0f}% of on-hand value sits above "
+                        f"{EXCESS_COVER_MULTIPLE:g}x the {row['cover_target_days']:.0f}-day cover target. "
+                        f"Working capital, not a service problem."
+                    ),
+                    "metric": row["excess_share_pct"],
+                    "target": 30.0,
+                }
+            )
+
+        if (row["stockout_pct"] or 0) >= 3.0:
+            actions.append(
+                {
+                    "severity": "warning",
+                    "title": f"{row['label']} stocks out on {row['stockout_pct']:.1f}% of lines",
+                    "detail": (
+                        f"Lines that filled to zero, not short. Median cover is "
+                        f"{row['cover_days']:.0f} days against a {row['cover_target_days']:.0f}-day target."
+                    ),
+                    "metric": row["stockout_pct"],
+                    "target": 3.0,
+                }
+            )
+
+    order = {"critical": 0, "warning": 1, "info": 2}
+    actions.sort(key=lambda a: (order.get(a["severity"], 9), -(a.get("metric") or 0)))
+    return actions
+
+
+def build_inventory(frame: pd.DataFrame) -> Dict[str, Any]:
+    """Availability and inventory position, for the planner and the pages."""
+    dept_col = _department_column(frame)
+    return {
+        "headline": {**_availability(frame), **_inventory_position(frame)},
+        "targets": {
+            "otif_pct": OTIF_TARGET_PCT,
+            "fill_pct": FILL_TARGET_PCT,
+            "cover_days_perishable": COVER_TARGET_DAYS_PERISHABLE,
+            "cover_days_ambient": COVER_TARGET_DAYS_AMBIENT,
+            "excess_cover_multiple": EXCESS_COVER_MULTIPLE,
+        },
+        "by_department": _inventory_by(frame, dept_col),
+        "by_lane": _inventory_by(frame, "ShippingMethodName", limit=8),
+        "by_vendor": _inventory_by(frame, "SupplierName", limit=8),
+        "actions": _inventory_actions(_inventory_by(frame, dept_col)),
+    }
+
+# ---------------------------------------------------------------------------
+# The same availability picture, computed in SQL
+# ---------------------------------------------------------------------------
+#
+# The products and sales-rep bundles are built from DuckDB rather than a
+# materialised frame, and pulling a whole frame back just to add a service
+# strip would double their memory on a 512 MB box. One aggregate query costs
+# almost nothing and returns the same numbers as `build_inventory`.
+#
+# `OTIF` is measured on the row here too - `AVG(CASE WHEN NOT late AND NOT
+# short ...)` - and not multiplied out of the two component rates.
+
+_INVENTORY_SQL = """
+    SELECT
+        {group_expr} AS label,
+        COUNT(*) AS lines,
+        AVG(CASE WHEN NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS line_fill_pct,
+        AVG(CASE WHEN NOT COALESCE(IsLate, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS on_time_pct,
+        AVG(CASE WHEN NOT COALESCE(IsLate, FALSE)
+                  AND NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS otif_pct,
+        AVG(CASE WHEN COALESCE(IsStockout, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS stockout_pct,
+        (1 - SUM(COALESCE(BackorderQty, 0)) / NULLIF(SUM(COALESCE(QuantityOrdered, 0)), 0)) * 100 AS unit_fill_pct,
+        MEDIAN(DaysOfSupply) AS cover_days,
+        SUM(COALESCE(OnHandValue, 0)) AS on_hand_value,
+        SUM(CASE WHEN DaysOfSupply > {excess_days} THEN COALESCE(OnHandValue, 0) ELSE 0 END) AS excess_value,
+        AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) * 100 AS below_reorder_pct
+    FROM fact
+    WHERE {where_sql}
+    GROUP BY 1
+    ORDER BY otif_pct ASC
+    LIMIT {limit}
+"""
+
+# Columns the query needs. Without them the strip is simply not rendered,
+# rather than reporting perfect service against columns that do not exist.
+INVENTORY_COLUMNS = ("IsShortShip", "IsLate", "IsStockout", "BackorderQty", "QuantityOrdered", "DaysOfSupply")
+
+
+def inventory_available(columns) -> bool:
+    """True when the dataset carries the availability columns."""
+    present = set(columns or ())
+    return all(name in present for name in INVENTORY_COLUMNS)
+
+
+def inventory_summary_sql(
+    where_sql: str,
+    where_params,
+    *,
+    group_expr: str = "COALESCE(NULLIF(ProteinType, ''), 'Unknown')",
+    limit: int = 12,
+    excess_days: float = COVER_TARGET_DAYS_AMBIENT * EXCESS_COVER_MULTIPLE,
+) -> List[Dict[str, Any]]:
+    """Per-group availability and inventory position, worst OTIF first."""
+    from app.services import fact_store
+
+    sql = _INVENTORY_SQL.format(
+        group_expr=group_expr,
+        where_sql=where_sql or "1=1",
+        limit=int(limit),
+        excess_days=float(excess_days),
+    )
+    try:
+        frame = fact_store.execute_sql_df(sql, list(where_params or []))
+    except Exception:  # pragma: no cover - a missing column must not break a page
+        return []
+    if frame is None or frame.empty:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for record in frame.to_dict(orient="records"):
+        lines = int(record.get("lines") or 0)
+        on_hand = float(record.get("on_hand_value") or 0.0)
+        excess = float(record.get("excess_value") or 0.0)
+        otif = record.get("otif_pct")
+        rows.append(
+            {
+                "label": str(record.get("label") or "Unknown"),
+                "lines": lines,
+                "line_fill_pct": _round_or_none(record.get("line_fill_pct")),
+                "unit_fill_pct": _round_or_none(record.get("unit_fill_pct")),
+                "on_time_pct": _round_or_none(record.get("on_time_pct")),
+                "otif_pct": _round_or_none(otif),
+                "stockout_pct": _round_or_none(record.get("stockout_pct"), 2),
+                "cover_days": _round_or_none(record.get("cover_days")),
+                "on_hand_value": on_hand,
+                "excess_value": excess,
+                "excess_share_pct": round(excess / on_hand * 100.0, 1) if on_hand else 0.0,
+                "below_reorder_pct": _round_or_none(record.get("below_reorder_pct")),
+                "reliable_estimate": lines >= MIN_ROWS_FOR_RATE,
+                "status": _service_status_otif(
+                    None if otif is None else float(otif), lines
+                ),
+            }
+        )
+    return rows
+
+
+def _round_or_none(value, digits: int = 1):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:  # NaN
+        return None
+    return round(number, digits)
+
+
+def inventory_totals(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Roll a scorecard up into one headline, weighting rates by line count."""
+    total_lines = sum(r["lines"] for r in rows) or 0
+    if not total_lines:
+        return {"lines": 0, "otif_pct": None, "line_fill_pct": None,
+                "on_time_pct": None, "stockout_pct": None,
+                "on_hand_value": 0.0, "excess_value": 0.0, "excess_share_pct": 0.0}
+
+    def weighted(key: str):
+        parts = [(r[key], r["lines"]) for r in rows if r.get(key) is not None]
+        if not parts:
+            return None
+        return round(sum(v * n for v, n in parts) / sum(n for _v, n in parts), 1)
+
+    on_hand = sum(r["on_hand_value"] for r in rows)
+    excess = sum(r["excess_value"] for r in rows)
+    return {
+        "lines": total_lines,
+        "otif_pct": weighted("otif_pct"),
+        "line_fill_pct": weighted("line_fill_pct"),
+        "on_time_pct": weighted("on_time_pct"),
+        "stockout_pct": weighted("stockout_pct"),
+        "on_hand_value": on_hand,
+        "excess_value": excess,
+        "excess_share_pct": round(excess / on_hand * 100.0, 1) if on_hand else 0.0,
+        "otif_target_pct": OTIF_TARGET_PCT,
     }

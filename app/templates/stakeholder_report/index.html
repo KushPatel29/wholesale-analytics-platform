@@ -688,6 +688,20 @@
   .plan-table td:nth-child(4) { display: none; }
   .plan-kpi__value { font-size: 1.55rem; }
 }
+
+.plan-sub { color: var(--wa-text-faint); font-size: 0.78rem; font-weight: 500; }
+
+.plan-footnote {
+  margin: 0.9rem 0 0;
+  font-size: 0.8rem;
+  color: var(--wa-text-faint);
+  line-height: 1.55;
+  max-width: 76ch;
+}
+
+/* The inventory scorecard is wide; let it scroll rather than squeeze the page. */
+.report-card > .plan-table { min-width: 640px; }
+.report-card { overflow-x: auto; }
 </style>
 {% endblock %}
 
@@ -768,5 +782,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260808-planner-1"></script>
+<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260809-inventory-1"></script>
 {% endblock %}

@@ -10,7 +10,7 @@ class ReportWorkspace {
     this.bundleUrl = this.container.getAttribute('data-bundle-url');
     this.state = {
       type: 'full',
-      sections: ['plan', 'demand', 'service', 'matrix', 'exposure', 'actions'],
+      sections: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
       data: null
     };
 
@@ -21,6 +21,7 @@ class ReportWorkspace {
     this.sectionRegistry = {
       plan: { label: 'Planning Position', icon: 'bi-speedometer2', render: this.renderPlanningPosition.bind(this) },
       demand: { label: 'Demand Signal', icon: 'bi-graph-up-arrow', render: this.renderDemand.bind(this) },
+      inventory: { label: 'Inventory & OTIF', icon: 'bi-box-seam', render: this.renderInventory.bind(this) },
       service: { label: 'Service Level', icon: 'bi-truck', render: this.renderService.bind(this) },
       matrix: { label: 'Demand vs Service', icon: 'bi-grid-3x3-gap', render: this.renderMatrix.bind(this) },
       exposure: { label: 'Vendor Exposure', icon: 'bi-diagram-2', render: this.renderExposure.bind(this) },
@@ -60,9 +61,9 @@ class ReportWorkspace {
       // what you look at depends on whether you are deciding what to buy,
       // where the network is failing, or just what to do this week.
       const presets = {
-        full: ['plan', 'demand', 'service', 'matrix', 'exposure', 'actions'],
+        full: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
         demand: ['plan', 'demand', 'matrix', 'actions'],
-        supply: ['plan', 'service', 'exposure', 'actions'],
+        supply: ['plan', 'inventory', 'service', 'exposure', 'actions'],
         actions: ['plan', 'actions']
       };
       this.state.sections = presets[this.state.type] || Object.keys(this.sectionRegistry);
@@ -165,6 +166,7 @@ class ReportWorkspace {
     const eyebrows = {
       plan: 'Where the plan stands',
       demand: 'Which way demand is moving',
+      inventory: 'What is on hand and whether it arrives complete',
       service: 'How reliably we can supply it',
       matrix: 'Where the two disagree',
       exposure: 'Who we depend on',
@@ -334,6 +336,117 @@ class ReportWorkspace {
           `).join('')}
         </tbody>
       </table>
+    `;
+  }
+
+  renderInventory() {
+    const inv = this._plan().inventory || {};
+    const head = inv.headline || {};
+    const targets = inv.targets || {};
+    const rows = inv.by_department || [];
+    if (!rows.length) return this._empty('No availability history for the active filters.');
+
+    const otifTarget = targets.otif_pct ?? 90;
+    const fillTarget = targets.fill_pct ?? 96;
+
+    const scorecard = (list, caption) => `
+      <table class="plan-table">
+        <caption class="plan-caption">${caption}</caption>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="num">OTIF</th><th class="num">Line fill</th><th class="num">On time</th>
+            <th class="num">Stockout</th><th class="num">Cover</th><th class="num">On hand</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(r => `
+            <tr class="${r.status === 'critical' ? 'is-critical' : ''}">
+              <td>
+                <div class="plan-bar plan-bar--service" style="--w:${Math.max(0, Math.min(100, Number(r.otif_pct) || 0))}%"></div>
+                <span class="plan-label">${r.label}</span>
+              </td>
+              <td class="num">${this._pct(r.otif_pct, 0)}</td>
+              <td class="num">${this._pct(r.line_fill_pct, 0)}</td>
+              <td class="num">${this._pct(r.on_time_pct, 0)}</td>
+              <td class="num">${this._pct(r.stockout_pct, 1)}</td>
+              <td class="num">${Number.isFinite(Number(r.cover_days)) ? Number(r.cover_days).toFixed(0) + 'd' : '—'}
+                  <span class="plan-sub">/ ${r.cover_target_days}d</span></td>
+              <td class="num">${this._money(r.on_hand_value)}</td>
+              <td>${this._statusChip(r.status)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    return `
+      <div class="report-card">
+        <p class="plan-lede">
+          Four availability numbers, and they are not interchangeable. A lane can hit 95%
+          on-time and 95% in-full separately and still miss one delivery in ten, which is
+          why <strong>OTIF</strong> — on time <em>and</em> in full, measured on the line rather
+          than multiplied out of the other two — is the one a store actually feels.
+        </p>
+
+        <div class="plan-kpis">
+          <div class="plan-kpi ${(head.otif_pct ?? 100) < otifTarget ? 'plan-kpi--danger' : ''}">
+            <div class="plan-kpi__label">OTIF</div>
+            <div class="plan-kpi__value">${this._pct(head.otif_pct)}</div>
+            <div class="plan-kpi__note">${otifTarget}% target · on time and in full</div>
+          </div>
+          <div class="plan-kpi ${(head.line_fill_pct ?? 100) < fillTarget ? 'plan-kpi--warn' : ''}">
+            <div class="plan-kpi__label">Line fill</div>
+            <div class="plan-kpi__value">${this._pct(head.line_fill_pct)}</div>
+            <div class="plan-kpi__note">Lines that shipped complete</div>
+          </div>
+          <div class="plan-kpi">
+            <div class="plan-kpi__label">Unit fill</div>
+            <div class="plan-kpi__value">${this._pct(head.unit_fill_pct)}</div>
+            <div class="plan-kpi__note">Units shipped against units ordered</div>
+          </div>
+          <div class="plan-kpi ${(head.stockout_pct ?? 0) >= 3 ? 'plan-kpi--warn' : ''}">
+            <div class="plan-kpi__label">Stockout rate</div>
+            <div class="plan-kpi__value">${this._pct(head.stockout_pct)}</div>
+            <div class="plan-kpi__note">Lines that filled to zero</div>
+          </div>
+          <div class="plan-kpi">
+            <div class="plan-kpi__label">Median cover</div>
+            <div class="plan-kpi__value">${Number.isFinite(Number(head.cover_days)) ? Number(head.cover_days).toFixed(0) + 'd' : '—'}</div>
+            <div class="plan-kpi__note">${this._pct(head.below_reorder_pct, 0)} of lines below reorder point</div>
+          </div>
+          <div class="plan-kpi">
+            <div class="plan-kpi__label">On hand</div>
+            <div class="plan-kpi__value">${this._money(head.on_hand_value)}</div>
+            <div class="plan-kpi__note">${this._pct(head.excess_share_pct, 0)} above cover target</div>
+          </div>
+        </div>
+
+        <div class="plan-spacer"></div>
+        ${scorecard(rows, 'By department — worst OTIF first')}
+        <p class="plan-footnote">
+          Cover targets differ by department on purpose: perishable lines are held to
+          ${targets.cover_days_perishable}&nbsp;days and ambient to ${targets.cover_days_ambient}, because a single
+          chain-wide target would flag all of fresh as a problem and none of general merchandise.
+        </p>
+
+        <div class="plan-spacer"></div>
+        ${scorecard(inv.by_lane || [], 'By fulfilment lane')}
+
+        ${(inv.actions || []).length ? `
+          <div class="plan-spacer"></div>
+          <ol class="plan-actions">
+            ${inv.actions.slice(0, 5).map(a => `
+              <li class="plan-action plan-action--${a.severity}">
+                <div class="plan-action__head">
+                  <span class="plan-action__sev">${a.severity}</span>
+                  <h5>${a.title}</h5>
+                </div>
+                <p>${a.detail}</p>
+              </li>
+            `).join('')}
+          </ol>` : ''}
+      </div>
     `;
   }
 

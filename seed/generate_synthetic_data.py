@@ -318,6 +318,8 @@ def build_lines(
     # Seasonality is applied to quantity, so revenue swings with the calendar
     # the way a real perishables book does.
     season_lookup = {g.name: np.asarray(g.seasonality) for g in C.DEPARTMENTS}
+    dept_short_rate = {g.name: g.short_ship_rate for g in C.DEPARTMENTS}
+    dept_fill_when_short = {g.name: g.typical_fill_when_short for g in C.DEPARTMENTS}
     season = np.array(
         [season_lookup[p][m] for p, m in zip(prod["ProteinType"].to_numpy(), month_idx)]
     )
@@ -352,11 +354,6 @@ def build_lines(
     price = np.where(by_weight, price_per_lb, price_per_lb * case_weight)
     cost_price = np.where(by_weight, cost_per_lb, cost_per_lb * case_weight)
 
-    # Packs are the physical boxes picked for the line.
-    pack_count = np.maximum(1, np.round(cases * rng.uniform(0.8, 1.2, size=n_lines)))
-    pack_weight_lb_sum = shipped_lb
-    pack_item_count_sum = cases
-
     # Delivery performance: region transit + method surcharge, with a
     # method-specific chance of running late.
     method_idx = _weighted_choice(
@@ -370,6 +367,96 @@ def build_lines(
     transit = cust_l["TransitDays"].to_numpy() + extra + slip
     ship_date = expected - pd.to_timedelta(np.ones(n_lines), unit="D")
     delivery_date = ship_date + pd.to_timedelta(transit, unit="D")
+
+    # ------------------------------------------------------------------
+    # Availability: what the store asked for against what the DC could send.
+    #
+    # Until now QuantityShipped was a copy of QuantityOrdered, which made fill
+    # rate and OTIF trivially 100% - two of the metrics a replenishment team
+    # actually runs on, reporting a number that could never move. Lines now go
+    # short at a department-specific rate, because the reason a supercenter
+    # misses a case differs by department: produce is grown rather than
+    # manufactured, seasonal is committed months before the demand is known,
+    # and packaged grocery almost never misses.
+    #
+    # Short shipping is correlated with lateness rather than independent of it.
+    # A lane under pressure misses dates and misses cases at the same time, and
+    # modelling them independently would let a dashboard "discover" that they
+    # are unrelated, which is an artefact of the generator rather than a finding.
+    short_rate = np.array([dept_short_rate[name] for name in prod["ProteinType"]])
+    fill_when_short = np.array([dept_fill_when_short[name] for name in prod["ProteinType"]])
+
+    # Lines on a late lane are about 1.8x more likely to also go short.
+    pressure = np.where(is_late, 1.8, 0.92)
+    is_short = rng.random(n_lines) < np.clip(short_rate * pressure, 0.0, 0.85)
+
+    fill_ratio = np.where(
+        is_short,
+        np.clip(rng.normal(fill_when_short, 0.16, size=n_lines), 0.05, 0.97),
+        1.0,
+    )
+    shipped_cases = np.maximum(np.where(is_short, np.floor(cases * fill_ratio), cases), 0.0)
+    # A line that fills to zero is a stockout rather than a short ship.
+    is_stockout = is_short & (shipped_cases <= 0)
+    backorder_cases = np.maximum(cases - shipped_cases, 0.0)
+
+    # Weight and packs follow what actually shipped, not what was asked for -
+    # revenue is derived from these downstream, so billing a short line at the
+    # ordered quantity would silently overstate the book.
+    shipped_lb = shipped_cases * case_weight * weight_noise
+    pack_count = np.maximum(1, np.round(np.maximum(shipped_cases, 1) * rng.uniform(0.8, 1.2, size=n_lines)))
+    pack_weight_lb_sum = shipped_lb
+    pack_item_count_sum = shipped_cases
+
+    # ------------------------------------------------------------------
+    # Inventory position at the moment the line was picked.
+    #
+    # The fact table is at order-line grain and a true inventory snapshot is a
+    # different grain entirely (SKU x location x day). Rather than invent a
+    # second table the query layer cannot see, each line carries the position
+    # it was picked against - which is enough for cover, turns, stockout rate
+    # and excess, and is how most ERP extracts hand it over anyway.
+    #
+    # Cover drives availability rather than the other way round: a line that
+    # went short was picked against a thin position, and one that filled was
+    # picked against a healthy one. Generating them independently would break
+    # the relationship the page exists to show.
+    daily_demand = np.maximum(cases / 7.0, 0.15)
+    # Cover is not normally distributed in a real chain: most SKUs sit near the
+    # plan and a long tail of slow movers accumulates months of stock nobody
+    # has written off yet. A symmetric distribution produces a book with no
+    # excess at all, which is the one thing every retailer's inventory has.
+    slow_mover = rng.random(n_lines) < 0.14
+    target_cover_days = np.where(
+        by_weight,
+        rng.normal(9.0, 2.5, size=n_lines),    # perishable: short cover by design
+        np.where(
+            slow_mover,
+            rng.lognormal(mean=4.5, sigma=0.45, size=n_lines),  # the dead tail
+            rng.normal(31.0, 9.0, size=n_lines),
+        ),
+    ).clip(2.0, 400.0)
+
+    cover_days = np.where(
+        is_stockout,
+        rng.uniform(0.0, 0.6, size=n_lines),
+        np.where(
+            is_short,
+            np.clip(rng.normal(2.4, 1.1, size=n_lines), 0.2, 6.0),
+            target_cover_days,
+        ),
+    )
+    on_hand_cases = np.maximum(np.round(cover_days * daily_demand), 0.0)
+
+    # Safety stock and reorder point, so "below reorder point" is a fact about
+    # the row rather than a threshold invented in the dashboard.
+    safety_stock_cases = np.maximum(np.round(daily_demand * np.where(by_weight, 3.0, 9.0)), 1.0)
+    lead_time_days = cust_l["TransitDays"].to_numpy() + extra
+    reorder_point_cases = np.maximum(
+        np.round(daily_demand * lead_time_days + safety_stock_cases), 1.0
+    )
+
+    on_hand_value = on_hand_cases * cost_price
 
     frame = pd.DataFrame(
         {
@@ -410,7 +497,18 @@ def build_lines(
             "ShipperName": np.array([m.carrier for m in methods]),
             "Carrier": np.array([m.carrier for m in methods]),
             "QuantityOrdered": cases,
-            "QuantityShipped": cases,
+            "QuantityShipped": shipped_cases,
+            # Availability. Fill rate and OTIF are computed from these
+            # downstream rather than stored, so a filter changes them.
+            "BackorderQty": backorder_cases,
+            "IsShortShip": is_short,
+            "IsStockout": is_stockout,
+            # Inventory position the line was picked against.
+            "OnHandQty": on_hand_cases,
+            "OnHandValue": on_hand_value.round(2),
+            "DaysOfSupply": cover_days.round(2),
+            "SafetyStockQty": safety_stock_cases,
+            "ReorderPointQty": reorder_point_cases,
             "WeightLb": shipped_lb.round(3),
             "ShippedLb": shipped_lb.round(3),
             "pack_count": pack_count.astype("int64"),

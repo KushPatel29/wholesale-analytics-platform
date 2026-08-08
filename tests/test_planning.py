@@ -173,3 +173,140 @@ class TestEndToEnd:
         assert concentration[0]["share_pct"] == pytest.approx(90.0)
         assert concentration[0]["concentrated"] is True
         assert concentration[0]["vendor_count"] == 2
+
+def _supply_line(department="Grocery", *, late=False, short=False, stockout=False,
+                 ordered=10.0, backorder=0.0, cover=30.0, on_hand=100.0,
+                 on_hand_value=500.0, reorder=50.0, weighed=False):
+    return {
+        "Date": pd.Timestamp("2026-03-01"),
+        "ProteinType": department,
+        "Revenue": 100.0,
+        "IsLate": late,
+        "IsShortShip": short,
+        "IsStockout": stockout,
+        "ShippingMethodName": "DC Ambient",
+        "SupplierName": "Acme Brands",
+        "QuantityOrdered": ordered,
+        "BackorderQty": backorder,
+        "DaysOfSupply": cover,
+        "OnHandQty": on_hand,
+        "OnHandValue": on_hand_value,
+        "ReorderPointQty": reorder,
+        "UnitOfBillingId": 3 if weighed else 1,
+    }
+
+
+class TestAvailability:
+    def test_otif_is_measured_on_the_row_not_multiplied(self):
+        """
+        The failures overlap, so OTIF is not on-time x in-full.
+
+        This fixture is chosen so the two answers disagree: both failures land
+        on the same two lines, which leaves half the lines perfect. Measured
+        OTIF is 50%; multiplying the component rates gives 25%. A fixture where
+        the failures are disjoint would return 25% either way and prove nothing.
+        """
+        frame = _frame([
+            _supply_line(late=True, short=True, backorder=4.0),
+            _supply_line(late=True, short=True, backorder=4.0),
+            _supply_line(late=False, short=False),
+            _supply_line(late=False, short=False),
+        ])
+        a = planning._availability(frame)
+        assert a["on_time_pct"] == pytest.approx(50.0)
+        assert a["line_fill_pct"] == pytest.approx(50.0)
+        assert a["otif_pct"] == pytest.approx(50.0)
+        multiplied = a["on_time_pct"] * a["line_fill_pct"] / 100.0
+        assert a["otif_pct"] != pytest.approx(multiplied)
+
+    def test_otif_with_disjoint_failures_counts_every_failing_line(self):
+        """The other extreme: no overlap, so every failure costs a line."""
+        frame = _frame([
+            _supply_line(late=True, short=False),
+            _supply_line(late=False, short=True, backorder=4.0),
+            _supply_line(late=False, short=False),
+            _supply_line(late=False, short=False),
+        ])
+        a = planning._availability(frame)
+        assert a["on_time_pct"] == pytest.approx(75.0)
+        assert a["line_fill_pct"] == pytest.approx(75.0)
+        assert a["otif_pct"] == pytest.approx(50.0)
+
+    def test_otif_never_exceeds_its_components(self):
+        frame = _frame([
+            _supply_line(late=i % 5 == 0, short=i % 7 == 0, backorder=2.0 if i % 7 == 0 else 0.0)
+            for i in range(200)
+        ])
+        a = planning._availability(frame)
+        assert a["otif_pct"] <= a["on_time_pct"] + 1e-9
+        assert a["otif_pct"] <= a["line_fill_pct"] + 1e-9
+
+    def test_unit_fill_ignores_the_shadowed_shipped_column(self):
+        """
+        The DuckDB fact view redefines `QuantityShipped` as a weight-converted
+        unit count, so dividing it by QuantityOrdered reported a 306% fill
+        rate. Unit fill must come from backorder instead.
+        """
+        rows = [_supply_line(ordered=10.0, backorder=2.0, short=True) for _ in range(10)]
+        frame = _frame(rows)
+        frame["QuantityShipped"] = 999.0  # what the view would hand back
+        assert planning._availability(frame)["unit_fill_pct"] == pytest.approx(80.0)
+
+    def test_a_frame_with_no_availability_columns_returns_nulls_not_zeros(self):
+        """A missing column is unknown, not perfect service."""
+        frame = _frame([_line("2026-01-01", "Grocery", 10, False)])
+        a = planning._availability(frame)
+        assert a["line_fill_pct"] is None
+        assert a["otif_pct"] is None
+
+
+class TestInventoryPosition:
+    def test_cover_target_follows_how_the_item_is_billed(self):
+        """
+        Perishables run short cover by design. One chain-wide target would
+        flag all of fresh and none of general merchandise.
+        """
+        fresh = _frame([_supply_line(weighed=True) for _ in range(10)])
+        ambient = _frame([_supply_line(weighed=False) for _ in range(10)])
+        assert planning._cover_target(fresh) == planning.COVER_TARGET_DAYS_PERISHABLE
+        assert planning._cover_target(ambient) == planning.COVER_TARGET_DAYS_AMBIENT
+
+    def test_excess_is_measured_against_that_target(self):
+        # Ambient target is 45 days; 1.6x that is 72. Half the lines sit above it.
+        rows = [_supply_line(cover=120.0, on_hand_value=1000.0) for _ in range(5)]
+        rows += [_supply_line(cover=30.0, on_hand_value=1000.0) for _ in range(5)]
+        position = planning._inventory_position(_frame(rows))
+        assert position["on_hand_value"] == pytest.approx(10_000.0)
+        assert position["excess_value"] == pytest.approx(5_000.0)
+        assert position["excess_share_pct"] == pytest.approx(50.0)
+
+    def test_below_reorder_counts_lines_under_their_own_reorder_point(self):
+        rows = [_supply_line(on_hand=10.0, reorder=50.0) for _ in range(3)]
+        rows += [_supply_line(on_hand=200.0, reorder=50.0) for _ in range(7)]
+        assert planning._inventory_position(_frame(rows))["below_reorder_pct"] == pytest.approx(30.0)
+
+
+class TestInventoryEndToEnd:
+    def test_a_failing_department_reaches_the_inventory_actions(self):
+        rows = [
+            _supply_line("Fresh & Produce", late=i % 3 == 0, short=i % 3 == 1,
+                         backorder=5.0 if i % 3 == 1 else 0.0, weighed=True, cover=6.0)
+            for i in range(90)
+        ]
+        rows += [_supply_line("Grocery") for _ in range(90)]
+        payload = planning.build_inventory(_frame(rows))
+
+        by_label = {r["label"]: r for r in payload["by_department"]}
+        assert by_label["Fresh & Produce"]["status"] == "critical"
+        assert by_label["Grocery"]["status"] == "ok"
+        # Worst OTIF sorts first, so the page opens on the problem.
+        assert payload["by_department"][0]["label"] == "Fresh & Produce"
+
+        critical = [a for a in payload["actions"] if a["severity"] == "critical"]
+        assert critical and "Fresh & Produce" in critical[0]["title"]
+
+    def test_empty_frame_is_shaped_not_thrown(self):
+        payload = planning.build_inventory(_frame([]))
+        assert payload["by_department"] == []
+        assert payload["actions"] == []
+        assert payload["headline"]["otif_pct"] is None

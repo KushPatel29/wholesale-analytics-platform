@@ -1,0 +1,124 @@
+{# Availability strip: OTIF, fill, stockout and cover.
+   Included by Products and Sales Reps; both call
+   `renderAvailabilityStrip(mount, bundle.inventory, opts)` once their
+   bundle lands. Kept in one file so the two pages cannot drift. #}
+
+<style>
+/* Availability strip - shared shape on Products and Sales Reps.
+   Reads the theme tokens, so it follows the light/dark toggle. */
+.inv-strip { border: 1px solid var(--wa-hairline); border-radius: var(--wa-radius); background: var(--wa-surface); padding: 1.1rem 1.25rem; margin-bottom: 1.25rem; }
+.inv-strip__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; margin-bottom: 0.9rem; }
+.inv-strip__eyebrow { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: var(--wa-text-faint); }
+.inv-strip__note { font-size: 0.8rem; color: var(--wa-text-dim); flex: 1 1 20ch; }
+.inv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--wa-hairline); border: 1px solid var(--wa-hairline); border-radius: var(--wa-radius-sm); overflow: hidden; }
+.inv-kpi { background: var(--wa-surface); padding: 0.75rem 0.85rem; border-top: 2px solid transparent; }
+.inv-kpi--warn { border-top-color: var(--wa-warn); }
+.inv-kpi--danger { border-top-color: var(--wa-bad); }
+.inv-kpi__label { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--wa-text-faint); }
+.inv-kpi__value { font-family: var(--wa-font-display); font-variant-numeric: tabular-nums; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; color: var(--wa-text); line-height: 1.2; }
+.inv-kpi__note { font-size: 0.72rem; color: var(--wa-text-dim); }
+.inv-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.inv-table th { text-align: left; font-size: 0.64rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--wa-text-faint); border-bottom: 1px solid var(--wa-hairline-strong); padding: 0.4rem 0.6rem; }
+.inv-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--wa-hairline-soft); color: var(--wa-text); }
+.inv-table .num { text-align: right; }
+.inv-table tr.is-critical td:first-child { box-shadow: inset 2px 0 0 var(--wa-bad); }
+.inv-chip { display: inline-block; padding: 0.08rem 0.45rem; border-radius: 999px; font-size: 0.66rem; font-weight: 600; }
+.inv-chip--ok { background: var(--wa-good-wash); color: var(--wa-good); }
+.inv-chip--watch { background: var(--wa-warn-wash); color: var(--wa-warn); }
+.inv-chip--critical { background: var(--wa-bad-wash); color: var(--wa-bad); }
+.inv-chip--unknown { background: var(--wa-surface-3); color: var(--wa-text-faint); }
+.inv-strip__empty { color: var(--wa-text-dim); font-size: 0.85rem; }
+@media (max-width: 760px) { .inv-table th:nth-child(n+5), .inv-table td:nth-child(n+5) { display: none; } }
+</style>
+
+<script>
+// Availability strip. Rendered from `bundle.inventory`, which the products and
+// sales-rep bundles compute with one aggregate query on the same where clause
+// the rest of the page uses. If the dataset has no availability columns the
+// bundle omits the key and the strip stays hidden rather than reporting
+// perfect service against columns that do not exist.
+(function () {
+  const pct = (v, d = 1) => (Number.isFinite(Number(v)) ? Number(v).toFixed(d) + '%' : '—');
+  const money = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'k';
+    return '$' + n.toFixed(0);
+  };
+  const chip = (s) => `<span class="inv-chip inv-chip--${s || 'unknown'}">${
+    { ok: 'On target', watch: 'Below target', critical: 'Critical', unknown: 'Too few lines' }[s] || 'Too few lines'
+  }</span>`;
+
+  window.renderAvailabilityStrip = function (mount, inventory, opts) {
+    const host = typeof mount === 'string' ? document.getElementById(mount) : mount;
+    if (!host) return;
+    if (!inventory || !inventory.totals || !inventory.totals.lines) {
+      host.innerHTML = '';
+      return;
+    }
+    const o = opts || {};
+    const rowsKey = o.rowsKey || 'by_department';
+    const rows = inventory[rowsKey] || [];
+    const t = inventory.totals;
+    const target = (inventory.targets && inventory.targets.otif_pct) || 90;
+
+    host.innerHTML = `
+      <div class="inv-strip">
+        <div class="inv-strip__head">
+          <span class="inv-strip__eyebrow">${o.eyebrow || 'Availability'}</span>
+          <span class="inv-strip__note">${o.note || ''}</span>
+        </div>
+        <div class="inv-kpis">
+          <div class="inv-kpi ${t.otif_pct < target ? 'inv-kpi--danger' : ''}">
+            <div class="inv-kpi__label">OTIF</div>
+            <div class="inv-kpi__value">${pct(t.otif_pct)}</div>
+            <div class="inv-kpi__note">${target}% target</div>
+          </div>
+          <div class="inv-kpi ${t.line_fill_pct < 96 ? 'inv-kpi--warn' : ''}">
+            <div class="inv-kpi__label">Line fill</div>
+            <div class="inv-kpi__value">${pct(t.line_fill_pct)}</div>
+            <div class="inv-kpi__note">Shipped complete</div>
+          </div>
+          <div class="inv-kpi">
+            <div class="inv-kpi__label">On time</div>
+            <div class="inv-kpi__value">${pct(t.on_time_pct)}</div>
+            <div class="inv-kpi__note">By promised date</div>
+          </div>
+          <div class="inv-kpi ${t.stockout_pct >= 3 ? 'inv-kpi--warn' : ''}">
+            <div class="inv-kpi__label">Stockout</div>
+            <div class="inv-kpi__value">${pct(t.stockout_pct)}</div>
+            <div class="inv-kpi__note">Filled to zero</div>
+          </div>
+          <div class="inv-kpi">
+            <div class="inv-kpi__label">On hand</div>
+            <div class="inv-kpi__value">${money(t.on_hand_value)}</div>
+            <div class="inv-kpi__note">${pct(t.excess_share_pct, 0)} above cover target</div>
+          </div>
+        </div>
+        ${rows.length ? `
+        <table class="inv-table">
+          <thead><tr>
+            <th>${o.rowLabel || 'Department'}</th>
+            <th class="num">OTIF</th><th class="num">Line fill</th><th class="num">On time</th>
+            <th class="num">Stockout</th><th class="num">Cover</th><th class="num">On hand</th><th>Status</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr class="${r.status === 'critical' ? 'is-critical' : ''}">
+                <td><strong>${r.label}</strong></td>
+                <td class="num">${pct(r.otif_pct, 0)}</td>
+                <td class="num">${pct(r.line_fill_pct, 0)}</td>
+                <td class="num">${pct(r.on_time_pct, 0)}</td>
+                <td class="num">${pct(r.stockout_pct, 1)}</td>
+                <td class="num">${Number.isFinite(Number(r.cover_days)) ? Number(r.cover_days).toFixed(0) + 'd' : '—'}</td>
+                <td class="num">${money(r.on_hand_value)}</td>
+                <td>${chip(r.status)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : ''}
+      </div>
+    `;
+  };
+})();
+</script>

@@ -12,6 +12,7 @@ import numpy as np
 
 from app.services import fact_schema as fs
 from app.services import fact_store
+from app.services import planning
 from app.services import margin_rules
 
 
@@ -5453,6 +5454,21 @@ def build_products_bundle(
         meta.setdefault("duckdb_query_count", None)
 
     payload = {**metrics, "table": table, "comparison": comparison, "meta": meta}
+
+    # Availability and stock position by department. One aggregate query on the
+    # same where-clause the rest of the bundle already uses - a merchandising
+    # page that shows margin without showing whether the item is on the shelf
+    # is only telling half the story.
+    if planning.inventory_available(cols):
+        inventory_rows = planning.inventory_summary_sql(where_sql, where_params)
+        payload["inventory"] = {
+            "by_department": inventory_rows,
+            "totals": planning.inventory_totals(inventory_rows),
+            "targets": {
+                "otif_pct": planning.OTIF_TARGET_PCT,
+                "fill_pct": planning.FILL_TARGET_PCT,
+            },
+        }
     payload.setdefault("charts", {})
     payload.setdefault(
         "health_matrix",
