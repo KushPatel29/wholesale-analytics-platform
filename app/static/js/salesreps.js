@@ -5853,7 +5853,7 @@
   let _mapAnimationId = null;
   let _mapStyleFallbackTimer = null;
   let _lastMapFeatures = [];
-  const MAP_DEFAULT_VIEW = { center: [-123.11, 49.27], zoom: 7.1 };
+  const MAP_DEFAULT_VIEW = { center: [-96.5, 38.5], zoom: 3.6 };
 
   // ── Rep colour palette (hex-matched to brand tokens) ──
   const REP_COLOR_MAP = [
@@ -5879,10 +5879,42 @@
     return FALLBACKS[h % FALLBACKS.length];
   };
 
-  // ── BC territory/city centroid lookup — built from real production GPS data ──
-  // Coords derived from AVG(DeliveryLat/Long) across all fact rows where available.
-  // Keys lowercase; fuzzy matching handles typos and region prefixes (e.g. "Int Kelowna" → "kelowna").
+  // ── Market / store-city centroid lookup ──
+  // Keys lowercase; fuzzy matching handles region prefixes and typos.
+  // The US entries below cover the store network in seed/catalog.py; the
+  // Canadian entries are kept so an older extract still plots.
   const _TERRITORY_CENTROIDS_RAW = {
+    // ── Regions ──
+    "texas & gulf":         [-96.80, 30.60],
+    "southeast":            [-84.39, 33.75],
+    "midwest":              [-93.10, 41.60],
+    "mid-atlantic":         [-77.04, 39.30],
+    "mountain west":        [-105.00, 39.74],
+    "pacific":              [-121.49, 38.58],
+    "northeast":            [-73.20, 42.60],
+    // ── States in the network ──
+    "tx": [-97.74, 30.27],  "ga": [-84.39, 33.75],  "oh": [-82.99, 39.96],
+    "pa": [-75.16, 39.95],  "co": [-104.99, 39.74], "ca": [-121.49, 38.58],
+    "ny": [-78.88, 42.89],
+    // ── Store cities ──
+    "dallas": [-96.80, 32.78],        "houston": [-95.37, 29.76],
+    "san antonio": [-98.49, 29.42],   "austin": [-97.74, 30.27],
+    "baton rouge": [-91.19, 30.45],   "atlanta": [-84.39, 33.75],
+    "charlotte": [-80.84, 35.23],     "nashville": [-86.78, 36.16],
+    "orlando": [-81.38, 28.54],       "birmingham": [-86.80, 33.52],
+    "columbus": [-82.99, 39.96],      "indianapolis": [-86.16, 39.77],
+    "kansas city": [-94.58, 39.10],   "des moines": [-93.61, 41.59],
+    "omaha": [-95.94, 41.26],         "philadelphia": [-75.16, 39.95],
+    "richmond": [-77.44, 37.54],      "pittsburgh": [-79.996, 40.44],
+    "baltimore": [-76.61, 39.29],     "denver": [-104.99, 39.74],
+    "salt lake city": [-111.89, 40.76], "boise": [-116.20, 43.62],
+    "albuquerque": [-106.65, 35.08],  "sacramento": [-121.49, 38.58],
+    "portland": [-122.68, 45.52],     "spokane": [-117.43, 47.66],
+    "fresno": [-119.79, 36.74],       "buffalo": [-78.88, 42.89],
+    "hartford": [-72.68, 41.76],      "worcester": [-71.80, 42.26],
+    "manchester": [-71.45, 42.99],
+
+    // ── Legacy Canadian extract ──
     // ── Province abbreviations ──
     "bc":  [-123.11, 49.27],
     "ab":  [-113.49, 53.55],

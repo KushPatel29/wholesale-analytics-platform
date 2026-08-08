@@ -121,7 +121,7 @@
             <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ url_for('overview_page.overview_landing') }}">Overview</a></li>
             {% endif %}
             {% if can_permission('page.overview.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ url_for('stakeholder_report.index') }}">Market Pulse</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ url_for('stakeholder_report.index') }}">Planning</a></li>
             {% endif %}
             {% if can_permission('page.customers.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ url_for('customers.index') }}">Customers</a></li>
