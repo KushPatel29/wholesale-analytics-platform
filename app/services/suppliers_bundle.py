@@ -2988,7 +2988,7 @@ def _protein_payload_from_frame(
         {
             "key": "top_family",
             "tone": "premium",
-            "label": "Largest protein family",
+            "label": "Largest department",
             "value": top_family.get("protein_family") or "Unassigned",
             "note": (
                 f"{float(top_family.get('share_current') or 0.0):.1f}% of supplier revenue · "
@@ -3027,7 +3027,7 @@ def _protein_payload_from_frame(
                 f"{_clean_float((strongest_dependency or {}).get('share_pct')):.1f}% tied to "
                 f"{(strongest_dependency or {}).get('family') or 'the top family'}"
                 if strongest_dependency
-                else "No supplier is materially dependent on a single protein family."
+                else "No supplier is materially dependent on a single department."
             ),
         },
     ]
@@ -3035,7 +3035,7 @@ def _protein_payload_from_frame(
     narrative = (
         f"{(top_family.get('protein_family') or 'Top protein')} represents "
         f"{float(top_family.get('share_current') or 0.0):.1f}% of supplier revenue in scope. "
-        f"{len(margin_watch)} protein families are carrying margin pressure and "
+        f"{len(margin_watch)} departments are carrying margin pressure and "
         f"{len([row for row in supplier_dependency if (row.get('share_pct') or 0.0) >= 60.0])} suppliers are highly protein-dependent."
     )
 
@@ -5241,7 +5241,7 @@ def _supplier_drilldown_v2_payload(
 
     protein_focus_cards = [
         {
-            "title": "Top protein family",
+            "title": "Top department",
             "value": str(top_protein_row.get("protein_family") or "—"),
             "meta": f"{_clean_optional_float(top_protein_row.get('revenue_share_pct')):.1f}% of revenue" if top_protein_row.get("revenue_share_pct") is not None else "No mapped protein revenue",
             "tone": "accent",
@@ -5311,7 +5311,7 @@ def _supplier_drilldown_v2_payload(
         playbook_cards.append(
             {
                 "title": "Diversify protein exposure",
-                "body": f"{top_protein_row.get('protein_family') or 'One protein family'} is carrying a disproportionate share of supplier revenue.",
+                "body": f"{top_protein_row.get('protein_family') or 'One department'} is carrying a disproportionate share of supplier revenue.",
                 "exposure": f"{float(top_protein_row.get('revenue_share_pct') or 0.0):.1f}% of supplier revenue",
                 "tone": "warn",
                 "target": "protein",
@@ -5413,7 +5413,7 @@ def _supplier_drilldown_v2_payload(
         f"Revenue is {_clean_float(curr['revenue'].sum()):,.0f} in the active window, "
         f"{'up' if (delta_revenue_total_pct or 0.0) >= 0 else 'down'} "
         f"{abs(delta_revenue_total_pct or 0.0):.1f}% vs the prior matched window. "
-        f"{top_protein_row.get('protein_family') or 'The leading protein family'} drives {top_protein_share_pct or 0.0:.1f}% of visible revenue, "
+        f"{top_protein_row.get('protein_family') or 'The leading department'} drives {top_protein_share_pct or 0.0:.1f}% of visible revenue, "
         f"while cost coverage sits at {cost_coverage_pct or 0.0:.1f}%."
     )
     trend_narrative = (
@@ -5426,7 +5426,7 @@ def _supplier_drilldown_v2_payload(
     )
     protein_narrative = (
         f"{top_protein_row.get('protein_family') or 'No mapped protein'} is the anchor family at {top_protein_share_pct or 0.0:.1f}% of supplier revenue. "
-        f"{max(protein_rows, key=lambda row: abs(float(row.get('mix_shift_pp') or 0.0))).get('protein_family') if protein_rows else 'No protein family'} shows the largest mix move versus prior."
+        f"{max(protein_rows, key=lambda row: abs(float(row.get('mix_shift_pp') or 0.0))).get('protein_family') if protein_rows else 'No department'} shows the largest mix move versus prior."
     )
     category_narrative = (
         f"{top_category_row.get('product_category') or 'No mapped category'} is the leading category at {top_category_share_pct or 0.0:.1f}% of supplier revenue."

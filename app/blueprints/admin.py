@@ -685,7 +685,7 @@ def features():
 @permission_required("manage_branding")
 def branding():
     if request.method == "POST":
-        brand_name = (request.form.get("brand_name") or "Wholesale Analytics").strip()
+        brand_name = (request.form.get("brand_name") or "Northgate Retail Analytics").strip()
         primary_color = (request.form.get("primary_color") or "#0d6efd").strip()
         if not primary_color.startswith("#") and len(primary_color) in (6, 7):
             primary_color = ("#" + primary_color.replace("#", "")).strip()

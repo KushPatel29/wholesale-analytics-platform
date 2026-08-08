@@ -141,7 +141,7 @@ def setup_2fa():
         pending = pyotp.random_base32()
         session["pending_totp_secret"] = pending
 
-    issuer = current_app.config.get("TOTP_ISSUER", "Wholesale Analytics")
+    issuer = current_app.config.get("TOTP_ISSUER", "Northgate Retail Analytics")
     uri = pyotp.totp.TOTP(pending).provisioning_uri(name=current_user.username, issuer_name=issuer)
 
     # Optional ASCII QR using qrcode if available

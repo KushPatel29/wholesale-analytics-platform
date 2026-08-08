@@ -241,8 +241,8 @@ def _build_minimal_xlsx_bytes(sheets: Dict[str, pd.DataFrame]) -> bytes:
                 'xmlns:dcterms="http://purl.org/dc/terms/" '
                 'xmlns:dcmitype="http://purl.org/dc/dcmitype/" '
                 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-                "<dc:creator>Wholesale Analytics</dc:creator>"
-                "<cp:lastModifiedBy>Wholesale Analytics</cp:lastModifiedBy>"
+                "<dc:creator>Northgate Retail Analytics</dc:creator>"
+                "<cp:lastModifiedBy>Northgate Retail Analytics</cp:lastModifiedBy>"
                 "</cp:coreProperties>"
             ),
         )
@@ -252,7 +252,7 @@ def _build_minimal_xlsx_bytes(sheets: Dict[str, pd.DataFrame]) -> bytes:
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                 '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
                 'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
-                "<Application>Wholesale Analytics</Application>"
+                "<Application>Northgate Retail Analytics</Application>"
                 f"<Sheets>{len(safe_sheet_names)}</Sheets>"
                 "</Properties>"
             ),

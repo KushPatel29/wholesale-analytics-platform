@@ -1,9 +1,9 @@
 Hello {{ recipient_name or "there" }},
 
 {% if purpose == "invite" -%}
-Your Wholesale Analytics account is ready.
+Your Northgate Retail Analytics account is ready.
 {% else -%}
-A password reset was requested for your Wholesale Analytics account.
+A password reset was requested for your Northgate Retail Analytics account.
 {% endif %}
 
 Set your password:

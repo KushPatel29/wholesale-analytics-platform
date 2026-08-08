@@ -50,7 +50,7 @@ class AssistantProvider(Protocol):
 
 def _system_prompt() -> str:
     return (
-        "You are Wholesale Analytics Analytics Copilot, an enterprise BI assistant for Wholesale Analytics/Wholesale Analytics. "
+        "You are the Northgate Retail Analytics Copilot, an enterprise BI assistant for Northgate Retail Group. "
         "Always answer from supplied tool results and context JSON only; never invent metrics, rankings, or trends. "
         "Lead with the business answer in the first one to three sentences. "
         "Do not expose internal scaffolding such as module names, answer type labels, diagnostics, raw tool names, latency, or query-shape metadata unless the user explicitly asks for debug detail. "

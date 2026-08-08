@@ -18,17 +18,17 @@ def test_canonicalize_columns_preserves_text_protein_dimension():
             "Cost": [90.0],
             "WeightLb": [25.0],
             "QuantityShipped": [10.0],
-            "Protein": ["Beef"],
+            "Protein": ["Grocery"],
         }
     )
 
     out = data_loader.canonicalize_columns(frame)
 
-    assert str(out.loc[0, "Protein"]) == "Beef"
-    assert str(out.loc[0, "ProteinType"]) == "Beef"
-    assert str(out.loc[0, "ProteinName"]) == "Beef"
-    assert str(out.loc[0, "Category"]) == "Beef"
-    assert str(out.loc[0, "ProductCategory"]) == "Beef"
+    assert str(out.loc[0, "Protein"]) == "Grocery"
+    assert str(out.loc[0, "ProteinType"]) == "Grocery"
+    assert str(out.loc[0, "ProteinName"]) == "Grocery"
+    assert str(out.loc[0, "Category"]) == "Grocery"
+    assert str(out.loc[0, "ProductCategory"]) == "Grocery"
 
 
 def test_finalize_dataframe_keeps_product_family_columns_as_strings():
@@ -48,15 +48,15 @@ def test_finalize_dataframe_keeps_product_family_columns_as_strings():
             "QuantityShipped": [10.0],
             "Price": [15.0],
             "CostPrice": [9.0],
-            "Protein": ["Beef"],
+            "Protein": ["Grocery"],
             "Category": ["Steak"],
         }
     )
 
     out = data_loader.finalize_dataframe(frame, best_effort=True)
 
-    assert str(out.loc[0, "Protein"]) == "Beef"
-    assert str(out.loc[0, "ProteinType"]) == "Beef"
-    assert str(out.loc[0, "ProteinName"]) == "Beef"
+    assert str(out.loc[0, "Protein"]) == "Grocery"
+    assert str(out.loc[0, "ProteinType"]) == "Grocery"
+    assert str(out.loc[0, "ProteinName"]) == "Grocery"
     assert str(out.loc[0, "Category"]) == "Steak"
     assert str(out.loc[0, "ProductCategory"]) == "Steak"

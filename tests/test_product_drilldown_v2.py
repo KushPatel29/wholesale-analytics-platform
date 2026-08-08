@@ -39,7 +39,7 @@ def product_drilldown_v2_client(app, monkeypatch, tmp_path):
                     "SKU": target_sku,
                     "ProductID": target_sku,
                     "ProductName": "Prime Ribeye",
-                    "Protein": "Beef",
+                    "Protein": "Grocery",
                     "ProteinType": None,
                     "Category": None,
                     "ProductCategory": "Steak",
@@ -197,10 +197,10 @@ def test_product_drilldown_v2_includes_family_context(product_drilldown_v2_clien
         context = product_drilldown_service.build_product_drilldown_context("SKU-001", filters={}, current_user_obj=object())
 
     family_context = context.get("family_context") or {}
-    assert family_context.get("protein_family") == "Beef"
+    assert family_context.get("protein_family") == "Grocery"
     assert family_context.get("product_category") == "Steak"
-    assert family_context.get("target_margin_pct") == pytest.approx(26.0, abs=0.01)
-    assert family_context.get("minimum_margin_pct") == pytest.approx(17.0, abs=0.01)
+    assert family_context.get("target_margin_pct") == pytest.approx(24.0, abs=0.01)
+    assert family_context.get("minimum_margin_pct") == pytest.approx(18.0, abs=0.01)
     assert family_context.get("target_price_lb") is not None
     assert family_context.get("minimum_price_lb") is not None
     assert (context.get("margin_profile") or {}).get("target_status")

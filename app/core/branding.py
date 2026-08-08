@@ -9,7 +9,7 @@ BRANDING_PATH = Path("cache/branding.json")
 BRANDING_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_BRANDING: Dict[str, Any] = {
-    "brand_name": "Wholesale Analytics",
+    "brand_name": "Northgate Retail Analytics",
     "primary_color": "#0d6efd",
     "logo_filename": None,
 }

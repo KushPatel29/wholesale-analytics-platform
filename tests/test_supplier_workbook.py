@@ -67,7 +67,7 @@ def test_top_products_worksheet_uses_human_readable_names(monkeypatch):
     monkeypatch.setattr(suppliers, "can_view_costs", lambda _=None: False)
 
     sku_map = pd.Series(
-        data=["Beef Grind Lean Grass Fed", "Atlantic Salmon Loin"],
+        data=["Grocery Pasta Northgate Value", "Electronics 4K Smart TV National Brand"],
         index=pd.Index([101, 102], name="ProductId"),
         dtype=object,
     )
@@ -95,12 +95,12 @@ def test_top_products_worksheet_uses_human_readable_names(monkeypatch):
     ]
     assert list(details.columns) == expected_columns
     assert details["ProductName"].dtype == object
-    assert "Beef" in str(details.iloc[0]["ProductName"])
-    assert "Atlantic Salmon" in str(details.iloc[1]["ProductName"])
+    assert "Grocery" in str(details.iloc[0]["ProductName"])
+    assert "4K Smart TV" in str(details.iloc[1]["ProductName"])
     assert details.iloc[2]["ProductName"].startswith("SKU 103")
 
     summary = suppliers._build_top_products_summary_frame(details)
     assert list(summary.columns)[0] == "ProductName"
     assert summary["ProductName"].dtype == object
     assert any(any(ch.isalpha() for ch in str(val)) for val in summary["ProductName"])
-    assert "Beef" in str(summary.iloc[0]["ProductName"])
+    assert "Grocery" in str(summary.iloc[0]["ProductName"])

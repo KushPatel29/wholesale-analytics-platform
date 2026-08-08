@@ -25,15 +25,16 @@ COPY . .
 # scanned, frames materialised per request, and how many requests can be in
 # flight at once.
 #
-# 150 accounts and 220 SKUs over four months is ~11k order lines. Still a
-# believable book with seasonality and a visible margin trend, and small enough
-# that a page render and the background warm-up can overlap without tipping the
-# container over.
+# Ten months rather than four, because the monthly forecast needs at least six
+# monthly points to run (MIN_MONTHLY_FORECAST_POINTS). At four months the panel
+# disabled itself and the overview shipped an empty "forecast is preparing"
+# card - the most prominent thing on the page did nothing. Store count comes
+# down to 80 to pay for the extra history, holding the dataset at ~26k lines.
 #
 # products.parquet is built here too: without it every products request takes a
 # FileNotFoundError path before falling back.
 RUN cp .env.demo .env \
-    && python -m seed.generate_synthetic_data --months 4 --customers 150 --products 220 \
+    && python -m seed.generate_synthetic_data --months 10 --customers 80 --products 180 \
     && python manage.py init-auth-db \
     && python manage.py seed-demo-users \
     && (python manage.py build-products-parquet || echo "products parquet skipped")

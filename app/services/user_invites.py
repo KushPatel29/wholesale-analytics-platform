@@ -5,8 +5,8 @@ from flask import render_template
 from .mailer import send_email
 
 
-INVITE_SUBJECT = "Your Wholesale Analytics account is ready"
-RESET_SUBJECT = "Reset your Wholesale Analytics password"
+INVITE_SUBJECT = "Your Northgate Retail Analytics account is ready"
+RESET_SUBJECT = "Reset your Northgate Retail Analytics password"
 
 
 def _subject_for_purpose(purpose: str) -> str:

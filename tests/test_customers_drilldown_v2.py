@@ -23,7 +23,7 @@ def seed_customers_drilldown_v2(tmp_path, monkeypatch):
         product = f"Product {idx:02d}"
         qty = float(4 + (idx % 4))
         weight = float(8 + (idx % 5))
-        protein = "Beef" if idx % 2 else "Pork"
+        protein = "Grocery" if idx % 2 else "Apparel"
         product_category = "Steak" if idx % 2 else "Roast"
 
         prior_revenue = float(90 + idx)
@@ -102,10 +102,10 @@ def seed_customers_drilldown_v2(tmp_path, monkeypatch):
                 "OrderStatus": "packed",
                 "ProductName": f"Other Product {idx}",
                 "SKU": f"OSKU-{idx:03d}",
-                "Protein": "Chicken",
+                "Protein": "Grocery",
                 "ProteinType": None,
                 "Category": None,
-                "ProductCategory": "Poultry",
+                "ProductCategory": "Electronics",
                 "Revenue": float(100 + (idx * 10)),
                 "Cost": float(65 + (idx * 6)),
                 "QuantityOrdered": float(5 + idx),
@@ -131,7 +131,7 @@ def seed_customers_drilldown_v2(tmp_path, monkeypatch):
             "OrderStatus": "packed",
             "ProductName": "Product 01",
             "SKU": "SKU-001",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "ProteinType": None,
             "Category": None,
             "ProductCategory": "Steak",
@@ -160,7 +160,7 @@ def seed_customers_drilldown_v2(tmp_path, monkeypatch):
             "OrderStatus": "packed",
             "ProductName": "Sparse Product",
             "SKU": "SKU-SPARSE-001",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "ProteinType": None,
             "Category": None,
             "ProductCategory": "Trim",
@@ -261,10 +261,10 @@ def test_customers_drilldown_v2_keeps_protein_and_category_dimensions_distinct(a
     category_rows = payload.get("categories") or []
 
     assert protein_mix
-    assert {row.get("family") for row in protein_mix[:4]} <= {"Beef", "Pork"}
+    assert {row.get("family") for row in protein_mix[:4]} <= {"Grocery", "Apparel"}
     assert category_rows
     assert {row.get("category") for row in category_rows[:4]} <= {"Steak", "Roast"}
-    assert ((payload.get("protein_intelligence") or {}).get("summary") or {}).get("top_family") in {"Beef", "Pork"}
+    assert ((payload.get("protein_intelligence") or {}).get("summary") or {}).get("top_family") in {"Grocery", "Apparel"}
 
 
 def test_customers_drilldown_v2_snapshot_export_contains_expected_sheets(app_client, seed_customers_drilldown_v2, monkeypatch):
@@ -449,13 +449,13 @@ def test_customers_drilldown_v2_exports_preserve_local_drill_state(app_client, s
             "page": "drilldown",
             "dataset": "product_profitability",
             "format": "csv",
-            "protein_focus": "Beef",
+            "protein_focus": "Grocery",
         },
     )
     assert products_resp.status_code == 200
     products_df = _csv_frame(products_resp)
     assert len(products_df.index) == 18
-    assert set(products_df["protein_family"].astype(str).str.lower()) == {"beef"}
+    assert set(products_df["protein_family"].astype(str).str.lower()) == {"grocery"}
 
     actions_resp = app_client.get(
         "/customers/export",

@@ -382,7 +382,7 @@
     setChip("badgeLifecycle", `Lifecycle: ${score.lifecycle || "Stable"}`, statusTone(score.lifecycle || "Stable"));
     setChip("badgeClass", `Class: ${score.classification || "—"}`, statusTone(score.classification || "Watch"));
     setChip("badgeCoverage", `Cost coverage: ${fmtPct(score.cost_coverage_pct)}`, asNum(score.cost_coverage_pct, 0) >= 90 ? "good" : asNum(score.cost_coverage_pct, 0) >= 75 ? "warn" : "risk");
-    setChip("badgeTopProtein", `Top protein: ${score.top_protein || "—"}`, statusTone((score.top_protein_share_pct || 0) >= 65 ? "concentrated" : "diversified"));
+    setChip("badgeTopProtein", `Top department: ${score.top_protein || "—"}`, statusTone((score.top_protein_share_pct || 0) >= 65 ? "concentrated" : "diversified"));
     setChip("badgeTopSku", `Top SKU: ${truncate(score.top_sku || "—", 40)}`, statusTone((score.top_sku_share_pct || 0) >= 20 ? "watch" : "stable"));
     setChip("badgeLastSold", `Last sold: ${score.last_sold || "—"}`, "accent");
 
@@ -669,7 +669,7 @@
     const categoryRows = asArr(protein.category_rows).slice(0, 12);
     const proteinNarrative = document.getElementById("v2ProteinNarrative");
     const categoryNarrative = document.getElementById("v2CategoryNarrative");
-    if (proteinNarrative) proteinNarrative.textContent = protein.narrative || "Protein concentration commentary will populate after the supplier bundle loads.";
+    if (proteinNarrative) proteinNarrative.textContent = protein.narrative || "Department concentration commentary will populate after the supplier bundle loads.";
     if (categoryNarrative) categoryNarrative.textContent = protein.category_narrative || "Category breadth commentary will populate after the supplier bundle loads.";
 
     const focusWrap = document.getElementById("v2ProteinFocusCards");
@@ -687,7 +687,7 @@
           `
             )
             .join("")
-        : '<div class="supplier-v2-empty-copy">Protein focus cards will appear once mapped supplier rows are available.</div>';
+        : '<div class="supplier-v2-empty-copy">Department focus cards will appear once mapped supplier rows are available.</div>';
     }
 
     const chipWrap = document.getElementById("v2ProteinFocusChips");
@@ -1053,7 +1053,7 @@
         `<li>Customer HHI <strong>${fmtNum2Safe(custConc.hhi)}</strong> · Top 1/5/10 share <strong>${fmtPct(custConc.top1_share)} / ${fmtPct(custConc.top5_share)} / ${fmtPct(custConc.top10_share)}</strong></li>`,
         `<li>SKU HHI <strong>${fmtNum2Safe(skuConc.hhi)}</strong> · Top 1/5/10 share <strong>${fmtPct(skuConc.top1_share)} / ${fmtPct(skuConc.top5_share)} / ${fmtPct(skuConc.top10_share)}</strong></li>`,
         `<li>80% revenue breadth: <strong>${fmtInt(custConc.customers_for_80_pct)}</strong> customers · <strong>${fmtInt(skuConc.skus_for_80_pct)}</strong> SKUs</li>`,
-        `<li>Top protein <strong>${escapeHtml(score.top_protein || "—")}</strong> carries <strong>${fmtPct(score.top_protein_share_pct)}</strong> of supplier revenue</li>`,
+        `<li>Top department <strong>${escapeHtml(score.top_protein || "—")}</strong> carries <strong>${fmtPct(score.top_protein_share_pct)}</strong> of supplier revenue</li>`,
       ].join("")
     );
   };
@@ -1174,7 +1174,7 @@
             <div class="supplier-v2-action-card-exposure">${escapeHtml(card.exposure || "")}</div>
           </div>
           <div class="supplier-v2-action-card-body">${escapeHtml(card.body || "")}</div>
-          <div class="supplier-v2-action-card-link">${escapeHtml(card.target === "protein" ? "Focus protein mix" : card.target === "customers" ? "Open customer layer" : "Open related products")}</div>
+          <div class="supplier-v2-action-card-link">${escapeHtml(card.target === "protein" ? "Focus department mix" : card.target === "customers" ? "Open customer layer" : "Open related products")}</div>
         </article>
       `
       )

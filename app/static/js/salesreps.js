@@ -28,8 +28,8 @@
   const ChartLib = window.Chart;
   const PAGE_CACHE_ID = "salesreps";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
-  const LOCALE = "en-CA";
-  const CURRENCY = "CAD";
+  const LOCALE = "en-US";
+  const CURRENCY = "USD";
   document.getElementById("GlobalFilters")?.classList.add("sr-global-filters");
 
   const TEXT_EMPTY = "None";
@@ -2032,7 +2032,7 @@
     parts.push(
       revenueMoM !== null && revenueMoM < 0
         ? "Recommend reviewing pricing guardrails and near-term recovery plays."
-        : "Use the leading rep and protein mix as the template for the next action."
+        : "Use the leading rep and department mix as the template for the next action."
     );
 
     return `${parts.filter(Boolean).join(". ")}.`;
@@ -3469,7 +3469,7 @@
     const opportunities = [];
     if (beefRevenue > 0 && poultryRevenue <= 0) opportunities.push("Open poultry cross-sell");
     if (beefRevenue > 0 && porkRevenue <= 0) opportunities.push("Add pork mix");
-    if (!opportunities.length && beefRevenue > 0) opportunities.push("Protein mix is already attached");
+    if (!opportunities.length && beefRevenue > 0) opportunities.push("Department mix is already attached");
     if (!opportunities.length) opportunities.push("No protein anchor in the visible window");
 
     title.textContent = row.customer_name || row.customer_id || TEXT_EMPTY;
@@ -3500,7 +3500,7 @@
         note: row.territory_name ? `Territory ${row.territory_name}` : "Territory None",
       },
       {
-        label: "Protein Mix",
+        label: "Department Mix",
         value: `${money(beefRevenue)} BF | ${money(poultryRevenue)} PT | ${money(porkRevenue)} PK`,
         note: row.shipping_method ? `Ship via ${row.shipping_method}` : "Ship method None",
       },
@@ -4324,13 +4324,13 @@
     const enriched = (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, share_pct: totalRevenue > 0 ? (num(row.revenue) / totalRevenue) * 100 : null }));
     const ranked = sortRows(enriched, state.proteinSortBy, state.proteinSortDir);
     if (!ranked.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-muted">No protein mix is available for the selected filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted">No department mix is available for the selected filters.</td></tr>';
       return;
     }
     tbody.innerHTML = ranked
       .map((row) => `
-        <tr${drillAttr(proteinPayload(row.protein_family, "Protein Intelligence", "Protein Performance", "Revenue", row.revenue, { filter_mode: "current_window" }))}>
-          <td><span class="sr-link"${drillAttr(proteinPayload(row.protein_family, "Protein Intelligence", "Protein Performance", "Revenue", row.revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.protein_family || NA)}</span></td>
+        <tr${drillAttr(proteinPayload(row.protein_family, "Department Intelligence", "Department Performance", "Revenue", row.revenue, { filter_mode: "current_window" }))}>
+          <td><span class="sr-link"${drillAttr(proteinPayload(row.protein_family, "Department Intelligence", "Department Performance", "Revenue", row.revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.protein_family || NA)}</span></td>
           <td class="text-end">${money(row.revenue)}</td>
           <td class="text-end">${row.profit == null ? NA : money(row.profit)}</td>
           <td class="text-end">${marginCellHtml(row)}</td>
@@ -4377,7 +4377,7 @@
           const row = ranked[idx];
           if (!row) return;
           openUniversal(
-            proteinPayload(row.protein_family, "Protein Intelligence", "Protein / Category Mix", "Revenue", row.revenue, {
+            proteinPayload(row.protein_family, "Department Intelligence", "Department / Category Mix", "Revenue", row.revenue, {
               filter_mode: "current_window",
             }),
             document.getElementById(canvasId)
@@ -5323,7 +5323,7 @@
         setText("srSectionProteinSubtitle", `${proteins.length} protein famil${proteins.length !== 1 ? "ies" : "y"} in scope · margin benchmarks applied where available`);
       }
     } catch (err) {
-      logError("Protein table rendering failed", err);
+      logError("Department table rendering failed", err);
     }
 
     try {

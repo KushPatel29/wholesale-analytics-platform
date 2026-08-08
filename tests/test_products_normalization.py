@@ -101,7 +101,7 @@ def test_normalize_products_backfills_protein_and_category_dimensions():
             "ProductId": ["SKU-1", "SKU-2"],
             "ProductName": ["Prime Ribeye", "Maple Bacon"],
             "ProteinType": [None, None],
-            "Protein": ["Beef", "Pork"],
+            "Protein": ["Grocery", "Apparel"],
             "Category": [None, None],
             "ProductCategory": ["Steak", "Bacon"],
             "Revenue": [100.0, 200.0],
@@ -111,7 +111,7 @@ def test_normalize_products_backfills_protein_and_category_dimensions():
 
     normalized = products_bp.normalize_products_df(raw)
 
-    assert normalized[products_bp.CAN.protein_type].astype(str).tolist() == ["Beef", "Pork"]
-    assert normalized[products_bp.CAN.protein_name].astype(str).tolist() == ["Beef", "Pork"]
+    assert normalized[products_bp.CAN.protein_type].astype(str).tolist() == ["Grocery", "Apparel"]
+    assert normalized[products_bp.CAN.protein_name].astype(str).tolist() == ["Grocery", "Apparel"]
     assert normalized[products_bp.CAN.category].astype(str).tolist() == ["Steak", "Bacon"]
     assert normalized[products_bp.CAN.product_category].astype(str).tolist() == ["Steak", "Bacon"]

@@ -50,40 +50,32 @@ class MarginRule:
 
 
 _RULE_ROWS: Sequence[MarginRule] = (
-    MarginRule("Deli", 36.0, 22.0, 9.0, 45.0, 31.0, 18.0),
-    MarginRule("Charcuterie", 49.0, 35.0, 22.0, 58.0, 44.0, 31.0),
-    MarginRule("Duck", 41.0, 27.0, 14.0, 50.0, 36.0, 23.0),
-    MarginRule("Beef", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Sausage", 49.0, 35.0, 22.0, 58.0, 44.0, 31.0),
-    MarginRule("Chicken", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Lamb", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Grind", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Eggs", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Bones", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Pork", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
+    # Margin policy by merchandising department. Minimums are the floor a buyer
+    # is expected to hold; targets are what the category plan is built on.
+    #
+    # The spread between departments is the whole point: a chain that applies
+    # one blended target across grocery and electronics will either price
+    # itself out of consumables or let general merchandise coast. Electronics
+    # carries the lowest bar in the business and still misses it, which is what
+    # the SKU watchlist is meant to surface.
+    #
+    # Product / gross / EBITDA are stacked the way the finance pack presents
+    # them: product margin sits above gross, and EBITDA sits ~13 points below.
+    MarginRule("Grocery", 32.0, 18.0, 5.0, 38.0, 24.0, 11.0),
+    MarginRule("Fresh & Produce", 40.0, 26.0, 13.0, 47.0, 33.0, 20.0),
+    MarginRule("Dairy & Frozen", 32.0, 18.0, 5.0, 38.0, 24.0, 11.0),
+    MarginRule("Meat & Seafood", 34.0, 20.0, 7.0, 41.0, 27.0, 14.0),
+    MarginRule("Health & Wellness", 40.0, 26.0, 13.0, 47.0, 33.0, 20.0),
+    MarginRule("Household Essentials", 34.0, 20.0, 7.0, 40.0, 26.0, 13.0),
+    MarginRule("Apparel", 52.0, 38.0, 25.0, 60.0, 46.0, 33.0),
+    MarginRule("Electronics", 22.0, 8.0, -5.0, 27.0, 13.0, 0.0),
+    MarginRule("Home & Kitchen", 44.0, 30.0, 17.0, 52.0, 38.0, 25.0),
+    MarginRule("Toys & Seasonal", 40.0, 26.0, 13.0, 48.0, 34.0, 21.0),
+    # Catch-alls for items that arrive without a department mapped.
+    MarginRule("General Merchandise", 40.0, 26.0, 13.0, 48.0, 34.0, 21.0),
+    MarginRule("Consumables", 34.0, 20.0, 7.0, 40.0, 26.0, 13.0),
     MarginRule("Misc", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
     MarginRule("Supplies", 39.0, 25.0, 12.0, 48.0, 34.0, 21.0),
-    MarginRule("Rabbit", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Imported Charcuterie", 39.0, 25.0, 12.0, 48.0, 34.0, 21.0),
-    MarginRule("Veal", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Bison", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Seafood", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Turkey", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("CornishHens", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Elk", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Wild Boar", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Venison", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Hiro", 31.0, 17.0, 4.0, 40.0, 26.0, 13.0),
-    MarginRule("Foie", 34.0, 20.0, 7.0, 43.0, 29.0, 16.0),
-    MarginRule("Hot Dog", 34.0, 20.0, -3.0, 43.0, 29.0, 16.0),
-    MarginRule("Bacon", 34.0, 20.0, -2.0, 43.0, 29.0, 16.0),
-    MarginRule("Broth", 39.0, 25.0, None, 48.0, 34.0, 21.0),
-    MarginRule("Goat", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
-    MarginRule("Goose", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
-    MarginRule("Partridge", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
-    MarginRule("Squab", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
-    MarginRule("Quail", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
-    MarginRule("Guinea Fowl", 39.0, 25.0, 5.0, 48.0, 34.0, 21.0),
 )
 
 _RULES_BY_KEY: Dict[str, MarginRule] = {}
@@ -151,16 +143,23 @@ def _register_rule(rule: MarginRule, aliases: Iterable[str] | None = None) -> No
 
 for _row in _RULE_ROWS:
     extra_aliases: List[str] = []
-    if _row.family == "CornishHens":
-        extra_aliases.extend(["Cornish Hens", "Cornish Hen"])
-    if _row.family == "Wild Boar":
-        extra_aliases.append("WildBoar")
-    if _row.family == "Hot Dog":
-        extra_aliases.append("HotDog")
-    if _row.family == "Guinea Fowl":
-        extra_aliases.append("GuineaFowl")
-    if _row.family == "Imported Charcuterie":
-        extra_aliases.append("ImportedCharcuterie")
+    # Departments arrive from several systems with slightly different spellings.
+    if _row.family == "Fresh & Produce":
+        extra_aliases.extend(["Fresh", "Produce", "Fresh and Produce", "FreshProduce"])
+    if _row.family == "Dairy & Frozen":
+        extra_aliases.extend(["Dairy", "Frozen", "Dairy and Frozen", "DairyFrozen"])
+    if _row.family == "Meat & Seafood":
+        extra_aliases.extend(["Meat", "Seafood", "Meat and Seafood", "Deli"])
+    if _row.family == "Health & Wellness":
+        extra_aliases.extend(["Health", "Wellness", "Pharmacy", "HBA", "Health and Wellness"])
+    if _row.family == "Household Essentials":
+        extra_aliases.extend(["Household", "Home Care", "HouseholdEssentials"])
+    if _row.family == "Home & Kitchen":
+        extra_aliases.extend(["Home", "Kitchen", "Homelines", "Home and Kitchen"])
+    if _row.family == "Toys & Seasonal":
+        extra_aliases.extend(["Toys", "Seasonal", "Toys and Seasonal"])
+    if _row.family == "General Merchandise":
+        extra_aliases.extend(["GM", "GeneralMerchandise"])
     _register_rule(_row, extra_aliases)
 
 

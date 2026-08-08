@@ -124,7 +124,7 @@ class Config:
     SMTP_PORT: int = _get_int("SMTP_PORT", 25)
     SMTP_USE_TLS: bool = _get_bool("SMTP_USE_TLS", False)
     SMTP_TIMEOUT_SECONDS: int = _get_int("SMTP_TIMEOUT_SECONDS", 20)
-    MAIL_FROM: str = (os.getenv("MAIL_FROM", "Wholesale Analytics <no-reply@wholesaleprovisions.example.com>") or "").strip()
+    MAIL_FROM: str = (os.getenv("MAIL_FROM", "Northgate Retail Analytics <no-reply@northgateretail.example.com>") or "").strip()
     MAIL_SUPPRESS_SEND: bool = _get_bool("MAIL_SUPPRESS_SEND", False)
     INVITES_ENABLED: bool = _get_bool("INVITES_ENABLED", True)
     NOTIFICATIONS_MAX_EMAILS_PER_HOUR: int = _get_int("NOTIFICATIONS_MAX_EMAILS_PER_HOUR", 10)
@@ -230,7 +230,7 @@ class Config:
 
     # MSSQL (for data_loader.py usage)
     MSSQL_SERVER: str | None = os.getenv("MSSQL_SERVER")
-    MSSQL_DB: str | None = os.getenv("MSSQL_DB", "Wholesale Analytics")
+    MSSQL_DB: str | None = os.getenv("MSSQL_DB", "Northgate Retail Analytics")
     MSSQL_USER: str | None = os.getenv("MSSQL_USER")
     MSSQL_PASSWORD: str | None = os.getenv("MSSQL_PASSWORD")
     MSSQL_TRUSTED: bool = _get_bool("MSSQL_TRUSTED", True)

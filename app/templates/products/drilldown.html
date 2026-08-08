@@ -21,7 +21,7 @@
   <div class="alert alert-warning" role="alert">{{ products_warning }}</div>
 {% endif %}
 
-{% set currency = currency_code or 'CAD' %}
+{% set currency = currency_code or 'USD' %}
 {% set show_forecast = (request.args.get('forecast','0') == '1') %}
 {% set ps = product_snapshot|default({}) %}
 {% set lifecycle = lifecycle|default({}) %}
@@ -624,7 +624,7 @@
 (() => {
   const root = document.querySelector('.container-fluid[data-currency]');
   const authFetch = window.authFetch || fetch;
-  const currency = root?.dataset.currency || 'CAD';
+  const currency = root?.dataset.currency || 'USD';
   const alsoBoughtUrl = root?.dataset.alsoBoughtUrl || '';
   const drilldownTemplate = root?.dataset.drilldownTemplate || '';
   const productId = root?.dataset.sku || root?.dataset.productId || '';

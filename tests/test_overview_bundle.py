@@ -132,13 +132,13 @@ def _bundle_payload() -> dict:
 def _overview_seed_frame() -> pd.DataFrame:
     rows = []
     specs = [
-        ("2025-03-10", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Beef", 900.0, 600.0, 9.0, 42.0),
-        ("2025-03-18", "CUST-02", "Customer B", "PROD-02", "Bacon", "South", "Prairie Meats", "Pork", 760.0, 520.0, 8.0, 37.0),
-        ("2025-12-08", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Beef", 1180.0, 780.0, 11.0, 51.0),
-        ("2026-01-14", "CUST-02", "Customer B", "PROD-02", "Bacon", "South", "Prairie Meats", "Pork", 1240.0, 840.0, 12.0, 54.0),
-        ("2026-02-11", "CUST-03", "Customer C", "PROD-03", "Sausage", "East", "Smokehouse", "Pork", 1320.0, 910.0, 13.0, 58.0),
-        ("2026-03-05", "CUST-04", "Customer D", "PROD-04", "Ribeye", "West", "FarmCo", "Beef", 1410.0, 955.0, 14.0, 63.0),
-        ("2026-03-18", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Beef", 1490.0, 1005.0, 15.0, 68.0),
+        ("2025-03-10", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Grocery", 900.0, 600.0, 9.0, 42.0),
+        ("2025-03-18", "CUST-02", "Customer B", "PROD-02", "Bacon", "South", "Prairie Meats", "Apparel", 760.0, 520.0, 8.0, 37.0),
+        ("2025-12-08", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Grocery", 1180.0, 780.0, 11.0, 51.0),
+        ("2026-01-14", "CUST-02", "Customer B", "PROD-02", "Bacon", "South", "Prairie Meats", "Apparel", 1240.0, 840.0, 12.0, 54.0),
+        ("2026-02-11", "CUST-03", "Customer C", "PROD-03", "Sausage", "East", "Smokehouse", "Apparel", 1320.0, 910.0, 13.0, 58.0),
+        ("2026-03-05", "CUST-04", "Customer D", "PROD-04", "Ribeye", "West", "FarmCo", "Grocery", 1410.0, 955.0, 14.0, 63.0),
+        ("2026-03-18", "CUST-01", "Customer A", "PROD-01", "Striploin", "North", "FarmCo", "Grocery", 1490.0, 1005.0, 15.0, 68.0),
     ]
     for idx, (ds, cust_id, cust_name, prod_id, prod_name, region, supplier, protein, revenue, cost, qty, weight) in enumerate(specs, start=1):
         rows.append(
@@ -262,7 +262,7 @@ def test_overview_bundle_endpoint_real_bundle_regression(app_client, tmp_path, m
         assert payload.get("top_movers", {}).get("customer") is not None
         ops_mix = ((payload.get("operations") or {}).get("mix") or {}).get("protein") or []
         assert ops_mix
-        assert {row.get("label") for row in ops_mix if isinstance(row, dict)}.issuperset({"Beef", "Pork"})
+        assert {row.get("label") for row in ops_mix if isinstance(row, dict)}.issuperset({"Grocery", "Apparel"})
         assert (payload.get("kpis") or {}).get("margin_pct") == pytest.approx(32.3393, abs=0.05)
     finally:
         fact_store.reset_duckdb_state()

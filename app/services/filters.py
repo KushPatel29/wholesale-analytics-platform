@@ -1443,7 +1443,7 @@ def build_filter_summary(filters: Any, *, max_items: int = 2) -> dict[str, Any]:
         dimension_chips.append(
             {
                 "key": "protein_groups",
-                "label": "Protein Group",
+                "label": "Department",
                 "count": len(protein_group_values),
                 "summary": summarize_filter_values(protein_group_values, max_items=max_items),
                 "values": [str(v) for v in protein_group_values],
@@ -1475,7 +1475,7 @@ def build_filter_summary(filters: Any, *, max_items: int = 2) -> dict[str, Any]:
         dimension_chips.append(
             {
                 "key": "protein_range",
-                "label": "Protein",
+                "label": "Department",
                 "count": len(protein_bounds),
                 "summary": " ".join(protein_bounds),
                 "values": protein_bounds,
@@ -1485,7 +1485,7 @@ def build_filter_summary(filters: Any, *, max_items: int = 2) -> dict[str, Any]:
         dimension_chips.append(
             {
                 "key": "protein_name_like",
-                "label": "Protein Name",
+                "label": "Department Name",
                 "count": 1,
                 "summary": str(params.protein_name_like),
                 "values": [str(params.protein_name_like)],
@@ -2046,7 +2046,7 @@ def apply_filters(df: pd.DataFrame, filters: FilterParams) -> pd.DataFrame:
                 mask &= ser.isin(status_set).to_numpy(dtype=bool, na_value=False)
                 break
 
-    # Protein Groups
+    # Departments
     protein_group_values = tuple(getattr(filters, "protein_groups", ()) or ())
     if protein_group_values:
         protein_set = {str(v).strip().lower() for v in protein_group_values if str(v).strip()}
@@ -2077,7 +2077,7 @@ def apply_filters(df: pd.DataFrame, filters: FilterParams) -> pd.DataFrame:
     protein_numeric_col = next(
         (
             col
-            for col in ("Protein", "ProteinType", "ProteinName", "Category", "ProductCategory")
+            for col in ("Department", "ProteinType", "ProteinName", "Category", "ProductCategory")
             if col in df.columns
         ),
         None,
@@ -2094,7 +2094,7 @@ def apply_filters(df: pd.DataFrame, filters: FilterParams) -> pd.DataFrame:
     token = (getattr(filters, "protein_name_like", None) or "").strip()
     if token:
         text_mask = np.zeros(n, dtype=bool)
-        for col in ("ProteinType", "ProteinName", "Category", "ProductCategory", "Protein", "ProductName"):
+        for col in ("ProteinType", "ProteinName", "Category", "ProductCategory", "Department", "ProductName"):
             if col in df.columns:
                 pn = df[col].astype("string")
                 text_mask |= pn.str.contains(token, case=False, na=False).to_numpy(dtype=bool, na_value=False)

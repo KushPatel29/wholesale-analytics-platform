@@ -1,4 +1,4 @@
-# Wholesale Analytics
+# Northgate Retail Analytics
 
 [![ci](https://github.com/KushPatel29/wholesale-analytics-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/KushPatel29/wholesale-analytics-platform/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.12-blue)
@@ -9,21 +9,45 @@
 with `gm`, then sign in as `rep.dana` and watch every figure narrow to one
 rep's book. It sleeps when idle, so the first request can take about a minute.
 
-The internal BI platform I built and ran at a perishable-goods wholesale
-distributor. Not a dashboard — the whole thing: incremental ETL off the ERP
-into a partitioned parquet lake, a DuckDB query layer, row-level security down
-to a sales rep's own book, and nine dashboards that the sales floor, the buyers
-and the GM actually used.
+A merchandising and replenishment analytics platform for a mass retail
+chain. Not a dashboard — the whole thing: incremental ETL off the source
+system into a partitioned parquet lake, a DuckDB query layer, row-level
+security down to one market manager's own store book, and nine dashboards
+built for the buyers, the market managers and the GM.
 
-It normally reads a SQL Server the reader does not have. So it now ships a
-seeded generator that invents a comparable distributor — 620 accounts, 880
-SKUs, 326,000 order lines — and writes it through the **same ETL writer**
-production uses. A clean clone gets a working platform in about a minute.
+It normally reads a SQL Server the reader does not have. So it ships a seeded
+generator that invents a comparable chain — **Northgate Retail Group**, a
+supercenter operator — and writes it through the **same ETL writer** production
+uses. A clean clone gets a working platform in about a minute.
 
-The hosted demo runs a smaller cut of the same generator (150 accounts, 220
+The catalogue is a supercenter's: ten merchandising departments from Grocery
+and Fresh through to Electronics and Toys & Seasonal, a private-label brand
+ladder, stores across seven US regions, CPG vendors, and both ways a retailer
+sells — items priced per each, and fresh items priced per pound and rung up on
+a scale. That second case is not decoration: revenue is *derived* from the
+billing basis rather than stored, which is the schema decision the whole query
+layer is built around.
+
+Two findings are planted in the generator, because a dashboard that finds
+nothing is not worth looking at:
+
+* **Electronics is the largest department by revenue and earns the thinnest
+  margin in the chain** — it looks like a growth engine on a revenue chart and
+  drags blended margin everywhere else.
+* **Apparel and Toys & Seasonal have the worst sell-through**, which is a
+  markdown problem rather than a demand problem: it shows up in margin and in
+  the SKU watchlist, never in the sales line.
+
+The hosted demo runs a smaller cut of the same generator (150 stores, 220
 SKUs, four months) because it lives on a 512 MB shared-CPU box, so its totals
 are smaller than the ones quoted below. The shape of the data, and every
 finding, is identical.
+
+**A note on column names.** The warehouse columns still carry the source
+system's vocabulary — `ProteinType` holds the department, `YieldPct` holds
+sell-through, `CostPerLb` holds cost per selling unit. Renaming a source
+system's columns to match a re-org is how you break every downstream report, so
+the columns stay and `seed/catalog.py` documents the mapping.
 
 ```bash
 pip install -r requirements.txt
@@ -46,7 +70,7 @@ same pages narrow to one rep's accounts.
 | **Structure** | 20 blueprints, 47 services, 107 test files |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
-| **Demo data** | 620 customers · 880 SKUs · 326k order lines · 24 months |
+| **Demo data** | 620 stores · 880 SKUs · 326k order lines · 24 months |
 
 **Dashboards:** Overview (executive), Customers (KPIs, RFM, CLV, cohorts),
 Products (with drilldown and forecasting), Suppliers, Regions, Sales Reps,
@@ -65,7 +89,7 @@ partitioning on, so a date-filtered page only touches the days it needs.
 **Revenue is derived, never stored.** The fact table holds pack weights, pack
 counts, a unit-of-billing flag and per-unit prices. The view computes revenue
 as `pack_weight × price` for catch-weight items and `pack_units × price` for
-everything else. Catch-weight is the whole problem in protein distribution — a
+everything else. Scale-weighed items are the whole problem in retail fresh — a
 ribeye is billed on the weight that actually shipped, a case of portioned
 chicken is not — and storing a revenue column would let the two definitions
 drift apart.
@@ -165,19 +189,21 @@ than rendering a blank cell over a value that was sent to the browser anyway.
 The generator plants findings rather than asserting them, so the dashboards
 have something real to surface:
 
-> **Beef is 31% of revenue at 11.2% margin, and falling.** Landed cost carries
-> inflation the list price does not, and the quarterly trend shows the squeeze:
-> 14.4% → 13.0% → 12.5% → 12.0% → 10.7% → 10.2% → 8.8% → 8.5%. Charcuterie, at
-> 8% of revenue, earns 24.1%.
+> **Electronics is 24% of revenue at 12.7% margin — the thinnest department in
+> the chain.** It is the single largest line on a revenue chart and the reason
+> blended margin sits where it does. For comparison, Apparel earns 40.4% on 9%
+> of revenue and Home & Kitchen 35.8% on 12.8%. A category plan built on a
+> single blended target will keep rewarding the department that earns least.
 
-> **Third-party LTL runs a 24% late rate against 3–5% for own fleet** — and it
-> is the only lane serving the far regions, so the delivery problem is a
-> routing decision, not a carrier problem.
+> **Third-party LTL runs a 24% late rate against 3.0% for the ambient DC
+> fleet** — and it is the only lane serving the outlying regions, so the
+> replenishment problem is a network-design decision, not a carrier problem.
+> Drop-ship is second worst at 11%.
 
-Blended margin is 16.2% on $61M a year, which is where a protein wholesaler
-should sit. None of this is asserted in a README and hoped for: it falls out of
-the catalog in `seed/catalog.py`, and the numbers above were read back out of
-DuckDB after generation.
+Blended margin is 24.2% on $151M across the 24-month window. None of this is
+asserted in a README and hoped for: it falls out of the catalog in
+`seed/catalog.py`, and every number above was read back out of DuckDB after
+generation.
 
 ---
 
@@ -242,7 +268,7 @@ the rest.
 
 ## Notes
 
-Built at a Vancouver wholesale distributor. All employer identifiers, customer
+Ported from an internal platform I built and ran. All employer identifiers, customer
 names, supplier names and cost data have been removed — the git history starts
 at the de-branded import, and every number in this repo is generated from
 `seed/catalog.py`.

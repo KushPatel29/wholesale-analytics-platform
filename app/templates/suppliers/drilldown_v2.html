@@ -67,7 +67,7 @@
             <span class="supplier-v2-chip" id="badgeLifecycle">Lifecycle: —</span>
             <span class="supplier-v2-chip" id="badgeClass">Class: —</span>
             <span class="supplier-v2-chip" id="badgeCoverage">Cost coverage: —</span>
-            <span class="supplier-v2-chip" id="badgeTopProtein">Top protein: —</span>
+            <span class="supplier-v2-chip" id="badgeTopProtein">Top department: —</span>
             <span class="supplier-v2-chip" id="badgeTopSku">Top SKU: —</span>
             <span class="supplier-v2-chip" id="badgeSupplierId">Supplier ID: {{ supplier_id }}</span>
             <span class="supplier-v2-chip" id="badgeLastSold">Last sold: —</span>
@@ -103,7 +103,7 @@
     <a class="supplier-v2-subnav-link" href="#sec-overview"><span>Overview</span><span class="supplier-v2-subnav-pill" id="navOverviewBadge">—</span></a>
     <a class="supplier-v2-subnav-link" href="#sec-trend"><span>Trend</span><span class="supplier-v2-subnav-pill" id="navTrendBadge">—</span></a>
     <a class="supplier-v2-subnav-link" href="#sec-mix"><span>Mix & Concentration</span><span class="supplier-v2-subnav-pill" id="navMixBadge">—</span></a>
-    <a class="supplier-v2-subnav-link" href="#sec-protein"><span>Protein</span><span class="supplier-v2-subnav-pill" id="navProteinBadge">—</span></a>
+    <a class="supplier-v2-subnav-link" href="#sec-protein"><span>Department</span><span class="supplier-v2-subnav-pill" id="navProteinBadge">—</span></a>
     <a class="supplier-v2-subnav-link" href="#sec-pricing"><span>Pricing & Margin</span><span class="supplier-v2-subnav-pill" id="navPricingBadge">—</span></a>
     <a class="supplier-v2-subnav-link" href="#sec-customers"><span>Customers</span><span class="supplier-v2-subnav-pill" id="navCustomersBadge">—</span></a>
     <a class="supplier-v2-subnav-link" href="#sec-products"><span>Products</span><span class="supplier-v2-subnav-pill" id="navProductsBadge">—</span></a>
@@ -334,21 +334,21 @@
 
   <section id="sec-protein" class="supplier-v2-section mb-3">
     <div class="supplier-v2-section-head">
-      <h4 class="mb-1">Protein & Category Exposure</h4>
-      <p class="text-muted mb-0">See which protein families and categories anchor the supplier relationship, where mix is shifting, and where negotiation risk is concentrated.</p>
+      <h4 class="mb-1">Department & Category Exposure</h4>
+      <p class="text-muted mb-0">See which departments and categories anchor the supplier relationship, where mix is shifting, and where negotiation risk is concentrated.</p>
     </div>
     <div class="row g-2">
       <div class="col-lg-6">
         <div class="card h-100">
           <div class="card-header">
             <h5 class="mb-1">Revenue by Protein Family</h5>
-            <div class="small text-muted">Current-window supplier exposure by protein family with matched-period mix shift.</div>
+            <div class="small text-muted">Current-window supplier exposure by department with matched-period mix shift.</div>
           </div>
           <div class="card-body">
             <div class="chart-wrap">
               <canvas id="v2ProteinRevenueChart"></canvas>
             </div>
-            <div class="small text-muted mt-2" id="v2ProteinNarrative">Protein concentration commentary will populate after the supplier bundle loads.</div>
+            <div class="small text-muted mt-2" id="v2ProteinNarrative">Department concentration commentary will populate after the supplier bundle loads.</div>
           </div>
         </div>
       </div>
@@ -377,14 +377,14 @@
       <div class="col-lg-7">
         <div class="card h-100">
           <div class="card-header">
-            <h5 class="mb-1">Protein Family Watch</h5>
+            <h5 class="mb-1">Department Family Watch</h5>
             <div class="small text-muted">Protein-specific revenue, margin, mix shift, and breadth to guide negotiation and diversification decisions.</div>
           </div>
           <div class="card-body p-0">
             <div class="table-responsive supplier-v2-table-shell">
               <table class="table table-sm mb-0 supplier-v2-grid-table">
                 <thead>
-                  <tr><th>Protein</th><th>Lead category</th><th class="text-end">Revenue</th><th class="text-end">Share</th><th class="text-end">Δ Mix</th><th class="text-end">Margin %</th></tr>
+                  <tr><th>Department</th><th>Lead category</th><th class="text-end">Revenue</th><th class="text-end">Share</th><th class="text-end">Δ Mix</th><th class="text-end">Margin %</th></tr>
                 </thead>
                 <tbody id="v2ProteinRows"><tr><td colspan="6" class="text-muted text-center">No protein diagnostics in the selected window.</td></tr></tbody>
               </table>
@@ -613,7 +613,7 @@
             <thead>
               <tr>
                 <th data-sort="display_name" class="sortable">Product</th>
-                <th data-sort="protein_family" class="sortable">Protein</th>
+                <th data-sort="protein_family" class="sortable">Department</th>
                 <th data-sort="product_category" class="sortable">Category</th>
                 <th data-sort="revenue" class="sortable text-end">Revenue</th>
                 <th data-sort="profit" class="sortable text-end">Profit</th>

@@ -18,8 +18,8 @@ def seed_customers_bundle_sections(tmp_path, monkeypatch):
             "CustomerId": "C_RET",
             "CustomerName": "Returning Co",
             "ProductId": "P_BEEF",
-            "ProductName": "Prime Beef",
-            "ProteinType": "Beef",
+            "ProductName": "Ribeye Steak National Brand",
+            "ProteinType": "Meat & Seafood",
             "RegionName": "West",
             "ShippingMethodName": "Truck",
             "City": "Los Angeles",
@@ -46,7 +46,7 @@ def seed_customers_bundle_sections(tmp_path, monkeypatch):
             "CustomerName": "Returning Co",
             "ProductId": "P_SALMON",
             "ProductName": "Atlantic Salmon",
-            "ProteinType": "Seafood",
+            "ProteinType": "Electronics",
             "RegionName": "West",
             "ShippingMethodName": "Truck",
             "City": "Los Angeles",
@@ -72,8 +72,8 @@ def seed_customers_bundle_sections(tmp_path, monkeypatch):
             "CustomerId": "C_NEW",
             "CustomerName": "New Co",
             "ProductId": "P_BEEF",
-            "ProductName": "Prime Beef",
-            "ProteinType": "Beef",
+            "ProductName": "Ribeye Steak National Brand",
+            "ProteinType": "Meat & Seafood",
             "RegionName": "West",
             "ShippingMethodName": "Courier",
             "City": "San Diego",
@@ -100,7 +100,7 @@ def seed_customers_bundle_sections(tmp_path, monkeypatch):
             "CustomerName": "Other Scope Co",
             "ProductId": "P_CHICKEN",
             "ProductName": "Organic Chicken",
-            "ProteinType": "Poultry",
+            "ProteinType": "Grocery",
             "RegionName": "West",
             "ShippingMethodName": "Courier",
             "City": "San Diego",
@@ -257,7 +257,7 @@ def test_customers_drilldown_bundle_includes_protein_intelligence(app_client, se
     payload = resp.get_json() or {}
     protein_intelligence = payload.get("protein_intelligence") or {}
     summary = protein_intelligence.get("summary") or {}
-    assert summary.get("top_family") == "Seafood"
+    assert summary.get("top_family") == "Electronics"
     assert summary.get("family_count") >= 1
     assert isinstance(protein_intelligence.get("mix"), list)
 

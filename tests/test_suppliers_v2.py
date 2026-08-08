@@ -19,7 +19,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier A",
             "ProductId": "P1",
             "ProductName": "Prod 1",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "Category": "Steaks",
             "CustomerId": "C1",
             "CustomerName": "Cust 1",
@@ -39,7 +39,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier A",
             "ProductId": "P1",
             "ProductName": "Prod 1",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "Category": "Steaks",
             "CustomerId": "C1",
             "CustomerName": "Cust 1",
@@ -59,7 +59,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier B",
             "ProductId": "P2",
             "ProductName": "Prod 2",
-            "Protein": "Pork",
+            "Protein": "Apparel",
             "Category": "Smoked",
             "CustomerId": "C2",
             "CustomerName": "Cust 2",
@@ -79,7 +79,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier C",
             "ProductId": "P3",
             "ProductName": "Prod 3",
-            "Protein": "Chicken",
+            "Protein": "Grocery",
             "Category": "Cuts",
             "CustomerId": "C3",
             "CustomerName": "Cust 3",
@@ -99,7 +99,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier D",
             "ProductId": "P4",
             "ProductName": "Prod 4",
-            "Protein": "Pork",
+            "Protein": "Apparel",
             "Category": "Bacon",
             "CustomerId": "C4",
             "CustomerName": "Cust 4",
@@ -119,7 +119,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier D",
             "ProductId": "P4",
             "ProductName": "Prod 4",
-            "Protein": "Pork",
+            "Protein": "Apparel",
             "Category": "Bacon",
             "CustomerId": "C4",
             "CustomerName": "Cust 4",
@@ -139,7 +139,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier E",
             "ProductId": "P5",
             "ProductName": "Prod 5",
-            "Protein": "Beef",
+            "Protein": "Health & Wellness",
             "Category": "Prepared",
             "CustomerId": "C5",
             "CustomerName": "Cust 5",
@@ -159,7 +159,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier E",
             "ProductId": "P5",
             "ProductName": "Prod 5",
-            "Protein": "Beef",
+            "Protein": "Health & Wellness",
             "Category": "Prepared",
             "CustomerId": "C5",
             "CustomerName": "Cust 5",
@@ -179,7 +179,7 @@ def seed_suppliers_v2(tmp_path, monkeypatch):
             "SupplierName": "Supplier Other",
             "ProductId": "P9",
             "ProductName": "Prod 9",
-            "Protein": "Seafood",
+            "Protein": "Meat & Seafood",
             "Category": "Frozen",
             "CustomerId": "C9",
             "CustomerName": "Cust 9",
@@ -291,14 +291,16 @@ def test_suppliers_v2_coverage_profit_and_protein_payload(app_client, seed_suppl
     assert kpis.get("total_profit") == pytest.approx(expected_profit)
     assert kpis.get("missing_cost_revenue") == pytest.approx(400.0)
     assert kpis.get("cost_coverage_pct") == pytest.approx((3200.0 / 3600.0) * 100.0, rel=1e-4)
-    assert kpis.get("top_protein_family") == "Beef"
-    assert kpis.get("top_protein_share_pct") == pytest.approx((1700.0 / 3600.0) * 100.0, rel=1e-4)
+    assert kpis.get("top_protein_family") == "Grocery"
+    # Grocery is the fixture's largest department in the current window:
+    # 2,100 of 3,600 in revenue.
+    assert kpis.get("top_protein_share_pct") == pytest.approx((2100.0 / 3600.0) * 100.0, rel=1e-4)
 
-    assert protein.get("summary", {}).get("top_family") == "Beef"
-    assert any(str(row.get("family")) == "Beef" for row in (protein.get("mix") or []))
+    assert protein.get("summary", {}).get("top_family") == "Grocery"
+    assert any(str(row.get("family")) == "Grocery" for row in (protein.get("mix") or []))
     assert by_id["SUP_D"]["missing_cost_revenue_current"] == pytest.approx(400.0)
     assert by_id["SUP_D"]["cost_coverage_pct"] == pytest.approx(0.0)
-    assert by_id["SUP_D"]["top_protein"] == "Pork"
+    assert by_id["SUP_D"]["top_protein"] == "Apparel"
 
 
 def test_suppliers_v2_export_parity_matches_filtered_table(app_client, seed_suppliers_v2, monkeypatch):
@@ -401,7 +403,7 @@ def test_suppliers_v2_rolls_top_protein_share_to_family_grain(app_client, tmp_pa
             "SupplierName": "Supplier Split",
             "ProductId": "B1",
             "ProductName": "Beef Rib",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "Category": "Steaks",
             "CustomerId": "C1",
             "CustomerName": "Cust 1",
@@ -421,7 +423,7 @@ def test_suppliers_v2_rolls_top_protein_share_to_family_grain(app_client, tmp_pa
             "SupplierName": "Supplier Split",
             "ProductId": "B2",
             "ProductName": "Beef Trim",
-            "Protein": "Beef",
+            "Protein": "Grocery",
             "Category": "Trim",
             "CustomerId": "C2",
             "CustomerName": "Cust 2",
@@ -441,7 +443,7 @@ def test_suppliers_v2_rolls_top_protein_share_to_family_grain(app_client, tmp_pa
             "SupplierName": "Supplier Split",
             "ProductId": "P1",
             "ProductName": "Pork Belly",
-            "Protein": "Pork",
+            "Protein": "Apparel",
             "Category": "Bacon",
             "CustomerId": "C3",
             "CustomerName": "Cust 3",
@@ -473,7 +475,7 @@ def test_suppliers_v2_rolls_top_protein_share_to_family_grain(app_client, tmp_pa
         rows = ((payload.get("table") or {}).get("rows") or [])
         row = rows[0]
         assert row.get("supplier_id") == "SUP_SPLIT"
-        assert row.get("top_protein") == "Beef"
+        assert row.get("top_protein") == "Grocery"
         assert row.get("top_category") in {"Steaks", "Trim"}
         assert row.get("top_protein_share_pct") == pytest.approx(80.0)
     finally:
@@ -494,7 +496,7 @@ def test_suppliers_v2_dependency_summary_counts_full_population_not_only_top_row
                     "SupplierName": f"Supplier {idx+1}",
                     "ProductId": f"B{idx+1}",
                     "ProductName": f"Beef {idx+1}",
-                    "Protein": "Beef",
+                    "Protein": "Grocery",
                     "Category": "Steaks",
                     "CustomerId": "C1",
                     "CustomerName": "Cust 1",
@@ -514,7 +516,7 @@ def test_suppliers_v2_dependency_summary_counts_full_population_not_only_top_row
                     "SupplierName": f"Supplier {idx+1}",
                     "ProductId": f"P{idx+1}",
                     "ProductName": f"Pork {idx+1}",
-                    "Protein": "Pork",
+                    "Protein": "Apparel",
                     "Category": "Bacon",
                     "CustomerId": "C2",
                     "CustomerName": "Cust 2",

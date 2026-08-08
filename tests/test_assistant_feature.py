@@ -201,7 +201,7 @@ def test_assistant_page_loads_when_enabled(assistant_client):
     assert login.status_code == 200
     resp = assistant_client.get("/assistant")
     assert resp.status_code == 200
-    assert b"Wholesale Analytics Enterprise Assistant" in resp.data
+    assert b"Northgate Retail Analytics Enterprise Assistant" in resp.data
 
 
 def test_assistant_page_hides_provider_scaffolding_and_limits_debug_toggle_to_admin(assistant_client):

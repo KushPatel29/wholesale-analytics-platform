@@ -6772,7 +6772,7 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
         "margin_watch": protein_margin_watch,
         "whitespace": protein_whitespace,
         "narrative": (
-            f"{((top_protein or {}).get('family') or 'Top protein family')} represents "
+            f"{((top_protein or {}).get('family') or 'Top department')} represents "
             f"{float((top_protein or {}).get('revenue_share_pct') or 0.0):.1f}% of current-window revenue. "
             f"{len(protein_whitespace)} whitespace cues and {len(protein_margin_watch)} margin-watch families are visible in scope."
         ),

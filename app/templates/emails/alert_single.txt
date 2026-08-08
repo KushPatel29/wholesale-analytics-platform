@@ -1,7 +1,7 @@
 {% set name = recipient_name or "there" -%}
 Hello {{ name }},
 
-{{ payload.summary or "A Wholesale Analytics alert was triggered." }}
+{{ payload.summary or "A Northgate Retail Analytics alert was triggered." }}
 
 {% if payload.details %}
 Details:

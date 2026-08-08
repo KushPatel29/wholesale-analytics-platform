@@ -512,7 +512,7 @@ def create_app() -> Flask:
     try:
         app.config["BRANDING"] = load_branding()
     except Exception:
-        app.config["BRANDING"] = {"brand_name": "Wholesale Analytics", "primary_color": "#0d6efd", "logo_filename": None}
+        app.config["BRANDING"] = {"brand_name": "Northgate Retail Analytics", "primary_color": "#0d6efd", "logo_filename": None}
 
     # Validate fact schema early to surface missing cost/date columns
     try:

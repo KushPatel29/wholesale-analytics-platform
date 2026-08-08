@@ -15,7 +15,7 @@
 {% set _filter_keys = [
   'start','start_date','end','end_date','date_preset','preset','range_preset','date_type',
   'statuses','regions','methods','shipping_methods','customers','suppliers','products','sales_reps',
-  'protein_groups', 'yield_min', 'yield_max',
+  'protein_groups',
   '_gf','_gf_reset'
 ] %}
 {% set _schema_url = filter_api.schema_url if filter_api is defined else '/api/filters/schema' %}
@@ -282,20 +282,11 @@
             </button>
 
             <button class="filter-tile" type="button" id="filterTileProtein" data-filter-key="protein_groups" data-filter-panel="filterPanelProtein" aria-expanded="false" aria-controls="filterPanelProtein">
-              <span class="filter-tile__eyebrow">Protein Groups</span>
+              <span class="filter-tile__eyebrow">Departments</span>
               <span class="filter-tile__summary" data-summary-for="fProteinGroups">All species</span>
               <span class="filter-tile__meta">
                 <span class="filter-tile__count" id="proteinGroupsCount">All</span>
                 <span class="filter-tile__hint">Open selector</span>
-              </span>
-            </button>
-
-            <button class="filter-tile" type="button" id="filterTileYield" data-filter-key="yield_range" data-filter-panel="filterPanelYield" aria-expanded="false" aria-controls="filterPanelYield" disabled title="Yield data is currently unavailable in the dataset.">
-              <span class="filter-tile__eyebrow">Yield Performance</span>
-              <span class="filter-tile__summary">Data pending</span>
-              <span class="filter-tile__meta">
-                <span class="filter-tile__count">N/A</span>
-                <span class="filter-tile__hint">Future data</span>
               </span>
             </button>
           </div>
@@ -479,7 +470,7 @@
               <div class="filter-workspace__header">
                 <div>
                   <div class="filter-workspace__eyebrow">Dimension selector</div>
-                  <h4 class="filter-workspace__title">Protein Groups</h4>
+                  <h4 class="filter-workspace__title">Departments</h4>
                 </div>
                 <div class="filter-workspace__selection">
                   <span class="filter-workspace__selection-text" data-workspace-summary-for="fProteinGroups">All species</span>
@@ -487,35 +478,12 @@
                 </div>
               </div>
               <p class="filter-workspace__help">Benchmark specific meat categories (Beef, Pork, etc.).</p>
-              <select class="form-select" id="fProteinGroups" name="protein_groups" multiple size="8" aria-label="Protein groups" data-msx="1">
+              <select class="form-select" id="fProteinGroups" name="protein_groups" multiple size="8" aria-label="Departments" data-msx="1">
                 {% for v in _summary_payload.get('protein_groups', []) %}
                   <option selected>{{ v }}</option>
                 {% endfor %}
               </select>
               <div class="msx d-none" data-enhance="fProteinGroups"></div>
-            </section>
-
-            <section class="filter-workspace" id="filterPanelYield" data-filter-key="yield_range" aria-labelledby="filterTileYield" hidden>
-              <div class="filter-workspace__header">
-                <div>
-                  <div class="filter-workspace__eyebrow">Metric selector</div>
-                  <h4 class="filter-workspace__title">Yield Performance</h4>
-                </div>
-                <div class="filter-workspace__selection">
-                  <span class="filter-workspace__selection-text" data-workspace-summary-for="fYieldRange">All yields</span>
-                </div>
-              </div>
-              <p class="filter-workspace__help">Filter by processing recovery percentage.</p>
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label for="fYieldMin" class="form-label">Minimum Yield %</label>
-                  <input type="number" step="0.1" class="form-control" id="fYieldMin" name="yield_min" value="{{ _summary_payload.get('yield_min') | default('', true) }}" placeholder="e.g. 95.0">
-                </div>
-                <div class="col-md-6">
-                  <label for="fYieldMax" class="form-label">Maximum Yield %</label>
-                  <input type="number" step="0.1" class="form-control" id="fYieldMax" name="yield_max" value="{{ _summary_payload.get('yield_max') | default('', true) }}" placeholder="e.g. 100.0">
-                </div>
-              </div>
             </section>
           </div>
         </section>

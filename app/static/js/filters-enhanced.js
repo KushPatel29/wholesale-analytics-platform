@@ -145,8 +145,7 @@
     { id: "fSalesReps", key: "sales_reps", label: "Sales Rep", emptyLabel: "All sales reps", countId: "salesRepsCount" },
     { id: "fSuppliers", key: "suppliers", label: "Supplier", emptyLabel: "All suppliers", countId: "suppliersCount" },
     { id: "fProducts", key: "products", label: "Product", emptyLabel: "All products", countId: "productsCount" },
-    { id: "fProteinGroups", key: "protein_groups", label: "Protein Group", emptyLabel: "All species", countId: "proteinGroupsCount" },
-    { id: "fYieldRange", key: "yield_range", label: "Yield Performance", emptyLabel: "All yields", countId: "yieldRangeCount" },
+    { id: "fProteinGroups", key: "protein_groups", label: "Department", emptyLabel: "All species", countId: "proteinGroupsCount" },
   ];
   const LABEL_ALIASES = {
     methods: ["methods", "shipping_methods", "ship_methods"],
@@ -895,7 +894,7 @@
     if (proteinBounds.length) {
       advancedChips.push({
         key: "protein_range",
-        label: "Protein",
+        label: "Department",
         count: proteinBounds.length,
         summary: proteinBounds.join(" "),
       });
@@ -903,7 +902,7 @@
     if (filters?.protein_name_like) {
       advancedChips.push({
         key: "protein_name_like",
-        label: "Protein Name",
+        label: "Department Name",
         count: 1,
         summary: String(filters.protein_name_like),
       });

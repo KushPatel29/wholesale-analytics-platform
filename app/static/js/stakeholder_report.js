@@ -1,5 +1,5 @@
 /**
- * Wholesale Analytics Executive Reporting Workspace
+ * Northgate Retail Analytics Executive Reporting Workspace
  * Enterprise-grade, live, interactive reporting layer.
  */
 class ReportWorkspace {

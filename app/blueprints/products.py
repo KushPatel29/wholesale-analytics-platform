@@ -4155,7 +4155,7 @@ def index():
         product_intelligence_v2=products_v2,
         products_v3=products_v3,
         products_v4=products_v4,
-        currency_code=current_app.config.get("CURRENCY_CODE", "CAD"),
+        currency_code=current_app.config.get("CURRENCY_CODE", "USD"),
         querystring=querystring,
         querystring_suffix=querystring_suffix,
         bubble_url=bubble_url,
@@ -5290,7 +5290,7 @@ def drilldown(product_id: str):
             "products/product_drilldown_v2.html",
             product_id=str(product_id),
             product_name=str(meta_payload.get("product_display_label") or meta_payload.get("product_name") or product_id),
-            currency_code=current_app.config.get("CURRENCY_CODE", "CAD"),
+            currency_code=current_app.config.get("CURRENCY_CODE", "USD"),
             qty_title=current_app.config.get("QTY_TITLE", "Quantity"),
             show_costs=show_costs,
             meta=meta_payload,
@@ -5470,7 +5470,7 @@ def drilldown(product_id: str):
 
     product_display_name = payload.get("meta", {}).get("entity_display_name") or payload.get("meta", {}).get("entity_label") or str(product_id)
     product_name = payload.get("meta", {}).get("entity_label") or str(product_id)
-    currency_code = current_app.config.get("CURRENCY_CODE", "CAD")
+    currency_code = current_app.config.get("CURRENCY_CODE", "USD")
     qty_title = current_app.config.get("QTY_TITLE", "Quantity")
     show_costs = can_view_costs(current_user)
 

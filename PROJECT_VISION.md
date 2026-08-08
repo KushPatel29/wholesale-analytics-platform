@@ -1,7 +1,7 @@
-# 🎯 Wholesale Analytics: Project Vision
+# 🎯 Northgate Retail Analytics: Project Vision
 
 ## 🗺️ High-Level Mission
-Wholesale Analytics is a high-performance, DuckDB-powered dashboarding suite designed for the hospitality/retail sector. Its mission is to turn massive MSSQL datasets into actionable insights for Overview, Sales, Customers, Products, Suppliers, and Labor.
+Northgate Retail Analytics is a high-performance, DuckDB-powered dashboarding suite designed for the hospitality/retail sector. Its mission is to turn massive MSSQL datasets into actionable insights for Overview, Sales, Customers, Products, Suppliers, and Labor.
 
 ## 🔑 Core Philosophy
 - **Speed First:** Use DuckDB and Parquet for sub-second analytic queries.

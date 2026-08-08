@@ -3,28 +3,51 @@ import pandas as pd
 import pytest
 
 
-def test_resolve_margin_rule_for_beef():
-    rule = margin_rules.resolve_margin_rule(protein="Beef", category="Steak")
+def test_resolve_margin_rule_for_a_department():
+    rule = margin_rules.resolve_margin_rule(protein="Grocery", category="Pasta")
     assert rule["mapped"] is True
-    assert rule["family"] == "Beef"
-    assert rule["min_gross_margin_pct"] == 17.0
-    assert rule["target_gross_margin_pct"] == 26.0
+    assert rule["family"] == "Grocery"
+    assert rule["min_gross_margin_pct"] == 18.0
+    assert rule["target_gross_margin_pct"] == 24.0
+
+
+def test_electronics_carries_the_lowest_bar_in_the_business():
+    """
+    The department mix is built so this is true, and the SKU watchlist story
+    depends on it: electronics is held to a far lower margin than anything
+    else, and still misses it.
+    """
+    electronics = margin_rules.resolve_margin_rule(protein="Electronics", category="4K Smart TV")
+    others = [
+        margin_rules.resolve_margin_rule(protein=name, category="")["min_gross_margin_pct"]
+        for name in ("Grocery", "Apparel", "Home & Kitchen", "Health & Wellness")
+    ]
+    assert electronics["min_gross_margin_pct"] < min(others)
 
 
 def test_evaluate_margin_record_assigns_band_and_uplift():
     evaluated = margin_rules.evaluate_margin_record(
-        protein="Charcuterie",
+        protein="Apparel",
         revenue=1000.0,
         cost=700.0,
         profit=300.0,
         margin_pct=30.0,
         unit_cost=7.0,
     )
-    assert evaluated["target_margin_pct"] == 44.0
-    assert evaluated["minimum_margin_pct"] == 35.0
+    assert evaluated["target_margin_pct"] == 46.0
+    assert evaluated["minimum_margin_pct"] == 38.0
+    # 30% against a 38% floor is materially below minimum.
     assert evaluated["status_key"] == "red"
-    assert evaluated["profit_uplift_to_target"] == pytest.approx(251.5178571428571)
-    assert evaluated["minimum_price"] == pytest.approx(12.076923076923077)
+
+    # Derive the two money figures independently rather than snapshotting what
+    # the engine returned, so a change in the engine has to be justified.
+    basis = evaluated["effective_cost_basis"]
+    revenue_at_target = basis / (1 - 0.46)
+    assert evaluated["profit_uplift_to_target"] == pytest.approx(
+        revenue_at_target - basis - 300.0, rel=0.01
+    )
+    unit_cost_with_overhead = 7.0 + evaluated["overhead_cost_basis"]
+    assert evaluated["minimum_price"] == pytest.approx(unit_cost_with_overhead / (1 - 0.38))
     assert evaluated["target_price"] is not None
 
 
@@ -40,7 +63,7 @@ def test_annotate_margin_row_handles_pandas_na_values():
     annotated = margin_rules.annotate_margin_row(
         {
             "protein_family": pd.NA,
-            "product_category": "Beef",
+            "product_category": "Grocery",
             "revenue": 1000.0,
             "cost": 700.0,
             "profit": 300.0,
@@ -48,15 +71,15 @@ def test_annotate_margin_row_handles_pandas_na_values():
             "unit_cost": 7.0,
         }
     )
-    assert annotated["family"] == "Beef"
+    assert annotated["family"] == "Grocery"
     assert annotated["status_key"] == "green"
 
 
 def test_annotate_margin_row_respects_explicit_effective_cost_fields():
     annotated = margin_rules.annotate_margin_row(
         {
-            "protein_family": "Beef",
-            "product_category": "Steak",
+            "protein_family": "Grocery",
+            "product_category": "Pasta",
             "revenue": 121.0,
             "cost": 84.73,
             "effective_cost_basis": 84.73,
@@ -70,12 +93,14 @@ def test_annotate_margin_row_respects_explicit_effective_cost_fields():
     )
     assert annotated["effective_cost_basis"] == pytest.approx(84.73)
     assert annotated["effective_cost_lb"] == pytest.approx(8.473)
-    assert annotated["target_price_lb"] == pytest.approx(11.45, abs=0.01)
+    # Grocery targets 24% gross, so the target price is the cost basis
+    # grossed up by that margin rather than a number pasted in here.
+    assert annotated["target_price_lb"] == pytest.approx(8.473 / (1 - 0.24), abs=0.01)
 
 
 def test_effective_cost_from_total_cost_adds_flat_overhead_once():
     evaluated = margin_rules.evaluate_margin_record(
-        protein="Beef",
+        protein="Grocery",
         revenue=140.0,
         cost=84.0,
         weight_lb=28.0,

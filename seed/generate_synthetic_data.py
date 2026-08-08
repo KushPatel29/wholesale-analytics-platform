@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import re
 import argparse
 import sys
 from dataclasses import dataclass
@@ -57,6 +58,35 @@ LOSS_LEADER_SHARE = 0.02
 LOSS_LEADER_DISCOUNT = 0.88
 
 
+
+
+# Two-letter department code for SKU numbers. Derived from initials so
+# "Fresh & Produce" and "Household Essentials" cannot collide the way a naive
+# name[:2] does ("Gr" for both Grocery and... nothing yet, but the next
+# department added would have found it).
+_DEPT_CODES = {
+    "Grocery": "GR",
+    "Fresh & Produce": "FP",
+    "Dairy & Frozen": "DF",
+    "Meat & Seafood": "MS",
+    "Health & Wellness": "HW",
+    "Household Essentials": "HE",
+    "Apparel": "AP",
+    "Electronics": "EL",
+    "Home & Kitchen": "HK",
+    "Toys & Seasonal": "TS",
+}
+
+
+def _dept_code(name: str) -> str:
+    if name in _DEPT_CODES:
+        return _DEPT_CODES[name]
+    parts = [w for w in re.split(r"[^A-Za-z]+", name) if w]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()
+    return name[:2].upper()
+
+
 @dataclass
 class Dimensions:
     customers: pd.DataFrame
@@ -88,22 +118,22 @@ def build_products(rng: np.random.Generator, n: int, suppliers: pd.DataFrame) ->
     Build a SKU list spread across protein groups in the proportions the
     catalog specifies, each with a landed cost and a list price.
     """
-    group_names = [g.name for g in C.PROTEIN_GROUPS]
-    group_idx = _weighted_choice(rng, group_names, [g.weight for g in C.PROTEIN_GROUPS], n)
+    group_names = [g.name for g in C.DEPARTMENTS]
+    group_idx = _weighted_choice(rng, group_names, [g.weight for g in C.DEPARTMENTS], n)
 
     rows = []
     for i, gi in enumerate(group_idx):
-        group = C.PROTEIN_GROUPS[gi]
-        cut = C.CUTS[group.name][rng.integers(len(C.CUTS[group.name]))]
-        grade = C.GRADES[rng.integers(len(C.GRADES))]
-        prep = C.PREPARATIONS[rng.integers(len(C.PREPARATIONS))]
+        group = C.DEPARTMENTS[gi]
+        cut = C.CATEGORIES[group.name][rng.integers(len(C.CATEGORIES[group.name]))]
+        grade = C.BRAND_TIERS[rng.integers(len(C.BRAND_TIERS))]
+        prep = C.PACK_SIZES[rng.integers(len(C.PACK_SIZES))]
 
         # Landed cost varies around the group's typical cost per lb.
-        cost_per_lb = float(group.cost_per_lb * rng.lognormal(mean=0.0, sigma=0.22))
+        cost_per_lb = float(group.unit_cost * rng.lognormal(mean=0.0, sigma=0.22))
         price_per_lb = cost_per_lb * group.markup * float(rng.normal(1.0, 0.06))
         price_per_lb = max(price_per_lb, cost_per_lb * 1.02)
 
-        catch_weight = bool(rng.random() < group.catch_weight_share)
+        catch_weight = bool(rng.random() < group.weighed_share)
         # Weight-billed lines quote a price per lb; unit-billed lines quote a
         # price per case, so we need a case weight to convert.
         case_weight = float(np.clip(rng.normal(11.0, 4.0), 2.0, 40.0))
@@ -111,7 +141,7 @@ def build_products(rng: np.random.Generator, n: int, suppliers: pd.DataFrame) ->
         rows.append(
             {
                 "ProductId": f"P{10000 + i}",
-                "SKU": f"{group.name[:2].upper()}-{1000 + i}",
+                "SKU": f"{_dept_code(group.name)}-{1000 + i}",
                 "ProductName": f"{cut} {grade} {prep}".replace("  ", " ").strip(),
                 "ProteinType": group.name,
                 "ProteinName": group.name,
@@ -119,7 +149,7 @@ def build_products(rng: np.random.Generator, n: int, suppliers: pd.DataFrame) ->
                 "ProductCategory": group.name,
                 "IsCatchWeight": catch_weight,
                 "UnitOfBillingId": C.BILL_BY_WEIGHT if catch_weight else C.BILL_BY_UNIT,
-                "YieldPct": round(float(np.clip(rng.normal(group.yield_pct, 0.05), 0.35, 0.99)), 4),
+                "YieldPct": round(float(np.clip(rng.normal(group.sell_through, 0.05), 0.35, 0.99)), 4),
                 "CostPerLb": round(cost_per_lb, 4),
                 "PricePerLb": round(price_per_lb, 4),
                 "CaseWeightLb": round(case_weight, 3),
@@ -149,7 +179,7 @@ def build_customers(rng: np.random.Generator, n: int, start: date, end: date) ->
     belongs to, who owns it, and the window over which it actually trades.
     """
     seg_idx = _weighted_choice(
-        rng, C.CUSTOMER_SEGMENTS, [s.weight for s in C.CUSTOMER_SEGMENTS], n
+        rng, C.STORE_FORMATS, [s.weight for s in C.STORE_FORMATS], n
     )
     reg_idx = _weighted_choice(rng, C.REGIONS, [r.weight for r in C.REGIONS], n)
 
@@ -172,20 +202,20 @@ def build_customers(rng: np.random.Generator, n: int, start: date, end: date) ->
                 break
 
     regions = [C.REGIONS[i] for i in reg_idx]
-    segments = [C.CUSTOMER_SEGMENTS[i] for i in seg_idx]
+    segments = [C.STORE_FORMATS[i] for i in seg_idx]
 
     # Reps own accounts in the regions they cover; anything uncovered falls to
     # the rep with the largest book, which is how concentration builds up.
     rep_names: list[str] = []
     rep_ids: list[str] = []
     for region in regions:
-        eligible = [r for r in C.SALES_REPS if region.name in r.regions]
+        eligible = [r for r in C.MARKET_MANAGERS if region.name in r.regions]
         if not eligible:
-            eligible = [C.SALES_REPS[0]]
+            eligible = [C.MARKET_MANAGERS[0]]
         shares = np.array([r.book_share for r in eligible], dtype=float)
         pick = eligible[int(rng.choice(len(eligible), p=shares / shares.sum()))]
         rep_names.append(pick.name)
-        rep_ids.append(f"R{C.SALES_REPS.index(pick) + 1:02d}")
+        rep_ids.append(f"R{C.MARKET_MANAGERS.index(pick) + 1:02d}")
 
     total_days = (end - start).days
     first_order = np.full(n, start, dtype=object)
@@ -213,7 +243,7 @@ def build_customers(rng: np.random.Generator, n: int, start: date, end: date) ->
             "RegionName": [r.name for r in regions],
             "RegionId": [f"RG{C.REGIONS.index(r) + 1:02d}" for r in regions],
             "City": [r.cities[int(rng.integers(len(r.cities)))] for r in regions],
-            "Province": [C.PROVINCE_BY_REGION[r.name] for r in regions],
+            "Province": [C.STATE_BY_REGION[r.name] for r in regions],
             "SalesRepId": rep_ids,
             "SalesRepName": rep_names,
             "OrdersPerMonth": [s.orders_per_month for s in segments],
@@ -287,7 +317,7 @@ def build_lines(
 
     # Seasonality is applied to quantity, so revenue swings with the calendar
     # the way a real perishables book does.
-    season_lookup = {g.name: np.asarray(g.seasonality) for g in C.PROTEIN_GROUPS}
+    season_lookup = {g.name: np.asarray(g.seasonality) for g in C.DEPARTMENTS}
     season = np.array(
         [season_lookup[p][m] for p, m in zip(prod["ProteinType"].to_numpy(), month_idx)]
     )
@@ -330,9 +360,9 @@ def build_lines(
     # Delivery performance: region transit + method surcharge, with a
     # method-specific chance of running late.
     method_idx = _weighted_choice(
-        rng, C.SHIPPING_METHODS, [m.weight for m in C.SHIPPING_METHODS], n_lines
+        rng, C.FULFILLMENT_METHODS, [m.weight for m in C.FULFILLMENT_METHODS], n_lines
     )
-    methods = [C.SHIPPING_METHODS[i] for i in method_idx]
+    methods = [C.FULFILLMENT_METHODS[i] for i in method_idx]
     extra = np.array([m.extra_days for m in methods])
     late_rate = np.array([m.late_rate for m in methods])
     is_late = rng.random(n_lines) < late_rate

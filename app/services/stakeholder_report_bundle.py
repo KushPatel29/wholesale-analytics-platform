@@ -22,7 +22,7 @@ from app.core.exports import fmt_currency, fmt_percent
 
 def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, Any]:
     """
-    Synthesizes a live stakeholder executive report bundle for the Wholesale Analytics demo company.
+    Synthesizes a live stakeholder executive report bundle for the Northgate Retail Analytics demo company.
     Professional Business Analyst perspective, MTD-aware and pace-calculated.
     """
     # 1) Core Dataset & KPIs
@@ -249,7 +249,7 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
             "scenarios": _generate_ba_scenarios(kpis, sales_kpis, c_insights, supplier_exposure, month_progress_pct, margin_delta_pct),
             "actions": _generate_ba_actions(kpis, sales_kpis, c_insights, day_of_month, margin_pct),
             "conclusion": _generate_ba_conclusion(kpis, month_progress_pct),
-            "platform_overview": "Wholesale Analytics is a mission-critical intelligence layer for Vancouver meat distribution."
+            "platform_overview": "Northgate Retail Analytics is a mission-critical intelligence layer for Vancouver meat distribution."
         },
         "meta": {
             "dataset_version": fact_store.cache_buster(),
@@ -351,4 +351,4 @@ def _generate_ba_actions(kpis, sales_kpis, c_insights, day, margin):
 def _generate_ba_conclusion(kpis, pace):
     rev = kpis.get("rev_delta_pct", 0)
     status = "strong" if rev >= 0 else "defensive"
-    return f"Vancouver Market Pulse Conclusion: Wholesale Analytics BC maintains a {status} posture. With {pace:.0f}% of the month elapsed, the focus remains on SKU-level margin discipline and securing territory-level volume anchors."
+    return f"Vancouver Market Pulse Conclusion: Northgate Retail Analytics BC maintains a {status} posture. With {pace:.0f}% of the month elapsed, the focus remains on SKU-level margin discipline and securing territory-level volume anchors."

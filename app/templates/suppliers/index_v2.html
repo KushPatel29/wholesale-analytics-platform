@@ -27,7 +27,7 @@
               <div class="suppliers-hero-eyebrow">Supplier Intelligence</div>
               <h1 class="suppliers-hero-title mb-2">Supplier Command Center</h1>
               <p class="suppliers-hero-subtitle mb-0">
-                Executive supplier readout for concentration, cost trust, protein exposure, commercial risk, and the next actions under the active Wholesale Analytics filter scope.
+                Executive supplier readout for concentration, cost trust, protein exposure, commercial risk, and the next actions under the active Northgate Retail Analytics filter scope.
               </p>
             </div>
             <div class="suppliers-hero-actions" aria-label="Supplier exports">
@@ -38,7 +38,7 @@
                 <i class="bi bi-filetype-csv me-1"></i>Table CSV
               </a>
               <a id="supV2ExportProtein" class="btn btn-sm btn-outline-light" href="{{ url_for('bundles.suppliers_export_csv') }}?scope=protein&suppliers_v2=1">
-                <i class="bi bi-diagram-3 me-1"></i>Protein CSV
+                <i class="bi bi-diagram-3 me-1"></i>Department CSV
               </a>
               <a id="supV2ExportActions" class="btn btn-sm btn-outline-light" href="{{ url_for('bundles.suppliers_export_csv') }}?scope=actions&suppliers_v2=1">
                 <i class="bi bi-lightning-charge me-1"></i>Action CSV
@@ -49,7 +49,7 @@
           <div class="suppliers-hero-purpose">
             <div class="suppliers-hero-purpose-label">What this page is for</div>
             <p class="mb-0">
-              Use this workspace to understand which suppliers drive the book, where margin and data quality are weakest, how the protein mix is shifting, and which relationships need immediate action.
+              Use this workspace to understand which suppliers drive the book, where margin and data quality are weakest, how the department mix is shifting, and which relationships need immediate action.
             </p>
           </div>
 
@@ -86,7 +86,7 @@
               </div>
               <div class="suppliers-command-point">
                 <div class="suppliers-command-point-label">Movers and mix</div>
-                <div id="supplierTopMoversSummary" class="suppliers-command-point-copy">Scanning supplier movers and protein mix...</div>
+                <div id="supplierTopMoversSummary" class="suppliers-command-point-copy">Scanning supplier movers and department mix...</div>
               </div>
             </div>
           </div>
@@ -131,7 +131,7 @@
                 <span class="value" id="supplierTopDecliner">—</span>
               </div>
               <div class="suppliers-mini-stat">
-                <span class="label">Top protein</span>
+                <span class="label">Top department</span>
                 <span class="value" id="supplierTopProtein">—</span>
               </div>
               <div class="suppliers-mini-stat">
@@ -150,7 +150,7 @@
   <nav class="suppliers-subnav mb-3" aria-label="Supplier workspace navigation">
     <a class="suppliers-subnav-link" href="#suppliers-scorecard">Scorecard</a>
     <a class="suppliers-subnav-link" href="#suppliers-trend-layer">Trend</a>
-    <a class="suppliers-subnav-link" href="#suppliers-protein-layer">Protein</a>
+    <a class="suppliers-subnav-link" href="#suppliers-protein-layer">Department</a>
     <a class="suppliers-subnav-link" href="#suppliers-risk-layer">Risk</a>
     <a class="suppliers-subnav-link" href="#suppliers-segments-layer">Segments</a>
     <a class="suppliers-subnav-link" href="#suppliers-command-table">Command Table</a>
@@ -350,23 +350,23 @@
       <div class="col-xl-7">
         <div class="card suppliers-section-card h-100">
           <div class="card-header">
-            <div class="suppliers-card-kicker">Protein layer</div>
-            <h4 class="mb-1">Protein contribution and mix shift</h4>
-            <div class="text-muted small">Revenue, margin, and share change by protein family across the visible supplier portfolio.</div>
+            <div class="suppliers-card-kicker">Department layer</div>
+            <h4 class="mb-1">Department contribution and mix shift</h4>
+            <div class="text-muted small">Revenue, margin, and share change by department across the visible supplier portfolio.</div>
           </div>
           <div class="card-body">
-            <div id="supProteinChart" class="suppliers-chart" aria-label="Protein contribution chart"></div>
+            <div id="supProteinChart" class="suppliers-chart" aria-label="Department contribution chart"></div>
             <div id="supplierProteinHighlights" class="suppliers-posture-grid suppliers-posture-grid-compact mt-3"></div>
-            <div id="supplierProteinFocusNarrative" class="suppliers-inline-note mt-3">Reviewing protein mix shift and concentration context...</div>
+            <div id="supplierProteinFocusNarrative" class="suppliers-inline-note mt-3">Reviewing department mix shift and concentration context...</div>
           </div>
         </div>
       </div>
       <div class="col-xl-5">
         <div class="card suppliers-section-card h-100">
           <div class="card-header">
-            <div class="suppliers-card-kicker">Protein watch</div>
-            <h4 class="mb-1">Protein families that deserve review</h4>
-            <div class="text-muted small">Top protein families by current revenue, mix shift, and margin risk. Click a protein chip to focus the command table.</div>
+            <div class="suppliers-card-kicker">Department watch</div>
+            <h4 class="mb-1">Department families that deserve review</h4>
+            <div class="text-muted small">Top departments by current revenue, mix shift, and margin risk. Click a protein chip to focus the command table.</div>
           </div>
           <div class="card-body">
             <div id="supplierProteinChips" class="suppliers-chip-row mb-3"></div>
@@ -374,7 +374,7 @@
               <table class="table table-sm align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Protein</th>
+                    <th>Department</th>
                     <th>Top supplier</th>
                     <th class="text-end">Revenue</th>
                     <th class="text-end">Share</th>
@@ -383,7 +383,7 @@
                   </tr>
                 </thead>
                 <tbody id="proteinMixRows">
-                  <tr><td colspan="6" class="text-muted">Loading protein mix...</td></tr>
+                  <tr><td colspan="6" class="text-muted">Loading department mix...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -408,7 +408,7 @@
                 <thead>
                   <tr>
                     <th>Supplier</th>
-                    <th>Top protein</th>
+                    <th>Top department</th>
                     <th class="text-end">Margin</th>
                     <th class="text-end">Uplift</th>
                   </tr>
@@ -434,7 +434,7 @@
                     <th>Supplier</th>
                     <th class="text-end">Missing Revenue</th>
                     <th class="text-end">Coverage</th>
-                    <th>Top protein</th>
+                    <th>Top department</th>
                   </tr>
                 </thead>
                 <tbody id="dataRiskRows"></tbody>
@@ -448,7 +448,7 @@
           <div class="card-header">
             <div class="suppliers-card-kicker">Dependency</div>
             <h4 class="mb-1">Supplier concentration watch</h4>
-            <div class="text-muted small">Suppliers most dependent on a single protein family or dominant SKU mix.</div>
+            <div class="text-muted small">Suppliers most dependent on a single department or dominant SKU mix.</div>
           </div>
           <div class="card-body">
             <div class="table-responsive suppliers-mini-table">
@@ -456,8 +456,8 @@
                 <thead>
                   <tr>
                     <th>Supplier</th>
-                    <th>Top protein</th>
-                    <th class="text-end">Protein share</th>
+                    <th>Top department</th>
+                    <th class="text-end">Department share</th>
                     <th class="text-end">Posture</th>
                   </tr>
                 </thead>
@@ -597,8 +597,8 @@
                 <th class="sortable text-end" data-sort="cost_coverage_pct" scope="col">Coverage</th>
                 <th class="sortable text-end" data-sort="missing_cost_revenue" scope="col">Missing cost</th>
                 <th class="sortable text-end" data-sort="days_since_last_order" scope="col">Days since last</th>
-                <th class="sortable" data-sort="top_protein" scope="col">Top protein</th>
-                <th class="sortable text-end" data-sort="top_protein_share_pct" scope="col">Protein share</th>
+                <th class="sortable" data-sort="top_protein" scope="col">Top department</th>
+                <th class="sortable text-end" data-sort="top_protein_share_pct" scope="col">Department share</th>
                 <th class="sortable text-end" data-sort="top_sku_share_pct" scope="col">Top SKU share</th>
                 <th scope="col">Action</th>
               </tr>

@@ -2046,7 +2046,7 @@
       <tr>
         <th scope="col">Customer</th>
         <th scope="col" class="text-end">Revenue</th>
-        ${columns.map((column) => `<th scope="col" class="text-center">${escapeHtml(column.label || column.key || "Protein")}</th>`).join("")}
+        ${columns.map((column) => `<th scope="col" class="text-center">${escapeHtml(column.label || column.key || "Department")}</th>`).join("")}
         <th scope="col" class="text-end">Open Gaps</th>
       </tr>
     `;

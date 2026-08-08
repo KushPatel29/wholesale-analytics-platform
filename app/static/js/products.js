@@ -89,7 +89,7 @@
   const V4_COLUMN_DEFS = [
     { key: "sku", label: "SKU", locked: true, visible: true, exportable: true },
     { key: "product", label: "Product", locked: true, visible: true, exportable: true },
-    { key: "protein_family", label: "Protein / Category", visible: true, exportable: true },
+    { key: "protein_family", label: "Department / Category", visible: true, exportable: true },
     { key: "product_category", label: "Category", visible: false, exportable: true },
     { key: "segment", label: "Segment", visible: true, exportable: true },
     { key: "supplier", label: "Supplier", visible: false, exportable: true },
@@ -167,7 +167,7 @@
     topMovers: "Top movers compares the current filtered window against the prior comparable window and highlights the biggest absolute change.",
     segmentSummary: "Segment summary groups SKUs using the existing revenue and order heuristics already used elsewhere in Product Intelligence.",
     segmentMovers: "Segment movers shows which SKUs are driving the biggest revenue swings inside each current segment.",
-    proteinFamily: "Protein intelligence shows which product families dominate revenue, which families are gaining or losing share, and where family-level margin pressure is building.",
+    proteinFamily: "Department intelligence shows which product families dominate revenue, which families are gaining or losing share, and where family-level margin pressure is building.",
     topProducts: "Top products re-ranks the current dataset by the selected metric without changing the underlying filters.",
     pareto: "Pareto shows how quickly revenue accumulates across the top SKUs. The cumulative line helps identify concentration risk.",
     healthMatrix: "Portfolio matrix classifies SKUs by percentile bands for velocity and profitability, then assigns Protect, Fix Margin, Grow, and Rationalize quadrants.",
@@ -1928,7 +1928,7 @@
     );
     setText(
       "assortmentLayerContext",
-      `${concentration?.top10_share != null ? `Top 10 SKUs represent ${fmtPct1.format(concentration.top10_share)}% of visible revenue.` : "Assortment concentration is being calculated."} ${protein?.summary?.top_family ? `${protein.summary.top_family} leads the visible protein mix${protein.summary.top_family_share != null ? ` at ${fmtPct1.format(protein.summary.top_family_share)}%.` : "."}` : ""} ${concentration?.skus_to_80 ? `${fmtInt.format(concentration.skus_to_80)} SKUs reach 80% of revenue.` : ""}`.trim()
+      `${concentration?.top10_share != null ? `Top 10 SKUs represent ${fmtPct1.format(concentration.top10_share)}% of visible revenue.` : "Assortment concentration is being calculated."} ${protein?.summary?.top_family ? `${protein.summary.top_family} leads the visible department mix${protein.summary.top_family_share != null ? ` at ${fmtPct1.format(protein.summary.top_family_share)}%.` : "."}` : ""} ${concentration?.skus_to_80 ? `${fmtInt.format(concentration.skus_to_80)} SKUs reach 80% of revenue.` : ""}`.trim()
     );
     setText(
       "tableLayerContext",
@@ -2018,7 +2018,7 @@
         pricingStatusKey && marginStatusKey && pricingStatusKey !== marginStatusKey
           ? `<span class="product-intel-pill">Margin band ${escapeHtml(contextRow?.target_status || marginStatus.label)}</span>`
           : "",
-        `<span class="product-intel-pill">${escapeHtml(contextRow?.protein_family || contextRow?.rule_family || "Protein unassigned")}</span>`,
+        `<span class="product-intel-pill">${escapeHtml(contextRow?.protein_family || contextRow?.rule_family || "Department unassigned")}</span>`,
         contextRow?.product_category ? `<span class="product-intel-pill">${escapeHtml(contextRow.product_category)}</span>` : "",
         contextRow?.target_achievement_pct != null ? `<span class="product-intel-pill">Target achievement ${escapeHtml(`${fmtPct1.format(contextRow.target_achievement_pct)}%`)}</span>` : "",
       ].filter(Boolean).join("")
@@ -2372,7 +2372,7 @@
     setText("proteinFamilyCount", summary?.family_count != null ? fmtInt.format(summary.family_count) : EM_DASH);
     setText(
       "proteinNarrativeHeadline",
-      proteinInsights?.narrative?.headline || "Protein family posture will populate when assortment detail loads."
+      proteinInsights?.narrative?.headline || "Department family posture will populate when assortment detail loads."
     );
     setText(
       "proteinNarrativeDetail",
@@ -2384,7 +2384,7 @@
       if (!host) return;
       const data = Array.isArray(rows) ? rows.slice(0, 4) : [];
       if (!data.length) {
-        host.innerHTML = '<span class="text-muted small">No protein family signal in the current scope.</span>';
+        host.innerHTML = '<span class="text-muted small">No department signal in the current scope.</span>';
         return;
       }
       host.innerHTML = data.map(formatter).join("");

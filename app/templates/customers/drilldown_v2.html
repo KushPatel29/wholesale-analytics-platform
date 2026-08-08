@@ -519,11 +519,11 @@
       <div class="ciw-metric-grid mb-3">
         {{ ui.metric_card({'label': 'Lead Protein', 'value': protein_summary.get('top_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('top_family_share_pct'), 'percent')|string ~ ' of current-window revenue') if protein_summary.get('top_family_share_pct') is not none else None}) }}
         {{ ui.metric_card({'label': 'Top 5 Protein Share', 'value': protein_summary.get('top5_family_share_pct'), 'format': 'percent', 'detail': protein_summary.get('dependency_posture')}) }}
-        {{ ui.metric_card({'label': 'Protein Families', 'value': protein_summary.get('family_count'), 'format': 'number', 'detail': 'Visible under current RBAC scope'}) }}
+        {{ ui.metric_card({'label': 'Department Families', 'value': protein_summary.get('family_count'), 'format': 'number', 'detail': 'Visible under current RBAC scope'}) }}
         {{ ui.metric_card({'label': 'Fastest Growing Protein', 'value': protein_summary.get('fastest_growing_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('fastest_growing_family_delta_pct'), 'percent')|string ~ ' vs prior window') if protein_summary.get('fastest_growing_family_delta_pct') is not none else 'No growing family signal'}) }}
       </div>
 
-      <div class="ciw-focus-bar" aria-label="Filter product sections by protein family">
+      <div class="ciw-focus-bar" aria-label="Filter product sections by department">
         <button class="ciw-focus-chip is-active" type="button" data-protein-focus="">All families</button>
         {% for row in protein_mix_rows[:5] %}
           <button class="ciw-focus-chip" type="button" data-protein-focus="{{ row.get('family') }}">{{ row.get('family') }} {% if row.get('revenue_share_pct') is not none %}<span>{{ ui.fmt_value(row.get('revenue_share_pct'), 'percent') }}</span>{% endif %}</button>
@@ -580,24 +580,24 @@
         <div class="ciw-surface-soft p-3">
           <div class="ciw-card-head">
             <div>
-              <h4>Protein Mix Summary</h4>
+              <h4>Department Mix Summary</h4>
               <div class="ciw-card-subtitle">Current-window protein concentration and share shift.</div>
             </div>
           </div>
           <div class="ciw-table-wrap">
             <table class="table table-sm ciw-table">
-              <thead><tr><th>Protein</th><th class="text-end">Share</th><th class="text-end">Revenue</th><th class="text-end">Δ Revenue</th></tr></thead>
+              <thead><tr><th>Department</th><th class="text-end">Share</th><th class="text-end">Revenue</th><th class="text-end">Δ Revenue</th></tr></thead>
               <tbody>
                 {% for row in protein_mix_rows[:6] %}
                   <tr data-family-focus-target="{{ (row.get('family') or '')|lower }}"
-                      data-drilldown-payload="{{ {'source_page': 'customer_drilldown', 'source_section': 'Product & Category Intelligence', 'source_widget': 'Protein Mix Summary', 'source_entity_type': 'customer', 'source_entity_id': customer_id, 'source_entity_label': hero_data.get('customer_name') or customer_name, 'requested_target': 'workspace', 'clicked_metric': 'Protein Revenue Share', 'clicked_metric_value': row.get('revenue_share_pct'), 'clicked_bucket': row.get('family'), 'extra': {'workspace_kind': 'fact_orders', 'filter_mode': 'current_window', 'target_filters': {'customer_ids': [customer_id], 'protein_name_like': row.get('family')}}}|tojson|forceescape }}">
+                      data-drilldown-payload="{{ {'source_page': 'customer_drilldown', 'source_section': 'Product & Category Intelligence', 'source_widget': 'Department Mix Summary', 'source_entity_type': 'customer', 'source_entity_id': customer_id, 'source_entity_label': hero_data.get('customer_name') or customer_name, 'requested_target': 'workspace', 'clicked_metric': 'Department Revenue Share', 'clicked_metric_value': row.get('revenue_share_pct'), 'clicked_bucket': row.get('family'), 'extra': {'workspace_kind': 'fact_orders', 'filter_mode': 'current_window', 'target_filters': {'customer_ids': [customer_id], 'protein_name_like': row.get('family')}}}|tojson|forceescape }}">
                     <td>{{ row.get('family') }}</td>
                     <td class="text-end">{{ ui.fmt_value(row.get('revenue_share_pct'), 'percent') }}</td>
                     <td class="text-end">{{ ui.fmt_value(row.get('revenue'), 'currency') }}</td>
                     <td class="text-end">{{ ui.fmt_value(row.get('delta_revenue_pct'), 'percent') }}</td>
                   </tr>
                 {% else %}
-                  <tr><td colspan="4" class="text-center text-muted py-3">No protein mix available.</td></tr>
+                  <tr><td colspan="4" class="text-center text-muted py-3">No department mix available.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -607,17 +607,17 @@
           <div class="ciw-card-head">
             <div>
               <h4>Margin Watch by Protein</h4>
-              <div class="ciw-card-subtitle">Protein families carrying margin leakage or cost pressure.</div>
+              <div class="ciw-card-subtitle">Department families carrying margin leakage or cost pressure.</div>
             </div>
           </div>
           <div class="ciw-table-wrap">
             <table class="table table-sm ciw-table">
-              <thead><tr><th>Protein</th><th class="text-end">Margin %</th><th class="text-end">Target Margin %</th><th class="text-end">Revenue</th><th>Status</th></tr></thead>
+              <thead><tr><th>Department</th><th class="text-end">Margin %</th><th class="text-end">Target Margin %</th><th class="text-end">Revenue</th><th>Status</th></tr></thead>
               <tbody>
                 {% for row in protein_margin_watch[:6] %}
                   {% set status_color = row.get('status_color') or '#7a7f87' %}
                   <tr data-family-focus-target="{{ (row.get('family') or '')|lower }}"
-                      data-drilldown-payload="{{ {'source_page': 'customer_drilldown', 'source_section': 'Product & Category Intelligence', 'source_widget': 'Margin Watch by Protein', 'source_entity_type': 'customer', 'source_entity_id': customer_id, 'source_entity_label': hero_data.get('customer_name') or customer_name, 'requested_target': 'workspace', 'clicked_metric': 'Protein Margin %', 'clicked_metric_value': row.get('margin_pct'), 'clicked_bucket': row.get('family'), 'extra': {'workspace_kind': 'fact_orders', 'filter_mode': 'current_window', 'target_filters': {'customer_ids': [customer_id], 'protein_name_like': row.get('family')}}}|tojson|forceescape }}">
+                      data-drilldown-payload="{{ {'source_page': 'customer_drilldown', 'source_section': 'Product & Category Intelligence', 'source_widget': 'Margin Watch by Protein', 'source_entity_type': 'customer', 'source_entity_id': customer_id, 'source_entity_label': hero_data.get('customer_name') or customer_name, 'requested_target': 'workspace', 'clicked_metric': 'Department Margin %', 'clicked_metric_value': row.get('margin_pct'), 'clicked_bucket': row.get('family'), 'extra': {'workspace_kind': 'fact_orders', 'filter_mode': 'current_window', 'target_filters': {'customer_ids': [customer_id], 'protein_name_like': row.get('family')}}}|tojson|forceescape }}">
                     <td>{{ row.get('family') }}</td>
                     <td class="text-end"><span class="fw-semibold" style="color: {{ status_color }};">{{ ui.fmt_value(row.get('margin_pct'), 'percent') }}</span></td>
                     <td class="text-end">{{ ui.fmt_value(row.get('target_margin_pct'), 'percent') }}</td>
@@ -650,7 +650,7 @@
                      data-family-focus-target="{{ (row.get('family') or '')|lower }}"
                      data-drilldown-payload="{{ {'source_page': 'customer_drilldown', 'source_section': 'Product & Category Intelligence', 'source_widget': 'Whitespace & Recovery', 'source_entity_type': 'customer', 'source_entity_id': customer_id, 'source_entity_label': hero_data.get('customer_name') or customer_name, 'requested_target': 'product' if whitespace_target else 'workspace', 'clicked_entity_type': 'product' if whitespace_target else None, 'clicked_entity_id': whitespace_target if whitespace_target else None, 'clicked_entity_label': whitespace_product or row.get('family'), 'clicked_metric': 'Whitespace Signal', 'clicked_metric_value': row.get('lift') or row.get('confidence_pct') or row.get('delta_revenue_pct') or row.get('revenue'), 'extra': {'workspace_kind': 'fact_products' if whitespace_product or row.get('category') else 'narrative', 'detail': whitespace_reason, 'category': row.get('category'), 'product': whitespace_product, 'target_filters': {'customer_ids': [customer_id], 'protein_name_like': row.get('family')}}}|tojson|forceescape }}">
               <div class="ciw-action-topline">
-                <span class="ciw-action-type">{{ row.get('category') or 'Protein Whitespace' }}</span>
+                <span class="ciw-action-type">{{ row.get('category') or 'Department Whitespace' }}</span>
                 <span class="ciw-action-urgency">{{ ui.fmt_value(row.get('confidence_pct') if row.get('confidence_pct') is not none else row.get('lift'), 'percent' if row.get('confidence_pct') is not none else 'number') }}{% if row.get('confidence_pct') is none and row.get('lift') is not none %}x lift{% endif %}</span>
               </div>
               <h4>{{ row.get('family') }}</h4>

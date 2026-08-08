@@ -3,12 +3,12 @@
   <body style="margin:0;padding:24px;background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
     <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
       <div style="background:#0f2742;color:#f8fafc;padding:20px 24px;">
-        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.82;">Wholesale Analytics Alert</div>
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.82;">Northgate Retail Analytics Alert</div>
         <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;">{{ alert_name }}</h1>
       </div>
       <div style="padding:24px;">
         <p style="margin:0 0 16px;">Hello {{ recipient_name or "there" }},</p>
-        <p style="margin:0 0 18px;">{{ payload.summary or "A Wholesale Analytics alert was triggered." }}</p>
+        <p style="margin:0 0 18px;">{{ payload.summary or "A Northgate Retail Analytics alert was triggered." }}</p>
         {% if payload.details %}
         <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
           <tbody>

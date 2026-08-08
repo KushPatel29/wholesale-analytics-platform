@@ -253,7 +253,7 @@ def test_notification_email_rendering(app):
             },
         )
 
-        assert "Wholesale Analytics Alert" in subject
+        assert "Northgate Retail Analytics Alert" in subject
         assert "Fact data is stale." in text_body
         assert "Open related page" in html_body
         assert "/notifications" in text_body

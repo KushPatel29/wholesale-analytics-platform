@@ -1,7 +1,7 @@
 {% set name = recipient_name or "there" -%}
 Hello {{ name }},
 
-{{ digest_label }} from Wholesale Analytics:
+{{ digest_label }} from Northgate Retail Analytics:
 
 {% for item in items -%}
 - {{ item.alert_name }}: {{ item.summary }}

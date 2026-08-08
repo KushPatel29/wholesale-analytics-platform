@@ -90,7 +90,7 @@ PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
 FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
     ("statuses,regions,methods", "bootstrap", False),
     (
-        "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups,yield_range",
+        "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups",
         "deferred",
         True,
     ),

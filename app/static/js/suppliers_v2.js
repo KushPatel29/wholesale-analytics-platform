@@ -534,7 +534,7 @@
     renderCallouts([
       `<strong>Commercial readout.</strong> ${int0(kpis.active_suppliers)} suppliers produced ${money0(kpis.total_revenue)} in revenue and ${showCosts ? `${money0(kpis.total_profit)} in covered profit` : "sales-only results"} under the active scope.`,
       `<strong>Concentration posture.</strong> Top supplier share is ${pct1(kpis.concentration_top1_share)} and the top five suppliers carry ${pct1(kpis.concentration_top5_share)} of visible revenue. ${int0((dependency.summary || {}).high_dependency_suppliers)} suppliers are materially concentrated in one protein or SKU family.`,
-      `<strong>Portfolio shape.</strong> ${int0(topSegment.suppliers)} suppliers sit in ${topSegment.segment || "the leading"} segment, while ${int0(kpis.at_risk_suppliers)} suppliers have been inactive for at least 90 days. Protein leadership currently sits in ${topProtein || "the top visible family"}.`,
+      `<strong>Portfolio shape.</strong> ${int0(topSegment.suppliers)} suppliers sit in ${topSegment.segment || "the leading"} segment, while ${int0(kpis.at_risk_suppliers)} suppliers have been inactive for at least 90 days. Department leadership currently sits in ${topProtein || "the top visible family"}.`,
     ]);
 
     setText(els.proteinNarrative, protein.narrative || "Protein-family contribution summary unavailable.");
@@ -590,7 +590,7 @@
     els.proteinHighlights.innerHTML = cards
       .map((card) => `
         <div class="suppliers-posture-card is-${escapeHtml(card.tone || "neutral")}">
-          <div class="suppliers-posture-label">${escapeHtml(card.label || "Protein")}</div>
+          <div class="suppliers-posture-label">${escapeHtml(card.label || "Department")}</div>
           <div class="suppliers-posture-value">${escapeHtml(card.value || "—")}</div>
           <div class="suppliers-posture-note">${escapeHtml(card.note || "")}</div>
         </div>
@@ -858,7 +858,7 @@
       els.dependencyRows,
       asArr(dependency.concentrated_suppliers).slice(0, 8),
       (row) => `
-        <tr data-supplier-link="${escapeHtml(row.supplier_id || "")}"${drillAttr(supplierPayload(row.supplier_id, row.supplier_name || row.supplier_id, "Dependency", "Supplier dependency", "Protein dependency", row.top_protein_share_pct))}>
+        <tr data-supplier-link="${escapeHtml(row.supplier_id || "")}"${drillAttr(supplierPayload(row.supplier_id, row.supplier_name || row.supplier_id, "Dependency", "Supplier dependency", "Department dependency", row.top_protein_share_pct))}>
           <td>${escapeHtml(row.supplier_name || row.supplier_id || "")}</td>
           <td>${escapeHtml(row.top_protein || "Unassigned")}</td>
           <td class="text-end">${pct1(row.top_protein_share_pct)}</td>

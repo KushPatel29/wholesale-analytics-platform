@@ -195,7 +195,7 @@ def schema(filters: Any = None) -> Dict[str, Any]:
         {"name": "products", "type": "multi", "label": "Products", "aliases": ["product_ids"]},
         {"name": "sales_reps", "type": "multi", "label": "Sales Reps", "aliases": ["sales_rep_ids"]},
         {"name": "shipping_methods", "type": "multi", "label": "Shipping Methods", "aliases": ["ship_method_ids", "methods"]},
-        {"name": "protein_groups", "type": "multi", "label": "Protein Groups", "aliases": ["protein_group", "meat_type", "species"]},
+        {"name": "protein_groups", "type": "multi", "label": "Departments", "aliases": ["protein_group", "meat_type", "species"]},
         {"name": "yield_min", "type": "number", "label": "Yield Min %", "default": defaults.get("yield_min")},
         {"name": "yield_max", "type": "number", "label": "Yield Max %", "default": defaults.get("yield_max")},
     ]

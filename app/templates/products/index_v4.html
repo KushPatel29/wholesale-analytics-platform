@@ -40,7 +40,7 @@
      data-export-segment-mix-csv="{{ url_for('products.export_segment_mix_csv') }}"
      data-export-quadrant-csv="{{ url_for('products.export_quadrant_csv') }}"
      data-drilldown-template="{{ url_for('products.drilldown', product_id='__PID__') }}"
-     data-currency="{{ currency_code or 'CAD' }}">
+     data-currency="{{ currency_code or 'USD' }}">
 
   <!-- Hero -->
   <div class="card products-hero shadow-soft mb-3 text-white border-0 overflow-hidden">
@@ -53,7 +53,7 @@
           <span id="heroPostureBadge" class="badge rounded-pill text-bg-light text-dark d-none"></span>
         </div>
         <p class="mb-3 text-white-50">
-          Product Intelligence command center for pricing, margin recovery, protein-family mix, demand health, assortment strategy, and commercial execution under the current scope.
+          Product Intelligence command center for pricing, margin recovery, department mix, demand health, assortment strategy, and commercial execution under the current scope.
         </p>
 
         <div class="d-flex flex-wrap gap-3 text-white-50 small">
@@ -1039,8 +1039,8 @@
     <div class="products-layer-intro">
       <div>
         <div class="products-layer-kicker">Segment and assortment diagnostics</div>
-        <h3 class="products-layer-title">Which segments, protein families, and SKUs are driving the mix?</h3>
-        <p class="products-layer-subtitle mb-0">Analyst mode keeps this layer open for deeper portfolio diagnostics, including protein-family concentration and family-level margin pressure.</p>
+        <h3 class="products-layer-title">Which segments, departments, and SKUs are driving the mix?</h3>
+        <p class="products-layer-subtitle mb-0">Analyst mode keeps this layer open for deeper portfolio diagnostics, including department concentration and family-level margin pressure.</p>
         <div id="assortmentLayerContext" class="products-layer-context mt-2">Explaining mix shift, dependency, and segment movement under the active filters...</div>
       </div>
     </div>
@@ -1092,7 +1092,7 @@
       <div class="col-xl-3">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">Protein intelligence</h5>
+            <h5 class="card-title mb-0">Department intelligence</h5>
             <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">Family</span>
           </div>
           <div class="card-body">
@@ -1101,7 +1101,7 @@
             <div class="d-flex justify-content-between py-1"><span>Families in scope</span><strong id="proteinFamilyCount">—</strong></div>
             <hr class="my-3">
             <div class="small text-uppercase text-muted mb-2">Mix shift</div>
-            <div id="proteinMixShiftList" class="small text-muted mb-3">Loading protein mix…</div>
+            <div id="proteinMixShiftList" class="small text-muted mb-3">Loading department mix…</div>
             <div class="small text-uppercase text-muted mb-2">Margin watch</div>
             <div id="proteinMarginWatchList" class="small text-muted">Loading family watchlist…</div>
           </div>
@@ -1113,13 +1113,13 @@
         <div class="card h-100 shadow-sm protein-family-card">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
             <div>
-              <h5 class="card-title mb-0">Protein portfolio posture</h5>
-              <div class="text-muted small">Which protein families are anchoring the business and where mix is shifting.</div>
+              <h5 class="card-title mb-0">Department portfolio posture</h5>
+              <div class="text-muted small">Which departments are anchoring the business and where mix is shifting.</div>
             </div>
             <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">Portfolio</span>
           </div>
           <div class="card-body">
-            <div id="proteinNarrativeHeadline" class="protein-story-headline">Loading protein family posture…</div>
+            <div id="proteinNarrativeHeadline" class="protein-story-headline">Loading department posture…</div>
             <div id="proteinNarrativeDetail" class="protein-story-detail text-muted small mt-2">Family-level mix shift, concentration, and margin context will appear here.</div>
             <div id="proteinPortfolioList" class="small text-muted mt-3">Loading family leaders…</div>
           </div>
@@ -1129,7 +1129,7 @@
         <div class="card h-100 shadow-sm protein-family-card">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
             <div>
-              <h5 class="card-title mb-0">Pricing opportunities by protein</h5>
+              <h5 class="card-title mb-0">Pricing opportunities by department</h5>
               <div class="text-muted small">Family-level price ladders and below-target gross-margin queues.</div>
             </div>
             <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Margin</span>
@@ -1143,7 +1143,7 @@
         <div class="card h-100 shadow-sm protein-family-card">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
             <div>
-              <h5 class="card-title mb-0">Execution watch by protein</h5>
+              <h5 class="card-title mb-0">Execution watch by department</h5>
               <div class="text-muted small">Where pricing fixes, cost gaps, and promote candidates concentrate.</div>
             </div>
             <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">Execution</span>
@@ -1326,7 +1326,7 @@
                   <tr>
                     <th class="sticky-col sticky-col-1 sortable" data-key="sku" data-column="sku" scope="col">SKU</th>
                     <th class="sticky-col sticky-col-2 sortable" data-key="product_id" data-column="product" scope="col">Product</th>
-                    <th data-column="protein_family" scope="col">Protein / Category</th>
+                    <th data-column="protein_family" scope="col">Department / Category</th>
                     <th data-column="product_category" scope="col">Category</th>
                     <th data-column="segment" scope="col">Segment</th>
                     <th data-column="supplier" scope="col">Supplier</th>

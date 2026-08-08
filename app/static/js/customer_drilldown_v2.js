@@ -473,7 +473,7 @@
       renderEmpty(
         el,
         proteinFocus
-          ? "No product mix matches the selected protein family in the current filter window."
+          ? "No product mix matches the selected department in the current filter window."
           : chartState.reason || "No product mix is available for the selected customer."
       );
       return;

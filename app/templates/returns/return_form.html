@@ -242,7 +242,7 @@
           <div style="margin-top: 5px;">
             {% if r.status in ['approved', 'awaiting_finance', 'completed'] %}
               <strong>{{ r.approval_target or 'Authorized Manager' }}</strong>
-              <div class="muted" style="font-size: 9px;">Approved via Wholesale Analytics Dashboard</div>
+              <div class="muted" style="font-size: 9px;">Approved via Northgate Retail Analytics Dashboard</div>
             {% else %}
               -
             {% endif %}
@@ -253,7 +253,7 @@
     
     <div style="margin-top: 20px; font-size: 9px; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 10px;">
       Enterprise Audit ID: {{ r.id }}-{{ r.last_updated|replace(':', '')|replace('-', '')|replace(' ', '') }} | 
-      Generated for {{ r.company or 'Wholesale Provisions' }} Finance Review
+      Generated for {{ r.company or 'Northgate Retail Group' }} Finance Review
     </div>
   </body>
 </html>

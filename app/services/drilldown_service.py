@@ -1173,7 +1173,7 @@ def _salesreps_workspace(context: Mapping[str, Any], *, user_obj: Any) -> dict[s
     if not narrative and territory_name:
         narrative = f"Attributed detail for territory {territory_name} under the current sales rep ownership model."
     elif not narrative and protein_family:
-        narrative = f"Attributed detail for protein family {protein_family} under the current sales rep ownership model."
+        narrative = f"Attributed detail for department {protein_family} under the current sales rep ownership model."
 
     return {
         "summary_cards": summary_cards[:6],

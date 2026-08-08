@@ -15,7 +15,7 @@ def seed_products(tmp_path, monkeypatch):
                 "DateExpected": "2025-12-01",
                 "ProductId": "SKU-1",
                 "ProductName": "Ribeye",
-                "ProteinType": "Beef",
+                "ProteinType": "Grocery",
                 "Category": "Steak",
                 "CustomerId": "C-1",
                 "CustomerName": "Chef A",
@@ -37,7 +37,7 @@ def seed_products(tmp_path, monkeypatch):
                 "DateExpected": "2025-12-15",
                 "ProductId": "SKU-2",
                 "ProductName": "Tenderloin",
-                "ProteinType": "Pork",
+                "ProteinType": "Apparel",
                 "Category": "Roast",
                 "CustomerId": "C-2",
                 "CustomerName": "Chef B",
@@ -59,7 +59,7 @@ def seed_products(tmp_path, monkeypatch):
                 "DateExpected": "2026-01-05",
                 "ProductId": "SKU-1",
                 "ProductName": "Ribeye",
-                "ProteinType": "Beef",
+                "ProteinType": "Grocery",
                 "Category": "Steak",
                 "CustomerId": "C-3",
                 "CustomerName": "Chef C",
@@ -98,7 +98,7 @@ def seed_products_protein_fallback(tmp_path, monkeypatch):
                 "DateExpected": "2025-12-01",
                 "ProductId": "SKU-9",
                 "ProductName": "Striploin",
-                "Protein": "Beef",
+                "Protein": "Grocery",
                 "ProteinType": None,
                 "Category": None,
                 "ProductCategory": "Steak",
@@ -188,8 +188,8 @@ def test_products_bundle_has_keys(app_client, seed_products):
         assert "customer_hhi" in row0
         assert "top_region_name" in row0
         assert "top_region_share" in row0
-        assert row0.get("target_margin_pct") == pytest.approx(26.0, abs=0.01)
-        assert row0.get("minimum_margin_pct") == pytest.approx(17.0, abs=0.01)
+        assert row0.get("target_margin_pct") == pytest.approx(24.0, abs=0.01)
+        assert row0.get("minimum_margin_pct") == pytest.approx(18.0, abs=0.01)
         assert row0.get("minimum_price") is not None
         assert row0.get("target_price") is not None
         assert row0.get("margin_status") in {"yellow", "light_green", "green", "orange", "red", "needs_mapping", "no_cost"}
@@ -221,7 +221,7 @@ def test_products_bundle_annotation_preserves_existing_profit_uplift_target():
             "sku": "SKU-PERSIST",
             "product_id": "SKU-PERSIST",
             "product_name": "Beef Test",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 1000.0,
             "cost": 750.0,
@@ -243,7 +243,7 @@ def test_execution_lists_rank_new_costing_priorities():
             "product_id": "SKU-RED",
             "product_name": "Red Priority",
             "display_name": "SKU-RED — Red Priority",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 18000.0,
             "profit": -500.0,
@@ -265,7 +265,7 @@ def test_execution_lists_rank_new_costing_priorities():
             "product_id": "SKU-YELLOW",
             "product_name": "Yellow Fast Mover",
             "display_name": "SKU-YELLOW — Yellow Fast Mover",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 22000.0,
             "profit": 1800.0,
@@ -287,7 +287,7 @@ def test_execution_lists_rank_new_costing_priorities():
             "product_id": "SKU-GREEN",
             "product_name": "Green Candidate",
             "display_name": "SKU-GREEN — Green Candidate",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 9000.0,
             "profit": 2600.0,
@@ -309,7 +309,7 @@ def test_execution_lists_rank_new_costing_priorities():
             "product_id": "SKU-NOCOST",
             "product_name": "Needs Cost",
             "display_name": "SKU-NOCOST — Needs Cost",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 14000.0,
             "profit": 0.0,
@@ -476,7 +476,7 @@ def test_prepare_visual_pricing_rows_preserves_unit_basis_for_unit_skus():
             "sku": "SKU-UNIT",
             "product_id": "SKU-UNIT",
             "product_name": "Unit SKU",
-            "protein_family": "Beef",
+            "protein_family": "Grocery",
             "product_category": "Steak",
             "revenue": 600.0,
             "cost": 300.0,
@@ -787,13 +787,13 @@ def test_products_bundle_includes_protein_intelligence_and_family_columns(app_cl
 
     protein_insights = data.get("protein_insights") or {}
     summary = protein_insights.get("summary") or {}
-    assert summary.get("top_family") in {"Beef", "Pork"}
+    assert summary.get("top_family") in {"Grocery", "Apparel"}
     assert summary.get("family_count") == 2
     assert isinstance(protein_insights.get("mix"), list)
 
     rows = (data.get("table") or {}).get("rows") or []
     assert rows
-    assert rows[0].get("protein_family") in {"Beef", "Pork"}
+    assert rows[0].get("protein_family") in {"Grocery", "Apparel"}
     assert rows[0].get("category") in {"Steak", "Roast"}
     assert rows[0].get("product_category") in {"Steak", "Roast"}
     assert isinstance(protein_insights.get("portfolio"), list)
@@ -801,8 +801,16 @@ def test_products_bundle_includes_protein_intelligence_and_family_columns(app_cl
     assert isinstance(protein_insights.get("pricing_opportunities"), list)
     assert isinstance(protein_insights.get("execution_watch"), list)
     assert "headline" in (protein_insights.get("narrative") or {})
-    assert (protein_insights.get("summary") or {}).get("target_margin_range") == "26%"
-    assert (protein_insights.get("summary") or {}).get("minimum_margin_range") == "17%"
+    # The fixture spans two departments with different policy, so the summary
+    # reports a range rather than a single figure. Derive it from the rule
+    # table so a policy change updates the expectation with it.
+    from app.services import margin_rules
+
+    rules = [margin_rules.resolve_margin_rule(protein=f, category="") for f in ("Grocery", "Apparel")]
+    targets = sorted(r["target_gross_margin_pct"] for r in rules)
+    minimums = sorted(r["min_gross_margin_pct"] for r in rules)
+    assert summary.get("target_margin_range") == f"{targets[0]:.0f}%–{targets[-1]:.0f}%"
+    assert summary.get("minimum_margin_range") == f"{minimums[0]:.0f}%–{minimums[-1]:.0f}%"
 
 
 def test_products_bundle_uses_protein_column_when_type_column_is_sparse(app_client, seed_products_protein_fallback):
@@ -812,13 +820,13 @@ def test_products_bundle_uses_protein_column_when_type_column_is_sparse(app_clie
 
     rows = ((data.get("table") or {}).get("rows") or [])
     assert rows
-    assert rows[0].get("protein_family") == "Beef"
+    assert rows[0].get("protein_family") == "Grocery"
     assert rows[0].get("category") == "Steak"
-    assert rows[0].get("target_margin_pct") == pytest.approx(26.0, abs=0.01)
-    assert rows[0].get("minimum_margin_pct") == pytest.approx(17.0, abs=0.01)
+    assert rows[0].get("target_margin_pct") == pytest.approx(24.0, abs=0.01)
+    assert rows[0].get("minimum_margin_pct") == pytest.approx(18.0, abs=0.01)
 
     protein_summary = ((data.get("protein_insights") or {}).get("summary") or {})
-    assert protein_summary.get("top_family") == "Beef"
+    assert protein_summary.get("top_family") == "Grocery"
 
 
 def test_products_bundle_supports_summary_section_requests(app_client, seed_products):

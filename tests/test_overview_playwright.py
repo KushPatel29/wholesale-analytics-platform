@@ -31,7 +31,7 @@ def test_overview_page_loads(page: Page):
     page.wait_for_url("http://127.0.0.1:5000/", timeout=5000)
 
     # Check that page loaded
-    expect(page).to_have_title(re.compile("Overview|Wholesale Analytics|Analytics", re.IGNORECASE))
+    expect(page).to_have_title(re.compile("Overview|Northgate Retail Analytics|Analytics", re.IGNORECASE))
 
 
 # def test_growth_analytics_section_exists(page: Page):

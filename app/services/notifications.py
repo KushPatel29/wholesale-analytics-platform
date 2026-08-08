@@ -644,7 +644,7 @@ def _build_digest_attachments(frequency: str, items: Sequence[Mapping[str, Any]]
 def render_single_alert_email(user: Any, type_key: str, payload: Mapping[str, Any]) -> tuple[str, str, str]:
     type_row = _type_row(type_key)
     alert_name = type_row.name if type_row is not None else str(type_key).replace("_", " ").title()
-    subject = f"Wholesale Analytics Alert: {alert_name}"
+    subject = f"Northgate Retail Analytics Alert: {alert_name}"
     context = {
         "recipient_name": _full_name(user),
         "alert_name": alert_name,
@@ -659,7 +659,7 @@ def render_single_alert_email(user: Any, type_key: str, payload: Mapping[str, An
 
 def render_digest_email(user: Any, frequency: str, items: Sequence[Mapping[str, Any]]) -> tuple[str, str, str]:
     digest_label = "Daily digest" if frequency == "daily" else "Weekly digest"
-    subject = f"Wholesale Analytics Alerts: {digest_label}"
+    subject = f"Northgate Retail Analytics Alerts: {digest_label}"
     normalized_items = [dict(item) for item in items]
     context = {
         "recipient_name": _full_name(user),
