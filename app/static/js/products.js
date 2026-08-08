@@ -15,7 +15,7 @@
   const isV2 = root.dataset.productsV2 === "1";
   const isV3 = root.dataset.productsV3 === "1";
   const isV4 = root.dataset.productsV4 === "1";
-  const PAGE_CACHE_ID = isV4 ? "products-v4-live6" : "products";
+  const PAGE_CACHE_ID = isV4 ? "products-v4-live7" : "products";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
   const WORKSPACE_STORAGE_KEY = isV4 ? "wholesale:products:v4:workspace" : "";
   const TABLE_PRESET_STORAGE_KEY = isV4 ? "wholesale:products:v4:table-preset" : "";
@@ -806,7 +806,11 @@
     });
     syncWorkspaceControls();
     writeWorkspaceState();
-    if (typeof setupLazySectionObserver === "function") {
+    // Workspace settings are applied once during module initialization, before
+    // global filters have published a stable query string. Starting the lazy
+    // detail/table observer at that point sent two unfiltered bundle requests
+    // ahead of the filtered summary on the hosted single-worker queue.
+    if (hasBootstrapped && typeof setupLazySectionObserver === "function") {
       setupLazySectionObserver();
     }
   };
