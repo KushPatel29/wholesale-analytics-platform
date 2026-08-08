@@ -38,6 +38,60 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# In-flight real requests, so the warm-up can get out of their way.
+#
+# Pacing by a fixed sleep was the first attempt at "do not monopolise the CPU",
+# and it cannot work on a host that spins down: the visitor whose arrival wakes
+# the container is, by construction, the one the warm-up overlaps. It can never
+# prime a cache in time to help them - it can only compete with them for 0.1 of
+# a CPU, and it did, for a hundred seconds a boot. Pages that answer in a
+# second warm were taking three minutes and dying on the worker timeout.
+#
+# The warm-up runs against `app.test_client()` in its own thread, so it never
+# occupies a gunicorn worker thread and nothing else throttles it.
+_inflight_requests = 0
+_inflight_lock = threading.Lock()
+_thread_state = threading.local()
+
+
+def _is_warmup_thread() -> bool:
+    return bool(getattr(_thread_state, "is_warmup", False))
+
+
+def register_traffic_hooks(app) -> None:
+    """Count real requests so `_wait_for_quiet` can see them."""
+
+    @app.before_request
+    def _warmup_track_request_start():  # pragma: no cover - trivial
+        global _inflight_requests
+        if _is_warmup_thread():
+            return None
+        with _inflight_lock:
+            _inflight_requests += 1
+        return None
+
+    @app.teardown_request
+    def _warmup_track_request_end(_exc=None):  # pragma: no cover - trivial
+        global _inflight_requests
+        if _is_warmup_thread():
+            return None
+        with _inflight_lock:
+            _inflight_requests = max(0, _inflight_requests - 1)
+        return None
+
+
+def _wait_for_quiet(timeout: float) -> bool:
+    """Block until no real request is in flight, or `timeout` expires."""
+    if timeout <= 0:
+        return True
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with _inflight_lock:
+            if _inflight_requests <= 0:
+                return True
+        time.sleep(0.2)
+    return False
+
 # Ordered cheapest-first, so the pages a visitor is most likely to open are
 # ready soonest.
 WARMUP_PATHS: tuple[str, ...] = (
@@ -156,6 +210,7 @@ def _warm_user(app, username: str, paths: tuple[str, ...]) -> bool:
         logger.warning("warmup.user_lookup_failed", extra={"user": username}, exc_info=True)
         return False
 
+    _thread_state.is_warmup = True
     try:
         with app.test_client() as client:
             # Seed the session directly rather than POSTing to /auth/login.
@@ -168,12 +223,18 @@ def _warm_user(app, username: str, paths: tuple[str, ...]) -> bool:
                 session["_fresh"] = False
 
             pace = float(os.getenv("DEMO_WARMUP_PACE_SECONDS", "0"))
+            yield_for = float(os.getenv("DEMO_WARMUP_YIELD_SECONDS", "120"))
             for path in paths:
                 # Pause between pages so the warm-up never monopolises a shared
                 # CPU. Without this it competes with whoever is already on the
                 # site, and both the warm-up and their request slow to a crawl.
                 if pace > 0:
                     time.sleep(pace)
+                # Then wait out anyone actually on the site. A real visitor
+                # gets the whole CPU; the warm-up resumes in the gaps. Bounded,
+                # so a page that hangs cannot strand the warm-up forever.
+                if not _wait_for_quiet(yield_for):
+                    logger.info("warmup.yield_timeout", extra={"path": path})
                 page_started = time.perf_counter()
                 try:
                     page = client.get(path)
@@ -281,6 +342,7 @@ def start_warmup(app) -> None:
     """Kick off the warm-up in a daemon thread; never blocks startup."""
     if not _enabled():
         return
+    register_traffic_hooks(app)
     thread = threading.Thread(target=_warm, args=(app,), name="demo-warmup", daemon=True)
     thread.start()
     logger.info("warmup.scheduled", extra={"paths": len(WARMUP_PATHS)})

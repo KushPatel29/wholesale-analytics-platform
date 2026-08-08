@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 
 import pytest
 
@@ -346,6 +348,92 @@ class TestDuckMemoryBudget:
             _init_spill_directory(conn, logging.getLogger(__name__), "test")
         finally:
             conn.close()
+
+
+class TestWarmupYieldsToTraffic:
+    """
+    On a host that spins down, the visitor whose arrival wakes the container is
+    the one the warm-up overlaps - it cannot prime anything in time to help
+    them, it can only take CPU from them. Pages that answer in a second warm
+    were taking three minutes and dying on the 180s worker timeout.
+
+    So the warm-up waits while a real request is in flight.
+    """
+
+    @staticmethod
+    def _reset():
+        from app.core import warmup
+
+        with warmup._inflight_lock:
+            warmup._inflight_requests = 0
+        warmup._thread_state.is_warmup = False
+        return warmup
+
+    def test_waits_while_a_request_is_in_flight(self):
+        warmup = self._reset()
+        with warmup._inflight_lock:
+            warmup._inflight_requests = 1
+        try:
+            started = time.perf_counter()
+            assert warmup._wait_for_quiet(0.5) is False
+            assert time.perf_counter() - started >= 0.4, "it has to actually wait"
+        finally:
+            self._reset()
+
+    def test_returns_immediately_when_nothing_is_in_flight(self):
+        warmup = self._reset()
+        started = time.perf_counter()
+        assert warmup._wait_for_quiet(5.0) is True
+        assert time.perf_counter() - started < 1.0
+
+    def test_resumes_as_soon_as_the_request_finishes(self):
+        warmup = self._reset()
+        with warmup._inflight_lock:
+            warmup._inflight_requests = 1
+
+        def _finish():
+            time.sleep(0.3)
+            with warmup._inflight_lock:
+                warmup._inflight_requests = 0
+
+        t = threading.Thread(target=_finish, daemon=True)
+        t.start()
+        try:
+            assert warmup._wait_for_quiet(10.0) is True, "must not wait out the full timeout"
+        finally:
+            t.join(timeout=2)
+            self._reset()
+
+    def test_the_warmups_own_requests_do_not_count_as_traffic(self, monkeypatch):
+        """
+        The warm-up drives the app through `test_client`, so its own requests
+        run the same before_request hook. If those counted, it would wait for
+        itself and never warm anything - a deadlock that looks exactly like the
+        warm-up silently not running.
+        """
+        warmup = self._reset()
+        monkeypatch.setenv("DEMO_WARMUP", "1")
+        app = create_app()
+
+        warmup._thread_state.is_warmup = True
+        try:
+            app.test_client().get("/healthz")
+            with warmup._inflight_lock:
+                counted = warmup._inflight_requests
+        finally:
+            self._reset()
+        assert counted == 0, "warm-up traffic must not be counted as real traffic"
+
+    def test_real_requests_are_counted_and_released(self, monkeypatch):
+        warmup = self._reset()
+        monkeypatch.setenv("DEMO_WARMUP", "1")
+        app = create_app()
+        try:
+            app.test_client().get("/healthz")
+            with warmup._inflight_lock:
+                assert warmup._inflight_requests == 0, "teardown must release the count"
+        finally:
+            self._reset()
 
 
 class TestHealthCheck:
