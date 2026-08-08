@@ -586,9 +586,15 @@ def _inventory_position(frame: pd.DataFrame) -> Dict[str, Any]:
     excess_value = float(value[cover > (target * EXCESS_COVER_MULTIPLE)].sum())
     dead_value = float(value[cover > (target * 4.0)].sum())
 
+    # Below reorder point is a rate over *lines*, not over SKUs, so it is
+    # measured on the raw frame. Averaging a SKU's positions first washes it
+    # out - a SKU that dips under its reorder point a fifth of the time
+    # averages to comfortably above it, and the figure went to zero.
     below_reorder_pct = None
-    if "on_hand" in working and "reorder" in working:
-        below_reorder_pct = round(float((working["on_hand"] < working["reorder"]).mean() * 100.0), 1)
+    if {"OnHandQty", "ReorderPointQty"} <= set(frame.columns):
+        on_hand_line = au.to_numeric_safe(frame["OnHandQty"])
+        reorder_line = au.to_numeric_safe(frame["ReorderPointQty"])
+        below_reorder_pct = round(float((on_hand_line < reorder_line).mean() * 100.0), 1)
 
     # Annual inventory turns: cost of goods over average inventory at cost,
     # annualised from the window so the figure is comparable to a benchmark.
@@ -770,7 +776,7 @@ _INVENTORY_SQL = """
             COALESCE(NULLIF(CAST(ProductId AS VARCHAR), ''), 'Unknown') AS sku,
             AVG(COALESCE(OnHandValue, 0)) AS sku_on_hand_value,
             AVG(DaysOfSupply) AS sku_cover_days,
-            AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) AS sku_below_reorder
+            0.0 AS sku_below_reorder
         FROM scoped
         GROUP BY 1, 2
     ),
@@ -779,8 +785,7 @@ _INVENTORY_SQL = """
             label,
             COUNT(*) AS skus,
             SUM(sku_on_hand_value) AS on_hand_value,
-            MEDIAN(sku_cover_days) AS cover_days,
-            AVG(sku_below_reorder) * 100 AS below_reorder_pct
+            MEDIAN(sku_cover_days) AS cover_days
         FROM sku_positions
         GROUP BY 1
     ),
@@ -793,6 +798,7 @@ _INVENTORY_SQL = """
             AVG(CASE WHEN NOT COALESCE(IsLate, FALSE)
                       AND NOT COALESCE(IsShortShip, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS otif_pct,
             AVG(CASE WHEN COALESCE(IsStockout, FALSE) THEN 1.0 ELSE 0.0 END) * 100 AS stockout_pct,
+            AVG(CASE WHEN COALESCE(OnHandQty, 0) < COALESCE(ReorderPointQty, 0) THEN 1.0 ELSE 0.0 END) * 100 AS below_reorder_pct,
             (1 - SUM(COALESCE(BackorderQty, 0)) / NULLIF(SUM(COALESCE(QuantityOrdered, 0)), 0)) * 100 AS unit_fill_pct
         FROM scoped
         GROUP BY 1
@@ -801,8 +807,8 @@ _INVENTORY_SQL = """
         service.label AS label,
         service.lines AS lines,
         service.line_fill_pct, service.on_time_pct, service.otif_pct,
-        service.stockout_pct, service.unit_fill_pct,
-        stock.cover_days, stock.on_hand_value, stock.below_reorder_pct, stock.skus
+        service.stockout_pct, service.unit_fill_pct, service.below_reorder_pct,
+        stock.cover_days, stock.on_hand_value, stock.skus
     FROM service
     LEFT JOIN stock ON stock.label = service.label
     ORDER BY service.otif_pct ASC
@@ -900,6 +906,9 @@ def inventory_totals(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "line_fill_pct": weighted("line_fill_pct"),
         "on_time_pct": weighted("on_time_pct"),
         "stockout_pct": weighted("stockout_pct"),
+        "unit_fill_pct": weighted("unit_fill_pct"),
+        "below_reorder_pct": weighted("below_reorder_pct"),
+        "cover_days": weighted("cover_days"),
         "on_hand_value": on_hand,
         "skus": sum(r.get("skus") or 0 for r in rows),
         "otif_target_pct": OTIF_TARGET_PCT,
