@@ -16,7 +16,7 @@ bp = Blueprint("labor", __name__, url_prefix="/labor")
 @bp.get("/")
 @login_required
 def index():
-    payload = labor_bundle.build_page_payload(request.args)
+    payload = labor_bundle.build_cached_page_payload(request.args)
     payload_safe = sanitize_for_json(payload)
     client_payload = sanitize_for_json(labor_bundle.build_client_payload(payload_safe))
     return render_template(
@@ -33,7 +33,7 @@ def index():
 @bp.get("/api/bundle")
 @login_required
 def api_bundle():
-    return jsonify(sanitize_for_json(labor_bundle.build_page_payload(request.args)))
+    return jsonify(sanitize_for_json(labor_bundle.build_cached_page_payload(request.args)))
 
 
 @bp.get("/export/<dataset>")

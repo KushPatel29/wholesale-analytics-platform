@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 import pandas as pd
 from flask import current_app, request, url_for
 
+from app.core import prebuilt_cache
 from app.core.cache_manager import TTLValueCache
 from app.services import labor_store
 
@@ -41,8 +42,10 @@ TABLE_SORTS = {
 
 _ANALYSIS_CACHE = TTLValueCache(maxsize=int(os.getenv("LABOR_ANALYSIS_CACHE_MAXSIZE", "48")))
 _FOCUS_CACHE = TTLValueCache(maxsize=int(os.getenv("LABOR_FOCUS_CACHE_MAXSIZE", "96")))
+_PAGE_CACHE = TTLValueCache(maxsize=int(os.getenv("LABOR_PAGE_CACHE_MAXSIZE", "32")))
 _ANALYSIS_CACHE_TTL_SECONDS = max(30, int(os.getenv("LABOR_ANALYSIS_CACHE_TTL", "180")))
 _FOCUS_CACHE_TTL_SECONDS = max(30, int(os.getenv("LABOR_FOCUS_CACHE_TTL", "180")))
+_PAGE_CACHE_TTL_SECONDS = max(60, int(os.getenv("LABOR_PAGE_CACHE_TTL", "900")))
 
 
 @dataclass(frozen=True)
@@ -3204,6 +3207,51 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
     if (_li_safe_float(current_summary.get('total_labor_cost')) or 0.0) <= 0 and (_li_safe_float(current_summary.get('total_paid_hours')) or 0.0) > 0:
         payload['messages'].append('The current scope contains paid hours without booked labor cost. Category concentration views fall back to paid hours where needed.')
     return _li_clean_frame(pd.DataFrame()).to_dict() if False else payload
+
+
+def build_cached_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Return a clone-safe labor page payload with immutable-demo disk caching."""
+    filters = resolve_filters(args)
+    cache_key = _labor_cache_key(
+        "page-payload-v3",
+        filters,
+        extra={
+            "page": filters.page,
+            "page_size": filters.page_size,
+            "sort_by": filters.sort_by,
+            "sort_dir": filters.sort_dir,
+        },
+    )
+    result = _PAGE_CACHE.get(cache_key)
+    hit = result is not None
+    prebuilt_hit = False
+    if result is None:
+        result = prebuilt_cache.load("labor-pages", cache_key)
+        if result is not None:
+            _PAGE_CACHE.set(cache_key, result, _PAGE_CACHE_TTL_SECONDS)
+            hit = True
+            prebuilt_hit = True
+        else:
+            result, hit = _PAGE_CACHE.get_or_compute(
+                cache_key,
+                _PAGE_CACHE_TTL_SECONDS,
+                lambda: build_page_payload(args),
+            )
+            if not hit:
+                prebuilt_cache.save("labor-pages", cache_key, result)
+
+    payload = _clone_cache_value(result)
+    if isinstance(payload, dict):
+        payload.setdefault("meta", {})
+        payload["meta"].update(
+            {
+                "cached": bool(hit),
+                "prebuilt": bool(prebuilt_hit),
+                "cache_key": cache_key,
+                "dataset_version": labor_store.get_dataset_version(),
+            }
+        )
+    return payload
 
 
 def build_client_payload(payload: Mapping[str, Any] | None) -> dict[str, Any]:
