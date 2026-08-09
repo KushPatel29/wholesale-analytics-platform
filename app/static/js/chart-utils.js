@@ -372,7 +372,7 @@
 
   function applyChartJsDefaults() {
     const ChartLib = window.Chart;
-    if (!ChartLib || ChartLib.__wholesaleContrastApplied) return;
+    if (!ChartLib) return;
     const palette = getThemePalette();
     ChartLib.defaults.color = palette.textMuted;
     ChartLib.defaults.borderColor = palette.grid;
@@ -393,6 +393,39 @@
       ChartLib.defaults.scale.title.color = palette.textSecondary;
     }
     ChartLib.__wholesaleContrastApplied = true;
+  }
+
+  function refreshPlotlyCharts() {
+    const PlotlyLib = window.Plotly;
+    if (!PlotlyLib || typeof PlotlyLib.relayout !== 'function') return;
+    const palette = getThemePalette();
+    const axisKeys = [
+      'xaxis', 'yaxis', 'xaxis2', 'yaxis2', 'xaxis3', 'yaxis3', 'xaxis4', 'yaxis4',
+    ];
+
+    document.querySelectorAll('.js-plotly-plot').forEach((chart) => {
+      const update = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        'font.color': palette.textSecondary,
+        'legend.font.color': palette.textSecondary,
+      };
+      axisKeys.forEach((key) => {
+        if (!chart.layout?.[key] && !chart._fullLayout?.[key]) return;
+        update[`${key}.tickfont.color`] = palette.textMuted;
+        update[`${key}.titlefont.color`] = palette.textSecondary;
+        update[`${key}.gridcolor`] = palette.grid;
+        update[`${key}.zerolinecolor`] = palette.grid;
+        update[`${key}.linecolor`] = palette.border;
+      });
+      try {
+        const pending = PlotlyLib.relayout(chart, update);
+        if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+      } catch (_err) {
+        // A chart may be purged while the theme is changing; the next render
+        // still receives the themed defaults from the Plotly wrapper.
+      }
+    });
   }
 
   function installPlotlyTheme() {
@@ -427,6 +460,7 @@
     getThemePalette,
     themedPlotlyLayout,
     applyChartTheme,
+    refreshPlotlyCharts,
     seriesPalette,
     seriesColor,
     seriesFill
@@ -437,8 +471,15 @@
     document.addEventListener('DOMContentLoaded', applyChartTheme, { once: true });
   }
 
+  // Plotly is loaded on idle for the primary workspaces, after this file has
+  // already run. Install the wrapper before those pages render their charts.
+  window.addEventListener('wa:plotlyready', applyChartTheme);
+
   // The toggle swaps the tokens; charts hold the values they resolved at draw
-  // time, so re-apply the theme defaults and let each page redraw.
-  window.addEventListener('wa:themechange', () => applyChartTheme());
+  // time, so refresh existing Plotly layouts as well as future chart defaults.
+  window.addEventListener('wa:themechange', () => {
+    applyChartTheme();
+    refreshPlotlyCharts();
+  });
 
 })();
