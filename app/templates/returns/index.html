@@ -66,9 +66,12 @@
           <label class="form-label" for="approverFilter">Approver</label>
           <select class="form-select" id="approverFilter" name="approver">
             <option value="">All</option>
-            <option value="Scott" {% if filters.approver == 'Scott' %}selected{% endif %}>Scott</option>
-            <option value="Brian" {% if filters.approver == 'Brian' %}selected{% endif %}>Brian</option>
-            <option value="Kyle" {% if filters.approver == 'Kyle' %}selected{% endif %}>Kyle</option>
+            {# Names come from the seeded approvers so the filter selects
+               something. These were three hardcoded first names left over from
+               the source system. #}
+            {% for approver in ['Marisa Whitfield', 'Devon Clarke', 'Priya Raman'] %}
+            <option value="{{ approver }}" {% if filters.approver == approver %}selected{% endif %}>{{ approver }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-md-2">
@@ -144,7 +147,7 @@
             <td><span class="badge text-bg-light border">{{ row.status_label }}</span></td>
             <td>{{ row.total_credit_amount|currency }}</td>
             <td><span class="small">{{ row.approval_target or '-' }}</span></td>
-            <td>{{ row.last_updated or row.updated_at or row.created_at }}</td>
+            <td>{{ (row.last_updated or row.updated_at or row.created_at) | day }}</td>
           </tr>
           {% else %}
           <tr>
