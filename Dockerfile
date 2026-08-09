@@ -25,17 +25,34 @@ COPY . .
 # scanned, frames materialised per request, and how many requests can be in
 # flight at once.
 #
-# Ten months rather than four, because the monthly forecast needs at least six
-# monthly points to run (MIN_MONTHLY_FORECAST_POINTS). At four months the panel
-# disabled itself and the overview shipped an empty "forecast is preparing"
-# card - the most prominent thing on the page did nothing. Store count comes
-# down to 80 to pay for the extra history, holding the dataset at ~26k lines.
+# Three whole fiscal years, not ten months.
+#
+# Ten months meant every customer's first order fell inside a two-week band and
+# there was no prior year to compare against, so the dashboard reported +896%
+# revenue growth, "10 up / 0 down" and "no decliners" - a book in which nothing
+# ever declines, which is recognisable as synthetic on sight. Three fiscal years
+# gives the year-over-year column something true to say and the cohort, RFM and
+# churn views something to show.
+#
+# 110 stores rather than 80: a region holds seven accounts at 80, so a single
+# new logo moved a whole territory 113% year-over-year and the regional story
+# came down to which accounts were drawn as gainers.
+#
+# 320 SKUs rather than 180: department weights are as low as 2.5%, so at 180
+# SKUs Electronics had four of them and one loss-leader took the entire
+# department's margin to zero - an artefact that reads as a finding.
+#
+# 24 suppliers rather than the default 46, so each carries an assortment worth
+# analysing instead of four SKUs.
+#
+# ~95k order lines, ~50 MB on disk. Queries are date-partitioned and the
+# default window is one fiscal year, so a page scans roughly a third of it.
 #
 # products.parquet is built here too: without it every products request takes a
 # FileNotFoundError path before falling back.
 RUN cp .env.demo .env \
-    && python -m seed.generate_synthetic_data --months 10 --customers 80 --products 180 \
-    && python -m seed.generate_synthetic_labor --days 210 \
+    && python -m seed.generate_synthetic_data --fiscal-years 3 --customers 110 --products 320 --suppliers 24 \
+    && python -m seed.generate_synthetic_labor --days 730 \
     && python manage.py init-auth-db \
     && python manage.py seed-demo-users \
     && (python manage.py build-products-parquet || echo "products parquet skipped") \
