@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from datetime import timedelta
+
 from app.services import comparison
 from app.services import fact_schema as fs
 from app.services import fact_store
@@ -1152,9 +1154,16 @@ def _window_context(filters: Any, cols: set[str], scope: Dict[str, Any]) -> Dict
         )
         prior_start_iso = window.prior_start.isoformat()
         prior_end_iso = window.prior_end_exclusive.isoformat()
-        yoy_start_iso = window.prior_start.isoformat()
-        yoy_end_iso = window.prior_end_exclusive.isoformat()
-        base_start_iso = min(window.current_start, window.prior_start).isoformat()
+        # Year-over-year stays a separate window from the prior period. The
+        # trend series carries a revenue_yoy line, and pointing it at the
+        # prior *period* would silently relabel a period-over-period movement
+        # as a year-over-year one.
+        yoy_start, yoy_end_inclusive = comparison.year_ago_window(
+            window.current_start, window.current_end
+        )
+        yoy_start_iso = yoy_start.isoformat()
+        yoy_end_iso = (yoy_end_inclusive + timedelta(days=1)).isoformat()
+        base_start_iso = min(window.current_start, window.prior_start, yoy_start).isoformat()
         base_end_iso = window.current_end_exclusive.isoformat()
         basis_label = window.basis_label
         basis_short_label = window.basis_short_label

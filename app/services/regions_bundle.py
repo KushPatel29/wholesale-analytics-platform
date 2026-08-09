@@ -211,15 +211,20 @@ def _comparison_windows(
                 "date_type": getattr(filters, "date_type", None),
             }
         )
+        # Regions renders a period-over-period column and a year-over-year
+        # column side by side, so the two windows stay distinct. Under the
+        # fiscal basis they coincide, which is correct rather than redundant:
+        # "vs prior fiscal YTD" *is* the year-ago comparison.
+        yoy_start, yoy_end_inclusive = comparison.year_ago_window(
+            window.current_start, window.current_end
+        )
         return {
             "current_start": window.current_start.isoformat(),
             "current_end": window.current_end_exclusive.isoformat(),
             "prior_start": window.prior_start.isoformat(),
             "prior_end": window.prior_end_exclusive.isoformat(),
-            # Regions shows both a prior-period and a year-ago column. When the
-            # active basis is already the fiscal year, they are the same window.
-            "yoy_start": window.prior_start.isoformat(),
-            "yoy_end": window.prior_end_exclusive.isoformat(),
+            "yoy_start": yoy_start.isoformat(),
+            "yoy_end": (yoy_end_inclusive + timedelta(days=1)).isoformat(),
             "basis_label": window.basis_label,
         }
     except Exception:

@@ -335,11 +335,56 @@ def _prior_fiscal_window(start: date, end: date) -> tuple[date, date]:
 
 
 def _preceding_window(start: date, end: date) -> tuple[date, date]:
-    """The window of equal length ending the day before this one begins."""
+    """
+    The equal-length window immediately before this one.
+
+    With one alignment rule: a *month-to-date* window is compared against the
+    same days of the prior month, not against the trailing days of it.
+
+    Mar 1-15 against Feb 14-28 is arithmetically "the preceding 15 days" and
+    analytically useless - it lines the first half of one month up against the
+    second half of another, so every month-boundary effect (billing runs, the
+    weekly shop, promo calendars) lands on one side of the comparison and not
+    the other. Mar 1-15 against Feb 1-15 is what "same length, immediately
+    preceding" is trying to express.
+    """
     days = max(1, (end - start).days + 1)
+
+    if start == _month_start(start) and end != _month_end(end):
+        prior_month_start = _shift_months(start, -1)
+        prior_end = min(_month_end(prior_month_start), prior_month_start + timedelta(days=days - 1))
+        return prior_month_start, prior_end
+
     prior_end = start - timedelta(days=1)
     prior_start = prior_end - timedelta(days=days - 1)
     return prior_start, prior_end
+
+
+def _month_start(value: date) -> date:
+    return value.replace(day=1)
+
+
+def _month_end(value: date) -> date:
+    return date(value.year, value.month, monthrange(value.year, value.month)[1])
+
+
+def _shift_months(value: date, months: int) -> date:
+    index = (value.month - 1) + months
+    year = value.year + (index // 12)
+    month = (index % 12) + 1
+    return date(year, month, min(value.day, monthrange(year, month)[1]))
+
+
+def year_ago_window(start: date, end: date) -> tuple[date, date]:
+    """
+    The same calendar window one year earlier.
+
+    Distinct from the prior window on purpose. Regions renders a
+    period-over-period column and a year-over-year column side by side, and
+    collapsing them means one of the two headings is lying about what is under
+    it - which is the class of fault this module exists to remove, not commit.
+    """
+    return _shift_years(start, -1), _shift_years(end, -1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

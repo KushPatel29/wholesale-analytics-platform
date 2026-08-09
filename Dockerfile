@@ -56,6 +56,8 @@ RUN cp .env.demo .env \
     && python manage.py init-auth-db \
     && python manage.py seed-demo-users \
     && (python manage.py build-products-parquet || echo "products parquet skipped") \
+    && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-seed-only-not-a-runtime-secret \
+       python -m seed.generate_synthetic_returns --count 140 --replace \
     && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-cache-only-not-a-runtime-secret \
        DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt python manage.py precompute-demo-cache
 

@@ -5198,6 +5198,27 @@ body.theme-wa-future .auth-panel {
   max-width: 34rem;
 }
 
+/* The synthetic-data disclosure on the Overview. Legible but not alarming:
+   it is a statement about how the demo was built, not an error banner. */
+body.theme-wa-future .overview-synthetic-note {
+  max-width: 62ch;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-left: 3px solid var(--wa-accent, var(--primary, #2563eb));
+  border-radius: 0 8px 8px 0;
+  background: var(--wa-surface-2);
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+body.theme-wa-future .overview-synthetic-note code {
+  padding: 0.06rem 0.28rem;
+  border-radius: 4px;
+  background: var(--wa-surface);
+  font-size: 0.9em;
+}
+
 /* Data freshness in the global filter bar. Deliberately the same muted
    treatment as the rest of the meta line: "Data through Jul 3, 2026" is a fact
    about the dataset, not a warning. */

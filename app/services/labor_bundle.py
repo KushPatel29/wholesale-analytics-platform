@@ -157,7 +157,7 @@ def _arg_list(args: Mapping[str, Any], *keys: str) -> tuple[str, ...]:
     return _clean_tokens(values)
 
 
-def _parse_date(raw: Any, *, default: date) -> date:
+def _parse_date(raw: Any, *, default: date | None) -> date | None:
     if raw in (None, ""):
         return default
     ts = pd.to_datetime(raw, errors="coerce")
@@ -216,12 +216,15 @@ def resolve_filters(args: Mapping[str, Any] | None = None) -> LaborFilters:
     default_days = max(7, int(current_app.config.get("LABOR_PAGE_DEFAULT_DAYS", 90) or 90))
 
     shared = _global_comparison()
-    if shared is not None:
-        default_start, default_end = shared.current_start, shared.current_end
-        # The labor dataset can be shorter than the sales dataset; never ask it
-        # for a window it does not hold.
-        default_end = min(default_end, max_date)
-        default_start = min(default_start, default_end)
+    # Only adopt the global window if the workforce extract actually covers it.
+    # Clamping a non-overlapping window into range collapses it to a single day,
+    # which is worse than ignoring it: the page then reports on one day while
+    # claiming to report on the fiscal year.
+    if shared is not None and _overlaps_labor_dataset(shared.current_start, shared.current_end):
+        default_start = max(shared.current_start, _labor_min_date(default=shared.current_start))
+        default_end = min(shared.current_end, max_date)
+        if default_start > default_end:
+            default_start = default_end
     else:
         default_end = max_date
         default_start = default_end - timedelta(days=default_days - 1)
@@ -784,9 +787,41 @@ def _prior_window(filters: LaborFilters) -> tuple[date, date]:
     """
     shared = _global_comparison()
     if shared is not None:
-        return shared.prior_start, shared.prior_end
-    window = comparison.resolve_comparison(filters)
-    return window.prior_start, window.prior_end
+        prior_start, prior_end = shared.prior_start, shared.prior_end
+        # The workforce dataset is a different extract from the sales one and can
+        # cover a shorter span. If the shared prior window falls outside what
+        # labor holds, every prior aggregate comes back as a frame with no rows
+        # and therefore no columns, and the enrichment that joins current to
+        # prior raises KeyError rather than reporting "no comparison available".
+        if _overlaps_labor_dataset(prior_start, prior_end):
+            return prior_start, prior_end
+
+    window_days = max(1, (filters.end - filters.start).days + 1)
+    prior_end = filters.start - timedelta(days=1)
+    prior_start = prior_end - timedelta(days=window_days - 1)
+    return prior_start, prior_end
+
+
+def _labor_min_date(*, default: date) -> date:
+    try:
+        status = labor_store.get_status()
+        parsed = _parse_date(status.min_date, default=None) if status.min_date else None
+        return parsed or default
+    except Exception:
+        return default
+
+
+def _overlaps_labor_dataset(start: date, end: date) -> bool:
+    """Whether [start, end] intersects the range the labor dataset covers."""
+    try:
+        status = labor_store.get_status()
+        min_date = _parse_date(status.min_date, default=None) if status.min_date else None
+        max_date = _parse_date(status.max_date, default=None) if status.max_date else None
+    except Exception:
+        return False
+    if min_date is None or max_date is None:
+        return False
+    return not (end < min_date or start > max_date)
 
 
 def _delta_pct(current: float | None, prior: float | None) -> float | None:
@@ -2282,9 +2317,29 @@ def _li_category_management_fields(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+# Columns this enrichment is contracted to produce. An empty result used to be
+# returned bare, so a filter that matched no departments handed downstream code
+# a frame with no columns at all - and `_li_build_signals` sorting on
+# 'cost_volatility' raised KeyError and took the whole Labor page to a 500.
+# "No departments matched" is a legitimate outcome of a filter and must render
+# as an empty panel, not as an error.
+_LI_DEPARTMENT_COLUMNS = (
+    "department_name",
+    "cost_volatility",
+    "priority_score",
+    "hours_volatility",
+    "recent_cost_acceleration_pct",
+    "recent_hours_acceleration_pct",
+    "management_focus",
+)
+
+
 def _li_enrich_department_summary(current_departments: pd.DataFrame, prior_departments: pd.DataFrame, department_daily: pd.DataFrame) -> pd.DataFrame:
     frame = _li_clean_frame(_enrich_department_summary(current_departments, prior_departments, department_daily))
     if frame.empty:
+        for column in _LI_DEPARTMENT_COLUMNS:
+            if column not in frame.columns:
+                frame[column] = pd.Series(dtype="object")
         return frame
     if not department_daily.empty:
         daily = department_daily.copy()
