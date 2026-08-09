@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Page not found | Northgate Retail Analytics{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <section class="error-panel">
+      <p class="error-panel__code">404</p>
+      <h1 class="error-panel__title">That page isn&rsquo;t here</h1>
+      <p class="error-panel__body">
+        The address <code>{{ request.path }}</code> doesn&rsquo;t match anything in this workspace.
+        It may have been renamed, or the link that brought you here may be out of date.
+      </p>
+      <div class="error-panel__actions">
+        <a class="btn btn-primary" href="/">Back to Overview</a>
+        <a class="btn btn-outline-secondary" href="/customers/">Customers</a>
+        <a class="btn btn-outline-secondary" href="/products/">Products</a>
+        <a class="btn btn-outline-secondary" href="/regions/">Regions</a>
+      </div>
+      {% if request_id %}
+      <p class="error-panel__meta">Request ID <code>{{ request_id }}</code></p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

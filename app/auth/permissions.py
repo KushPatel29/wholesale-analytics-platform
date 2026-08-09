@@ -17,6 +17,11 @@ ALLOWED_ROLES: Set[str] = {
     "analyst",
     "viewer",
     "returns_only",
+    # The public portfolio demo's one-click login. Reads every analytics page
+    # including the cost/margin columns, and writes nothing - see
+    # DEMO_VIEWER_PERMISSION_KEYS below and the read-only request guard in
+    # app/core/rbac.py.
+    "demo_viewer",
 }
 
 
@@ -40,6 +45,7 @@ SYSTEM_ROLE_DESCRIPTIONS: Dict[str, str] = {
     "analyst": "Analyst access",
     "viewer": "Read-only access",
     "returns_only": "Returns-only portal access",
+    "demo_viewer": "Public demo: reads every analytics page, writes nothing",
 }
 
 
@@ -70,6 +76,8 @@ _PERMISSION_DEFINITIONS: list[dict[str, Any]] = [
     _perm("page.suppliers.view", "Suppliers", "Page Access", module="Suppliers", description="View the Suppliers page"),
     _perm("page.labor.view", "Labor", "Page Access", module="Labor", description="View the Labor Intelligence page"),
     _perm("page.salesreps.view", "Sales Reps", "Page Access", module="Sales Reps", description="View the Sales Reps page"),
+    _perm("page.inventory.view", "Inventory", "Page Access", module="Inventory", description="View the Inventory Analysis page"),
+    _perm("page.planning.view", "Planning", "Page Access", module="Planning", description="View the Demand & Supply Planner"),
     _perm("page.returns.view", "Returns", "Page Access", module="Returns", description="View the Returns portal"),
     _perm(
         "page.admin.view",
@@ -814,11 +822,50 @@ _SALESREPS_ACCESS: Set[str] = {
 
 _SENSITIVE_FULL_ACCESS: Set[str] = set(SENSITIVE_DATA_PERMISSION_KEYS)
 
+_PLANNING_ACCESS: Set[str] = {
+    "page.planning.view",
+    "page.inventory.view",
+    "page.forecasting.view",
+}
+
+
+# The public demo's role. Built by union rather than by listing keys, so a new
+# read permission added to any access group above reaches the demo login
+# automatically instead of silently 403-ing the one account visitors use.
+#
+# Deliberately absent: everything in _OWNER_GM_ADMIN_BASE (the admin portal),
+# and every returns permission except `page.returns.view` - a visitor may read
+# the RMA tracker but may not create, approve, reject or refund. Writes are
+# additionally blocked wholesale by the read-only guard in app/core/rbac.py, so
+# a future write route that forgets its permission check still cannot be
+# reached by this role.
+DEMO_VIEWER_PERMISSION_KEYS: Set[str] = _merge_permissions(
+    _OVERVIEW_ACCESS,
+    _CUSTOMERS_ACCESS,
+    _PRODUCTS_ACCESS,
+    _REGIONS_ACCESS,
+    _SUPPLIERS_ACCESS,
+    _LABOR_ACCESS,
+    _SALESREPS_ACCESS,
+    _PLANNING_ACCESS,
+    # Cost, margin and profit unmasked: a BI portfolio whose margin columns all
+    # read "—" demonstrates nothing.
+    _SENSITIVE_FULL_ACCESS,
+    {
+        "page.returns.view",
+        "page.returns.analytics.view",
+        "export.returns",
+        "returns.pdf.export",
+    },
+)
+
 
 DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
+    "demo_viewer": set(DEMO_VIEWER_PERMISSION_KEYS),
     "admin": {"*"},
     "owner": _merge_permissions(
         _OWNER_GM_ADMIN_BASE,
+        _PLANNING_ACCESS,
         _OVERVIEW_ACCESS,
         _CUSTOMERS_ACCESS,
         _PRODUCTS_ACCESS,
@@ -831,6 +878,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
     ),
     "gm": _merge_permissions(
         _OWNER_GM_ADMIN_BASE,
+        _PLANNING_ACCESS,
         _OVERVIEW_ACCESS,
         _CUSTOMERS_ACCESS,
         _PRODUCTS_ACCESS,
@@ -843,6 +891,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
     ),
     "sales_manager": _merge_permissions(
         _OVERVIEW_ACCESS,
+        _PLANNING_ACCESS,
         _CUSTOMERS_ACCESS,
         _PRODUCTS_ACCESS,
         _REGIONS_ACCESS,
@@ -910,6 +959,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
     ),
     "analyst": _merge_permissions(
         _OVERVIEW_ACCESS,
+        _PLANNING_ACCESS,
         {
             "page.products.view",
             "page.products.drilldown.view",

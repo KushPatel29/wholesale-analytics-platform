@@ -200,12 +200,15 @@ def seed_demo_users_cmd(password: str) -> None:
             u.is_active = True
             u.is_approved = True
             u.must_reset_password = False
-            u.email = f"{username}@wholesaleprovisions.example.com"
+            u.email = f"{username}@northgateretail.example.com"
             reps = spec["scope"].get("rep", ())
             regions = spec["scope"].get("region", ())
             u.sales_rep_id = reps[0] if reps and reps[0] != "*" else None
             u.region_id = regions[0] if regions else None
-            u.set_password(password)
+            # The one-click demo account carries its own short password so the
+            # login page can print something a visitor can retype. Everything
+            # else takes the shared --password value.
+            u.set_password(str(spec.get("password") or password))
             s.flush()
 
             # Rewrite this user's scope rules from scratch so re-running the
@@ -223,9 +226,10 @@ def seed_demo_users_cmd(password: str) -> None:
                     )
         s.commit()
 
-    click.secho(f"Seeded {len(DEMO_USERS)} demo users (password: {password})", fg="green")
+    click.secho(f"Seeded {len(DEMO_USERS)} demo users (default password: {password})", fg="green")
     for username, spec in DEMO_USERS.items():
-        click.echo(f"  {username:16} role={spec['role']:14} {spec['note']}")
+        pw = str(spec.get("password") or password)
+        click.echo(f"  {username:16} role={spec['role']:14} pw={pw:22} {spec['note']}")
     log_audit("cli", "seed_demo_users", {"count": len(DEMO_USERS)})
 
 

@@ -124,9 +124,11 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">Top Suppliers by Revenue</h5>
-          <div class="btn-group btn-group-sm">
-            <a class="btn btn-outline-secondary" href="{{ url_for('suppliers.export_overview', format='csv') }}">CSV</a>
-          </div>
+          {# The CSV button that used to sit here pointed at
+             suppliers.export_overview, which `_block_legacy_suppliers` answers
+             with 410 Gone. It rendered as a working control and downloaded an
+             error. The live export is bundles.suppliers_export_csv, already
+             offered at the top of this page. #}
         </div>
         <div class="card-body">
           <div id="topSuppliersChart" class="chart-container skeleton" aria-label="Top suppliers by revenue">

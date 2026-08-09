@@ -92,6 +92,17 @@ ENV DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt \
     DEMO_WARMUP=0 \
     DEMO_WARMUP_SECONDARY=0
 
+# "This is the public demo" - which is what makes the login page offer the
+# one-click read-only account and print the credentials.
+#
+# This used to be read off DEMO_WARMUP, and warm-up moved into the build layer
+# above and set it to 0. The side effect was that the deployed portfolio showed
+# an anonymous visitor a username box with no way to fill it, which is the one
+# failure this deployment cannot survive: its entire audience arrives logged
+# out and leaves within seconds. Warm-up strategy and demo-ness are separate
+# questions and now have separate flags.
+ENV DEMO_MODE=1
+
 EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

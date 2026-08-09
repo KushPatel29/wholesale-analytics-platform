@@ -326,14 +326,22 @@ def require_login(fn):
     def wrapper(*args, **kwargs):
         if _cfg_flag("LOGIN_DISABLED", False) or _cfg_flag("AUTHZ_DISABLED", False):
             return fn(*args, **kwargs)
+        # The view call must stay OUTSIDE this try. It used to be inside it, so
+        # any exception raised by the view itself was caught by the bare
+        # `except Exception` below and re-reported as
+        # "401 Authentication required" - a real traceback rendered to the user
+        # as a login failure, on every route decorated with this. That is how
+        # /products/ presented as an auth problem while the session was fine.
+        authenticated = False
         try:
             from flask_login import current_user  # type: ignore
 
-            if current_user.is_authenticated:
-                return fn(*args, **kwargs)
+            authenticated = bool(current_user.is_authenticated)
         except Exception:
-            pass
-        abort(401, description="Authentication required")
+            authenticated = False
+        if not authenticated:
+            abort(401, description="Authentication required")
+        return fn(*args, **kwargs)
 
     return wrapper
 

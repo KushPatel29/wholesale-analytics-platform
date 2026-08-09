@@ -1,16 +1,30 @@
 {% extends 'base.html' %}
+{% block title %}No access | Northgate Retail Analytics{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
-    <div class="alert alert-warning">
-      <h4 class="alert-heading">Forbidden (403)</h4>
-      <p>You do not have permission to access this page.</p>
+    <section class="error-panel">
+      <p class="error-panel__code">403</p>
+      <h1 class="error-panel__title">Your account can&rsquo;t open this page</h1>
+      <p class="error-panel__body">
+        {% if error %}{{ error }}{% else %}
+        This workspace scopes every page by role, and yours doesn&rsquo;t include this one.
+        {% endif %}
+      </p>
       {% if user_role %}
-      <p class="mb-0"><small>Your role: <code>{{ user_role }}</code>. Required role(s): <code>{{ required_roles|join(', ') }}</code>.</small></p>
+      <p class="error-panel__body error-panel__body--muted">
+        Signed in as <code>{{ user_role }}</code>.
+        {% if required_roles %}This page is open to <code>{{ required_roles|join('</code>, <code>')|safe }}</code>.{% endif %}
+      </p>
       {% endif %}
-    </div>
-    <a class="btn btn-outline-secondary" href="/">Go back home</a>
+      <div class="error-panel__actions">
+        <a class="btn btn-primary" href="/">Back to Overview</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('auth.login') }}">Switch account</a>
+      </div>
+      {% if request_id %}
+      <p class="error-panel__meta">Request ID <code>{{ request_id }}</code></p>
+      {% endif %}
+    </section>
   </div>
-  </div>
+</div>
 {% endblock %}
-

@@ -72,7 +72,12 @@ ALLOWED_ROLES: Set[str] = {
     "analyst",
     "viewer",
     "returns_only",
+    "demo_viewer",
 }
+
+# Roles that may never mutate anything, enforced by method rather than by
+# auditing every write route. See `install_read_only_guard`.
+READ_ONLY_ROLES: Set[str] = {"demo_viewer"}
 
 
 SUPER_USERS: Dict[str, str] = {
@@ -164,6 +169,18 @@ DEFAULT_ROLE_PERMISSIONS: Mapping[str, Set[str]] = {
         "view_analytics",
         "view_velocity",
         "view_region",
+    },
+    # Every legacy read key including view_costs: a margin dashboard whose
+    # margin columns come back masked is not a demo of anything.
+    "demo_viewer": {
+        "view_kpis",
+        "view_analytics",
+        "view_downloads",
+        "view_velocity",
+        "view_drilldown",
+        "view_product",
+        "view_region",
+        "view_costs",
     },
     "sales": {
         "view_kpis",
@@ -307,6 +324,43 @@ _PAGE_PERMISSION_BY_ROLE: Dict[str, Set[str]] = {
         "page.customers.view",
         "page.products.view",
         "page.regions.view",
+    },
+    # Mirror of DEMO_VIEWER_PERMISSION_KEYS in app/auth/permissions.py, which is
+    # merged in below by the AUTH_DEFAULT_ROLE_PERMISSION_KEYS loop. Repeated
+    # here so the legacy in-memory map (used when AUTHZ_DB_PERMISSIONS is off)
+    # grants the same pages.
+    "demo_viewer": {
+        "page.overview.view",
+        "page.customers.view",
+        "page.customers.drilldown.view",
+        "page.products.view",
+        "page.products.drilldown.view",
+        "page.regions.view",
+        "page.regions.drilldown.view",
+        "page.suppliers.view",
+        "page.suppliers.drilldown.view",
+        "page.salesreps.view",
+        "page.salesreps.drilldown.view",
+        "page.labor.view",
+        "page.inventory.view",
+        "page.planning.view",
+        "page.forecasting.view",
+        "page.returns.view",
+        "page.returns.analytics.view",
+        "export.overview",
+        "export.customers",
+        "export.products",
+        "export.products.csv",
+        "export.regions",
+        "export.suppliers",
+        "export.suppliers.csv",
+        "export.suppliers.products_vs_customers",
+        "export.salesreps",
+        "export.salesrep.csv",
+        "export.salesrep.xlsx",
+        "export.labor",
+        "export.returns",
+        "returns.pdf.export",
     },
 }
 for _role_name, _keys in _PAGE_PERMISSION_BY_ROLE.items():
@@ -1125,6 +1179,44 @@ def route_permission_override_allows_request() -> bool | None:
     return True
 
 
+# Roles whose presence in a `requires_roles` list means "administrators only".
+# A gate naming *only* these is an admin gate and a read-only demo login must
+# not pass it; a gate that also names an analytics role (sales, sales_manager,
+# gm, production, analyst, viewer) is a page gate and it may.
+_ADMIN_ONLY_ROLES: Set[str] = {"admin", "owner"}
+
+
+def _read_only_role_satisfies(wanted: Set[str], user: Any) -> bool:
+    """
+    Whether a read-only role may pass a role gate it is not literally named in.
+
+    `requires_roles` is used at ~50 call sites with hand-written role tuples.
+    Adding `demo_viewer` to each one would work today and rot the first time
+    someone adds a route, which is exactly how the demo ended up with pages that
+    403 for the only account visitors have. So the decision is made once, here.
+
+    Three conditions, all required:
+      * the user actually holds a read-only role;
+      * the request is a safe method (the write guard covers the rest, but this
+        keeps the rule true on its own rather than by cross-reference);
+      * the gate is not admin-only.
+
+    The admin portal is gated by `permission_required("admin.users.manage")`
+    rather than by role, and `demo_viewer` holds no admin permission, so that
+    surface is closed independently of this.
+    """
+    if not wanted or not wanted - _ADMIN_ONLY_ROLES:
+        return False
+    try:
+        from flask import request as _request
+
+        if _request.method not in {"GET", "HEAD", "OPTIONS"}:
+            return False
+    except Exception:
+        return False
+    return user_is_read_only(user)
+
+
 def requires_roles(*roles: str) -> Callable:
     wanted = {_normalize_role(r) for r in roles if r}
     msg = f"Insufficient role; requires any of: {', '.join(sorted(wanted)) or 'N/A'}"
@@ -1183,9 +1275,13 @@ def requires_roles(*roles: str) -> Callable:
                     abort(403, description="Missing permission for this route.")
                 return fn(*args, **kwargs)
             allowed = not wanted or has_role(*wanted)
+            reason = "authorization_granted" if allowed else "missing_role"
+            if not allowed and _read_only_role_satisfies(wanted, user):
+                allowed = True
+                reason = "read_only_role_grant"
             log_rbac_decision(
                 allowed=allowed,
-                reason="authorization_granted" if allowed else "missing_role",
+                reason=reason,
                 required_roles=wanted,
                 user=user,
             )
@@ -1226,6 +1322,69 @@ def _coerce_series_to_str(s: pd.Series) -> pd.Series:
         return s.astype(str)
     except Exception:
         return s.astype("string")
+
+
+def user_is_read_only(user: Any = None) -> bool:
+    """
+    Whether this user's role may never mutate state.
+
+    Templates use this to *hide* write affordances; `install_read_only_guard`
+    below is what actually enforces it. Both matter: a hidden button that still
+    works is a security hole, and a working button that 403s is the dead end
+    this role exists to avoid.
+    """
+    target = user if user is not None else _get_user()
+    if not getattr(target, "is_authenticated", False):
+        return False
+    roles = {_normalize_role(getattr(target, "role", None))} | _db_role_names(target)
+    return bool(roles & READ_ONLY_ROLES)
+
+
+def install_read_only_guard(app: Any) -> None:
+    """
+    Refuse every state-changing request from a read-only role, at one choke
+    point rather than on each route.
+
+    The public demo hands an anonymous visitor a real session. Enumerating the
+    app's write routes and gating each one is the kind of audit that is correct
+    the day it is written and wrong three commits later, so the rule is keyed
+    off the HTTP method instead: if it is not a safe method, a read-only role
+    cannot reach it.
+
+    Login and logout are exempt - both are POSTs, and a visitor who cannot log
+    out is a worse outcome than one who cannot save a view.
+    """
+    safe_methods = {"GET", "HEAD", "OPTIONS"}
+    exempt_endpoints = {"auth.login", "auth.logout", "auth.demo_login"}
+
+    @app.before_request
+    def _block_writes_for_read_only_roles():  # pragma: no cover - exercised via tests
+        from flask import request as _request
+
+        if _request.method in safe_methods:
+            return None
+        if (_request.endpoint or "") in exempt_endpoints:
+            return None
+        if not user_is_read_only():
+            return None
+        log_rbac_decision(
+            allowed=False,
+            reason="read_only_role",
+            required_roles=set(),
+            user=_get_user(),
+        )
+        wants_json = (
+            _request.is_json
+            or _request.path.startswith("/api/")
+            or "application/json" in (_request.headers.get("Accept") or "")
+        )
+        detail = "This demo account is read-only. Sign in with a full account to make changes."
+        if wants_json:
+            from flask import jsonify
+
+            return jsonify({"error": "read_only", "message": detail}), 403
+        abort(403, description=detail)
+        return None
 
 
 def can_view_page(page_key: str, user: Any = None) -> bool:

@@ -89,7 +89,7 @@ class SuppliersDataError(RuntimeError):
 # ───────────────────────────────────────────────────────────
 # Config
 # ───────────────────────────────────────────────────────────
-VIEW_ROLES = ("production", "gm", "owner", "admin")
+VIEW_ROLES = ("production", "gm", "owner", "admin", "analyst", "demo_viewer")
 TOP_N_DEFAULT = 15
 TOP_N_MAX = 200
 TABLE_PAGE_SIZE_DEFAULT = 50
@@ -1354,6 +1354,10 @@ def index():
         raise InternalServerError("An error occurred while loading suppliers.") from None
 
 
+# `/suppliers/drilldown/<id>` is the shape the overview's drill links have
+# always built, and it 404'd for the same reason regions did. See the note on
+# regions.drilldown.
+@bp.route("/drilldown/<path:supplier_id>")
 @bp.route("/<supplier_id>")
 @login_required
 @requires_roles(*VIEW_ROLES)

@@ -586,9 +586,19 @@ def index():
 # Routes: drilldown
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Two paths, one view. The overview's drill links have always been built as
+# `/regions/drilldown/<name>` (matching /customers/drilldown/<id>), while the
+# only route registered was the bare `/regions/<name>` - so every region link on
+# the landing page 404'd, and the 404 rendered through the shared 403 template
+# as "Forbidden". Registering the path the links already use is the fix; the
+# bare form stays for saved URLs.
+#
+# `demo_viewer` is in the role list because a read-only visitor clicking the
+# most obvious link on the overview must not hit a permissions wall.
+@bp.route("/drilldown/<path:region_name>")
 @bp.route("/<region_name>")
 @login_required
-@requires_roles("sales_manager", "gm", "owner", "admin")
+@requires_roles("sales_manager", "gm", "owner", "admin", "analyst", "demo_viewer")
 def drilldown(region_name):
     if not legacy_pandas_enabled():
         if _regions_drilldown_v2_active():

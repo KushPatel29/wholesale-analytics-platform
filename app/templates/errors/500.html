@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Something broke | Northgate Retail Analytics{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <section class="error-panel">
+      <p class="error-panel__code error-panel__code--bad">500</p>
+      <h1 class="error-panel__title">Something broke on our side</h1>
+      <p class="error-panel__body">
+        This request failed before it could render. Reloading often works &mdash; the demo runs on a
+        small free-tier instance and occasionally drops a request under memory pressure.
+      </p>
+      <div class="error-panel__actions">
+        <a class="btn btn-primary" href="/">Back to Overview</a>
+        <button type="button" class="btn btn-outline-secondary" onclick="window.location.reload()">Reload this page</button>
+      </div>
+      {% if request_id %}
+      <p class="error-panel__meta">Request ID <code>{{ request_id }}</code></p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

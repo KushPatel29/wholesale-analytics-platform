@@ -98,6 +98,55 @@ def login():
     return render_template("auth/login.html", form=form)
 
 
+@bp.route("/demo", methods=["GET", "POST"])
+@limiter.limit("30 per minute")
+def demo_login():
+    """
+    One click into the read-only demo account.
+
+    A portfolio link that opens on a username box loses its reader in the first
+    ten seconds, and that reader is the entire audience for this deployment. So
+    the login page carries a button that lands here, and this signs the visitor
+    straight in as `demo_viewer`.
+
+    GET is allowed on purpose: the point is that a URL pasted into a recruiter's
+    address bar - or reached from a bookmark - is enough. That is only safe
+    because the account is read-only by role (see `install_read_only_guard`),
+    so there is no state for a cross-site GET to change.
+
+    Only reachable when DEMO_MODE is on, so a real deployment of this codebase
+    has no anonymous door.
+    """
+    from ..core.demo_accounts import DEMO_VIEWER_USERNAME, demo_logins_enabled
+
+    if not demo_logins_enabled():
+        return redirect(url_for("auth.login"))
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+
+    user = get_user_by_username(DEMO_VIEWER_USERNAME)
+    if user is None or not getattr(user, "is_active", False):
+        current_app.logger.warning("auth.demo_login_unavailable", extra={"username": DEMO_VIEWER_USERNAME})
+        flash(
+            "The demo account is not available on this deployment. "
+            "Run `python manage.py seed-demo-users` to create it.",
+            "warning",
+        )
+        return redirect(url_for("auth.login"))
+
+    login_user(user, remember=False)
+    try:
+        log_audit(user, "demo_login")
+    except Exception:
+        pass
+    session["is_demo_session"] = True
+    next_url = request.args.get("next") or url_for("dashboard.index")
+    # Never bounce off-site on the strength of a query parameter.
+    if not str(next_url).startswith("/"):
+        next_url = url_for("dashboard.index")
+    return redirect(next_url)
+
+
 @bp.route("/logout")
 def logout():
     if current_user.is_authenticated:

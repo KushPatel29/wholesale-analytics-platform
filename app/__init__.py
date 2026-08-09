@@ -50,6 +50,7 @@ def register_blueprints(app: Flask) -> None:
     from .blueprints.labor import bp as labor_bp
     from .blueprints.salesreps import bp as salesreps_bp
     from .blueprints.stakeholder_report import bp as stakeholder_report_bp
+    from .blueprints.stakeholder_report import legacy_bp as stakeholder_report_legacy_bp
     from .blueprints.bundles import bp as bundles_bp
     from .blueprints.filters_api import bp as filters_api_bp
     from .blueprints.filters_actions import bp as filters_actions_bp
@@ -95,6 +96,7 @@ def register_blueprints(app: Flask) -> None:
         app.register_blueprint(labor_bp)
     app.register_blueprint(salesreps_bp)
     app.register_blueprint(stakeholder_report_bp)
+    app.register_blueprint(stakeholder_report_legacy_bp)
     app.register_blueprint(filters_api_bp)
     app.register_blueprint(filters_actions_bp)
     app.register_blueprint(api_slice_bp)
@@ -643,7 +645,17 @@ def create_app() -> Flask:
             except Exception:
                 return False
 
-        return {"effective_permissions": perms, "can_permission": _can}
+        # `is_read_only` lets a template hide a write control rather than render
+        # one that 403s. The guard in app/core/rbac.py is what enforces it; this
+        # is only about not offering a dead button to the demo visitor.
+        try:
+            from .core.rbac import user_is_read_only
+
+            read_only = bool(user_is_read_only())
+        except Exception:
+            read_only = False
+
+        return {"effective_permissions": perms, "can_permission": _can, "is_read_only": read_only}
 
     app.register_error_handler(DatasetNotBuiltError, _handle_dataset_not_built)
     _register_cli_commands(app)
@@ -680,6 +692,9 @@ def create_app() -> Flask:
             if (
                 path.startswith("/auth/login")
                 or path.startswith("/auth/logout")
+                # The one-click demo entry point signs the visitor in, so it has
+                # to be reachable while logged out - the whole point of it.
+                or path.startswith("/auth/demo")
                 or path.startswith("/auth/reset-password")
                 or path.startswith("/auth/set-password")
             ):
@@ -974,6 +989,15 @@ def create_app() -> Flask:
     # Per-request logging (request-id + payload fingerprint)
     install_request_logging(app)
 
+    # Read-only roles (the public demo login) can never reach a write route,
+    # whatever that route's own decorators happen to say.
+    try:
+        from .core.rbac import install_read_only_guard
+
+        install_read_only_guard(app)
+    except Exception:  # pragma: no cover - never block boot on this
+        app.logger.exception("rbac.read_only_guard_install_failed")
+
     @app.errorhandler(Exception)
     def _handle_uncaught(err):  # pragma: no cover - side-effect logging
         status = 500
@@ -1006,7 +1030,15 @@ def create_app() -> Flask:
             detail = str(getattr(err, "description", "") or message)
             return _problem_response(status, message, detail=detail)
         try:
-            template_name = "errors/500.html" if status >= 500 else "errors/403.html"
+            # Every 4xx used to render errors/403.html, so a mistyped or dead
+            # URL told the visitor "Forbidden (403) - you do not have permission",
+            # which reads as a broken login rather than a wrong address.
+            if status >= 500:
+                template_name = "errors/500.html"
+            elif status == 404:
+                template_name = "errors/404.html"
+            else:
+                template_name = "errors/403.html"
             body = render_template(template_name, error=message, request_id=req_id)
         except Exception:
             body = f"Error: {message}. Request ID: {req_id or ''}"

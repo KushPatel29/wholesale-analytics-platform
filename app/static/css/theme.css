@@ -5194,6 +5194,149 @@ body.theme-wa-future .auth-panel__subtitle {
   font-size: 0.95rem;
 }
 
+body.theme-wa-future .auth-panel {
+  max-width: 34rem;
+}
+
+/* Error pages. These used to be a bootstrap alert with "Go back home", which
+   read like a stack trace escaped; a visitor who mistypes a URL should land
+   somewhere that still looks like the product. */
+body.theme-wa-future .error-panel {
+  max-width: 40rem;
+  margin: 3rem auto;
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 1.35rem;
+  background: var(--wa-surface);
+  box-shadow: var(--surface-shadow-lg);
+}
+
+body.theme-wa-future .error-panel__code {
+  margin: 0 0 0.35rem;
+  color: var(--color-eyebrow-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+body.theme-wa-future .error-panel__code--bad {
+  color: var(--wa-bad, var(--danger, #dc2626));
+}
+
+body.theme-wa-future .error-panel__title {
+  margin: 0 0 0.75rem;
+  color: var(--foreground);
+  font-size: 1.65rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+body.theme-wa-future .error-panel__body {
+  margin: 0 0 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+body.theme-wa-future .error-panel__body--muted {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+body.theme-wa-future .error-panel__body code,
+body.theme-wa-future .error-panel__meta code {
+  padding: 0.08rem 0.32rem;
+  border-radius: 5px;
+  background: var(--wa-surface-2);
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+body.theme-wa-future .error-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+body.theme-wa-future .error-panel__meta {
+  margin: 1.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+/* The one-click door into the demo. Deliberately the largest, highest-contrast
+   thing on the page - it is the only control most visitors should ever use. */
+body.theme-wa-future .auth-demo__cta {
+  display: block;
+  margin-bottom: 1.2rem;
+  padding: 0.85rem 1.1rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--wa-accent, var(--primary, #2563eb));
+  color: var(--wa-accent-contrast, #fff);
+  text-align: center;
+  text-decoration: none;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+body.theme-wa-future .auth-demo__cta:hover,
+body.theme-wa-future .auth-demo__cta:focus-visible {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  color: var(--wa-accent-contrast, #fff);
+}
+
+body.theme-wa-future .auth-demo__cta-label {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+body.theme-wa-future .auth-demo__cta-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+body.theme-wa-future .auth-about {
+  margin-bottom: 1.35rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border, var(--wa-hairline));
+  border-radius: 12px;
+  background: var(--wa-surface-2);
+}
+
+body.theme-wa-future .auth-about__title {
+  margin: 0 0 0.45rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.theme-wa-future .auth-about__body {
+  margin: 0 0 0.6rem;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+body.theme-wa-future .auth-about__body--last {
+  margin-bottom: 0;
+}
+
+body.theme-wa-future .auth-about__body code {
+  padding: 0.08rem 0.32rem;
+  border-radius: 5px;
+  background: var(--wa-surface);
+  font-size: 0.82em;
+}
+
 /* Demo credentials panel, shown only on the public demo build. */
 body.theme-wa-future .auth-demo {
   margin-bottom: 1.35rem;
@@ -5201,6 +5344,29 @@ body.theme-wa-future .auth-demo {
   border: 1px solid var(--border, var(--wa-hairline));
   border-radius: 12px;
   background: var(--wa-good-wash);
+}
+
+body.theme-wa-future .auth-demo__summary {
+  cursor: pointer;
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+body.theme-wa-future .auth-demo[open] .auth-demo__summary {
+  margin-bottom: 0.65rem;
+}
+
+body.theme-wa-future .auth-demo__cred {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+body.theme-wa-future .auth-demo__cred code {
+  padding: 0.08rem 0.32rem;
+  border-radius: 5px;
+  background: var(--wa-surface-2);
+  font-size: 0.9em;
 }
 
 body.theme-wa-future .auth-demo__lead {

@@ -525,8 +525,12 @@
           <div class="filters-actions__buttons">
             <button class="btn btn-outline-secondary" type="button" id="clearDimensionFiltersBtn">Clear dimensions</button>
             <button class="btn btn-outline-secondary" type="button" id="resetFiltersBtn" title="Reset all filters to default">Reset</button>
+            {# Saved views are per-user state. The read-only demo login cannot
+               write any, so it is offered none rather than a button that 403s. #}
+            {% if not is_read_only %}
             <button class="btn btn-outline-primary" type="button" id="openSaveViewBtn">Save View</button>
             <button class="btn btn-outline-primary" type="button" id="updateSavedViewBtn" disabled>Update View</button>
+            {% endif %}
             <button class="btn btn-primary d-flex align-items-center" type="submit" id="filtersApply">
               <span class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true" id="filtersApplySpinner"></span>
               <i class="bi bi-check2-circle me-1" id="filtersApplyIcon"></i>
@@ -536,16 +540,25 @@
         </div>
       </form>
 
-      <section class="filters-section filters-section--saved" id="savedViewsSection" aria-labelledby="savedViewsHeading">
+      {# Not wrapped in an is_read_only guard: this section also carries
+         #filtersBootstrapData, which the filter bar reads on every page. The
+         write controls inside it are hidden individually instead. #}
+      <section class="filters-section filters-section--saved{% if is_read_only %} filters-section--readonly{% endif %}" id="savedViewsSection" aria-labelledby="savedViewsHeading">
         <div class="filters-section__header">
           <div>
             <div class="filters-section__eyebrow">Saved Views</div>
             <h3 class="filters-section__title" id="savedViewsHeading">Private saved views built into the main workflow</h3>
           </div>
-          <div class="filters-section__support">Load, update, or remove your own saved view without losing the current page or analytical scope.</div>
+          <div class="filters-section__support">
+            {%- if is_read_only -%}
+            Saved views are per-user state, so the read-only demo account cannot create them. Sign in with a full account to try this.
+            {%- else -%}
+            Load, update, or remove your own saved view without losing the current page or analytical scope.
+            {%- endif -%}
+          </div>
         </div>
 
-        <div class="saved-view-hub">
+        <div class="saved-view-hub"{% if is_read_only %} hidden{% endif %}>
           <div class="saved-view-hub__topline">
             <form method="post" action="/views/save" class="saved-view-form" id="saveViewForm">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

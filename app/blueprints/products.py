@@ -430,45 +430,11 @@ def login_required(fn):
     return require_login(fn)
 
 
-def requires_roles(*roles: str):
-    """Lightweight role gate using centralized RBAC logic."""
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            from app.core.access_policy import _cfg_flag
-            if _cfg_flag("AUTHZ_DISABLED", False) or _cfg_flag("LOGIN_DISABLED", False):
-                return fn(*args, **kwargs)
-            
-            if callable(route_permission_override_allows_request):
-                try:
-                    allow_override = route_permission_override_allows_request()
-                except Exception:
-                    allow_override = None
-                if allow_override is not None:
-                    if not allow_override:
-                        abort(403)
-                    return fn(*args, **kwargs)
-
-            wanted = {str(r).strip().lower() for r in roles if r}
-            user_roles = set()
-            try:
-                if rbac_roles_for:
-                    user_roles |= {str(r).strip().lower() for r in rbac_roles_for(current_user)}
-                else:
-                    if hasattr(current_user, "roles") and current_user.roles:
-                        for role in current_user.roles:
-                            name = getattr(role, "name", None)
-                            user_roles.add(str(name or role).strip().lower())
-                    if hasattr(current_user, "role") and current_user.role:
-                        user_roles.add(str(current_user.role).strip().lower())
-            except Exception:
-                user_roles = set()
-
-            if wanted and not user_roles.intersection(wanted):
-                abort(403)
-            return fn(*args, **kwargs)
-        return wrapper
-    return decorator
+# Products used to carry its own copy of `requires_roles`, which resolved roles
+# independently of app.core.rbac. It therefore never saw the read-only demo
+# grant and 403'd the demo login on every products route while the rest of the
+# app let it through. One gate, defined once.
+from app.core.rbac import requires_roles  # noqa: E402
 
 
 # -----------------------------
