@@ -160,7 +160,10 @@ FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
 BUNDLE_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/api/stakeholder-report/bundle", "date_type=fiscal&_gf=1"),
     ("/api/products/bundle", "date_type=fiscal&_gf=1&_sections=overview%2Cstrategy%2Cdemand"),
-    ("/api/inventory/bundle", "date_type=fiscal&_gf=1"),
+    (
+        "/api/inventory/bundle",
+        "date_type=fiscal&_gf=1&page=1&page_size=25&sort_by=priority",
+    ),
     ("/api/customers/bundle", "date_type=fiscal&_gf=1"),
     ("/api/suppliers/bundle", "date_type=fiscal&_gf=1"),
     ("/api/regions/bundle", "date_type=fiscal&_gf=1"),

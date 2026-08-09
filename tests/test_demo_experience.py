@@ -140,6 +140,9 @@ class TestWarmup:
         """
         extras = dict(warmup.BUNDLE_ENDPOINTS)
         assert "_sections=" in extras["/api/products/bundle"]
+        assert "page=1" in extras["/api/inventory/bundle"]
+        assert "page_size=25" in extras["/api/inventory/bundle"]
+        assert "sort_by=priority" in extras["/api/inventory/bundle"]
         assert all("date_type=fiscal" in v for v in extras.values())
 
     def test_warms_the_filter_options_every_page_requests(self):
