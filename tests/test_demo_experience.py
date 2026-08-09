@@ -509,6 +509,15 @@ class TestWarmupOrder:
             assert page in paths, f"{page} fell out of the warm-up"
         assert len(paths) == len(set(paths)), "a path is warmed twice"
 
+    def test_server_rendered_deep_links_include_the_active_window(self, monkeypatch):
+        paths = self._primary_paths(monkeypatch)
+        for page in ("/customers/", "/suppliers/"):
+            filtered = [path for path in paths if path.startswith(f"{page}?")]
+            assert len(filtered) == 1
+            assert "date_preset=current_fy" in filtered[0]
+            assert "date_type=fiscal" in filtered[0]
+            assert "_gf=1" in filtered[0]
+
 
 class TestSecurityHeaders:
     def test_data_uri_fonts_are_allowed(self, app):

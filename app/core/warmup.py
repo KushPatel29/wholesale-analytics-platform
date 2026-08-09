@@ -233,8 +233,26 @@ def primary_paths() -> tuple[str, ...]:
         f"/api/products/bundle?{window}&date_type=fiscal&_gf=1"
         "&_sections=table&page=1&page_size=25&sort_by=revenue&sort_dir=desc",
     )
+    # Customers and Suppliers render a small server-side data fallback before
+    # their client bundle takes over. Navigation carries the active filter
+    # window in the URL, so caching only the bare page leaves those filtered
+    # deep links under a different key and makes the host recompute them. Keep
+    # just these two exact page variants in the image; the other pages are
+    # already lightweight shells and do not need duplicate entries.
+    filtered_server_pages = tuple(
+        f"{path}?{window}&date_type=fiscal&_gf=1"
+        for path in ("/customers/", "/suppliers/")
+    )
     remaining_pages = tuple(path for path in WARMUP_PATHS if path not in landing)
-    return landing_options + landing + other_options + other_bundles + product_lazy_bundles + remaining_pages
+    return (
+        landing_options
+        + landing
+        + other_options
+        + other_bundles
+        + product_lazy_bundles
+        + filtered_server_pages
+        + remaining_pages
+    )
 
 
 def _enabled() -> bool:

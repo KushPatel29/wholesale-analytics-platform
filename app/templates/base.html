@@ -120,7 +120,7 @@
   {% set _hide_global_filters = hide_global_filters if hide_global_filters is defined else (disable_global_filters if disable_global_filters is defined else (request.blueprint == 'admin' or _blueprint_name.startswith('returns_'))) %}
   <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}">
     {% set branding = config.get('BRANDING', {}) %}
-    <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
+    <nav class="navbar navbar-expand-xxl navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
           {# Inlined rather than an <img>: the wordmark is drawn with
