@@ -1089,6 +1089,14 @@
     persistSnapshot(lastPayload);
   };
 
+  window.addEventListener("wa:plotlyready", () => {
+    if (!lastPayload) return;
+    renderTrend((lastPayload.charts || {}).revenue_profit_trend || lastPayload.trend || {});
+    renderPareto((lastPayload.charts || {}).concentration_pareto || [], lastPayload.kpis || {});
+    renderProteinChart(lastPayload.protein_intelligence || {});
+    renderSegmentChart(((lastPayload.segments || {}).rows) || []);
+  });
+
   const applyActiveStates = () => {
     root.querySelectorAll(".supplier-quick-chip").forEach((btn) => {
       const active = (btn.dataset.quick || "all") === state.quickFilter;

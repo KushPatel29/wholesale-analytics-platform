@@ -895,6 +895,13 @@
     persistSnapshot(payload);
   };
 
+  window.addEventListener("wa:plotlyready", () => {
+    if (!lastPayload) return;
+    renderRevenueChart();
+    renderProfitChart();
+    renderOpportunityMatrix(lastPayload.opportunity_matrix || {});
+  });
+
   const dispatchApplied = () => {
     const detail = { page: "regions", qs: filterQs };
     if (currentApplyId) {

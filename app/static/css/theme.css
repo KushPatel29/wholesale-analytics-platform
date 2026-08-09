@@ -5740,9 +5740,8 @@ body.theme-wa-future .hero-panel {
 .border-light   { border-color: var(--wa-hairline) !important; }
 
 /* ---- filters shell -------------------------------------------------------
-   The filter panel header was a three-stop navy-to-maroon gradient with fixed
-   inverse text, so it stayed dark in light mode and clashed in dark mode. It
-   is a header, not a hero: one surface, one hairline, the accent as a keyline.
+   The shared filter header is deliberate dark chrome in both modes. This
+   gives its dates and controls one dependable contrast boundary everywhere.
    -------------------------------------------------------------------------- */
 body.theme-wa-future .filters-shell {
   background: var(--wa-surface);
@@ -5752,40 +5751,44 @@ body.theme-wa-future .filters-shell {
 }
 
 body.theme-wa-future .filters-shell__header {
-  background: var(--wa-surface-2);
-  border-bottom: 1px solid var(--wa-hairline);
-  border-left: 2px solid var(--wa-accent);
-  color: var(--wa-text);
+  background:
+    radial-gradient(circle at top right, rgba(var(--page-accent-rgb), 0.22), transparent 38%),
+    linear-gradient(135deg, #08101d 0%, #142238 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-left: 2px solid var(--wa-accent) !important;
+  color: var(--wa-on-dark) !important;
 }
 
 body.theme-wa-future .filters-shell__title,
 body.theme-wa-future .filters-shell__meta,
 body.theme-wa-future .filters-shell__date,
 body.theme-wa-future #filtersLastAppliedLabel {
-  color: var(--wa-text);
+  color: var(--wa-on-dark) !important;
 }
 
 body.theme-wa-future .filters-shell__meta,
 body.theme-wa-future .filters-shell__date,
 body.theme-wa-future .filters-shell__eyebrow {
-  color: var(--wa-text-dim);
+  color: var(--wa-on-dark-muted) !important;
 }
 
 body.theme-wa-future .filters-shell__eyebrow {
-  color: var(--wa-accent);
+  color: rgba(var(--page-accent-alt-rgb), 0.95) !important;
 }
 
-body.theme-wa-future .filters-collapse-btn {
-  background: var(--wa-surface);
-  border: 1px solid var(--wa-hairline-strong);
-  color: var(--wa-text);
+body.theme-wa-future .filters-shell__header .filters-collapse-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  color: var(--wa-on-dark) !important;
   border-radius: 999px;
   padding-inline: 1rem;
 }
 
-body.theme-wa-future .filters-collapse-btn:hover {
-  border-color: var(--wa-accent);
-  color: var(--wa-accent);
+body.theme-wa-future .filters-shell__header .filters-collapse-btn:hover,
+body.theme-wa-future .filters-shell__header .filters-collapse-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  color: #08101d !important;
 }
 
 body.theme-wa-future .filter-chip,
@@ -5793,4 +5796,132 @@ body.theme-wa-future .filter-chip--muted {
   background: var(--wa-surface-3);
   border: 1px solid var(--wa-hairline);
   color: var(--wa-text-dim);
+}
+
+body.theme-wa-future .filters-shell__header :is(.filter-chip, .filter-chip--muted, .filters-status-badge) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: var(--wa-on-dark-muted) !important;
+}
+
+body.theme-wa-future .filters-shell__header .filters-status-badge.is-warning {
+  background: rgba(224, 165, 72, 0.16) !important;
+  border-color: rgba(224, 165, 72, 0.34) !important;
+  color: var(--wa-on-dark) !important;
+}
+
+/* ---- final theme boundaries ---------------------------------------------
+   Chrome and hero panels are deliberately dark in both modes. Everything
+   else follows the paper/graphite surface tokens. Keeping that boundary
+   explicit prevents legacy utilities from creating equal foreground and
+   background colors when the theme changes. */
+.navbar-wholesale,
+body.theme-wa-future .navbar-wholesale {
+  background: #0a0e12;
+  color: var(--wa-on-dark);
+}
+
+body.theme-wa-future .navbar-wholesale :is(.navbar-brand, .navbar-brand-copy, .nav-link, .dropdown-toggle) {
+  color: var(--wa-on-dark);
+}
+
+body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link:hover,
+body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link:focus-visible {
+  color: var(--wa-on-dark);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-wa-future .navbar-wholesale .navbar-nav .nav-link.disabled {
+  color: var(--wa-on-dark-muted) !important;
+}
+
+body.theme-wa-future :is(
+  .page-header,
+  .page-header-futuristic,
+  .hero-card,
+  .hero-card-futuristic,
+  .products-hero,
+  .labor-hero,
+  .assistant-header,
+  .suppliers-hero
+) {
+  background:
+    radial-gradient(circle at top right, rgba(var(--page-accent-rgb), 0.24), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(var(--page-accent-alt-rgb), 0.18), transparent 28%),
+    linear-gradient(135deg, #08101d 0%, #142238 68%, rgba(var(--page-accent-rgb), 0.55) 150%);
+  border-color: rgba(255, 255, 255, 0.12);
+  border-top: 3px solid rgba(var(--page-accent-rgb), 0.9);
+  color: var(--wa-on-dark);
+}
+
+body.theme-wa-future :is(
+  .page-header,
+  .page-header-futuristic,
+  .hero-card,
+  .hero-card-futuristic,
+  .products-hero,
+  .labor-hero,
+  .assistant-header,
+  .suppliers-hero
+) :is(h1, h2, h3, h4, h5, h6, strong, .fw-bold, .fs-3, .fs-4, .fs-5, .fs-6) {
+  color: var(--wa-on-dark) !important;
+}
+
+body.theme-wa-future :is(
+  .page-header,
+  .page-header-futuristic,
+  .hero-card,
+  .hero-card-futuristic,
+  .products-hero,
+  .labor-hero,
+  .assistant-header,
+  .suppliers-hero
+) :is(.text-muted, .text-secondary, .small, small, .text-white-50) {
+  color: var(--wa-on-dark-muted) !important;
+}
+
+body.theme-wa-future :is(
+  .page-header,
+  .page-header-futuristic,
+  .hero-card,
+  .hero-card-futuristic,
+  .products-hero,
+  .labor-hero,
+  .assistant-header,
+  .suppliers-hero
+) :is(.badge, .chip, .feature-badge, .status-chip-futuristic) {
+  color: var(--wa-on-dark) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+body.theme-wa-future .text-white,
+body.theme-wa-future .text-bg-dark,
+body.theme-wa-future .bg-dark-subtle {
+  color: var(--wa-on-dark) !important;
+}
+
+/* Product decision context belongs to the dark hero. Legacy surface tokens
+   made these four panels paper-white in light mode while their copy remained
+   inverse. A restrained glass layer keeps the information readable in both
+   themes without introducing another visual system. */
+body.theme-wa-future .products-hero :is(.products-context-strip, .products-hero-summary-card) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: var(--wa-on-dark) !important;
+  backdrop-filter: none;
+}
+
+body.theme-wa-future .products-hero :is(
+  .products-context-label,
+  .products-context-value,
+  .products-context-story,
+  .products-hero-summary-label,
+  .products-hero-summary-value
+) {
+  color: var(--wa-on-dark) !important;
+}
+
+body.theme-wa-future .products-hero :is(.products-context-label, .products-hero-summary-label) {
+  color: var(--wa-on-dark-muted) !important;
 }

@@ -883,6 +883,46 @@ def create_app() -> Flask:
             return None
 
     @app.after_request
+    def _compress_text_responses(response):  # pragma: no cover - integration behavior
+        """Gzip sizeable text payloads without another runtime dependency."""
+        try:
+            import gzip
+
+            accepted = (request.headers.get("Accept-Encoding") or "").lower()
+            if "gzip" not in accepted or response.status_code < 200 or response.status_code in {204, 304}:
+                return response
+            if response.headers.get("Content-Encoding") or response.status_code == 206:
+                return response
+            mimetype = (response.mimetype or "").lower()
+            compressible = (
+                mimetype.startswith("text/")
+                or mimetype in {"application/json", "application/javascript", "image/svg+xml"}
+            )
+            if not compressible:
+                return response
+            # Flask serves static files in direct-passthrough mode. Disable it
+            # only after confirming the response is compressible so CSS/JS get
+            # the same transfer savings as JSON without buffering downloads.
+            if response.direct_passthrough:
+                response.direct_passthrough = False
+            body = response.get_data()
+            if len(body) < 1024:
+                return response
+            compressed = gzip.compress(body, compresslevel=5)
+            if len(compressed) >= len(body):
+                return response
+            response.set_data(compressed)
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Content-Length"] = str(len(compressed))
+            vary = [item.strip() for item in (response.headers.get("Vary") or "").split(",") if item.strip()]
+            if not any(item.lower() == "accept-encoding" for item in vary):
+                vary.append("Accept-Encoding")
+            response.headers["Vary"] = ", ".join(vary)
+        except Exception:
+            return response
+        return response
+
+    @app.after_request
     def _mask_sensitive_json(response):  # pragma: no cover - integration behavior
         try:
             if app.config.get("LOGIN_DISABLED") or app.config.get("AUTHZ_DISABLED"):

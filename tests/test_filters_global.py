@@ -66,6 +66,24 @@ def test_get_fiscal_periods_uses_october_year_start():
     assert str(periods["fytd_comparison"]["comparison_end"].date()) == "2025-04-08"
 
 
+def test_demo_fiscal_periods_anchor_to_the_immutable_dataset(monkeypatch):
+    from app.services import fact_store
+
+    monkeypatch.setenv("DEMO_PREBUILT_CACHE_READ", "1")
+    monkeypatch.setattr(fact_store, "get_meta", lambda: {"date_max": "2020-06-15"})
+
+    periods = get_fiscal_periods()
+
+    assert str(periods["current_fy"]["end"].date()) == "2020-06-15"
+
+    monkeypatch.setenv("DEMO_PREBUILT_CACHE_READ", "0")
+    monkeypatch.setenv("DEMO_PREBUILT_CACHE_WRITE", "1")
+    build_periods = get_fiscal_periods()
+    assert str(build_periods["current_fy"]["end"].date()) == "2020-06-15"
+    parsed_preset_periods = get_fiscal_periods(pd.Timestamp("2022-01-15"))
+    assert str(parsed_preset_periods["current_fy"]["end"].date()) == "2020-06-15"
+
+
 def test_parse_filters_accepts_schema_alias_names():
     params = parse_filters(
         {

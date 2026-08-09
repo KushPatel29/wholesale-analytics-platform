@@ -97,11 +97,13 @@ def _wait_for_quiet(timeout: float) -> bool:
 WARMUP_PATHS: tuple[str, ...] = (
     "/",
     "/overview/api/bundle?_gf=1",
+    "/stakeholder-report/",
     "/products/",
     "/customers/",
     "/suppliers/",
     "/regions/",
     "/salesreps/",
+    "/returns",
     "/customers/kpis",
     "/customers/rfm",
     "/customers/clv",
@@ -130,6 +132,7 @@ SECONDARY_PATHS: tuple[str, ...] = (
 # its network entries.
 PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
     "overview",
+    "stakeholder-report",
     "customers",
     "products",
     "suppliers",
@@ -152,6 +155,7 @@ FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
 
 # endpoint -> extra arguments the page sends alongside the date window.
 BUNDLE_ENDPOINTS: tuple[tuple[str, str], ...] = (
+    ("/api/stakeholder-report/bundle", "date_type=fiscal&_gf=1"),
     ("/api/products/bundle", "date_type=fiscal&_gf=1&_sections=overview%2Cstrategy%2Cdemand"),
     ("/api/customers/bundle", "date_type=fiscal&_gf=1"),
     ("/api/suppliers/bundle", "date_type=fiscal&_gf=1"),
@@ -190,6 +194,47 @@ def _default_window_query() -> str:
     except Exception:
         logger.debug("warmup.window_resolution_failed", exc_info=True)
         return "date_preset=current_fy"
+
+
+def primary_paths() -> tuple[str, ...]:
+    """Return the exact default requests used by the documented demo login."""
+    window = _default_window_query()
+
+    def _options_path(page: str, dimensions: str, phase: str, with_window: bool) -> str:
+        if with_window:
+            return (
+                f"/api/filters/options?{window}&date_type=fiscal&_gf=1"
+                f"&dimensions={dimensions}&page={page}&phase={phase}"
+            )
+        return f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
+
+    landing_options = tuple(
+        _options_path("overview", dimensions, phase, with_window)
+        for dimensions, phase, with_window in FILTER_OPTION_PHASES
+    )
+    landing = ("/overview/api/bundle?" + window + "&date_type=fiscal&_gf=1", "/")
+    other_options = tuple(
+        _options_path(page, dimensions, phase, with_window)
+        for page in PAGES_WITH_FILTER_OPTIONS
+        if page != "overview"
+        for dimensions, phase, with_window in FILTER_OPTION_PHASES
+    )
+    other_bundles = tuple(
+        f"{endpoint}?{window}&{extra}"
+        for endpoint, extra in BUNDLE_ENDPOINTS
+        if not endpoint.startswith("/overview/")
+    )
+    # Products intentionally fetches a compact summary first.  Its pricing and
+    # table layers are lazy, but a visitor who clicks or scrolls to them should
+    # still get the same instant demo response as the landing layer.
+    product_lazy_bundles = (
+        f"/api/products/bundle?{window}&date_type=fiscal&_gf=1"
+        "&_sections=pricing%2Cexecution%2Cassortment&bubble_top_n=250",
+        f"/api/products/bundle?{window}&date_type=fiscal&_gf=1"
+        "&_sections=table&page=1&page_size=25&sort_by=revenue&sort_dir=desc",
+    )
+    remaining_pages = tuple(path for path in WARMUP_PATHS if path not in landing)
+    return landing_options + landing + other_options + other_bundles + product_lazy_bundles + remaining_pages
 
 
 def _enabled() -> bool:
@@ -269,15 +314,6 @@ def _warm(app) -> None:
 
     # The documented demo login goes first: every page, then the XHRs those
     # pages fire, using the same arguments the front end sends.
-    window = _default_window_query()
-    def _options_path(page: str, dimensions: str, phase: str, with_window: bool) -> str:
-        if with_window:
-            return (
-                f"/api/filters/options?{window}&date_type=fiscal&_gf=1"
-                f"&dimensions={dimensions}&page={page}&phase={phase}"
-            )
-        return f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
-
     # Order matters more than coverage.
     #
     # The filter options used to be warmed last, after eleven pages and six
@@ -289,26 +325,7 @@ def _warm(app) -> None:
     #
     # Warm what the landing page blocks on first: its filter options, then its
     # bundle, then the page itself. Everything else follows.
-    landing_options = tuple(
-        _options_path("overview", dimensions, phase, with_window)
-        for dimensions, phase, with_window in FILTER_OPTION_PHASES
-    )
-    landing = ("/overview/api/bundle?" + window + "&date_type=fiscal&_gf=1", "/")
-    other_options = tuple(
-        _options_path(page, dimensions, phase, with_window)
-        for page in PAGES_WITH_FILTER_OPTIONS
-        if page != "overview"
-        for dimensions, phase, with_window in FILTER_OPTION_PHASES
-    )
-    other_bundles = tuple(
-        f"{endpoint}?{window}&{extra}"
-        for endpoint, extra in BUNDLE_ENDPOINTS
-        if not endpoint.startswith("/overview/")
-    )
-    remaining_pages = tuple(path for path in WARMUP_PATHS if path not in landing)
-
-    primary_paths = landing_options + landing + other_options + other_bundles + remaining_pages
-    _warm_user(app, primary, primary_paths)
+    _warm_user(app, primary, primary_paths())
 
     # Then the rest, so whichever account a visitor picks is already warm.
     # Bounded by a budget: on a slow host it is better to leave some accounts

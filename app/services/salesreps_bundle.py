@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 import threading
 import time
@@ -274,7 +275,12 @@ def _rep_directory_csv_path() -> Path:
 
 
 def _rep_directory_cache_key() -> str:
-    parts = [str(fact_store.cache_buster() or "0")]
+    # Dataset versions can be reused by isolated test/demo snapshots. Include
+    # the resolved source path so a rep-name directory never crosses datasets.
+    parts = [
+        str(fact_store.cache_buster() or "0"),
+        str(os.getenv("PARQUET_PATH") or getattr(fact_store, "FACT_PATH", "")),
+    ]
     csv_path = _rep_directory_csv_path()
     try:
         stat = csv_path.stat()

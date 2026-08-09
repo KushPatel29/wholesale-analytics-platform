@@ -675,8 +675,22 @@
     };
   };
 
-  const presetRange = (preset) => {
+  const datasetReferenceDate = () => {
+    const inlineOptions = typeof readInlineOptionsPayload === "function" ? readInlineOptionsPayload() : null;
+    const raw =
+      state.lastOptionsPayload?.date_max ||
+      state.lastOptionsPayload?.max_date ||
+      inlineOptions?.date_max ||
+      inlineOptions?.max_date ||
+      "";
+    const parsed = raw ? new Date(`${String(raw).slice(0, 10)}T00:00:00`) : null;
     const today = new Date();
+    if (parsed && !Number.isNaN(parsed.getTime()) && parsed.getTime() < today.getTime()) return parsed;
+    return today;
+  };
+
+  const presetRange = (preset) => {
+    const today = datasetReferenceDate();
     const token = String(preset || "").trim().toLowerCase();
     let start = null;
     let end = null;

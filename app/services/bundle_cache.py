@@ -10,6 +10,7 @@ from concurrent.futures import Future
 from typing import Any, Callable, Dict
 
 from app.core.cache_manager import TTLValueCache
+from app.core import prebuilt_cache
 from app.services import filters_service
 from app.services.filters import bind_filter_cache_key
 
@@ -71,11 +72,24 @@ def cached_bundle(
             payload["meta"]["cached"] = False
         return payload
 
-    result, hit = _CACHE.get_or_compute(key, ttl, _build)
+    result = _CACHE.get(key)
+    hit = result is not None
+    prebuilt_hit = False
+    if result is None:
+        result = prebuilt_cache.load("bundles", key)
+        if result is not None:
+            _CACHE.set(key, result, ttl)
+            hit = True
+            prebuilt_hit = True
+        else:
+            result, hit = _CACHE.get_or_compute(key, ttl, _build)
+            if not hit:
+                prebuilt_cache.save("bundles", key, result)
     payload = copy.deepcopy(result)
     if isinstance(payload, dict):
         payload.setdefault("meta", {})
         payload["meta"]["cached"] = bool(hit)
+        payload["meta"]["prebuilt"] = bool(prebuilt_hit)
         payload["meta"]["dataset_version"] = dataset_version
         payload["meta"]["cache_key"] = key
         payload["meta"]["cache_ttl"] = ttl

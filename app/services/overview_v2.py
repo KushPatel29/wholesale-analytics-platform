@@ -18,6 +18,7 @@ from flask_login import current_user
 
 
 from app.cache import cache
+from app.core import prebuilt_cache
 from app.services import analytics_utils as au
 from app.services import margin_rules
 from app.services import overview_metrics as om
@@ -337,16 +338,27 @@ def _bundle_cache_key(filters: FilterParams, include_current_month: bool, defaul
 def _bundle_cache_get(cache_key: str) -> Optional[Dict[str, Any]]:
     with _bundle_cache_lock:
         ctx = _bundle_cache.get(cache_key)
+    prebuilt_hit = False
+    if not ctx:
+        ctx = prebuilt_cache.load("overview-bundles", cache_key)
+        if isinstance(ctx, dict):
+            with _bundle_cache_lock:
+                _bundle_cache[cache_key] = ctx
+            prebuilt_hit = True
     if not ctx:
         return None
     payload = _clone_payload(ctx.get("payload", {}))
+    if prebuilt_hit and isinstance(payload, dict):
+        payload.setdefault("meta", {})["prebuilt"] = True
     monthly = ctx.get("monthly")
     return {"payload": payload, "monthly": monthly, "cache_hit": True}
 
 
 def _bundle_cache_set(cache_key: str, payload: Dict[str, Any], monthly: pd.DataFrame) -> None:
+    value = {"payload": payload, "monthly": monthly}
     with _bundle_cache_lock:
-        _bundle_cache[cache_key] = {"payload": payload, "monthly": monthly}
+        _bundle_cache[cache_key] = value
+    prebuilt_cache.save("overview-bundles", cache_key, value)
 
 
 def _bundle_lock_for(cache_key: str) -> Lock:

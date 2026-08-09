@@ -3268,7 +3268,7 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 #srTableEmpty,
 .salesreps-v2 .sr-territory-empty {
   background: var(--wa-surface-2) !important;
-  color: var(--wa-canvas-deep) !important;
+  color: var(--wa-text) !important;
 }
 
 .salesreps-v2 .sr-page-toolbar {
@@ -3278,7 +3278,7 @@ body:has(.salesreps-v2) .app-main {
   padding: 0.45rem 0.8rem;
   margin-bottom: 0.85rem !important;
   background: var(--wa-canvas-deep) !important;
-  color: var(--wa-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
   border-left: 3px solid var(--wa-accent-deep);
   box-shadow: 0 8px 22px -12px rgba(0, 0, 0, 0.55);
 }
@@ -3294,7 +3294,7 @@ body:has(.salesreps-v2) .app-main {
 
 .salesreps-v2 .sr-filter-breadcrumb-label,
 .salesreps-v2 .sr-filter-breadcrumb {
-  color: var(--wa-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
 }
 
 .salesreps-v2 .sr-filter-toggle {
@@ -3302,7 +3302,7 @@ body:has(.salesreps-v2) .app-main {
     linear-gradient(180deg, rgba(61, 37, 28, 0.95), rgba(38, 23, 17, 0.98)),
     repeating-linear-gradient(135deg, var(--wa-surface-2) 0 2px, transparent 2px 9px) !important;
   border: 1px solid var(--wa-warn-wash) !important;
-  color: var(--wa-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -3319,7 +3319,7 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 #srTopCustomersTable tbody tr,
 .salesreps-v2 #srTable tbody tr {
   background: var(--wa-surface) !important;
-  color: var(--wa-canvas-deep) !important;
+  color: var(--wa-text) !important;
 }
 
 .salesreps-v2 #srTable tbody tr:hover td,
@@ -3693,4 +3693,49 @@ body:has(.salesreps-v2) .app-main {
   vertical-align: middle;
   margin-left: 0.22rem;
   line-height: 1;
+}
+
+/* Final contrast boundary: this workspace is loaded after the shared theme,
+   so its late legacy rules must preserve the same dark-chrome contract. */
+.salesreps-v2 .sr-page-toolbar {
+  background: #101923 !important;
+  color: var(--wa-on-dark) !important;
+}
+
+.salesreps-v2 .sr-page-toolbar :is(
+  .sr-filter-breadcrumb-label,
+  .sr-filter-breadcrumb,
+  .text-muted,
+  .small
+) {
+  color: var(--wa-on-dark) !important;
+}
+
+.salesreps-v2 #srFilterDrawerMount .filters-shell__header {
+  background:
+    radial-gradient(circle at top right, rgba(var(--page-accent-rgb), 0.22), transparent 38%),
+    linear-gradient(135deg, #08101d 0%, #142238 100%) !important;
+  color: var(--wa-on-dark) !important;
+  border: 0 !important;
+  border-left: 3px solid var(--wa-accent-deep) !important;
+}
+
+.salesreps-v2 #srFilterDrawerMount .filters-shell__header :is(
+  .filters-shell__title,
+  .filters-shell__meta,
+  .filters-shell__date,
+  .filters-shell__eyebrow,
+  #filtersLastAppliedLabel
+) {
+  color: var(--wa-on-dark) !important;
+}
+
+.salesreps-v2 #srFilterDrawerMount .filters-shell__header :is(.filters-shell__eyebrow, .filters-shell__meta) {
+  color: var(--wa-on-dark-muted) !important;
+}
+
+.salesreps-v2 #srFilterDrawerMount .filters-shell__header .filters-status-badge {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: var(--wa-on-dark-muted) !important;
 }

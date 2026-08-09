@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% set filters_handler = 'ajax' %}
-{% set suppliers_rev = config.get('STATIC_REV', '20260325') ~ '-suppliers-intel-3' %}
+{% set suppliers_rev = config.get('STATIC_REV', '20260325') ~ '-suppliers-intel-4' %}
 {% block head_extras %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers_v2.css', v=suppliers_rev) }}">

@@ -4283,6 +4283,15 @@
     safeRender("staged actions", () => renderStagedActions());
   };
 
+  // Plotly is intentionally idle-loaded so it cannot block the first data
+  // paint. If it arrives after the detail payload, redraw only its two panels.
+  window.addEventListener("wa:plotlyready", () => {
+    if (!lastPayload || !requestState.detail.loaded) return;
+    const chartsPayload = lastPayload.charts || {};
+    safeRender("price vs velocity", () => renderPriceVelocity(lastPayload.price_vs_velocity || chartsPayload.price_velocity || []));
+    safeRender("performance bubble", () => renderPerformanceBubble(lastPayload.performance_bubble || {}));
+  });
+
   const renderTableBundle = (payload = {}) => {
     renderTable(payload.table || {});
   };

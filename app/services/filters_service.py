@@ -13,6 +13,7 @@ from flask import g, has_request_context
 
 from app.core import access_policy
 from app.core.cache_manager import TTLValueCache
+from app.core import prebuilt_cache
 from app.core.exceptions import DatasetNotBuiltError
 from app.services import fact_store
 from app.services.filters import (
@@ -855,7 +856,19 @@ def get_filter_options(
         hit = True
     else:
         try:
-            result, hit = _OPTIONS_CACHE.get_or_compute(key, OPTIONS_TTL_SECONDS, _build)
+            result = _OPTIONS_CACHE.get(key)
+            hit = result is not None
+            prebuilt_hit = False
+            if result is None:
+                result = prebuilt_cache.load("filter-options", key)
+                if result is not None:
+                    _OPTIONS_CACHE.set(key, result, OPTIONS_TTL_SECONDS)
+                    hit = True
+                    prebuilt_hit = True
+                else:
+                    result, hit = _OPTIONS_CACHE.get_or_compute(key, OPTIONS_TTL_SECONDS, _build)
+                    if not hit:
+                        prebuilt_cache.save("filter-options", key, result)
         except Exception as exc:
             if stale_result is None:
                 raise
@@ -872,6 +885,7 @@ def get_filter_options(
         result["meta"]["cache_key"] = key
         result["meta"]["cache_ttl"] = OPTIONS_TTL_SECONDS
         result["meta"]["cached"] = bool(hit)
+        result["meta"]["prebuilt"] = bool(locals().get("prebuilt_hit", False))
         result["meta"]["requested_dimensions"] = list(requested)
         result.setdefault("date_min", None)
         result.setdefault("date_max", None)

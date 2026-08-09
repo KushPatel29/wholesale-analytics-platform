@@ -492,4 +492,5 @@
 
   bindInteractions();
   renderCharts();
+  window.addEventListener("wa:plotlyready", renderCharts, { once: true });
 })();

@@ -283,5 +283,48 @@ def build_products_parquet_cmd(output: str | None, source: str) -> None:
     click.echo(f"Wrote products parquet to {target} with {len(df)} rows (schema v{schema_version}).")
 
 
+@cli.command("precompute-demo-cache")
+@click.option("--username", default="gm", show_default=True, help="Demo account whose scoped defaults are cached")
+def precompute_demo_cache_cmd(username: str) -> None:
+    """Build the immutable default-page cache packaged in the demo image."""
+    cache_dir = Path(os.getenv("DEMO_PREBUILT_CACHE_DIR", "cache/demo-prebuilt")).resolve()
+    os.environ["DEMO_PREBUILT_CACHE_DIR"] = cache_dir.as_posix()
+    os.environ["DEMO_PREBUILT_CACHE_WRITE"] = "1"
+    os.environ["DEMO_PREBUILT_CACHE_READ"] = "0"
+    os.environ["DEMO_WARMUP"] = "0"
+
+    from app import create_app
+    from app.auth.models import get_user_by_username
+    from app.core.warmup import primary_paths
+
+    user = get_user_by_username(username)
+    if user is None:
+        raise click.ClickException(f"Demo user '{username}' does not exist; run seed-demo-users first.")
+
+    app = create_app()
+    paths = primary_paths()
+    failures: list[str] = []
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["_user_id"] = str(user.id)
+            session["_fresh"] = False
+        for index, path in enumerate(paths, start=1):
+            response = client.get(path)
+            click.echo(f"[{index:02d}/{len(paths):02d}] {response.status_code} {path}")
+            if response.status_code >= 400:
+                failures.append(f"{response.status_code} {path}")
+
+    files = tuple(cache_dir.rglob("*.pickle.gz")) if cache_dir.exists() else ()
+    if failures:
+        raise click.ClickException("Demo cache requests failed: " + "; ".join(failures))
+    if not files:
+        raise click.ClickException("No prebuilt cache files were created.")
+    total_bytes = sum(path.stat().st_size for path in files)
+    click.secho(
+        f"Prebuilt {len(files)} scoped cache files ({total_bytes / 1024 / 1024:.1f} MiB) in {cache_dir}.",
+        fg="green",
+    )
+
+
 if __name__ == "__main__":
     cli()

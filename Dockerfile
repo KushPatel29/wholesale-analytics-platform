@@ -37,7 +37,9 @@ RUN cp .env.demo .env \
     && python -m seed.generate_synthetic_data --months 10 --customers 80 --products 180 \
     && python manage.py init-auth-db \
     && python manage.py seed-demo-users \
-    && (python manage.py build-products-parquet || echo "products parquet skipped")
+    && (python manage.py build-products-parquet || echo "products parquet skipped") \
+    && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-cache-only-not-a-runtime-secret \
+       DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt python manage.py precompute-demo-cache
 
 # Two threads rather than four: each in-flight request materialises pandas
 # frames, so thread count multiplies peak memory directly.
@@ -79,12 +81,14 @@ ENV DUCKDB_MEMORY_LIMIT=112MB \
     DUCKDB_TEMP_DIRECTORY=/tmp/duckdb \
     DUCKDB_MAX_TEMP_DIRECTORY_SIZE=2GB
 
-# Build the caches in the background at boot so no visitor pays for the first
-# render of a page. Paced so the warm-up never starves a real request on a
-# shared CPU, and limited to the documented demo login - warming all six cost
-# more memory than it saved.
-ENV DEMO_WARMUP=1 \
-    DEMO_WARMUP_PACE_SECONDS=2 \
+# The synthetic dataset is immutable inside this image, so its default bundles
+# are precomputed in the build layer above. Reading them is a small file load;
+# the old boot-time warm-up competed with the first visitor for the free CPU
+# and made cold starts slower even though it eventually helped later visits.
+ENV DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt \
+    DEMO_PREBUILT_CACHE_READ=1 \
+    DEMO_PREBUILT_CACHE_WRITE=0 \
+    DEMO_WARMUP=0 \
     DEMO_WARMUP_SECONDARY=0
 
 EXPOSE 10000

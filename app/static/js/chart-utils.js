@@ -441,7 +441,4 @@
   // time, so re-apply the theme defaults and let each page redraw.
   window.addEventListener('wa:themechange', () => applyChartTheme());
 
-  // Auto-load SheetJS on script load
-  loadSheetJS().catch(err => console.warn('Failed to load SheetJS:', err));
-
 })();

@@ -5393,20 +5393,6 @@
     persistSnapshot(payload);
   };
 
-  const fetchEfficiency = async (qs) => {
-    const url = qs ? `/api/salesreps/efficiency?${qs}` : "/api/salesreps/efficiency";
-    try {
-      const res = await authFetch(url, { headers: { Accept: "application/json" } });
-      const payload = await res.json();
-      if (payload.eff) renderEfficiency(payload.eff);
-    } catch (err) {
-      logError("Efficiency fetch failed", err);
-      toggleEmpty("effChart", true);
-    } finally {
-      setChartShellLoading("effChart", false);
-    }
-  };
-
   const fetchBundle = async (options = {}) => {
     reqId += 1;
     const thisReq = reqId;
@@ -5421,8 +5407,6 @@
     updateExportLinks();
     const url = qs ? `${bundleUrl}?${qs}` : bundleUrl;
     const snapshot = options.snapshot || null;
-
-    fetchEfficiency(qs); // Parallel fetch for bubble chart
 
     try {
       const headers = pageCache ? pageCache.prepareHeaders(url, { Accept: "application/json" }) : { Accept: "application/json" };

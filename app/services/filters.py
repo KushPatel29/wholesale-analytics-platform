@@ -531,6 +531,31 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
             now = pd.Timestamp.utcnow()
         except Exception:
             now = pd.Timestamp.today()
+    # The hosted demo ships an immutable snapshot and a matching prebuilt
+    # analytics cache. Anchor rolling presets to that snapshot's newest row so
+    # the default view remains both truthful and fast after the calendar moves
+    # beyond the image build date. Internal preset parsing supplies `now`
+    # explicitly, so this boundary intentionally applies in both cases.
+    demo_cache_enabled = any(
+        str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+        for name in ("DEMO_PREBUILT_CACHE_READ", "DEMO_PREBUILT_CACHE_WRITE")
+    )
+    if demo_cache_enabled:
+        try:
+            from app.services import fact_store
+
+            manifest = fact_store.get_meta() or {}
+            dataset_max = pd.to_datetime(
+                manifest.get("date_max") or manifest.get("max_date"),
+                errors="coerce",
+            )
+            if not pd.isna(dataset_max):
+                dataset_max = _coerce_tznaive(pd.Timestamp(dataset_max)).normalize()
+                current_day = _coerce_tznaive(pd.Timestamp(now)).normalize()
+                if dataset_max < current_day:
+                    now = dataset_max
+        except Exception:
+            pass
     today = _coerce_tznaive(now).normalize()
     current_fy_start = _fiscal_year_start(today)
     previous_fy_start = (current_fy_start - pd.DateOffset(years=1)).normalize()
