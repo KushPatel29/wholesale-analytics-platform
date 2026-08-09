@@ -17,12 +17,13 @@ def test_products_js_served(app):
         assert "SECTION_GROUPS" in body
         assert "bubbleXMetric" in body
         assert "visualStatusKey" in body
-        assert "products-v4-live8" in body
+        assert "products-v4-live9" in body
         assert "return await window.filtersReady" in body
         assert "Promise.race([window.filtersReady" not in body
         assert 'if (hasBootstrapped && typeof setupLazySectionObserver === "function")' in body
         assert "requestIdleCallback(loadRemaining" not in body
         assert "groupForHash" in body
+        assert "if (groupState.loading && !force) return lastPayload" in body
         assert "readyGroups.length" in body
         assert 'data-column="velocity_per_month"' in body
         assert "updateTableLayerContextForSubset" in body

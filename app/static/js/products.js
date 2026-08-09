@@ -15,7 +15,7 @@
   const isV2 = root.dataset.productsV2 === "1";
   const isV3 = root.dataset.productsV3 === "1";
   const isV4 = root.dataset.productsV4 === "1";
-  const PAGE_CACHE_ID = isV4 ? "products-v4-live8" : "products";
+  const PAGE_CACHE_ID = isV4 ? "products-v4-live9" : "products";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
   const WORKSPACE_STORAGE_KEY = isV4 ? "wholesale:products:v4:workspace" : "";
   const TABLE_PRESET_STORAGE_KEY = isV4 ? "wholesale:products:v4:table-preset" : "";
@@ -4388,6 +4388,11 @@
     const groupState = requestState[group];
     if (!groupState) return null;
     if (groupState.loaded && !force) return lastPayload;
+    // A navigation click can scroll the destination into the observer margin,
+    // so both paths may ask for the same group in the same frame. Do not abort
+    // and restart useful work that is already in flight; explicit filter/sort
+    // refreshes pass force=true and still replace stale requests.
+    if (groupState.loading && !force) return lastPayload;
     abortGroupRequest(group);
     const controller = new AbortController();
     const reqId = ++groupState.reqId;
