@@ -872,10 +872,23 @@ def bundle(page: str, args: Any) -> Dict[str, Any]:
         payload.setdefault("warnings", [])
         if isinstance(payload.get("warnings"), list):
             payload["warnings"].append("Access not configured")
-    try:
-        meta.setdefault("packs_coverage", fact_store.packs_coverage(filters, scope=scope, apply_default_window=True))
-    except Exception:
-        meta.setdefault("packs_coverage", {})
+    # A cache hit must stay a cache hit. Running this dataset-wide DuckDB query
+    # after loading a prebuilt payload erased most of the latency saved by the
+    # cache on small hosted instances. The percentage is already present in the
+    # page KPIs when that page exposes it; fresh payloads still collect the full
+    # coverage metadata before being returned.
+    if meta.get("cached"):
+        kpis = payload.get("kpis") if isinstance(payload.get("kpis"), dict) else {}
+        coverage_pct = kpis.get("packs_coverage_pct")
+        meta.setdefault(
+            "packs_coverage",
+            {"packs_coverage_pct": coverage_pct} if coverage_pct is not None else {},
+        )
+    else:
+        try:
+            meta.setdefault("packs_coverage", fact_store.packs_coverage(filters, scope=scope, apply_default_window=True))
+        except Exception:
+            meta.setdefault("packs_coverage", {})
     try:
         safe_payload = to_json_safe(payload)
         meta.setdefault("payload_bytes", payload_size(safe_payload))
@@ -1012,10 +1025,18 @@ def drilldown(entity: str, args: Any) -> Dict[str, Any]:
     meta.setdefault("entity_id", entity_id)
     meta["cache_hit"] = bool(meta.get("cached"))
     bind_filter_cache_key(meta.get("cache_key"))
-    try:
-        meta.setdefault("packs_coverage", fact_store.packs_coverage(filters, scope=scope, apply_default_window=True))
-    except Exception:
-        meta.setdefault("packs_coverage", {})
+    if meta.get("cached"):
+        kpis = payload.get("kpis") if isinstance(payload.get("kpis"), dict) else {}
+        coverage_pct = kpis.get("packs_coverage_pct")
+        meta.setdefault(
+            "packs_coverage",
+            {"packs_coverage_pct": coverage_pct} if coverage_pct is not None else {},
+        )
+    else:
+        try:
+            meta.setdefault("packs_coverage", fact_store.packs_coverage(filters, scope=scope, apply_default_window=True))
+        except Exception:
+            meta.setdefault("packs_coverage", {})
     try:
         safe_payload = to_json_safe(payload)
         meta.setdefault("payload_bytes", payload_size(safe_payload))
