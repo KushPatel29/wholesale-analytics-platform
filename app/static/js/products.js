@@ -15,7 +15,7 @@
   const isV2 = root.dataset.productsV2 === "1";
   const isV3 = root.dataset.productsV3 === "1";
   const isV4 = root.dataset.productsV4 === "1";
-  const PAGE_CACHE_ID = isV4 ? "products-v4-live7" : "products";
+  const PAGE_CACHE_ID = isV4 ? "products-v4-live8" : "products";
   const PAGE_CACHE_POLICY = { freshMs: 90 * 1000, maxAgeMs: 20 * 60 * 1000 };
   const WORKSPACE_STORAGE_KEY = isV4 ? "wholesale:products:v4:workspace" : "";
   const TABLE_PRESET_STORAGE_KEY = isV4 ? "wholesale:products:v4:table-preset" : "";
@@ -4828,27 +4828,24 @@
       sectionObserver.observe(node);
     });
 
-    // Backstop. The observer's root is the viewport, and this page scrolls
-    // inside a container rather than the document, so on some layouts the
-    // pricing and table sections never intersect and their groups never load -
-    // leaving a grid of em-dashes on screen permanently rather than briefly.
-    //
-    // Load them on idle instead of relying on the scroll. First paint still
-    // only waits for the summary group; this just guarantees the rest arrives
-    // rather than hoping an intersection fires.
-    const loadRemaining = () => {
-      targets.forEach(({ group, selector }) => {
-        if (requestState[group]?.loaded || requestState[group]?.loading) return;
-        ensureGroupLoaded(group);
-        const node = document.querySelector(selector);
-        if (node) sectionObserver?.unobserve(node);
-      });
+    // Anchor navigation must also load the destination explicitly. This keeps
+    // first paint summary-only on small hosts while making "Pricing", "Table",
+    // and action links reliable even in layouts whose scrolling element is not
+    // the document viewport observed above.
+    const groupForHash = {
+      "#products-pricing": "detail",
+      "#products-risk-opportunity": "detail",
+      "#products-segments": "detail",
+      "#products-table": "table",
     };
-    if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(loadRemaining, { timeout: 2500 });
-    } else {
-      window.setTimeout(loadRemaining, 1200);
-    }
+    document.querySelectorAll('a[href^="#products-"]').forEach((link) => {
+      if (link.dataset.bundleLinkBound === "1") return;
+      link.dataset.bundleLinkBound = "1";
+      link.addEventListener("click", () => {
+        const group = groupForHash[link.getAttribute("href") || ""];
+        if (group) ensureGroupLoaded(group);
+      });
+    });
   };
 
   const refreshSummaryBundle = () => {
