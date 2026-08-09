@@ -9,7 +9,7 @@
   const REQUIRED_CONTAINERS = {
     overview: ["kpiGrid", "trendChart", "mixChart", "paretoChart", "topMoversBody"],
     sales: ["bundleKpiRevenue", "bundleTableBody", "bundleTrend"],
-    products: ["kpiRevenue", "kpiQty", "productTbody", "priceBubbleChart"],
+    products: ["kpiRevenue", "kpiQty", "productTbody", "paretoChart"],
     regions: ["regionsChart", "regionsTable"],
     suppliers: ["suppliersTable", "trendChart"],
     salesreps: ["salesrepsRevenue", "salesrepsQty", "salesrepsMargin", "salesreps-table-body"],

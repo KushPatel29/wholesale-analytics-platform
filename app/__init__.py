@@ -44,6 +44,7 @@ def register_blueprints(app: Flask) -> None:
     from .blueprints.dashboard import bp as dashboard_bp
     from .blueprints.customers import bp as customers_bp
     from .blueprints.products import bp as products_bp
+    from .blueprints.inventory import bp as inventory_bp
     from .blueprints.regions import bp as regions_bp
     from .blueprints.suppliers import bp as suppliers_bp
     from .blueprints.labor import bp as labor_bp
@@ -87,6 +88,7 @@ def register_blueprints(app: Flask) -> None:
         pass
     app.register_blueprint(customers_bp)
     app.register_blueprint(products_bp)
+    app.register_blueprint(inventory_bp)
     app.register_blueprint(regions_bp)
     app.register_blueprint(suppliers_bp)
     if bool(app.config.get("LABOR_ANALYTICS_ENABLED", True)):
@@ -154,6 +156,15 @@ def register_blueprints(app: Flask) -> None:
                 "returns_enabled": False,
                 "ai_enabled": False,
             }
+
+    @app.context_processor
+    def _inject_page_guide():
+        try:
+            from .core.page_guides import guide_for_request
+
+            return {"page_guide": guide_for_request(request)}
+        except Exception:
+            return {"page_guide": None}
 
     @app.context_processor
     def _inject_active_drilldown_context():

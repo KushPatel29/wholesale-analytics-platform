@@ -632,6 +632,11 @@
         <div id="pricingLayerContext" class="products-layer-context mt-2">Summarizing below-target exposure and pricing actions...</div>
       </div>
     </div>
+    {# The interactive bubble, distribution, and movers duplicated the trend,
+       guardrail, and table views below while adding four chart renders. Keep
+       their code out of the shipped DOM; the compact decision surfaces are
+       faster and cover the same showcase questions. #}
+    {% if false %}
     <div class="row g-3">
       <div class="col-12">
         <div class="card h-100 shadow-sm">
@@ -743,6 +748,7 @@
         </div>
       </div>
     </div>
+    {% endif %}
   </section>
 
   <section id="products-pricing-guardrails" class="mb-4" data-workspace-section="pricing">
@@ -854,6 +860,9 @@
         </div>
       </div>
     </div>
+    {# Browser-only action staging looked like a durable workflow but was not
+       connected to a system of record. Omit it from the showcase workspace. #}
+    {% if false %}
     <div class="row g-3 mb-3">
       <div class="col-xl-7">
         <div class="card shadow-sm h-100">
@@ -935,6 +944,7 @@
         </div>
       </div>
     </div>
+    {% endif %}
     <div class="row g-3">
       <div class="col-xl-4" data-workspace-mode="analyst">
         <div class="card h-100 shadow-sm">
@@ -1169,6 +1179,7 @@
       </div>
     </div>
     <div class="row g-3">
+      {% if false %}
       <div class="col-xl-6">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-transparent d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -1194,8 +1205,9 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
-      <div class="col-xl-6">
+      <div class="col-12">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">Pareto (80/20)</h5>

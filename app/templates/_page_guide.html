@@ -1,0 +1,21 @@
+<section class="page-guide" aria-labelledby="pageGuideTitle">
+  <details>
+    <summary>
+      <span class="page-guide__icon" aria-hidden="true"><i class="bi bi-compass"></i></span>
+      <span class="page-guide__intro">
+        <span class="page-guide__eyebrow">How to use this page</span>
+        <span class="page-guide__title" id="pageGuideTitle">{{ page_guide.title }}</span>
+        <span class="page-guide__summary">{{ page_guide.summary }}</span>
+      </span>
+      <span class="page-guide__toggle" aria-hidden="true">Open guide</span>
+    </summary>
+    <div class="page-guide__steps">
+      {% for number, label, detail in page_guide.steps %}
+        <div class="page-guide__step">
+          <span class="page-guide__number">{{ number }}</span>
+          <div><strong>{{ label }}</strong><span>{{ detail }}</span></div>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+</section>

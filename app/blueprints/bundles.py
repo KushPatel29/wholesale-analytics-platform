@@ -290,6 +290,13 @@ def products_bundle():
     return _bundle("products")
 
 
+@bp.get("/inventory/bundle")
+@login_required
+@permission_required("page.products.view")
+def inventory_bundle():
+    return _bundle("inventory")
+
+
 @bp.get("/customers/bundle")
 @login_required
 def customers_bundle():

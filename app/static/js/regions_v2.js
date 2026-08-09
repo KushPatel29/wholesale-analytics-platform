@@ -429,10 +429,42 @@
     };
   };
 
+  const renderBarList = (chartEl, rows, { valueFormatter, color, logScale = false, onSelect } = {}) => {
+    if (!chartEl) return;
+    chartEl.innerHTML = "";
+    const values = rows.map((row) => Math.max(0, asNumber(row.value)));
+    const scaled = values.map((value) => (logScale ? Math.log1p(value) : value));
+    const maximum = Math.max(...scaled, 1);
+    const fragment = document.createDocumentFragment();
+    rows.forEach((row, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "regions-v2-bar-row";
+      button.setAttribute("aria-label", `${row.label}: ${valueFormatter(row.value)}`);
+      const label = document.createElement("span");
+      label.className = "regions-v2-bar-label";
+      label.textContent = truncate(row.label, 34);
+      const track = document.createElement("span");
+      track.className = "regions-v2-bar-track";
+      const fill = document.createElement("span");
+      fill.className = "regions-v2-bar-fill";
+      fill.style.width = `${Math.max(2, (scaled[index] / maximum) * 100)}%`;
+      fill.style.background = color;
+      track.appendChild(fill);
+      const value = document.createElement("strong");
+      value.className = "regions-v2-bar-value";
+      value.textContent = valueFormatter(row.value);
+      button.append(label, track, value);
+      button.addEventListener("click", () => onSelect?.(row));
+      fragment.appendChild(button);
+    });
+    chartEl.appendChild(fragment);
+  };
+
   const renderRevenueChart = () => {
     const chartEl = document.getElementById("regionsV2RevenueChart");
     const emptyEl = document.getElementById("regionsV2RevenueEmpty");
-    if (!chartEl || typeof window.Plotly === "undefined") return;
+    if (!chartEl) return;
     const series = currentRevenueSeries();
     const hasData = series.labels.length > 0 && series.values.some((value) => value > 0);
     if (emptyEl) emptyEl.classList.toggle("d-none", hasData);
@@ -441,38 +473,19 @@
       return;
     }
     const logScale = Boolean(document.getElementById("regionsV2LogScale")?.checked);
-    window.Plotly.newPlot(
+    renderBarList(
       chartEl,
-      [
-        {
-          x: series.values.slice().reverse(),
-          y: series.labels.map((label) => truncate(label, 28)).slice().reverse(),
-          text: series.labels.slice().reverse(),
-          type: "bar",
-          orientation: "h",
-          marker: { color: "#1d4ed8" },
-          hovertemplate: "%{text}<br>%{x:$,.0f}<extra></extra>",
-        },
-      ],
+      series.labels.map((label, index) => ({ label, value: series.values[index] })),
       {
-        margin: { t: 10, r: 20, b: 35, l: 120 },
-        height: Math.max(340, series.labels.length * 26),
-        xaxis: { tickprefix: "$", tickformat: "~s", type: logScale ? "log" : "linear" },
-        yaxis: { automargin: true },
-      },
-      { displayModeBar: false, responsive: true }
-    );
-    if (typeof chartEl.on === "function") {
-      if (chartEl.removeAllListeners) chartEl.removeAllListeners("plotly_click");
-      chartEl.on("plotly_click", (event) => {
-        const point = event?.points?.[0];
-        if (!point?.text) return;
-        openUniversal(
-          regionDrillPayload(point.text, point.text, "Ranking & Performance", "Revenue by Region", "Revenue", point.x),
+        valueFormatter: fmtCompactCurrency,
+        color: "linear-gradient(90deg, var(--wa-accent), var(--wa-info))",
+        logScale,
+        onSelect: (row) => openUniversal(
+          regionDrillPayload(row.label, row.label, "Ranking & Performance", "Revenue by Region", "Revenue", row.value),
           chartEl
-        );
-      });
-    }
+        ),
+      }
+    );
   };
 
   const profitabilitySeries = () => {
@@ -486,7 +499,7 @@
   const renderProfitChart = () => {
     const chartEl = document.getElementById("regionsV2ProfitChart");
     const emptyEl = document.getElementById("regionsV2ProfitEmpty");
-    if (!chartEl || typeof window.Plotly === "undefined") return;
+    if (!chartEl) return;
     const series = profitabilitySeries();
     const labels = series.rows.map((row) => row.region || "Unknown");
     const values = series.rows.map((row) => row[series.metric]);
@@ -497,39 +510,25 @@
       return;
     }
     const isPct = series.metric === "margin_pct";
-    const color = series.metric === "profit" ? "#16a34a" : isPct ? "#0891b2" : series.metric === "aov" ? "#f59e0b" : "#4338ca";
-    window.Plotly.newPlot(
+    const color = series.metric === "profit"
+      ? "linear-gradient(90deg, var(--wa-good), var(--wa-info))"
+      : isPct
+        ? "linear-gradient(90deg, var(--wa-info), var(--wa-accent))"
+        : series.metric === "aov"
+          ? "linear-gradient(90deg, var(--wa-warning), var(--wa-accent))"
+          : "linear-gradient(90deg, var(--wa-accent), var(--wa-info))";
+    renderBarList(
       chartEl,
-      [
-        {
-          x: values.slice().reverse(),
-          y: labels.map((label) => truncate(label, 28)).slice().reverse(),
-          text: labels.slice().reverse(),
-          type: "bar",
-          orientation: "h",
-          marker: { color },
-          hovertemplate: isPct ? "%{text}<br>%{x:.1f}%<extra></extra>" : "%{text}<br>%{x:$,.2f}<extra></extra>",
-        },
-      ],
+      labels.map((label, index) => ({ label, value: values[index] })),
       {
-        margin: { t: 10, r: 20, b: 35, l: 120 },
-        height: Math.max(340, labels.length * 26),
-        xaxis: isPct ? { ticksuffix: "%" } : { tickprefix: "$", tickformat: "~s" },
-        yaxis: { automargin: true },
-      },
-      { displayModeBar: false, responsive: true }
-    );
-    if (typeof chartEl.on === "function") {
-      if (chartEl.removeAllListeners) chartEl.removeAllListeners("plotly_click");
-      chartEl.on("plotly_click", (event) => {
-        const point = event?.points?.[0];
-        if (!point?.text) return;
-        openUniversal(
-          regionDrillPayload(point.text, point.text, "Ranking & Performance", "Profitability by Region", series.metric, point.x),
+        valueFormatter: isPct ? fmtPercent : fmtCompactCurrency,
+        color,
+        onSelect: (row) => openUniversal(
+          regionDrillPayload(row.label, row.label, "Ranking & Performance", "Profitability by Region", series.metric, row.value),
           chartEl
-        );
-      });
-    }
+        ),
+      }
+    );
   };
 
   const pillClass = (value, prefix) => {
@@ -615,71 +614,42 @@
   const renderOpportunityMatrix = (payload = {}) => {
     const chartEl = document.getElementById("regionsV2OpportunityChart");
     const emptyEl = document.getElementById("regionsV2OpportunityEmpty");
-    if (!chartEl || typeof window.Plotly === "undefined") return;
+    if (!chartEl) return;
     const points = Array.isArray(payload.points) ? payload.points : [];
     if (emptyEl) emptyEl.classList.toggle("d-none", points.length >= 3);
     if (points.length < 3) {
       chartEl.innerHTML = "";
       return;
     }
-    const palette = { Scale: "#16a34a", Protect: "#f59e0b", Fix: "#dc2626", Watch: "#2563eb" };
-    window.Plotly.newPlot(
-      chartEl,
-      [
-        {
-          x: points.map((point) => asNumber(point.revenue)),
-          y: points.map((point) => asNumber(point.margin_pct)),
-          text: points.map((point) => point.region || ""),
-          mode: "markers+text",
-          type: "scatter",
-          textposition: "top center",
-          marker: {
-            size: 14,
-            color: points.map((point) => palette[point.quadrant] || "#2563eb"),
-            opacity: 0.85,
-          },
-          hovertemplate: "%{text}<br>Revenue %{x:$,.0f}<br>Margin %{y:.1f}%<extra></extra>",
-        },
-      ],
-      {
-        margin: { t: 10, r: 20, b: 45, l: 55 },
-        height: 340,
-        xaxis: { title: "Revenue", tickprefix: "$", tickformat: "~s" },
-        yaxis: { title: "Margin %", ticksuffix: "%" },
-        shapes: [
-          {
-            type: "line",
-            x0: payload.revenue_median,
-            x1: payload.revenue_median,
-            y0: 0,
-            y1: 1,
-            yref: "paper",
-            line: { color: "rgba(15, 23, 42, 0.25)", dash: "dot" },
-          },
-          {
-            type: "line",
-            y0: payload.margin_median,
-            y1: payload.margin_median,
-            x0: 0,
-            x1: 1,
-            xref: "paper",
-            line: { color: "rgba(15, 23, 42, 0.25)", dash: "dot" },
-          },
-        ],
-      },
-      { displayModeBar: false, responsive: true }
-    );
-    if (typeof chartEl.on === "function") {
-      if (chartEl.removeAllListeners) chartEl.removeAllListeners("plotly_click");
-      chartEl.on("plotly_click", (event) => {
-        const point = event?.points?.[0];
-        if (!point?.text) return;
-        openUniversal(
-          regionDrillPayload(point.text, point.text, "Opportunity Matrix", "Protect / Fix / Scale", "Margin %", point.y),
-          chartEl
-        );
-      });
-    }
+    chartEl.innerHTML = "";
+    chartEl.classList.add("regions-v2-opportunity-grid");
+    const groups = ["Scale", "Protect", "Fix", "Watch"];
+    groups.forEach((quadrant) => {
+      const panel = document.createElement("section");
+      panel.className = `regions-v2-quadrant regions-v2-quadrant--${quadrant.toLowerCase()}`;
+      const title = document.createElement("h6");
+      title.textContent = quadrant;
+      panel.appendChild(title);
+      points
+        .filter((point) => (point.quadrant || "Watch") === quadrant)
+        .sort((a, b) => asNumber(b.revenue) - asNumber(a.revenue))
+        .forEach((point) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "regions-v2-quadrant-item";
+          const name = document.createElement("strong");
+          name.textContent = point.region || "Unknown";
+          const meta = document.createElement("span");
+          meta.textContent = `${fmtCompactCurrency(point.revenue)} · ${fmtPercent(point.margin_pct)} margin`;
+          button.append(name, meta);
+          button.addEventListener("click", () => openUniversal(
+            regionDrillPayload(point.region, point.region, "Opportunity Matrix", "Protect / Fix / Scale", "Margin %", point.margin_pct),
+            chartEl
+          ));
+          panel.appendChild(button);
+        });
+      chartEl.appendChild(panel);
+    });
   };
 
   const renderRetention = (payload = {}) => {
@@ -894,13 +864,6 @@
     }
     persistSnapshot(payload);
   };
-
-  window.addEventListener("wa:plotlyready", () => {
-    if (!lastPayload) return;
-    renderRevenueChart();
-    renderProfitChart();
-    renderOpportunityMatrix(lastPayload.opportunity_matrix || {});
-  });
 
   const dispatchApplied = () => {
     const detail = { page: "regions", qs: filterQs };

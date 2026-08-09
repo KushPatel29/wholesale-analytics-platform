@@ -31,7 +31,7 @@
 }
 
 .labor-hero {
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
   overflow: hidden;
   background:
     radial-gradient(circle at top right, var(--wa-warn-wash), transparent 28%),
@@ -87,7 +87,7 @@
 }
 
 .labor-kicker {
-  color: var(--wa-text-inverse);
+  color: var(--wa-warn);
   margin-bottom: 0.8rem;
 }
 
@@ -100,7 +100,7 @@
 .labor-hero-subtitle {
   max-width: 70ch;
   margin: 0.45rem 0 0.55rem;
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark-muted);
   font-size: 1.05rem;
 }
 
@@ -130,16 +130,16 @@
 .labor-hero-purpose {
   max-width: 76ch;
   margin: 0;
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark-muted);
 }
 
 .labor-hero-narrative {
   margin-top: 1rem;
   padding: 1.05rem 1.1rem;
   border-radius: 1rem;
-  background: var(--wa-surface-2);
-  border: 1px solid var(--wa-hairline);
-  color: var(--wa-text-inverse);
+  background: rgba(7, 16, 29, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--wa-on-dark);
 }
 
 .labor-chip-row {
@@ -167,8 +167,8 @@
 
 .labor-page .labor-hero .labor-chip {
   background: rgba(18, 35, 53, 0.42);
-  border-color: var(--wa-hairline);
-  color: var(--wa-text-inverse) !important;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--wa-on-dark-muted) !important;
 }
 
 .labor-chip-dark {
@@ -185,8 +185,8 @@
 .labor-command-card {
   padding: 1rem;
   border-radius: 1.1rem;
-  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
-  border: 1px solid var(--wa-hairline);
+  background: rgba(7, 16, 29, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .labor-command-list {
@@ -200,9 +200,9 @@
   display: block;
   padding: 0.85rem 0.95rem;
   border-radius: 0.95rem;
-  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
-  border: 1px solid var(--wa-hairline);
-  color: var(--wa-text-inverse);
+  background: rgba(7, 16, 29, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--wa-on-dark);
   text-decoration: none;
 }
 
@@ -214,20 +214,20 @@
 .labor-command-link__detail {
   display: block;
   margin-top: 0.25rem;
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark-muted);
   font-size: 0.9rem;
 }
 
 .labor-command-link:hover,
 .labor-export-menu summary:hover {
-  color: var(--wa-text-inverse);
-  border-color: var(--wa-hairline);
+  color: var(--wa-on-dark);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .labor-export-menu {
   border-radius: 1rem;
-  background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
-  border: 1px solid var(--wa-hairline);
+  background: rgba(7, 16, 29, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .labor-export-menu summary {
@@ -235,7 +235,7 @@
   cursor: pointer;
   padding: 0.95rem 1rem;
   font-weight: 700;
-  color: var(--wa-text-inverse);
+  color: var(--wa-on-dark);
 }
 
 .labor-export-menu summary::-webkit-details-marker {
@@ -261,6 +261,11 @@
   border-radius: 1rem;
   border: 1px solid var(--wa-hairline);
   background: linear-gradient(180deg, var(--wa-surface-2), var(--wa-surface-2));
+}
+
+.labor-hero .labor-mini-stat {
+  background: rgba(7, 16, 29, 0.52);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .labor-mini-stat-info {
@@ -304,8 +309,8 @@
 }
 
 .labor-export-menu .btn-outline-light {
-  background: var(--wa-surface-2);
-  color: var(--wa-text-inverse);
+  background: rgba(7, 16, 29, 0.55);
+  color: var(--wa-on-dark);
   border-color: var(--wa-hairline);
 }
 
@@ -318,8 +323,8 @@
 
 .labor-export-menu .btn-outline-light:hover,
 .labor-export-menu .btn-outline-light:focus {
-  background: var(--wa-surface-2);
-  color: var(--wa-text-inverse);
+  background: rgba(7, 16, 29, 0.72);
+  color: var(--wa-on-dark);
   border-color: var(--wa-hairline);
 }
 
@@ -330,7 +335,7 @@
 .labor-page .labor-hero .labor-mini-stat__hint,
 .labor-page .labor-hero .labor-chip,
 .labor-page .labor-hero .labor-chip i {
-  color: var(--wa-text-inverse) !important;
+  color: var(--wa-on-dark) !important;
 }
 
 .labor-filter-card {

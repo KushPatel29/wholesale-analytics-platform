@@ -18,6 +18,7 @@ from app.services import fact_schema as fs
 from app.services.bundle_builder import payload_size, to_json_safe, validate_bundle
 from app.services import customers_bundle
 from app.services import products_bundle
+from app.services import inventory_bundle
 from app.services import regions_bundle
 from app.services import suppliers_bundle
 from app.services import salesreps_bundle
@@ -603,6 +604,8 @@ def _build_bundle(page: str, filters: Any, scope: Dict[str, Any], args: Any) -> 
             args,
             requested_sections=_requested_sections(args),
         )
+    if page == "inventory":
+        return inventory_bundle.build_inventory_bundle(filters, scope, args)
     if page == "regions":
         return regions_bundle.build_regions_bundle(filters, scope, args)
     if page == "suppliers":

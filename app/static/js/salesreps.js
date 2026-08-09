@@ -62,14 +62,8 @@
   const CHART_IDS = [
     "trendChart",
     "topRepsChart",
-    "monthlyCompareChart",
-    "transferChart",
     "srProteinChart",
     "concentrationChart",
-    "effChart",
-    "profitRevenueChart",
-    "revenueShareChart",
-    "aspChart",
     "srTerritoryChart",
   ];
   const COLUMN_STORAGE_KEY = "salesreps.columnVisibility.v1";
@@ -5321,12 +5315,6 @@
     }
 
     try {
-      initLiveMap(payload);
-    } catch (err) {
-      logError("Live map rendering failed", err);
-    }
-
-    try {
       renderProteinTable(analysis.proteins || []);
       // 6D: Protein section subtitle
       const proteins = analysis.proteins || [];
@@ -5368,18 +5356,8 @@
         const n = topRepRows.length;
         if (n) setText("srSectionComparisonSubtitle", `${n} rep${n !== 1 ? "s" : ""} · select checkboxes in the table below to compare side-by-side`);
         
-        renderPareto(topRepRows);
-        renderAspLeaders(payload.charts?.asp_leaders || tableRows);
-        
-        renderMonthlyCompare(payload.charts?.monthly_compare || payload.trend?.monthly_compare || {});
-        renderTransfers(payload.charts?.transfers || []);
         renderTrend(payload.charts?.trend || payload.trend || {});
         renderConcentration(payload.charts?.concentration || []);
-        
-        const efficiencySignature = signatureForRows(payload.charts?.scatter || tableRows, ["rep_id", "customers", "revenue", "profit", "margin_pct"]);
-        memoizedRender("efficiency-chart", efficiencySignature, () => renderEfficiency(payload.charts?.scatter || tableRows));
-        
-        renderProfitRevenue(payload.charts?.profit_vs_revenue || []);
       } catch (err) {
         logError("Deferred chart rendering failed", err);
       } finally {
@@ -5446,7 +5424,7 @@
       if (err?.name === "AbortError") return;
       logError("salesreps bundle failed", err);
       if (!lastPayload) {
-        ["trendChart", "topRepsChart", "monthlyCompareChart", "transferChart", "srProteinChart", "concentrationChart", "effChart", "profitRevenueChart", "revenueShareChart", "aspChart"].forEach((id) => toggleEmpty(id, true));
+        CHART_IDS.forEach((id) => toggleEmpty(id, true));
         setScorecardLoading(false);
         setSummaryNarrativeLoading(false);
       }

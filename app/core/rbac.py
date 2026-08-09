@@ -945,6 +945,8 @@ def request_permission_policy(path: str | None = None) -> dict[str, tuple[tuple[
             required_all.append("export.customers")
     elif current_path.startswith("/api/products/drilldown/bundle"):
         required_all.extend(("page.products.view", "page.products.drilldown.view"))
+    elif current_path.startswith("/api/inventory") or current_path.startswith("/inventory"):
+        required_all.append("page.products.view")
     elif current_path.startswith("/api/products/bundle"):
         required_all.extend(("page.products.view", "feature.products.dashboard.view"))
     elif current_path.startswith("/products/api/trend_delta") or current_path.startswith("/products/api/trend"):

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% set filters_handler = 'ajax' %}
+{% block title %}Inventory Analysis | Northgate Retail Analytics{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260809-showcase-1') }}">
+{% endblock %}
+
+{% block content %}
+<div id="InventoryApp" class="inventory-page" data-bundle-url="{{ url_for('bundles.inventory_bundle') }}">
+  <section class="inventory-hero mb-4">
+    <div>
+      <div class="inventory-eyebrow">Inventory command center</div>
+      <h1>Inventory Analysis</h1>
+      <p>Balance service, replenishment, and working capital with one SKU-level view of cover, turns, backorders, ABC class, SVSI, aging, and carrying cost.</p>
+      <div class="inventory-hero__meta">
+        <span id="inventoryWindow">Resolving active window…</span>
+        <span id="inventorySource">Latest observed SKU inventory snapshot</span>
+      </div>
+    </div>
+    <div class="inventory-hero__actions">
+      <button class="btn btn-light btn-sm" id="inventoryExportBtn" type="button" disabled><i class="bi bi-download me-1"></i>Export current view</button>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('stakeholder_report.index') }}">Open planning</a>
+    </div>
+  </section>
+
+  <div id="inventoryAlert" class="alert alert-danger d-none" role="alert"></div>
+
+  <section class="inventory-insights" id="inventoryInsights" aria-live="polite">
+    <div class="inventory-skeleton-card"></div><div class="inventory-skeleton-card"></div><div class="inventory-skeleton-card"></div>
+  </section>
+
+  <section class="inventory-kpis" aria-label="Inventory scorecard">
+    {% for id, label, hint in [
+      ('inventoryValue', 'Inventory value', 'Latest observed value'),
+      ('inventoryUnits', 'Units on hand', 'Portfolio stock quantity'),
+      ('inventoryWeeks', 'Weeks on hand', 'On hand ÷ average weekly usage'),
+      ('inventoryTurns', 'Annual turns', '52 ÷ weeks on hand'),
+      ('inventoryReorder', 'Needs replenishment', 'Critical + reorder SKUs'),
+      ('inventoryExcess', 'Excess cover', 'Above the category guardrail'),
+      ('inventoryBackorders', 'Backorder units', 'Open unit exposure'),
+      ('inventoryHolding', 'Annual holding cost', '11% planning assumption')
+    ] %}
+      <article class="inventory-kpi">
+        <span>{{ label }}</span><strong id="{{ id }}">—</strong><small>{{ hint }}</small>
+      </article>
+    {% endfor %}
+  </section>
+
+  <section class="inventory-section">
+    <div class="inventory-section__head">
+      <div><span>Stock posture</span><h2>Work the lanes from left to right</h2></div>
+      <p>Critical and Reorder protect service. Healthy protects flow. Excess releases cash.</p>
+    </div>
+    <div class="stock-posture-rail" id="inventoryPosture"></div>
+  </section>
+
+  <section class="inventory-action-grid">
+    <article class="inventory-panel">
+      <div class="inventory-panel__head">
+        <div><span>Buy plan</span><h3>Replenishment priorities</h3></div>
+        <span class="inventory-panel__badge" id="purchasePlanCount">0 SKUs</span>
+      </div>
+      <p class="inventory-panel__copy">Suggested units close the gap to the category cover target. Validate supplier lead time before ordering.</p>
+      <div class="inventory-list" id="purchasePlanList"><div class="inventory-empty">Loading purchase plan…</div></div>
+    </article>
+    <article class="inventory-panel">
+      <div class="inventory-panel__head">
+        <div><span>Rebalance</span><h3>Excess and cash-release candidates</h3></div>
+        <span class="inventory-panel__badge" id="rebalanceCount">0 SKUs</span>
+      </div>
+      <p class="inventory-panel__copy">High cover or excess-weighted SVSI suggests transfer, markdown, supplier restraint, or assortment review.</p>
+      <div class="inventory-list" id="rebalanceList"><div class="inventory-empty">Loading excess candidates…</div></div>
+    </article>
+  </section>
+
+  <section class="inventory-section">
+    <div class="inventory-section__head">
+      <div><span>Portfolio diagnostics</span><h2>Value, movement, aging, and supplier exposure</h2></div>
+      <p>Each diagnostic uses the same active scope and one SKU-level calculation set.</p>
+    </div>
+    <div class="inventory-diagnostics">
+      <article class="inventory-panel"><h3>ABC by inventory value</h3><div id="inventoryAbc" class="inventory-bars"></div></article>
+      <article class="inventory-panel"><h3>Movement quadrant</h3><div id="inventoryQuadrants" class="inventory-bars"></div></article>
+      <article class="inventory-panel"><h3>Inventory aging</h3><div id="inventoryAging" class="inventory-bars"></div></article>
+      <article class="inventory-panel">
+        <h3>Annual holding-cost model</h3>
+        <div id="inventoryHoldingSplit" class="inventory-bars"></div>
+        <small class="inventory-footnote">Capital 5% · service 1% · storage 2% · risk 3%</small>
+      </article>
+    </div>
+  </section>
+
+  <section class="inventory-section">
+    <div class="inventory-section__head">
+      <div><span>Demand versus stock</span><h2>SVSI and cover matrix</h2></div>
+      <p>SVSI compares each SKU’s share of inventory value with its share of unit usage. Near 1.0 is balanced.</p>
+    </div>
+    <div class="inventory-matrix" id="inventoryMatrix"></div>
+  </section>
+
+  <section class="inventory-section">
+    <div class="inventory-section__head">
+      <div><span>Supplier lens</span><h2>Inventory exposure by supplier</h2></div>
+      <p>Use replenishment count and backorders beside value exposure before escalating a supplier.</p>
+    </div>
+    <div class="table-responsive inventory-table-wrap">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Supplier</th><th class="text-end">SKUs</th><th class="text-end">Inventory value</th><th class="text-end">Needs reorder</th><th class="text-end">Backorders</th></tr></thead>
+        <tbody id="inventorySupplierBody"><tr><td colspan="5" class="text-center text-muted py-4">Loading supplier exposure…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="inventory-section" id="inventory-detail">
+    <div class="inventory-section__head inventory-section__head--table">
+      <div><span>SKU workspace</span><h2>Inventory detail</h2><p id="inventoryTableStatus">Loading inventory rows…</p></div>
+      <div class="inventory-table-controls">
+        <input type="search" class="form-control form-control-sm" id="inventorySearch" placeholder="Search SKU, product, supplier…" aria-label="Search inventory">
+        <select class="form-select form-select-sm" id="inventoryPostureFilter" aria-label="Filter by stock posture">
+          <option value="">All postures</option><option value="critical">Critical</option><option value="reorder">Reorder</option><option value="healthy">Healthy</option><option value="excess">Excess</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive inventory-table-wrap">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead><tr><th>SKU / Product</th><th>Posture</th><th>ABC</th><th class="text-end">On hand</th><th class="text-end">Days</th><th class="text-end">Turns</th><th class="text-end">SVSI</th><th class="text-end">Inventory value</th><th>Recommended action</th></tr></thead>
+        <tbody id="inventoryTableBody"><tr><td colspan="9" class="text-center text-muted py-5">Loading inventory analysis…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="inventory-pager">
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="inventoryPrev">Previous</button>
+      <span id="inventoryPage">Page 1</span>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="inventoryNext">Next</button>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/inventory.js', v='20260809-showcase-1') }}" defer></script>
+{% endblock %}

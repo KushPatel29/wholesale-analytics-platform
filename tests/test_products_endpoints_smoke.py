@@ -124,8 +124,9 @@ def test_products_page_flag_switch(products_client):
     assert b"alertCandidateList" in resp_v4.data
     assert b"elasticGuardrailList" in resp_v4.data
     assert b"pricingAlertCandidateList" in resp_v4.data
-    assert b"decisionWorkbenchPanel" in resp_v4.data
-    assert b"stagedActionsList" in resp_v4.data
+    assert b"decisionWorkbenchPanel" not in resp_v4.data
+    assert b"stagedActionsList" not in resp_v4.data
+    assert b"paretoChart" in resp_v4.data
     assert b"tableViewPresets" in resp_v4.data
     assert b"productIntelPanel" in resp_v4.data
     assert b"insightTopProductContext" in resp_v4.data

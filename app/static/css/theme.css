@@ -3299,6 +3299,19 @@ body.theme-wa-future[data-page-tone="regions"] {
   --bs-primary-rgb: 99, 170, 242;
 }
 
+body.theme-wa-future[data-page-tone="inventory"] {
+  --page-accent: #4fc8a2;
+  --page-accent-rgb: 79, 200, 162;
+  --page-accent-alt: #6aa9e8;
+  --page-accent-alt-rgb: 106, 169, 232;
+  --wa-accent: #4fc8a2;
+  --wa-accent-bright: #76ddbb;
+  --wa-accent-deep: #247f64;
+  --wa-accent-wash: rgba(79, 200, 162, 0.13);
+  --wa-accent-line: rgba(79, 200, 162, 0.34);
+  --bs-primary-rgb: 79, 200, 162;
+}
+
 body.theme-wa-future[data-page-tone="suppliers"] {
   --page-accent: #58c98b;
   --page-accent-rgb: 88, 201, 139;
@@ -3421,6 +3434,17 @@ body.theme-wa-future[data-page-tone="assistant"] {
   --wa-accent-wash: rgba(40, 108, 167, 0.1);
   --wa-accent-line: rgba(40, 108, 167, 0.28);
   --bs-primary-rgb: 40, 108, 167;
+}
+
+:root[data-theme="light"] body.theme-wa-future[data-page-tone="inventory"] {
+  --page-accent: #176f56;
+  --page-accent-rgb: 23, 111, 86;
+  --wa-accent: #176f56;
+  --wa-accent-bright: #105e48;
+  --wa-accent-deep: #0b4d3a;
+  --wa-accent-wash: rgba(23, 111, 86, 0.1);
+  --wa-accent-line: rgba(23, 111, 86, 0.28);
+  --bs-primary-rgb: 23, 111, 86;
 }
 
 :root[data-theme="light"] body.theme-wa-future[data-page-tone="suppliers"] {
@@ -5924,4 +5948,155 @@ body.theme-wa-future .products-hero :is(
 
 body.theme-wa-future .products-hero :is(.products-context-label, .products-hero-summary-label) {
   color: var(--wa-on-dark-muted) !important;
+}
+
+body.theme-wa-future .products-hero .btn-outline-light {
+  color: var(--wa-on-dark) !important;
+  background: rgba(4, 12, 24, 0.34) !important;
+  border-color: rgba(255, 255, 255, 0.54) !important;
+}
+
+body.theme-wa-future .products-hero .btn-outline-light:hover,
+body.theme-wa-future .products-hero .btn-outline-light:focus {
+  color: var(--wa-on-dark) !important;
+  background: rgba(4, 12, 24, 0.58) !important;
+  border-color: rgba(255, 255, 255, 0.82) !important;
+}
+
+/* A single orientation pattern shared by every primary workspace. It stays
+   collapsed by default, adds no JavaScript, and uses only theme tokens so it
+   cannot turn into low-contrast paper on the dark canvas. */
+.page-guide {
+  margin: 0 0 1rem;
+  color: var(--wa-text);
+}
+
+.page-guide details {
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--wa-surface), var(--wa-surface-2));
+  border: 1px solid var(--wa-hairline);
+  border-radius: var(--wa-radius-lg);
+  box-shadow: var(--wa-shadow-sm);
+}
+
+.page-guide summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.page-guide summary::-webkit-details-marker { display: none; }
+
+.page-guide__icon,
+.page-guide__number {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--wa-accent-bright);
+  background: var(--wa-accent-wash);
+  border: 1px solid var(--wa-accent-line);
+}
+
+.page-guide__icon {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.7rem;
+  font-size: 1rem;
+}
+
+.page-guide__intro { min-width: 0; }
+.page-guide__eyebrow,
+.page-guide__title,
+.page-guide__summary { display: block; }
+
+.page-guide__eyebrow {
+  color: var(--wa-accent-bright);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page-guide__title {
+  margin-top: 0.08rem;
+  color: var(--wa-text-strong);
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.page-guide__summary {
+  margin-top: 0.12rem;
+  overflow: hidden;
+  color: var(--wa-text-muted);
+  font-size: 0.79rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-guide__toggle {
+  color: var(--wa-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.page-guide__toggle::after {
+  content: "▾";
+  display: inline-block;
+  margin-left: 0.4rem;
+  transition: transform 0.18s ease;
+}
+
+.page-guide details[open] .page-guide__toggle::after { transform: rotate(180deg); }
+
+.page-guide__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--wa-hairline-soft);
+}
+
+.page-guide__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.page-guide__step + .page-guide__step { border-left: 1px solid var(--wa-hairline-soft); }
+
+.page-guide__number {
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.page-guide__step strong {
+  display: block;
+  color: var(--wa-text-strong);
+  font-size: 0.78rem;
+}
+
+.page-guide__step span:not(.page-guide__number) {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--wa-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 767.98px) {
+  .page-guide summary { grid-template-columns: auto minmax(0, 1fr); }
+  .page-guide__toggle { display: none; }
+  .page-guide__summary { white-space: normal; }
+  .page-guide__steps { grid-template-columns: 1fr; }
+  .page-guide__step + .page-guide__step {
+    border-top: 1px solid var(--wa-hairline-soft);
+    border-left: 0;
+  }
 }

@@ -485,7 +485,7 @@
     renderTrendChart("laborWorkerFocusTrendChart", ((focus.worker || {}).trend_rows) || []);
 
     renderTrendChart("laborTrendChart", charts.daily_trend || []);
-    renderRateTrendChart("laborRateTrendChart", charts.rate_trend || []);
+    renderRateTrendChart("laborRateTrendChart", charts.rate_trend || charts.daily_trend || []);
     renderWeekdayChart("laborWeekdayChart", charts.weekday_pattern || []);
     renderGroupedLineChart("laborDeptTrendChart", charts.monthly_department_trend || [], { groupKey: "department_name", dateKey: "labor_month", valueKey: "labor_cost", clickParam: "department", format: "currency" });
   }

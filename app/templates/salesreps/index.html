@@ -4,10 +4,6 @@
 
 {% block head_extras %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260809-final-cleanup-2') }}">
-<link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.3.2/dist/maplibre-gl.css" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.3.2/dist/maplibre-gl.css" rel="stylesheet"></noscript>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.3.2/dist/maplibre-gl.js" async></script>
 {% endblock %}
 
 {% block content %}
@@ -62,9 +58,6 @@
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="salesrepsActionsMenu">
               <li><a class="dropdown-item" id="salesrepsExportXlsx" href="{{ url_for('salesreps.export_xlsx') }}">Export XLSX</a></li>
               <li><a class="dropdown-item" id="salesrepsExportCsv" href="{{ url_for('salesreps.export_csv') }}">Export CSV</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item" type="button" id="salesrepsActionCrm">Sync to CRM <span class="badge text-bg-light ms-2">Soon</span></button></li>
-              <li><button class="dropdown-item" type="button" id="salesrepsActionSlack">Notify Rep via Slack <span class="badge text-bg-light ms-2">Soon</span></button></li>
             </ul>
           </div>
         </div>
@@ -161,52 +154,6 @@
         </div>
       </div>
     </div>
-  </section>
-
-  <!-- Live-Action Geospatial Map -->
-  <section class="mb-4" id="srMapSection">
-    <article class="card shadow-sm border-0">
-      <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-        <div>
-          <div class="fw-semibold">Live Account Map</div>
-          <div class="text-muted small">Customer locations sized by revenue. Pulsing red halo = silent &gt; 30 days. Click a territory bar or bubble to filter the dashboard.</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <div class="sr-map-legend d-none d-lg-flex" id="srMapLegend"></div>
-          <div class="btn-group btn-group-sm" role="group" aria-label="Map Mode">
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeBubbles" value="bubbles" checked autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeBubbles" title="Standard point map">Customers</label>
-            
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeOpportunity" value="opportunity" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeOpportunity" title="Weighted opportunity heatmap">Opportunity</label>
-
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeRisk" value="risk" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeRisk" title="Risk concentration heatmap">Risk</label>
-
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeFresh" value="fresh" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeFresh" title="Fresh and meat penetration">Fresh</label>
-
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeConsumables" value="consumables" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeConsumables" title="Grocery and consumables penetration">Consumables</label>
-
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeGm" value="gm" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeGm" title="General merchandise penetration">Gen. Merch</label>
-
-            <input type="radio" class="btn-check" name="srMapMode" id="srMapModeHybrid" value="hybrid" autocomplete="off">
-            <label class="btn btn-outline-secondary" for="srMapModeHybrid" title="Opportunity heatmap with customer bubbles">Hybrid</label>
-          </div>
-          <button class="btn btn-outline-secondary btn-sm" id="srMapResetBtn" title="Reset territory filter">Reset Filter</button>
-        </div>
-      </div>
-      <div class="card-body p-0">
-        <div id="srLiveMap" class="sr-live-map" aria-label="Customer account geospatial map"></div>
-        <div id="srMapPlaceholder" class="sr-map-placeholder">
-          <div class="sr-map-placeholder-icon">&#127758;</div>
-          <div class="fw-semibold text-secondary">Map loading...</div>
-          <div class="text-muted small mt-1">Account locations will appear once data is ready.</div>
-        </div>
-      </div>
-    </article>
   </section>
 
   <section class="row g-3 mb-4">
@@ -385,45 +332,8 @@
   <section class="sr-section-heading mb-3">
     <div>
       <p class="sr-section-kicker mb-1">Trend Intelligence</p>
-      <h3 class="mb-1">Current Versus Prior Performance, Rep Momentum, And Transfer Flow</h3>
-      <p class="text-muted mb-0" id="srSectionTrendSubtitle">Aligned current-period trends, prior-year comparisons, transfer exposure, and rep-level performance movement.</p>
-    </div>
-  </section>
-
-  <section class="row g-3 mb-4">
-    <div class="col-12 col-xl-8">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-          <div>
-            <div class="fw-semibold">Current vs Prior-Year Trend</div>
-            <div class="text-muted small">Current-owner history appends to the active book so period-over-period comparisons stay meaningful.</div>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="position-relative">
-            <div style="height:320px" class="sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="monthlyCompareChart"></canvas></div>
-            <button id="btnMonthlyComparePng"
-                    class="btn btn-sm btn-outline-secondary sr-chart-dl-btn"
-                    title="Download chart as PNG"
-                    style="position:absolute;top:6px;right:6px;display:none;font-size:0.75rem;padding:2px 10px;border-radius:20px">
-              &#11015; PNG
-            </button>
-          </div>
-        </div>
-      </article>
-    </div>
-    <div class="col-12 col-xl-4">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-          <div>
-            <div class="fw-semibold">Transferred Revenue</div>
-            <div class="text-muted small">Transferred-in versus transferred-out revenue by current owner.</div>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="transferChart"></canvas></div>
-        </div>
-      </article>
+      <h3 class="mb-1">Current Versus Prior Performance And Rep Momentum</h3>
+      <p class="text-muted mb-0" id="srSectionTrendSubtitle">One focused trend and one leaderboard keep performance movement easy to scan.</p>
     </div>
   </section>
 
@@ -508,7 +418,7 @@
   </section>
 
   <section class="row g-3 mb-4">
-    <div class="col-12 col-xl-4">
+    <div class="col-12">
       <article class="card shadow-sm border-0 h-100">
         <div class="card-header bg-white border-0 sr-section-header">
           <div class="fw-semibold">Concentration Risk By Rep</div>
@@ -516,28 +426,6 @@
         </div>
         <div class="card-body">
           <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="concentrationChart"></canvas></div>
-        </div>
-      </article>
-    </div>
-    <div class="col-12 col-xl-4">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 sr-section-header">
-          <div class="fw-semibold">Rep Efficiency</div>
-          <div class="text-muted small">Revenue versus customer count, with bubble size reflecting profit contribution.</div>
-        </div>
-        <div class="card-body">
-          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="effChart"></canvas></div>
-        </div>
-      </article>
-    </div>
-    <div class="col-12 col-xl-4">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 sr-section-header">
-          <div class="fw-semibold">Profit Versus Revenue</div>
-          <div class="text-muted small">Quadrant view of large books, high-profit books, and underperforming owner portfolios.</div>
-        </div>
-        <div class="card-body">
-          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="profitRevenueChart"></canvas></div>
         </div>
       </article>
     </div>
@@ -733,33 +621,8 @@
   <section class="sr-section-heading mb-3">
     <div>
       <p class="sr-section-kicker mb-1">Rep Ranking / Comparison</p>
-      <h3 class="mb-1">Share, Pricing Leadership, And Full Rep Comparison</h3>
-      <p class="text-muted mb-0" id="srSectionComparisonSubtitle">Pareto concentration, pricing leaders, and the detailed rep comparison grid leadership uses to examine owner performance.</p>
-    </div>
-  </section>
-
-  <section class="row g-3 mb-4">
-    <div class="col-12 col-xl-7">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 sr-section-header">
-          <div class="fw-semibold">Revenue Share Concentration</div>
-          <div class="text-muted small">Top rep contribution and cumulative concentration under the selected metric.</div>
-        </div>
-        <div class="card-body">
-          <div class="ratio ratio-16x9 sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="revenueShareChart"></canvas></div>
-        </div>
-      </article>
-    </div>
-    <div class="col-12 col-xl-5">
-      <article class="card shadow-sm border-0 h-100">
-        <div class="card-header bg-white border-0 sr-section-header">
-          <div class="fw-semibold">ASP Leaders</div>
-          <div class="text-muted small">Top average selling price leaders across the visible owner book.</div>
-        </div>
-        <div class="card-body">
-          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="aspChart"></canvas></div>
-        </div>
-      </article>
+      <h3 class="mb-1">Full Rep Comparison</h3>
+      <p class="text-muted mb-0" id="srSectionComparisonSubtitle">Searchable, sortable owner performance with selectable executive and risk views.</p>
     </div>
   </section>
 

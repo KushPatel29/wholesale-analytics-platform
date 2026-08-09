@@ -27,7 +27,7 @@
       <div class="labor-hero-layout">
         <div class="labor-hero-main">
           <div class="labor-kicker">Workforce Command Header</div>
-          <h1 class="labor-hero-title">{{ hero.get('title', 'Labor Intelligence') }}</h1>
+          <h1 class="labor-hero-title">{{ hero.get('title', 'Labor Force Analysis by Department') }}</h1>
           <p class="labor-hero-subtitle">{{ hero.get('subtitle', 'Enterprise workforce and labor decision support.') }}</p>
           <p class="labor-hero-purpose">{{ hero.get('purpose', 'Use this workspace to understand where labor pressure sits, what is driving it, and what management should inspect next.') }}</p>
           {% if hero.get('executive_narrative') %}
@@ -408,12 +408,6 @@
         <div class="card-body">
           <div class="labor-chart-title">{{ (payload.get('charts', {}).get('category_mix_meta') or {}).get('label', 'Category mix') }}</div>
           <div id="laborCategoryMixChart" class="labor-chart labor-chart-lg"></div>
-        </div>
-      </div>
-      <div class="card border-0 labor-chart-card labor-chart-card-lg">
-        <div class="card-body">
-          <div class="labor-chart-title">Category shift over time</div>
-          <div id="laborCategoryTrendChart" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
     </div>

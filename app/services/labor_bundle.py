@@ -3041,8 +3041,8 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
     review_category = analysis.get('review_category') or {}
 
     payload['hero'] = {
-        'title': 'Labor Intelligence',
-        'subtitle': 'Enterprise workforce, labor cost, premium, absence, and staffing decision support from the live Synerion labor feed.',
+        'title': 'Labor Force Analysis by Department',
+        'subtitle': 'Department-first workforce, labor cost, premium, absence, staffing stability, and manager decision support.',
         'purpose': 'Use this workspace to understand what changed, where labor pressure sits, which teams or workers need review first, and what managers should inspect next.',
         'current_window_label': payload['scope'].get('current_window_label'),
         'prior_window_label': payload['scope'].get('prior_window_label'),
@@ -3090,29 +3090,81 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
     category_table = analysis['category_mix'].copy()
     worker_table = analysis['worker_summary'].copy()
 
+    def _project(frame: pd.DataFrame, columns: list[str], limit: int | None = None) -> list[dict[str, Any]]:
+        if frame.empty:
+            return []
+        keep = [column for column in columns if column in frame.columns]
+        compact = frame.loc[:, keep]
+        if limit is not None:
+            compact = compact.head(limit)
+        return compact.to_dict(orient='records')
+
+    department_chart_fields = ['department_name', 'labor_cost', 'paid_hours', 'blended_rate', 'cost_delta_pct', 'cost_volatility', 'premium_share_pct', 'absence_share_pct', 'priority_score']
+    worker_chart_fields = ['employee_name', 'employee_code', 'labor_cost', 'paid_hours', 'premium_share_pct', 'absence_share_pct', 'priority_score']
+
     payload['charts'] = {
-        'department_cost': _sort_for_json(department_table, ['labor_cost', 'department_name'], [False, True], limit=12),
-        'department_change': _sort_for_json(department_table.assign(abs_cost_delta_pct=pd.to_numeric(department_table.get('cost_delta_pct'), errors='coerce').abs()), ['abs_cost_delta_pct', 'labor_cost'], [False, False], limit=12) if not department_table.empty else [],
-        'department_risk': _sort_for_json(department_table, ['priority_score', 'labor_cost'], [False, False], limit=12),
-        'department_volatility': _sort_for_json(department_table, ['cost_volatility', 'labor_cost'], [False, False], limit=12),
-        'department_scatter': _sort_for_json(department_table, ['priority_score', 'labor_cost'], [False, False], limit=15),
+        'department_cost': _project(department_table.sort_values(['labor_cost', 'department_name'], ascending=[False, True]), department_chart_fields, 12),
+        'department_change': _project(department_table.assign(abs_cost_delta_pct=pd.to_numeric(department_table.get('cost_delta_pct'), errors='coerce').abs()).sort_values(['abs_cost_delta_pct', 'labor_cost'], ascending=[False, False]), department_chart_fields, 12) if not department_table.empty else [],
+        'department_risk': _project(department_table.sort_values(['priority_score', 'labor_cost'], ascending=[False, False]), department_chart_fields, 12),
+        'department_volatility': _project(department_table.sort_values(['cost_volatility', 'labor_cost'], ascending=[False, False]), department_chart_fields, 12),
+        'department_scatter': _project(department_table.sort_values(['priority_score', 'labor_cost'], ascending=[False, False]), department_chart_fields, 15),
         'daily_trend': analysis['daily_trend'].to_dict(orient='records'),
-        'rate_trend': analysis['daily_trend'].to_dict(orient='records'),
         'weekday_pattern': analysis['weekday_pattern'].to_dict(orient='records'),
         'monthly_pattern': analysis['monthly_pattern'].to_dict(orient='records'),
         'monthly_department_trend': analysis['monthly_department_trend'].to_dict(orient='records'),
-        'category_mix': _sort_for_json(category_table, [analysis['overall'].get('category_mix_basis') or 'labor_cost', 'time_category'], [False, True], limit=12),
+        'category_mix': _project(category_table.sort_values([analysis['overall'].get('category_mix_basis') or 'labor_cost', 'time_category'], ascending=[False, True]), ['time_category', 'labor_cost', 'paid_hours'], 12),
         'category_mix_meta': {'value_key': analysis['overall'].get('category_mix_basis') or 'labor_cost', 'label': 'Labor cost mix' if (analysis['overall'].get('category_mix_basis') or 'labor_cost') == 'labor_cost' else 'Operational hours mix'},
-        'category_trend': analysis['category_daily_trend'].to_dict(orient='records'),
-        'worker_cost': _sort_for_json(worker_table, ['labor_cost', 'employee_name'], [False, True], limit=12),
-        'worker_hours': _sort_for_json(worker_table, ['paid_hours', 'employee_name'], [False, True], limit=12),
-        'worker_risk': _sort_for_json(worker_table, ['priority_score', 'labor_cost'], [False, False], limit=12),
-        'worker_daily_trend': analysis['worker_daily_trend'].to_dict(orient='records'),
+        'worker_cost': _project(worker_table.sort_values(['labor_cost', 'employee_name'], ascending=[False, True]), worker_chart_fields, 12),
+        'worker_hours': _project(worker_table.sort_values(['paid_hours', 'employee_name'], ascending=[False, True]), worker_chart_fields, 12),
+        'worker_risk': _project(worker_table.sort_values(['priority_score', 'labor_cost'], ascending=[False, False]), worker_chart_fields, 12),
     }
 
     focus_department_name = filters.departments[0] if filters.departments else review_department.get('department_name')
+    # Department is the default full investigation. Preserve the category and
+    # worker focus contract with compact summaries; their trend and cross-scope
+    # query payloads are only materialised after the visitor selects one.
     focus_category_name = filters.time_categories[0] if filters.time_categories else review_category.get('time_category')
     focus_worker_code = filters.employees[0] if filters.employees else review_worker.get('employee_code')
+
+    def _compact_category_focus(name: str | None) -> dict[str, Any] | None:
+        if not name:
+            return None
+        match = category_table.loc[category_table['time_category'] == name]
+        if match.empty:
+            return None
+        summary = match.iloc[0].to_dict()
+        return {
+            'time_category': name,
+            'summary': summary,
+            'trend_rows': [],
+            'department_rows': [],
+            'worker_rows': [],
+            'interpretation': f"{name} is the highest-priority time category in the active department scope.",
+            'clear_url': build_url(filters, updates={'time_category': None}, include_pagination=False),
+            'is_selected': False,
+            'reason_note': 'Select this category to load its department, worker, and trend investigation.',
+        }
+
+    def _compact_worker_focus(code: str | None) -> dict[str, Any] | None:
+        if not code:
+            return None
+        match = worker_table.loc[worker_table['employee_code'] == code]
+        if match.empty:
+            return None
+        summary = match.iloc[0].to_dict()
+        return {
+            'employee_code': code,
+            'employee_name': summary.get('employee_name'),
+            'summary': summary,
+            'trend_rows': [],
+            'department_rows': [],
+            'category_rows': [],
+            'interpretation': f"{summary.get('employee_name') or code} is the highest-priority worker in the active scope.",
+            'clear_url': build_url(filters, updates={'employee': None}, include_pagination=False),
+            'is_selected': False,
+            'reason_note': 'Select this worker to load department, category, and trend detail.',
+        }
+
     payload['focus'] = {
         'department': _cached_focus(
             'department',
@@ -3125,18 +3177,18 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
             filters,
             focus_category_name,
             lambda: _li_build_focus_category(_analysis_filters(filters), analysis, focus_category_name),
-        ),
+        ) if filters.time_categories and focus_category_name else _compact_category_focus(focus_category_name),
         'worker': _cached_focus(
             'worker',
             filters,
             focus_worker_code,
             lambda: _li_build_focus_worker(_analysis_filters(filters), analysis, focus_worker_code),
-        ),
+        ) if filters.employees and focus_worker_code else _compact_worker_focus(focus_worker_code),
     }
 
-    payload['department_table'] = department_table.head(15).to_dict(orient='records')
-    payload['category_table'] = category_table.head(15).to_dict(orient='records')
-    payload['worker_table'] = worker_table.head(20).to_dict(orient='records')
+    payload['department_table'] = _project(department_table, ['department_name', 'department_scope_url', 'focus_reason', 'labor_cost', 'paid_hours', 'blended_rate', 'premium_share_pct', 'absence_share_pct', 'cost_delta_pct', 'cost_volatility', 'risk_tone', 'management_focus', 'action_label'], 15)
+    payload['category_table'] = _project(category_table, ['time_category', 'category_scope_url', 'activity_note', 'focus_reason', 'labor_cost', 'paid_hours', 'share_display_pct', 'share_display_label', 'cost_delta_pct', 'leading_department', 'risk_tone', 'management_focus', 'action_label'], 15)
+    payload['worker_table'] = _project(worker_table, ['employee_name', 'employee_code', 'employee_scope_url', 'exposure_profile', 'labor_cost', 'paid_hours', 'premium_share_pct', 'absence_share_pct', 'department_count', 'category_count', 'risk_tone', 'management_focus', 'action_label'], 20)
     payload['watchlist'] = {'rows': analysis['department_watchlist'].head(15).to_dict(orient='records')}
     payload['watchlists'] = {
         'departments': analysis['department_watchlist'].head(12).to_dict(orient='records'),

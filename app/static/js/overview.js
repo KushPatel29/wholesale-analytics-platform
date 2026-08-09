@@ -1873,7 +1873,7 @@
             <td class="text-truncate" title="${r.label || ""}">
               <div class="d-flex flex-column gap-1">
                 ${labelHtml}
-                <span style="display:inline-block;height:4px;background:${delta >= 0 ? ChartUtils.seriesColor(0) : ChartUtils.seriesColor(3)};width:${barWidth}px;border-radius:999px;"></span>
+                <span style="display:inline-block;height:4px;background:${delta >= 0 ? (window.ChartUtils?.seriesColor?.(0) || '#2f8f70') : (window.ChartUtils?.seriesColor?.(3) || '#c44f4f')};width:${barWidth}px;border-radius:999px;"></span>
               </div>
             </td>
             <td class="text-end">${fmtCurrency1.format(r.current || 0)}</td>

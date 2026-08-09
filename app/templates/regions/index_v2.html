@@ -3,7 +3,7 @@
 {% block content %}
 <div
   id="RegionsOverviewV2App"
-  class="regions-v2 container-fluid py-4 bg-light"
+  class="regions-v2 container-fluid py-4"
   data-page="regions_v2"
   data-bundle-url="{{ url_for('bundles.regions_bundle') }}"
   data-export-url="{{ url_for('regions.export_overview') }}"
@@ -600,6 +600,92 @@
   .regions-v2 .regions-v2-chart {
     min-height: 340px;
     width: 100%;
+  }
+  .regions-v2 .regions-v2-bar-row {
+    display: grid;
+    grid-template-columns: minmax(8.5rem, 1.3fr) minmax(8rem, 3fr) minmax(5.5rem, auto);
+    width: 100%;
+    gap: .75rem;
+    align-items: center;
+    padding: .48rem .35rem;
+    color: var(--wa-text);
+    background: transparent;
+    border: 0;
+    border-radius: .55rem;
+    text-align: left;
+  }
+  .regions-v2 .regions-v2-bar-row:hover,
+  .regions-v2 .regions-v2-bar-row:focus-visible {
+    background: var(--wa-accent-wash);
+    outline: none;
+  }
+  .regions-v2 .regions-v2-bar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .84rem;
+    font-weight: 600;
+  }
+  .regions-v2 .regions-v2-bar-track {
+    display: block;
+    height: .68rem;
+    overflow: hidden;
+    background: var(--wa-surface-2);
+    border: 1px solid var(--wa-border);
+    border-radius: 999px;
+  }
+  .regions-v2 .regions-v2-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .regions-v2 .regions-v2-bar-value {
+    color: var(--wa-text-muted);
+    font-size: .8rem;
+    text-align: right;
+  }
+  .regions-v2 .regions-v2-opportunity-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
+    min-height: 0;
+  }
+  .regions-v2 .regions-v2-quadrant {
+    padding: .75rem;
+    background: var(--wa-surface-2);
+    border: 1px solid var(--wa-border);
+    border-top: 3px solid var(--wa-info);
+    border-radius: .75rem;
+  }
+  .regions-v2 .regions-v2-quadrant--scale { border-top-color: var(--wa-good); }
+  .regions-v2 .regions-v2-quadrant--protect { border-top-color: var(--wa-warning); }
+  .regions-v2 .regions-v2-quadrant--fix { border-top-color: var(--wa-bad); }
+  .regions-v2 .regions-v2-quadrant h6 { color: var(--wa-text); }
+  .regions-v2 .regions-v2-quadrant-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: .4rem;
+    padding: .45rem .55rem;
+    color: var(--wa-text);
+    background: var(--wa-surface);
+    border: 1px solid transparent;
+    border-radius: .5rem;
+    text-align: left;
+  }
+  .regions-v2 .regions-v2-quadrant-item:hover,
+  .regions-v2 .regions-v2-quadrant-item:focus-visible {
+    border-color: var(--wa-accent-line);
+    outline: none;
+  }
+  .regions-v2 .regions-v2-quadrant-item span {
+    color: var(--wa-text-muted);
+    font-size: .75rem;
+  }
+  @media (max-width: 575.98px) {
+    .regions-v2 .regions-v2-bar-row { grid-template-columns: minmax(6rem, 1fr) minmax(4rem, 1.5fr); }
+    .regions-v2 .regions-v2-bar-value { grid-column: 2; }
+    .regions-v2 .regions-v2-opportunity-grid { grid-template-columns: 1fr; }
   }
   .regions-v2 .regions-v2-mini-table,
   .regions-v2 .regions-v2-tall-table,

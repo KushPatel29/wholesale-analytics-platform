@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set needs_chartjs = true %}
 {% set filters_handler = 'ajax' %}
 {% block title %}Business Performance{% endblock %}
 
@@ -1468,5 +1469,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js', v=(version or 'overview-nowcast-20260328')) }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview.js', v='20260809-showcase-1') }}" defer></script>
 {% endblock %}

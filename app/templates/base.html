@@ -30,8 +30,8 @@
     {% if current_user.is_authenticated %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/universal_drilldown.css') }}">
     {% endif %}
-    {% set _needs_chartjs = current_user.is_authenticated and ((needs_chartjs | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['overview_page', 'stakeholder_report', 'customers', 'products', 'salesreps']) %}
-    {% set _needs_plotly = current_user.is_authenticated and ((needs_plotly | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['products', 'regions', 'suppliers', 'labor']) %}
+    {% set _needs_chartjs = current_user.is_authenticated and ((needs_chartjs | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['overview_page', 'customers', 'products', 'salesreps']) %}
+    {% set _needs_plotly = current_user.is_authenticated and ((needs_plotly | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['products', 'suppliers', 'labor']) %}
     {% if _needs_chartjs %}
     <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}" defer></script>
     {% endif %}
@@ -110,6 +110,8 @@
     {% set _page_tone = 'customers' %}
   {% elif request.endpoint and request.endpoint.startswith('products.') %}
     {% set _page_tone = 'products' %}
+  {% elif request.endpoint and request.endpoint.startswith('inventory.') %}
+    {% set _page_tone = 'inventory' %}
   {% elif request.endpoint and request.endpoint.startswith('regions.') %}
     {% set _page_tone = 'regions' %}
   {% elif request.endpoint and request.endpoint.startswith('suppliers.') %}
@@ -165,6 +167,7 @@
             {% endif %}
             {% if can_permission('page.products.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ url_for('products.index') }}">Products</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}" href="{{ url_for('inventory.index') }}">Inventory</a></li>
             {% endif %}
             {% if can_permission('page.regions.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ url_for('regions.index') }}">Regions</a></li>
@@ -297,6 +300,9 @@
             {% endif %}
           </div>
         {% endif %}
+      {% endif %}
+      {% if current_user.is_authenticated and page_guide is defined and page_guide %}
+        {% include "_page_guide.html" %}
       {% endif %}
       {% block content %}{% endblock %}
     </main>

@@ -35,6 +35,7 @@ COPY . .
 # FileNotFoundError path before falling back.
 RUN cp .env.demo .env \
     && python -m seed.generate_synthetic_data --months 10 --customers 80 --products 180 \
+    && python -m seed.generate_synthetic_labor --days 210 \
     && python manage.py init-auth-db \
     && python manage.py seed-demo-users \
     && (python manage.py build-products-parquet || echo "products parquet skipped") \
