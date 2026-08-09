@@ -32,13 +32,21 @@
   let currentApplyId = "";
   let bootstrapped = false;
 
-  const fmtCurrency0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-  const fmtCurrency1 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 1 });
-  const fmtNumber0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-  const fmtNumber1 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+  /* These four were local Intl formatters, and fmtCurrency1 - one decimal on
+     money - is what printed the headline revenue as `$7,192,185.4` and clipped
+     it out of its own card. They now delegate to the shared house rules in
+     js/format.js, so the ~80 call sites below are corrected in one place and
+     cannot drift from what the server renders.
+
+     The `.format()` shape is kept so those call sites stay untouched. */
+  const F = window.WAFormat;
+  const fmtCurrency0 = { format: (v) => F.currency(v) };
+  const fmtCurrency1 = { format: (v) => F.currency(v) };
+  const fmtNumber0 = { format: (v) => F.count(v, { missing: "0" }) };
+  const fmtNumber1 = { format: (v) => F.decimal(v, { missing: "0" }) };
   const fmtDateShort = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
   const fmtDateTime = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-  const fmtPercent1 = (v) => `${fmtNumber1.format(Number(v) || 0)}%`;
+  const fmtPercent1 = (v) => F.percent(v, { missing: "0.0%" });
   const asNumber = (value) => {
     const num = Number(value);
     return Number.isFinite(num) ? num : null;
@@ -523,22 +531,18 @@
     return fmtNumber0.format(Number(value) || 0);
   };
 
+  const MONEY_KEYS = ["revenue", "cost", "profit", "asp", "aov", "profit_per_order", "profit_per_lb"];
+
   const compactNumber = (num, key, fmtOverride = null) => {
     const n = Number(num);
     if (!Number.isFinite(n)) return null;
     const abs = Math.abs(n);
-    const short = (div, suffix) => {
-      const base = n / div;
-      if (fmtOverride === "currency" || ["revenue", "cost", "profit", "asp", "aov", "profit_per_order", "profit_per_lb"].includes(key)) {
-        return `${fmtCurrency1.format(base)}${suffix}`;
-      }
-      if (fmtOverride === "percent" || key === "margin_pct") return `${fmtNumber1.format(base)}${suffix}`;
-      return `${fmtNumber1.format(base)}${suffix}`;
-    };
+    if (abs < 10_000) return null;
+    if (fmtOverride === "currency" || MONEY_KEYS.includes(key)) return F.compactCurrency(n);
+    const short = (div, suffix) => `${F.decimal(n / div)}${suffix}`;
     if (abs >= 1_000_000_000) return short(1_000_000_000, "B");
     if (abs >= 1_000_000) return short(1_000_000, "M");
-    if (abs >= 10_000) return short(1_000, "K");
-    return null;
+    return short(1_000, "K");
   };
 
   const formatDisplay = (key, value, fmtOverride = null) => {
@@ -552,28 +556,26 @@
   };
 
   const formatByFmt = (fmt, value) => {
-    if (value === null || value === undefined || Number.isNaN(value)) return "-";
-    if (fmt === "percent") return fmtPercent1(value);
-    if (fmt === "currency") return fmtCurrency1.format(Number(value) || 0);
-    if (fmt === "number") return fmtNumber0.format(Number(value) || 0);
-    return fmtNumber1.format(Number(value) || 0);
+    if (fmt === "percent") return F.percent(value);
+    if (fmt === "currency") return F.currency(value);
+    if (fmt === "number") return F.count(value);
+    return F.decimal(value);
   };
 
+  /* Signed deltas. `formatSigned` used to build a negative as
+     "" + fmtCurrency1.format(-79.48), which Intl renders as `-$79.48` - but
+     the same pattern elsewhere concatenated "$" itself and produced `$-79.48`.
+     One helper, one answer. */
   const formatSigned = (fmt, value) => {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return "n/a";
-    const num = Number(value);
-    const sign = num > 0 ? "+" : "";
-    if (fmt === "currency") return `${sign}${fmtCurrency1.format(num)}`;
-    if (fmt === "percent") return `${sign}${fmtNumber1.format(num)}%`;
-    return `${sign}${fmtNumber1.format(num)}`;
+    if (fmt === "currency") return F.currencySigned(value, { missing: "n/a" });
+    if (fmt === "percent") return F.percentSigned(value, { missing: "n/a" });
+    const num = F.coerce(value);
+    if (num === null) return "n/a";
+    return `${num > 0 ? "+" : num < 0 ? "-" : ""}${F.decimal(Math.abs(num))}`;
   };
 
-  const formatSignedPoints = (value) => {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return "n/a";
-    const num = Number(value);
-    const sign = num > 0 ? "+" : "";
-    return `${sign}${fmtNumber1.format(num)} pts`;
-  };
+  const formatSignedPoints = (value) => F.points(value, { missing: "n/a" });
+
   const normalizeMarginStatusKey = (value) => String(value || "").trim().toLowerCase();
   const clampNumber = (value, lower, upper) => Math.min(Math.max(Number(value), lower), upper);
   const marginStatusBuffers = (minimum, target) => {
@@ -2131,7 +2133,7 @@
       }
       const compareLabel = periodBlock?.comparison_label || (periodKey === "mom" ? primaryCompareLabel(windowMeta) : "Same period last year");
       const window = periodBlock?.window || {};
-      const priorRange = window.prior_start && window.prior_end ? `${window.prior_start} to ${window.prior_end}` : compareLabel;
+      const priorRange = window.prior_start && window.prior_end ? F.dayRange(window.prior_start, window.prior_end) : compareLabel;
       return `${compareLabel}: ${formatByFmt("currency", previous)} -> ${formatByFmt("currency", current)} (Δ ${formatByFmt("currency", delta)}, Δ ${pctOrNa(deltaPct)}) - ${priorRange}`;
     };
 
@@ -2672,11 +2674,11 @@
     if (els.forecastHistoryDetail) {
       const historyBits = [];
       historyBits.push(historyBasisLabel);
-      if (historyStart || historyEnd) historyBits.push(`Selected ${emptyText(historyStart, "?")} to ${emptyText(historyEnd, "?")}`);
+      if (historyStart || historyEnd) historyBits.push(`Selected ${F.dayRange(historyStart, historyEnd, { missing: "?" })}`);
       if ((availableHistoryStart || availableHistoryEnd) && (availableHistoryStart !== historyStart || availableHistoryEnd !== historyEnd)) {
-        historyBits.push(`Available ${emptyText(availableHistoryStart, "?")} to ${emptyText(availableHistoryEnd, "?")}`);
+        historyBits.push(`Available ${F.dayRange(availableHistoryStart, availableHistoryEnd, { missing: "?" })}`);
       }
-      if (trainingCutoff) historyBits.push(`Cutoff ${trainingCutoff}`);
+      if (trainingCutoff) historyBits.push(`Cutoff ${F.day(trainingCutoff)}`);
       if (historyExcludedPoints) historyBits.push(`${fmtNumber0.format(historyExcludedPoints)} older month${Number(historyExcludedPoints) === 1 ? "" : "s"} excluded`);
       els.forecastHistoryDetail.textContent = historyBits.join(" • ") || "Training window and cutoff details will appear here.";
     }
@@ -2999,7 +3001,7 @@
     }
     const w = meta.window || {};
     if (els.dataWindow) {
-      els.dataWindow.textContent = currentWindowLabel(w) || (w.start && w.end ? `${w.start} -> ${w.end}` : "Not available");
+      els.dataWindow.textContent = currentWindowLabel(w) || (w.start && w.end ? F.dayRange(w.start, w.end) : "Not available");
     }
     if (els.comparisonBasisChip) {
       els.comparisonBasisChip.textContent = primaryCompareLabel(w);
@@ -3019,7 +3021,14 @@
     }
     const filters = meta.filters || {};
     const parts = [];
-    const dateLabel = filters.start || filters.end ? `${filters.start || "start"} -> ${filters.end || "end"}` : null;
+    /* The window the reader is looking at, in words. This printed
+       `2025-10-01T00:00:00 -> 2026-08-09T00:00:00` immediately under the hero,
+       and the end date was the *requested* one - 37 days past the last row -
+       rather than the window actually analysed. Both are fixed: the label is
+       human-readable, and it prefers the clamped window the page computed on. */
+    const shownStart = w?.start || filters.start;
+    const shownEnd = w?.end || filters.end;
+    const dateLabel = shownStart || shownEnd ? F.dayRange(shownStart, shownEnd, { missing: "" }) : null;
     let activeFilterCount = 0;
     if (dateLabel) {
       parts.push(dateLabel);

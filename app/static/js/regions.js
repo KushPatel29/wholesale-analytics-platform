@@ -139,7 +139,7 @@
   const renderSummaryRibbon = (kpis = {}, table = {}, meta = {}) => {
     const windowStart = kpis.start || "-";
     const windowEnd = displayWindowEnd(kpis.end);
-    setText("regionsSummaryWindow", `Window: ${windowStart} to ${windowEnd}`);
+    setText("regionsSummaryWindow", window.WAFormat.dayRange(windowStart, windowEnd));
     setText("regionsSummaryRegions", `Regions shown: ${fmtInt.format(table.total || kpis.regions_count || 0)}`);
     setText("regionsSummaryCustomers", `Customers: ${fmtInt.format(kpis.customers || 0)}`);
     setText("regionsSummaryOrders", `Orders: ${fmtInt.format(kpis.orders || 0)}`);

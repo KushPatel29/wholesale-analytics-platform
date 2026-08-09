@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from app.services import comparison
 from app.services import fact_schema as fs
 from app.services import fact_store
 from app.services import planning
@@ -1130,21 +1131,33 @@ def _window_context(filters: Any, cols: set[str], scope: Dict[str, Any]) -> Dict
     yoy_end_iso = None
     base_start_iso = start_iso
     base_end_iso = end_iso
+    basis_label = None
+    basis_short_label = None
 
     if start_ts is not None and end_ts is not None and pd.notna(start_ts) and pd.notna(end_ts):
-        window_days = max(int((end_ts - start_ts).days), 1)
-        prior_start = start_ts - pd.Timedelta(days=window_days)
-        prior_end = start_ts
-        yoy_start = start_ts - pd.DateOffset(years=1)
-        yoy_end = end_ts - pd.DateOffset(years=1)
-        prior_start_iso = prior_start.date().isoformat()
-        prior_end_iso = prior_end.date().isoformat()
-        yoy_start_iso = yoy_start.date().isoformat()
-        yoy_end_iso = yoy_end.date().isoformat()
-        base_start = min(start_ts, prior_start, yoy_start)
-        base_end = end_ts
-        base_start_iso = base_start.date().isoformat()
-        base_end_iso = base_end.date().isoformat()
+        # The prior window comes from the shared comparison module rather than
+        # from local date maths here. Sales Reps also used to render "Date
+        # Window: Last 3 Months" measured from the wall clock, which on the
+        # demo landed almost entirely past the data cutoff - which is why every
+        # one of its nine KPIs read $0.00 / N/A / 0.
+        #
+        # `end_iso` is exclusive here; the comparison module is inclusive.
+        window = comparison.resolve_comparison(
+            {
+                "start": start_ts.date(),
+                "end": (end_ts - pd.Timedelta(days=1)).date(),
+                "preset": getattr(normalized, "preset", None),
+                "date_type": getattr(normalized, "date_type", None),
+            }
+        )
+        prior_start_iso = window.prior_start.isoformat()
+        prior_end_iso = window.prior_end_exclusive.isoformat()
+        yoy_start_iso = window.prior_start.isoformat()
+        yoy_end_iso = window.prior_end_exclusive.isoformat()
+        base_start_iso = min(window.current_start, window.prior_start).isoformat()
+        base_end_iso = window.current_end_exclusive.isoformat()
+        basis_label = window.basis_label
+        basis_short_label = window.basis_short_label
     elif start_ts is not None and pd.notna(start_ts):
         base_start_iso = start_ts.date().isoformat()
 
@@ -1165,6 +1178,12 @@ def _window_context(filters: Any, cols: set[str], scope: Dict[str, Any]) -> Dict
         "prior_end_exclusive": prior_end_iso,
         "yoy_start": yoy_start_iso,
         "yoy_end_exclusive": yoy_end_iso,
+        # The label the KPI deltas are rendered with. Read from the shared
+        # comparison module rather than hardcoded in the front-end, which is
+        # how every delta on this page came to be captioned "MoM (FMTD)" while
+        # actually comparing against the prior fiscal year-to-date.
+        "basis_label": basis_label,
+        "basis_short_label": basis_short_label,
         "base_start": base_start_iso,
         "base_end_exclusive": base_end_iso,
     }
@@ -3784,6 +3803,8 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         "prior_end_exclusive": windows.get("prior_end_exclusive"),
         "yoy_start": windows.get("yoy_start"),
         "yoy_end_exclusive": windows.get("yoy_end_exclusive"),
+        "basis_label": windows.get("basis_label"),
+        "basis_short_label": windows.get("basis_short_label"),
         "units_label": "Units",
         "asp_label": "ASP",
         "asp_lb_label": "ASP / lb",

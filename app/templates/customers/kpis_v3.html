@@ -108,7 +108,7 @@
 <section class="card border-0 shadow-sm mb-3" aria-labelledby="scorecard-title">
   <div class="card-header bg-white d-flex justify-content-between align-items-center">
     <h2 id="scorecard-title" class="h6 mb-0">Executive Scorecard</h2>
-    <span class="small text-muted">Computed for {{ (summary.get('window') or {}).get('start') }} to {{ (summary.get('window') or {}).get('end') }}</span>
+    <span class="small text-muted">{{ (summary.get('window') or {}).get('start') | day_range((summary.get('window') or {}).get('end')) }}</span>
   </div>
   <div class="card-body">
     <div class="row g-3">

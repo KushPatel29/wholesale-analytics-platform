@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from app.services import fact_schema as fs
+from app.services import comparison as comparison_service
 from app.services import fact_store
 from app.services import planning
 from app.services import margin_rules
@@ -335,7 +336,7 @@ def _with_window(filters: Any, *, start: date | None, end: date | None) -> Any:
     return filters
 
 
-def _build_comparison_window(start_iso: str | None, end_iso: str | None) -> Dict[str, Any]:
+def _build_comparison_window(start_iso: str | None, end_iso: str | None, filters: Any = None) -> Dict[str, Any]:
     start = _coerce_date(start_iso)
     end_exclusive = _coerce_date(end_iso)
     display_end = end_exclusive - timedelta(days=1) if end_exclusive is not None else None
@@ -421,8 +422,41 @@ def _build_comparison_window(start_iso: str | None, end_iso: str | None) -> Dict
         trajectory_note = "Trajectory shows only the active filtered window; deltas use the prior matched-days comparison."
         projection_note = "Next-month projection uses recent completed periods and ignores partial trailing periods where possible."
 
+    # The branch logic above still decides the *wording* - month-to-date reads
+    # differently from a completed month set - but the dates themselves come
+    # from the shared comparison module.
+    #
+    # This function used to pick its own prior window, which is how Products
+    # came to compare against Nov 22 2024 - Sep 30 2025 while the Overview,
+    # under the identical global filter, compared against Oct 1 2024 - Jul 3
+    # 2025. Same company, same day, two different growth percentages depending
+    # on which tab you had open.
+    shared = comparison_service.resolve_comparison(
+        {
+            "start": start,
+            "end": display_end,
+            "preset": getattr(filters, "preset", None),
+            "date_type": getattr(filters, "date_type", None),
+        }
+    )
+    start = shared.current_start
+    display_end = shared.current_end
+    prior_start = shared.prior_start
+    prior_end = shared.prior_end
+    current_days = shared.current_days
+    comparison_label = shared.basis_short_label
+    note = (
+        f"{_window_label(start, display_end)} compared with "
+        f"{_window_label(prior_start, prior_end)}."
+    )
+
     return {
         "method": method,
+        "basis": shared.basis,
+        "basis_label": shared.basis_label,
+        "basis_short_label": shared.basis_short_label,
+        "data_through": shared.data_through.isoformat() if shared.data_through else None,
+        "clamped": shared.clamped,
         "current_start": start.isoformat(),
         "current_end": display_end.isoformat(),
         "prior_start": prior_start.isoformat(),
@@ -3735,7 +3769,7 @@ def build_products_bundle(
     started = time.perf_counter()
     cols = fact_store.list_columns()
     where_sql, where_params, start_iso, end_iso = fact_store.build_where_clause(filters, cols, scope, apply_default_window=True)
-    comparison = _build_comparison_window(start_iso, end_iso)
+    comparison = _build_comparison_window(start_iso, end_iso, filters)
     comparison_filters = _with_window(
         filters,
         start=_coerce_date(comparison.get("history_start")),

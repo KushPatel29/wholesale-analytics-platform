@@ -55,7 +55,7 @@
   {% endif %}
   {% if meta.get('analysis_window_start') and meta.get('analysis_window_end') %}
     <span class="badge text-bg-light border">
-      Window: {{ meta.get('analysis_window_start') }} to {{ meta.get('analysis_window_end') }}
+      {{ meta.get('analysis_window_start') | day_range(meta.get('analysis_window_end')) }}
     </span>
   {% endif %}
 </div>

@@ -40,7 +40,7 @@
     text("inventoryExcess", fmt(kpi.excess_skus));
     text("inventoryBackorders", fmt(kpi.backorder_units));
     text("inventoryHolding", money(kpi.holding_cost_annual));
-    text("inventoryWindow", kpi.start && kpi.end ? `${kpi.start} to ${kpi.end}` : "Active filtered window");
+    text("inventoryWindow", kpi.start && kpi.end ? window.WAFormat.dayRange(kpi.start, kpi.end) : "Active filtered window");
   };
 
   const renderPosture = (rows) => {

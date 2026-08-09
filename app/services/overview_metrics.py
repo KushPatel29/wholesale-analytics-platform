@@ -7,10 +7,46 @@ from typing import Any, Iterable, Optional
 
 import pandas as pd
 
+from app.services import comparison
 from app.services.filters import FISCAL_DATE_TYPE, FilterParams, get_fiscal_periods
 
 
 EPSILON = 1e-9
+
+
+def _clamped(contract: "WindowContract") -> "WindowContract":
+    """
+    Pull a window back to the last date the dataset holds.
+
+    Applied to whatever the preset produced rather than inside each branch, so
+    a preset added later cannot forget it. Both ends of the prior window move
+    with the current one, or the two stop being comparable - which is the bug
+    this whole module exists to prevent.
+    """
+    from dataclasses import replace
+
+    cutoff = comparison.data_cutoff()
+    if cutoff is None or contract.current_end <= cutoff:
+        return contract
+
+    trimmed_days = (contract.current_end - cutoff).days
+    current_end = cutoff
+    current_start = min(contract.current_start, current_end)
+    return replace(
+        contract,
+        current_end=current_end,
+        current_start=current_start,
+        prior_month_end=contract.prior_month_end - timedelta(days=trimmed_days),
+        prior_year_end=contract.prior_year_end - timedelta(days=trimmed_days),
+        current_days=max(1, (current_end - current_start).days + 1),
+        current_window_label=_window_label(current_start, current_end),
+        prior_window_label=_window_label(
+            contract.prior_month_start, contract.prior_month_end - timedelta(days=trimmed_days)
+        ),
+        yoy_window_label=_window_label(
+            contract.prior_year_start, contract.prior_year_end - timedelta(days=trimmed_days)
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -277,10 +313,15 @@ def resolve_window_contract(
     include_current_month: bool = False,
     default_days: int = 180,
 ) -> WindowContract:
-    today = datetime.utcnow().date()
+    # "Today" is the data cutoff, not the wall clock. The demo's filter ran 37
+    # days past the last row, so every window carried five weeks that held
+    # nothing: the final bar of each trend chart collapsed to near-zero and the
+    # margin line nosedived to 0%, which reads as a business imploding rather
+    # than as a partial period. See app/services/comparison.py.
+    today = comparison.effective_today()
     fiscal_contract = _fiscal_window_contract(filters, today)
     if fiscal_contract is not None:
-        return fiscal_contract
+        return _clamped(fiscal_contract)
     start = _to_date(getattr(filters, "start", None))
     end = _to_date(getattr(filters, "end", None))
     defaulted = False
@@ -367,7 +408,7 @@ def resolve_window_contract(
     history_start = min(prior_year_start, prior_month_start, start)
     prior_days = max(1, (prior_month_end - prior_month_start).days + 1)
 
-    return WindowContract(
+    return _clamped(WindowContract(
         current_start=start,
         current_end=end,
         prior_month_start=prior_month_start,
@@ -396,7 +437,7 @@ def resolve_window_contract(
         trajectory_note=trajectory_note,
         date_type="calendar",
         trend_bucket_label="Month",
-    )
+    ))
 
 
 def safe_div(numerator: Any, denominator: Any) -> Optional[float]:

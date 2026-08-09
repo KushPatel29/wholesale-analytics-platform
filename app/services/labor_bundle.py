@@ -15,7 +15,7 @@ from flask import current_app, request, url_for
 
 from app.core import prebuilt_cache
 from app.core.cache_manager import TTLValueCache
-from app.services import labor_store
+from app.services import comparison, labor_store
 
 
 WEEKDAY_ORDER = {
@@ -174,15 +174,61 @@ def _int_arg(raw: Any, default: int, *, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
 
+def _global_comparison() -> comparison.ComparisonWindow | None:
+    """
+    The window the rest of the app is showing, from the shared filter state.
+
+    Labor used to default to "the last 90 days from the labor dataset's max
+    date" whenever the request carried no explicit start/end - which was always,
+    because the global filter bar was not rendered on this page. So Labor
+    answered quarter-over-quarter (Jan 5 - Apr 4 2026) while every other page
+    answered fiscal year-to-date (Oct 1 2025 - Jul 3 2026) under the same
+    filter, and the two disagreed about the size of the company.
+
+    Resolved from the *global* FilterParams rather than from LaborFilters,
+    because LaborFilters carries no preset - so asking the comparison module
+    about it would silently select the preceding-period basis and reintroduce
+    the disagreement in a subtler form.
+    """
+    try:
+        from flask import session
+        from flask_login import current_user
+
+        from app.services.filters import resolve_filters as resolve_global_filters
+
+        filters, _meta = resolve_global_filters(
+            request,
+            current_user,
+            session_obj=session,
+            source=request.args or {},
+            sticky_enabled=bool(current_app.config.get("STICKY_FILTERS", True)),
+            update_session=False,
+        )
+        return comparison.resolve_comparison(filters)
+    except Exception:
+        return None
+
+
 def resolve_filters(args: Mapping[str, Any] | None = None) -> LaborFilters:
     source = args or request.args
     status = labor_store.get_status()
     max_date = _parse_date(status.max_date, default=date.today()) if status.max_date else date.today()
     default_days = max(7, int(current_app.config.get("LABOR_PAGE_DEFAULT_DAYS", 90) or 90))
-    default_end = max_date
-    default_start = default_end - timedelta(days=default_days - 1)
+
+    shared = _global_comparison()
+    if shared is not None:
+        default_start, default_end = shared.current_start, shared.current_end
+        # The labor dataset can be shorter than the sales dataset; never ask it
+        # for a window it does not hold.
+        default_end = min(default_end, max_date)
+        default_start = min(default_start, default_end)
+    else:
+        default_end = max_date
+        default_start = default_end - timedelta(days=default_days - 1)
+
     start = _parse_date(source.get("start"), default=default_start)
     end = _parse_date(source.get("end"), default=default_end)
+    end = min(end, max_date)
     if start > end:
         start, end = end, start
     sort_by = str(source.get("sort") or source.get("sort_by") or "labor_cost").strip().lower()
@@ -729,10 +775,18 @@ def _query_filter_options(filters: LaborFilters) -> dict[str, list[dict[str, str
 
 
 def _prior_window(filters: LaborFilters) -> tuple[date, date]:
-    window_days = max(1, (filters.end - filters.start).days + 1)
-    prior_end = filters.start - timedelta(days=1)
-    prior_start = prior_end - timedelta(days=window_days - 1)
-    return prior_start, prior_end
+    """
+    The comparison window, from the one place that decides it.
+
+    This used to compute its own preceding-window date maths, which is how
+    Labor came to report against a different prior period from every other
+    page under an identical filter. See app/services/comparison.py.
+    """
+    shared = _global_comparison()
+    if shared is not None:
+        return shared.prior_start, shared.prior_end
+    window = comparison.resolve_comparison(filters)
+    return window.prior_start, window.prior_end
 
 
 def _delta_pct(current: float | None, prior: float | None) -> float | None:

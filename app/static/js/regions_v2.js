@@ -357,7 +357,7 @@
     const packs = meta?.packs_coverage || {};
     const freshness = meta?.freshness || {};
 
-    renderBadge("regionsV2Window", `Window: ${kpis.start || "-"} to ${displayWindowEnd(kpis.end)}`, "text-bg-light");
+    renderBadge("regionsV2Window", window.WAFormat.dayRange(kpis.start, displayWindowEnd(kpis.end)), "text-bg-light");
     renderBadge("regionsV2Regions", `Regions in scope: ${fmtInt.format(asNumber(kpis.regions_count))}`, "text-bg-light");
     renderBadge("regionsV2Customers", `Customers in scope: ${fmtInt.format(asNumber(kpis.customers))}`, "text-bg-light");
     renderBadge("regionsV2Orders", `Orders in scope: ${fmtInt.format(asNumber(kpis.orders))}`, "text-bg-light");

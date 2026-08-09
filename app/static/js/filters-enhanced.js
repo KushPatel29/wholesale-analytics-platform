@@ -880,8 +880,8 @@
   const formatDateLabel = (filters) => {
     const preset = humanizePreset(filters?.date_preset);
     if (preset && String(filters?.date_preset || "").toLowerCase() !== "custom") return preset;
-    if (filters?.start && filters?.end) return `${filters.start} to ${filters.end}`;
-    if (filters?.start) return `Since ${filters.start}`;
+    if (filters?.start && filters?.end) return window.WAFormat.dayRange(filters.start, filters.end);
+    if (filters?.start) return `Since ${window.WAFormat.day(filters.start)}`;
     if (filters?.end) return `Through ${filters.end}`;
     return preset || "All Time";
   };

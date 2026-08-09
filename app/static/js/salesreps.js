@@ -319,16 +319,24 @@
     return compact ? fmtMoney0.format(n) : fmtMoney2.format(n);
   };
 
+  /* `Jul 6, 2026`, matching every other page and the server. This rendered
+     `08/09/2026` - a different date format from the rest of the app, and
+     ambiguous to half the world. */
   const formatDateCA = (raw) => {
     if (!raw) return TEXT_EMPTY;
-    const dt = new Date(raw);
-    if (Number.isNaN(dt.valueOf())) return String(raw);
-    return dt.toLocaleDateString(LOCALE, { year: "numeric", month: "2-digit", day: "2-digit" });
+    return window.WAFormat.day(raw, { missing: TEXT_EMPTY });
   };
 
+  /* "Now" is the data cutoff, not the browser clock. Ageing an account against
+     the wall clock on a dataset that stops earlier makes every account look
+     dormant - the same fault that emptied this page's KPIs. */
   const referenceDate = () => {
-    const dt = new Date();
-    return Number.isNaN(dt.valueOf()) ? new Date() : dt;
+    const through = document.body?.dataset?.dataThrough;
+    if (through) {
+      const parsed = new Date(`${through}T00:00:00`);
+      if (!Number.isNaN(parsed.valueOf())) return parsed;
+    }
+    return new Date();
   };
 
   const silentAge = (rawDate, explicitDays = null) => {
@@ -1064,21 +1072,29 @@
     if (el) el.textContent = value;
   };
 
+  /* The comparison basis, as the server resolved it. Hardcoding "MoM (FMTD)"
+     here was wrong twice over: the delta is against the prior fiscal
+     year-to-date, not the prior month, and the label did not change when the
+     filter did. It is now taken from the bundle, which reads it from the one
+     module that decides the window. */
+  let comparisonBasisLabel = "vs prior period";
+
   const setDelta = (id, value, suffix = "%") => {
     const el = document.getElementById(id);
     if (!el) return;
     const n = opt(value);
     el.classList.remove("delta-up", "delta-down");
     if (n === null) {
-      el.innerHTML = `<span class="sr-kpi-delta sr-kpi-delta--neutral">MoM (FMTD) —</span>`;
+      el.innerHTML = `<span class="sr-kpi-delta sr-kpi-delta--neutral">${comparisonBasisLabel} —</span>`;
       return;
     }
     const cls = n >= 0 ? "sr-kpi-delta--pos" : "sr-kpi-delta--neg";
     const sign = n >= 0 ? "+" : "";
-    el.innerHTML = `<span class="sr-kpi-delta ${cls}">${sign}${fmtPct.format(n)}${suffix} MoM (FMTD)</span>`;
+    el.innerHTML = `<span class="sr-kpi-delta ${cls}">${sign}${fmtPct.format(n)}${suffix} ${comparisonBasisLabel}</span>`;
   };
 
   const updateColumnLabels = (meta = {}) => {
+    if (meta.basis_short_label) comparisonBasisLabel = meta.basis_short_label;
     const units = meta.units_label || root.dataset.unitsLabel || "Units";
     const asp = meta.asp_label || root.dataset.aspLabel || "ASP";
     const aspLb = meta.asp_lb_label || root.dataset.aspLbLabel || "ASP / LB";

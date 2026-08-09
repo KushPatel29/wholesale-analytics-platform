@@ -30,6 +30,12 @@
     {% if current_user.is_authenticated %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/universal_drilldown.css') }}">
     {% endif %}
+    {# House rules for printing numbers, shared by every page script. Loaded
+       synchronously in <head> so window.WAFormat exists before any renderer
+       runs - a page script that falls back to its own formatter is how the
+       same revenue total came to be printed three different ways. Tiny file,
+       no dependencies. #}
+    <script src="{{ url_for('static', filename='js/format.js', v='20260810-format-1') }}"></script>
     {% set _needs_chartjs = current_user.is_authenticated and ((needs_chartjs | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['overview_page', 'customers', 'products', 'salesreps']) %}
     {% set _needs_plotly = current_user.is_authenticated and ((needs_plotly | default(false)) or (needs_early_charts | default(false)) or request.blueprint in ['products', 'suppliers', 'labor']) %}
     {% if _needs_chartjs %}
@@ -128,7 +134,11 @@
     {% set _page_tone = 'operations' %}
   {% endif %}
   {% set _hide_global_filters = hide_global_filters if hide_global_filters is defined else (disable_global_filters if disable_global_filters is defined else (request.blueprint == 'admin' or _blueprint_name.startswith('returns_'))) %}
-  <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}">
+  {# data-data-through: the last date the dataset holds. Page scripts that
+     compute "days since" must age against this, not against the browser clock -
+     on a dataset that stops before today, wall-clock ageing marks every account
+     dormant and every "active in the last 30 days" count zero. #}
+  <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}"{% if data_through %} data-data-through="{{ data_through.isoformat() }}"{% endif %}>
     {% set branding = config.get('BRANDING', {}) %}
     <nav class="navbar navbar-expand-xxl navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">

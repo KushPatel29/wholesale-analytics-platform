@@ -55,6 +55,16 @@
           <h2 class="filters-shell__title">Global Filters</h2>
           <div class="filters-shell__meta">
             <span class="filters-shell__date" id="filtersDateSummary">{{ _summary.get('date_label', 'All Time') }}</span>
+            {# Data freshness, stated once, in neutral language.
+               The Regions page used to self-report this in red as
+               "Freshness: 37d lag", which reads as a broken pipeline. With the
+               analysis window clamped to the last row (see comparison.py) the
+               lag is not a defect, it is just where the data ends - and a
+               reviewer should be told plainly rather than alarmed. #}
+            {% if data_through_label %}
+            <span class="filters-shell__meta-sep" aria-hidden="true"></span>
+            <span class="filters-shell__freshness" title="The analysis window is clamped to the last date in the dataset.">Data through {{ data_through_label }}</span>
+            {% endif %}
             <span class="filters-shell__meta-sep" aria-hidden="true"></span>
             <span id="filtersLastAppliedLabel">
               {% if g.filters_last_applied_at is defined and g.filters_last_applied_at %}

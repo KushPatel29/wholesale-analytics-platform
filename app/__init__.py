@@ -160,6 +160,24 @@ def register_blueprints(app: Flask) -> None:
             }
 
     @app.context_processor
+    def _inject_data_freshness():
+        """
+        The last date the dataset holds, for the global filter bar.
+
+        Cheap: a memoised manifest read, not a query. See
+        app/services/comparison.py.
+        """
+        try:
+            from .services.comparison import data_cutoff, format_day
+
+            cutoff = data_cutoff()
+            if cutoff is None:
+                return {"data_through": None, "data_through_label": None}
+            return {"data_through": cutoff, "data_through_label": format_day(cutoff)}
+        except Exception:
+            return {"data_through": None, "data_through_label": None}
+
+    @app.context_processor
     def _inject_page_guide():
         try:
             from .core.page_guides import guide_for_request
@@ -235,6 +253,16 @@ def init_extensions(app: Flask) -> None:
     app.jinja_env.filters["currency"] = fmt_currency
     app.jinja_env.filters["percent"] = fmt_percent
     app.jinja_env.filters["intcomma"] = fmt_intcomma
+
+    # House rules for numbers and dates, shared with app/static/js/format.js.
+    # Registered alongside the older filters rather than replacing them: several
+    # templates depend on `currency` always printing two decimals.
+    try:
+        from .services.formatting import register_jinja_filters
+
+        register_jinja_filters(app)
+    except Exception:  # pragma: no cover - never block boot on a filter
+        app.logger.exception("formatting.filters_install_failed")
 
     @app.before_request
     def _load_saved_views():

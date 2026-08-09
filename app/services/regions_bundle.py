@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from datetime import timedelta
 from statistics import pstdev
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
+from app.services import comparison
 from app.services import fact_schema as fs
 from app.services import fact_store
 from app.services.filters import normalize_filters
@@ -165,7 +167,25 @@ def _calc_wow(weekly_values: list[float]) -> float | None:
     return (last - prev) / abs(prev) * 100.0
 
 
-def _comparison_windows(start_iso: str | None, end_iso: str | None) -> Dict[str, str | None]:
+def _comparison_windows(
+    start_iso: str | None,
+    end_iso: str | None,
+    filters: Any = None,
+) -> Dict[str, str | None]:
+    """
+    The current and prior windows, from the one place that decides them.
+
+    This computed its own preceding-period maths and separately its own
+    year-offset, and the page then rendered `YoY Growth: -` because the two
+    disagreed about which one it was showing. It now defers to
+    app/services/comparison.py, so Regions answers the same question as
+    Overview, Products, Labor and Sales Reps.
+
+    `end_iso` arrives exclusive from the callers here; the comparison module
+    works in inclusive dates, so it is converted on the way in and back on the
+    way out. Getting that wrong is half of why the demo's end date differed by
+    a day between pages.
+    """
     if not start_iso or not end_iso:
         return {
             "current_start": start_iso,
@@ -174,24 +194,33 @@ def _comparison_windows(start_iso: str | None, end_iso: str | None) -> Dict[str,
             "prior_end": None,
             "yoy_start": None,
             "yoy_end": None,
+            "basis_label": None,
         }
     try:
-        current_start = pd.Timestamp(start_iso).normalize()
-        current_end = pd.Timestamp(end_iso).normalize()
-        if current_end <= current_start:
-            current_end = current_start + pd.Timedelta(days=1)
-        span = current_end - current_start
-        prior_end = current_start
-        prior_start = prior_end - span
-        yoy_start = current_start - pd.DateOffset(years=1)
-        yoy_end = current_end - pd.DateOffset(years=1)
+        current_start = pd.Timestamp(start_iso).normalize().date()
+        end_exclusive = pd.Timestamp(end_iso).normalize().date()
+        current_end_inclusive = end_exclusive - timedelta(days=1)
+        if current_end_inclusive < current_start:
+            current_end_inclusive = current_start
+
+        window = comparison.resolve_comparison(
+            {
+                "start": current_start,
+                "end": current_end_inclusive,
+                "preset": getattr(filters, "preset", None),
+                "date_type": getattr(filters, "date_type", None),
+            }
+        )
         return {
-            "current_start": current_start.date().isoformat(),
-            "current_end": current_end.date().isoformat(),
-            "prior_start": prior_start.date().isoformat(),
-            "prior_end": prior_end.date().isoformat(),
-            "yoy_start": yoy_start.date().isoformat(),
-            "yoy_end": yoy_end.date().isoformat(),
+            "current_start": window.current_start.isoformat(),
+            "current_end": window.current_end_exclusive.isoformat(),
+            "prior_start": window.prior_start.isoformat(),
+            "prior_end": window.prior_end_exclusive.isoformat(),
+            # Regions shows both a prior-period and a year-ago column. When the
+            # active basis is already the fiscal year, they are the same window.
+            "yoy_start": window.prior_start.isoformat(),
+            "yoy_end": window.prior_end_exclusive.isoformat(),
+            "basis_label": window.basis_label,
         }
     except Exception:
         return {
@@ -201,6 +230,7 @@ def _comparison_windows(start_iso: str | None, end_iso: str | None) -> Dict[str,
             "prior_end": None,
             "yoy_start": None,
             "yoy_end": None,
+            "basis_label": None,
         }
 
 
@@ -598,8 +628,12 @@ def _serialize_rows(frame: pd.DataFrame, columns: list[str]) -> list[dict[str, A
     return rows
 
 
-def _build_empty_regions_payload(start_iso: str | None = None, end_iso: str | None = None) -> Dict[str, Any]:
-    windows = _comparison_windows(start_iso, end_iso)
+def _build_empty_regions_payload(
+    start_iso: str | None = None,
+    end_iso: str | None = None,
+    filters: Any = None,
+) -> Dict[str, Any]:
+    windows = _comparison_windows(start_iso, end_iso, filters)
     return {
         "kpis": {
             "total_revenue": 0.0,
@@ -677,7 +711,7 @@ def _regions_overview_context(filters: Any, scope: Dict[str, Any]) -> Dict[str, 
 
     where_sql, params, start_iso, end_iso = fact_store.build_where_clause(filters, cols, scope, apply_default_window=True)
     scoped_sql = _region_scoped_sql(cols_map, where_sql)
-    windows = _comparison_windows(start_iso, end_iso)
+    windows = _comparison_windows(start_iso, end_iso, filters)
 
     prior_where_sql = None
     prior_params: List[Any] = []
@@ -1662,7 +1696,7 @@ def _region_drilldown_context(region_id: str, filters: Any, scope: Dict[str, Any
     current_scoped_sql = _region_scoped_sql(cols_map, region_filter_sql)
     current_params = list(params) + [region_id]
 
-    windows = _comparison_windows(start_iso, end_iso)
+    windows = _comparison_windows(start_iso, end_iso, filters)
 
     prior_scoped_sql = "SELECT * FROM current_scoped WHERE 1 = 0"
     prior_params: list[Any] = []

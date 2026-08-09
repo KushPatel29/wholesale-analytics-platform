@@ -299,7 +299,9 @@
     });
     const start = meta?.window?.start || meta?.filters?.start;
     const end = meta?.window?.end || meta?.filters?.end;
-    const range = start || end ? `${start || "start"} to ${end || "end"}` : "window not set";
+    /* Rendered for a reader, not for a log. This line used to print
+       `2025-10-01T00:00:00 -> 2026-08-09T00:00:00` directly under the hero. */
+    const range = start || end ? window.WAFormat.dayRange(start, end) : "window not set";
     return parts.length ? `${range} | ${parts.join(" | ")}` : `${range} | no extra filters`;
   }
 
@@ -313,9 +315,9 @@
     if (els.filterSummaryText) els.filterSummaryText.textContent = summarizeFilters(meta);
     if (els.lastRefreshChip) els.lastRefreshChip.textContent = meta?.last_refresh || page.dataset.lastRefresh || "unknown";
     if (els.dataWindowChip) {
-      const start = windowObj?.start || "n/a";
-      const end = windowObj?.end || "n/a";
-      els.dataWindowChip.textContent = `${start} → ${end}`;
+      els.dataWindowChip.textContent = window.WAFormat.dayRange(
+        windowObj?.start, windowObj?.end, { missing: "n/a" }
+      );
     }
 
     if (els.rowsChip) els.rowsChip.textContent = `Rows: ${fmtNumber(health?.rows)}`;

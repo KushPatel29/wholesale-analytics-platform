@@ -245,14 +245,14 @@
 
     setText("v2RegionTitle", score.region_name || regionId || "Region");
     if (windowMeta.start && windowMeta.end) {
-      setText("v2WindowSummary", `Active window ${windowMeta.start} to ${displayWindowEnd(windowMeta.end)}.`);
+      setText("v2WindowSummary", `Active window ${window.WAFormat.dayRange(windowMeta.start, displayWindowEnd(windowMeta.end))}.`);
     } else {
       setText("v2WindowSummary", "Computed using current filters and scope.");
     }
     if (windowMeta.prior_start && windowMeta.prior_end) {
       setText(
         "v2ComparisonSummary",
-        `Comparison window ${windowMeta.prior_start} to ${displayWindowEnd(windowMeta.prior_end)}.`
+        `Comparison window ${window.WAFormat.dayRange(windowMeta.prior_start, displayWindowEnd(windowMeta.prior_end))}.`
       );
     } else {
       setText("v2ComparisonSummary", "Prior period unavailable for this filtered region.");

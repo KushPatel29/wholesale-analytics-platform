@@ -1079,7 +1079,7 @@
     if (els.dataWindow) {
       const start = w.start || null;
       const end = w.end || null;
-      els.dataWindow.textContent = start && end ? `${start} -> ${end}` : "Not available";
+      els.dataWindow.textContent = start && end ? window.WAFormat.dayRange(start, end) : "Not available";
     }
     const filters = meta.filters || {};
     const parts = [];

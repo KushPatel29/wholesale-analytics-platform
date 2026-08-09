@@ -5198,6 +5198,15 @@ body.theme-wa-future .auth-panel {
   max-width: 34rem;
 }
 
+/* Data freshness in the global filter bar. Deliberately the same muted
+   treatment as the rest of the meta line: "Data through Jul 3, 2026" is a fact
+   about the dataset, not a warning. */
+body.theme-wa-future .filters-shell__freshness {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 /* Error pages. These used to be a bootstrap alert with "Go back home", which
    read like a stack trace escaped; a visitor who mistypes a URL should land
    somewhere that still looks like the product. */

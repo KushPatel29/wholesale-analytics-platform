@@ -24,7 +24,7 @@
     </div>
     <div class="assistant-header-meta">
       <span class="chip" id="assistantPageChip">Page: {{ assistant_context.page or 'overview' }}</span>
-      <span class="chip" id="assistantWindowChip">Window: {{ assistant_context.filters.start or 'auto' }} → {{ assistant_context.filters.end or 'auto' }}</span>
+      <span class="chip" id="assistantWindowChip">{{ assistant_context.filters.start | day_range(assistant_context.filters.end) if assistant_context.filters.start else 'Automatic window' }}</span>
       {% if assistant_context.entity and assistant_context.entity.id %}
       <span class="chip" id="assistantEntityChip">Entity: {{ assistant_context.entity.label or assistant_context.entity.id }}</span>
       {% endif %}

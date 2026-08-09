@@ -1887,7 +1887,26 @@
     if (!host) return;
     const filters = currentFilterState();
     const parts = [];
+
+    /* The date window is one phrase, not four key/value pairs.
+       This loop used to walk every filter key including start, end,
+       date_preset and date_type, so the product page's primary hero panel read
+       "Start: 2025-10-01 | End: 2026-08-09 | Date Preset: current_fy |
+       Date Type: fiscal." - a debug dump in the most prominent place on the
+       page. */
+    const WINDOW_KEYS = new Set([
+      "start", "end", "start_date", "end_date",
+      "date_preset", "preset", "range_preset", "date_type", "complete_months_only",
+    ]);
+    const windowLabel = window.WAFormat.dayRange(
+      filters?.start || filters?.start_date,
+      filters?.end || filters?.end_date,
+      { missing: "" }
+    );
+    if (windowLabel) parts.push(windowLabel);
+
     Object.entries(filters || {}).forEach(([key, rawValue]) => {
+      if (WINDOW_KEYS.has(key)) return;
       if (rawValue == null || rawValue === "") return;
       const values = Array.isArray(rawValue) ? rawValue.filter(Boolean) : [rawValue].filter(Boolean);
       if (!values.length) return;
