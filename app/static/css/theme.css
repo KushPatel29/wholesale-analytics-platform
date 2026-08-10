@@ -5319,6 +5319,67 @@ body.theme-wa-future tr.table-totals > td {
   background: var(--wa-surface-2);
 }
 
+/* The suggested tour on the Overview. Numbered links, not an overlay: a modal
+   tour is something to dismiss, and a reviewer with three minutes should not
+   have to spend the first ten seconds closing a thing. */
+body.theme-wa-future .overview-tour {
+  max-width: 62ch;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border, var(--wa-hairline));
+  border-radius: 10px;
+  background: var(--wa-surface-2);
+}
+
+body.theme-wa-future .overview-tour__lead {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+body.theme-wa-future .overview-tour__steps {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+body.theme-wa-future .overview-tour__steps a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+body.theme-wa-future .overview-tour__steps a:hover,
+body.theme-wa-future .overview-tour__steps a:focus-visible {
+  color: var(--foreground);
+}
+
+/* Keyboard focus must be visible everywhere, not just where a component
+   happened to style it. */
+body.theme-wa-future a:focus-visible,
+body.theme-wa-future button:focus-visible,
+body.theme-wa-future select:focus-visible,
+body.theme-wa-future input:focus-visible,
+body.theme-wa-future [tabindex]:focus-visible {
+  outline: 2px solid var(--wa-accent, var(--primary, #2563eb));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Disabled controls were near-invisible against the dark surface - the
+   Returns "Reset" button in particular read as missing rather than off. */
+body.theme-wa-future .btn:disabled,
+body.theme-wa-future .btn.disabled,
+body.theme-wa-future fieldset:disabled .btn {
+  opacity: 0.62;
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+
 /* The synthetic-data disclosure on the Overview. Legible but not alarming:
    it is a statement about how the demo was built, not an error banner. */
 body.theme-wa-future .overview-synthetic-note {

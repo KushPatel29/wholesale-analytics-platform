@@ -1070,6 +1070,20 @@
         &mdash; three fiscal years of orders, stores, SKUs and vendors, with deliberate
         anomalies planted for the analysis to find. No real company&rsquo;s data is involved.
       </p>
+      {# A reviewer gets two or three minutes and will not find the good parts
+         unsupervised. Five numbered steps, as links rather than a modal tour:
+         no library, no overlay to dismiss, works with JavaScript disabled, and
+         it costs nothing if the reader ignores it. #}
+      <nav class="overview-tour" aria-label="Suggested tour">
+        <span class="overview-tour__lead">New here? Five minutes, in order:</span>
+        <ol class="overview-tour__steps">
+          <li><a href="#scorecardSection">Read the scorecard &mdash; revenue, margin and the year-over-year column</a></li>
+          <li><a href="/customers/">Open Customers &mdash; RFM bands, cohort retention, churn risk</a></li>
+          <li><a href="/products/">Open Products &mdash; find the department whose margin collapsed</a></li>
+          <li><a href="/regions/">Open Regions &mdash; one territory is down sharply; the others are not</a></li>
+          <li><a href="/suppliers/">Open Suppliers &mdash; one vendor has crossed into loss</a></li>
+        </ol>
+      </nav>
       {% endif %}
       <div id="comparisonNoteText" class="hero-period-note">Comparisons follow the active filtered window.</div>
       <div class="context-strip" aria-label="Business context strip">
