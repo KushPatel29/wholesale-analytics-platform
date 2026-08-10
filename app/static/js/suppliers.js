@@ -310,21 +310,43 @@
     }
     removeSkeleton("topSuppliersChart");
 
+    /* Horizontal bars, not vertical.
+       Supplier names are long ("Silverbrook Manufacturing"), and as x-axis
+       categories Plotly rotated them 90 degrees into an illegible wall of
+       overlapping text while the y-axis showed a single "$0" tick and the bars
+       ran off the top of the plot area. On a horizontal bar chart the name is
+       read left-to-right at its natural size and the value axis has room for
+       real ticks.
+
+       Sorted ascending because Plotly draws the first category at the bottom,
+       so ascending input renders as descending on screen - the order a reader
+       expects from a "top N" chart. */
+    const ordered = labels
+      .map((label, i) => ({ label: String(label ?? ""), value: values[i] || 0 }))
+      .sort((a, b) => a.value - b.value);
+
+    const truncate = (s) => (s.length > 28 ? `${s.slice(0, 27)}…` : s);
+
     window.Plotly.newPlot(
       "topSuppliersChart",
       [
         {
-          x: labels,
-          y: values,
+          y: ordered.map((r) => truncate(r.label)),
+          x: ordered.map((r) => r.value),
           type: "bar",
-          hovertemplate: "%{x}<br>%{y:$,.0f}<extra></extra>",
+          orientation: "h",
+          // Full, untruncated name in the tooltip.
+          customdata: ordered.map((r) => r.label),
+          hovertemplate: "%{customdata}<br>%{x:$,.0f}<extra></extra>",
         },
       ],
       {
-        margin: { t: 10, r: 20, b: 100, l: 60 },
-        xaxis: { automargin: true },
-        yaxis: { title: "Revenue", tickformat: "$,.0f" },
-        height: 380,
+        margin: { t: 10, r: 24, b: 44, l: 8 },
+        xaxis: { title: "Revenue", tickformat: "$,.0s", automargin: true },
+        // automargin gives the labels whatever width they need instead of
+        // clipping them against a fixed left margin.
+        yaxis: { automargin: true, type: "category", ticksuffix: "  " },
+        height: Math.max(320, ordered.length * 30 + 90),
       },
       { displayModeBar: false, responsive: true }
     );

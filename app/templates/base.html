@@ -23,7 +23,7 @@
     </script>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_T_netflix_style.png') }}?v=11">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260809-final-cleanup-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260810-demo-ready-1') }}">
     {% if request.blueprint == 'overview_page' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
     {% endif %}
@@ -57,7 +57,7 @@
        what tests/test_customers_drilldown_v2.py pins. #}
     {% if current_user.is_authenticated and (needs_early_charts | default(false)) %}
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260809-final-cleanup-2') }}"></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260810-demo-ready-1') }}"></script>
     {% elif _needs_plotly %}
     {# Primary workspaces only use Plotly's scatter/bar/pie traces. The basic
        build is much smaller than the all-trace bundle. Load it after the data
@@ -88,9 +88,9 @@
         }, { once: true });
       })();
     </script>
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260809-final-cleanup-2') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260810-demo-ready-1') }}" defer></script>
     {% elif _needs_chartjs %}
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260809-final-cleanup-2') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260810-demo-ready-1') }}" defer></script>
     {% endif %}
     {% block head_extras %}{% endblock %}
     <script>
@@ -375,7 +375,7 @@
     {# Keep filters boot sequence predictable: FilterState -> adapter -> filters UI #}
     <script src="{{ url_for('static', filename='js/global_filters.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/bundle-adapter.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='js/filters-enhanced.js') }}?v=20260809-final-cleanup-2" defer></script>
+    <script src="{{ url_for('static', filename='js/filters-enhanced.js') }}?v=20260810-demo-ready-1" defer></script>
     {% endif %}
     {% if current_user.is_authenticated %}
     <script src="{{ url_for('static', filename='js/page-state-cache.js') }}?v=20260401-page-state-cache-1" defer></script>

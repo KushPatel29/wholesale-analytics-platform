@@ -402,7 +402,7 @@
   </div>
 
   <div class="table-responsive">
-    <table class="table table-sm table-hover align-middle mb-0 customer-table" id="customerCommandTable">
+    <table class="table table-sm table-hover align-middle mb-0 customer-table table-sticky-first" id="customerCommandTable">
       <thead class="table-light position-sticky top-0">
         <tr>
           <th scope="col">Customer</th>
@@ -478,9 +478,9 @@
         <tr><td colspan="24" class="text-center text-muted py-4">No customers match the current filters.</td></tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-light">
+      <tfoot class="table-light table-totals">
         <tr>
-          <th colspan="4" class="text-end">Page totals</th>
+          <th colspan="4" class="text-end">Totals for the 25 rows shown</th>
           <th class="text-end">{{ fmt_currency(page_totals.get('revenue')) }}</th>
           <th colspan="2"></th>
           <th></th>

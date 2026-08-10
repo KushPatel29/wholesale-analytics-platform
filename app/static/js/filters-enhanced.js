@@ -61,6 +61,56 @@
     }
   };
 
+  /* ------------------------------------------------------------------
+     Never navigate on top of a navigation the user started.
+
+     The filter layer syncs the URL after load, and when it did that with
+     `location.assign` it raced with - and killed - a click that was already in
+     flight. Clicking Inventory while Products was still settling left you back
+     on Products with filter parameters appended; the same swallowed navigations
+     to Returns and to customer drilldowns. It reproduced three times during
+     this session's own testing, so it is not rare.
+
+     `navigationPending` is set the moment the user commits to going somewhere -
+     a click on an internal link, a form submit, or the browser's own
+     `beforeunload` - and every filter-initiated navigation checks it first.
+     The URL sync itself uses history.replaceState, which cannot cancel
+     anything; these three assigns are the ones that could.
+     ------------------------------------------------------------------ */
+  const nav = { pending: false };
+
+  const markNavigationPending = () => {
+    nav.pending = true;
+  };
+
+  /* Capture phase: run before any handler that might stopPropagation. */
+  document.addEventListener(
+    "click",
+    (event) => {
+      const link = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!link) return;
+      const href = link.getAttribute("href") || "";
+      if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+      if (link.target && link.target !== "_self") return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+      markNavigationPending();
+    },
+    true
+  );
+  document.addEventListener("submit", markNavigationPending, true);
+  window.addEventListener("beforeunload", markNavigationPending);
+
+  /* The single place the filter layer is allowed to navigate. */
+  const filterNavigate = (url, { reason = "filters" } = {}) => {
+    if (!url) return false;
+    if (nav.pending) {
+      console.info(`filters.navigate.skipped reason=${reason} (user navigation in flight)`);
+      return false;
+    }
+    window.location.assign(url);
+    return true;
+  };
+
   const state = {
     schemaEndpoint: "/api/filters/schema",
     optionsEndpoint: "/api/filters/options",
@@ -1969,11 +2019,11 @@
       body: new URLSearchParams(data),
     });
     if (response.redirected) {
-      window.location.assign(response.url);
+      filterNavigate(response.url, { reason: "apply-redirect" });
       return;
     }
     if (response.ok) {
-      window.location.reload();
+      if (!nav.pending) window.location.reload();
       return;
     }
     throw new Error(`Request failed (${response.status})`);
@@ -2405,7 +2455,7 @@
 
         if (handlerMode !== "ajax") {
           clearActiveApply();
-          window.location.assign(targetUrl);
+          filterNavigate(targetUrl, { reason: "non-ajax-apply" });
           return;
         }
 
@@ -2428,7 +2478,7 @@
           retryBtn?.classList.remove("d-none");
           updateActionState();
           if (fallbackUrl) {
-            window.location.assign(fallbackUrl);
+            filterNavigate(fallbackUrl, { reason: "apply-ack-timeout" });
           }
         }, APPLY_ACK_TIMEOUT_MS);
 

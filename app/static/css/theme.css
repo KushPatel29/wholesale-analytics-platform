@@ -5198,6 +5198,127 @@ body.theme-wa-future .auth-panel {
   max-width: 34rem;
 }
 
+/* ==========================================================================
+   Mobile: the page must not scroll sideways
+   --------------------------------------------------------------------------
+   Recruiters open portfolio links on phones. At 375px the Overview laid out to
+   503px and the whole document scrolled horizontally, which is the difference
+   between "dense" and "broken".
+
+   Two causes, both structural rather than per-component:
+
+   - flex rows that do not wrap. A `d-flex` with several chips or buttons has no
+     wrap by default, so it sets a floor on the document width;
+   - tables rendered outside a `.table-responsive` wrapper, which then push the
+     page wider instead of scrolling inside their own box.
+
+   Fixed here rather than in each template because the failure recurs wherever
+   someone adds a row of chips, and a rule that applies once cannot be
+   forgotten.
+   ========================================================================== */
+@media (max-width: 767.98px) {
+  /* Both, or the document still scrolls while the body clips. */
+  html,
+  body.theme-wa-future {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* `.app-shell` IS the body element, so `.app-shell .d-flex` matches nothing.
+     Scope to the body class directly. */
+  body.theme-wa-future .d-flex:not(.flex-nowrap):not(.flex-column) {
+    flex-wrap: wrap;
+  }
+
+  /* Any table, wrapped or not, scrolls inside its own box. */
+  body.theme-wa-future table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Sticky columns need a positioned ancestor with a real width; at this size
+     the horizontal space is not there to spare, so drop them. */
+  body.theme-wa-future .table-sticky-first > tbody > tr > td:first-child,
+  body.theme-wa-future .table-sticky-first > thead > tr > th:first-child {
+    position: static;
+    box-shadow: none;
+  }
+
+  /* Charts get a workable minimum rather than collapsing to a sliver. */
+  body.theme-wa-future .chart-container,
+  body.theme-wa-future .js-plotly-plot {
+    min-height: 240px;
+  }
+}
+
+/* ==========================================================================
+   Wide tables: sticky header, sticky first column, and a visible edge
+   --------------------------------------------------------------------------
+   The Customers and Suppliers tables cut columns mid-header at the right edge
+   ("ORDE...", "PROFIT...") and the only affordance was a horizontal scrollbar
+   that is easy to miss on a trackpad. Three changes, all on the existing
+   .table-responsive wrapper so every table gets them:
+
+   - the header row stays put while the body scrolls vertically;
+   - the first column (always the entity name) stays put while the body scrolls
+     horizontally, so a reader never loses track of which row they are reading;
+   - a right-edge shadow appears only while there is more table to the right,
+     which is the affordance the scrollbar was failing to provide.
+
+   The shadow is a background-attachment trick rather than script: two linear
+   gradients pinned to the scroll container, and two solid "cover" gradients
+   pinned to the content. When the content edge reaches the container edge the
+   cover hides the shadow. No listeners, no layout thrash.
+   ========================================================================== */
+body.theme-wa-future .table-responsive {
+  overflow-x: auto;
+  overflow-y: visible;
+  background-image:
+    linear-gradient(to right, var(--wa-surface), var(--wa-surface)),
+    linear-gradient(to right, var(--wa-surface), var(--wa-surface)),
+    linear-gradient(to right, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0)),
+    linear-gradient(to left, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0));
+  background-position: left center, right center, left center, right center;
+  background-repeat: no-repeat;
+  background-size: 26px 100%, 26px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+body.theme-wa-future .table-responsive > table > thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--wa-surface);
+}
+
+/* First column sticky, but only where the table is wide enough to scroll.
+   Applying it unconditionally puts a seam on narrow tables that do not need
+   one. Opt in per table with .table-sticky-first. */
+body.theme-wa-future .table-sticky-first > tbody > tr > td:first-child,
+body.theme-wa-future .table-sticky-first > thead > tr > th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--wa-surface);
+  box-shadow: 1px 0 0 var(--border);
+}
+
+body.theme-wa-future .table-sticky-first > thead > tr > th:first-child {
+  z-index: 3;
+}
+
+/* A totals row must line up with the columns it totals and say what it is.
+   The Customers "Page totals" row printed three figures that did not sit under
+   their columns, so it read as a stray row of numbers. */
+body.theme-wa-future tfoot.table-totals > tr > td,
+body.theme-wa-future tr.table-totals > td {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--wa-surface-2);
+}
+
 /* The synthetic-data disclosure on the Overview. Legible but not alarming:
    it is a statement about how the demo was built, not an error banner. */
 body.theme-wa-future .overview-synthetic-note {
