@@ -144,16 +144,25 @@ PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
 )
 
 # (dimensions, phase, whether the page sends the date window with it).
-# The deferred call carries the window and every dimension, and it is the
-# expensive one - about ten seconds cold on the hosted box. Warming it without
-# the window produced a different cache key and left it cold.
+# The deferred call carries the window and is the expensive one - about ten
+# seconds cold on the hosted box. Warming it without the window produced a
+# different cache key and left it cold.
+#
+# The requested dimension list is *also* part of the cache key, and the front
+# end sends one of two lists depending on how it bootstrapped: every dimension
+# when it restored from the DOM or from storage, and only the five it does not
+# already hold when it bootstrapped from the network (filters-enhanced.js,
+# `deferredDimensions`). Warming only the eight-dimension shape meant a
+# first-time visitor - who takes the network path, and is exactly the person
+# this cache exists for - asked for the five-dimension key and missed every
+# time. Both shapes are warmed; they cost one extra entry each.
+_DEFERRED_ALL = "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups"
+_DEFERRED_REMAINING = "customers,sales_reps,suppliers,products,protein_groups"
+
 FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
     ("statuses,regions,methods", "bootstrap", False),
-    (
-        "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups",
-        "deferred",
-        True,
-    ),
+    (_DEFERRED_ALL, "deferred", True),
+    (_DEFERRED_REMAINING, "deferred", True),
 )
 
 # endpoint -> extra arguments the page sends alongside the date window.
