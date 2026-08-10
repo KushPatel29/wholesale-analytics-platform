@@ -288,9 +288,25 @@ def build_products_parquet_cmd(output: str | None, source: str) -> None:
 
 
 @cli.command("precompute-demo-cache")
-@click.option("--username", default="gm", show_default=True, help="Demo account whose scoped defaults are cached")
-def precompute_demo_cache_cmd(username: str) -> None:
-    """Build the immutable default-page cache packaged in the demo image."""
+@click.option(
+    "--username",
+    "usernames",
+    multiple=True,
+    default=("demo", "gm"),
+    show_default=True,
+    help="Demo accounts whose scoped defaults are cached. Repeat for more than one.",
+)
+def precompute_demo_cache_cmd(usernames: tuple[str, ...]) -> None:
+    """
+    Build the immutable default-page cache packaged in the demo image.
+
+    Cached per account, because the cache key carries the caller's scope hash
+    and permission version. This used to precompute for `gm` alone, so once the
+    one-click `demo` account became the way visitors arrive, every one of them
+    missed the cache and paid the full cold build - including on
+    /api/filters/options, which every page blocks on and which exceeded the
+    client's 20-second timeout on the free tier.
+    """
     cache_dir = Path(os.getenv("DEMO_PREBUILT_CACHE_DIR", "cache/demo-prebuilt")).resolve()
     os.environ["DEMO_PREBUILT_CACHE_DIR"] = cache_dir.as_posix()
     os.environ["DEMO_PREBUILT_CACHE_WRITE"] = "1"
@@ -301,22 +317,24 @@ def precompute_demo_cache_cmd(username: str) -> None:
     from app.auth.models import get_user_by_username
     from app.core.warmup import primary_paths
 
-    user = get_user_by_username(username)
-    if user is None:
-        raise click.ClickException(f"Demo user '{username}' does not exist; run seed-demo-users first.")
-
     app = create_app()
     paths = primary_paths()
     failures: list[str] = []
-    with app.test_client() as client:
-        with client.session_transaction() as session:
-            session["_user_id"] = str(user.id)
-            session["_fresh"] = False
-        for index, path in enumerate(paths, start=1):
-            response = client.get(path)
-            click.echo(f"[{index:02d}/{len(paths):02d}] {response.status_code} {path}")
-            if response.status_code >= 400:
-                failures.append(f"{response.status_code} {path}")
+    for username in usernames:
+        user = get_user_by_username(username)
+        if user is None:
+            raise click.ClickException(f"Demo user '{username}' does not exist; run seed-demo-users first.")
+        click.echo("")
+        click.secho(f"Caching {len(paths)} paths as '{username}'", fg="cyan")
+        with app.test_client() as client:
+            with client.session_transaction() as session:
+                session["_user_id"] = str(user.id)
+                session["_fresh"] = False
+            for index, path in enumerate(paths, start=1):
+                response = client.get(path)
+                click.echo(f"[{index:02d}/{len(paths):02d}] {response.status_code} {path}")
+                if response.status_code >= 400:
+                    failures.append(f"{username}: {response.status_code} {path}")
 
     files = tuple(cache_dir.rglob("*.pickle.gz")) if cache_dir.exists() else ()
     if failures:

@@ -807,6 +807,46 @@ def _options_payload(filters: FilterParams, scope: Dict[str, Any], *, requested_
     }
 
 
+def _clamp_window_to_data(params: Any) -> Any:
+    """
+    Pull the window end back to the last date the dataset holds.
+
+    Two reasons, and the second is the expensive one.
+
+    Correctness: the option lists for a window running past the data are the
+    same lists as at the cutoff, because there are no rows in between.
+
+    Cache stability: this endpoint blocks first paint on every page, and its
+    cache key includes the window. The front end computes "current fiscal year"
+    in JavaScript and sends an explicit end of *today*, so the key changed every
+    midnight - which meant the cache built into the demo image had a one-day
+    shelf life. From day two, every visitor to a container that had been up for
+    a week paid the full uncached build, and on a free-tier box that exceeded
+    the client's 20-second timeout and rendered "Options request timed out".
+
+    Clamping to the cutoff makes the key stable for as long as the dataset is,
+    which is the life of the image.
+    """
+    try:
+        import pandas as pd
+        from dataclasses import replace as _replace
+
+        from app.services.comparison import data_cutoff
+
+        cutoff = data_cutoff()
+        if cutoff is None:
+            return params
+        end = getattr(params, "end", None)
+        if end is None:
+            return params
+        cutoff_ts = pd.Timestamp(cutoff)
+        if pd.Timestamp(end) <= cutoff_ts:
+            return params
+        return _replace(params, end=cutoff_ts)
+    except Exception:
+        return params
+
+
 def get_filter_options(
     filters: Any,
     scope: Optional[Dict[str, Any]] = None,
@@ -814,7 +854,7 @@ def get_filter_options(
     use_cache: bool = True,
     requested_keys: Any = None,
 ) -> Dict[str, Any]:
-    params = normalize_filters(filters)
+    params = _clamp_window_to_data(normalize_filters(filters))
     scope_payload = scope or {}
     version = fact_store.cache_buster()
     requested = normalize_requested_option_keys(requested_keys)

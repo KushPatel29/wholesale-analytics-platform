@@ -187,10 +187,18 @@ def _default_window_query() -> str:
 
         from app.services.filters import get_fiscal_periods
 
+        from app.services.comparison import data_cutoff
+
         periods = get_fiscal_periods()
         current = periods.get("current_fy") or {}
         start = current.get("start")
         end = current.get("end") or pd.Timestamp.utcnow()
+        # End on the data cutoff, matching what the request path clamps to.
+        # Warming `end=today` produced a key that changed at every midnight, so
+        # the cache baked into the demo image stopped matching after a day.
+        cutoff = data_cutoff()
+        if cutoff is not None:
+            end = min(pd.Timestamp(end), pd.Timestamp(cutoff))
         if start is None:
             return "date_preset=current_fy"
         return (
