@@ -52,7 +52,18 @@ def test_filters_enhanced_frontend_contract(app):
         assert "window.dispatchGlobalFiltersApplied = dispatchGlobalFiltersApplied;" in body
         assert "const nextApplyId = () =>" in body
         assert "const incomingApplyId = normalizeApplyId(evt?.detail?.applyId);" in body
-        assert 'window.location.assign(fallbackUrl);' in body
+        # The invariant is "an apply that is never acknowledged still lands the
+        # user on the filtered URL", not the literal call that does it. This
+        # asserted `window.location.assign(fallbackUrl);` and so failed when the
+        # navigation was routed through the guard that stops the filter layer
+        # cancelling a click the user already made.
+        assert "fallbackUrl" in body, "the apply-ack timeout must still have a fallback target"
+        assert "filterNavigate(fallbackUrl" in body or "location.assign(fallbackUrl" in body
+
+        # And the guard itself: every filter-initiated navigation goes through
+        # one place that can decline. Without this, the race is free to return.
+        assert "const filterNavigate" in body
+        assert "nav.pending" in body
 
 
 def test_global_filters_frontend_contract(app):
