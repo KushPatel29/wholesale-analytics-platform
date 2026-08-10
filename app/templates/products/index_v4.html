@@ -772,7 +772,7 @@
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">Pricing actions (rule-based)</h5>
-            <a class="btn btn-sm btn-outline-secondary" id="pricingActionsExport" href="{{ url_for('products.export_execution_csv', list='pricing_fixes') }}{{ querystring|default('') }}">
+            <a class="btn btn-sm btn-outline-secondary" id="pricingActionsExport" href="{{ url_for('products.export_execution_csv', list='pricing_fixes') }}{{ querystring|default('')|replace('?', '&', 1) }}">
               <i class="bi bi-download me-1"></i>Export
             </a>
           </div>
@@ -1022,9 +1022,9 @@
               <div class="text-muted small">Top 10 shown; exports return all matching rows under current filters.</div>
             </div>
             <div class="btn-group btn-group-sm" role="group" aria-label="Execution exports">
-              <a id="execPricingExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='pricing_fixes') }}{{ querystring|default('') }}">Pricing fixes</a>
-              <a id="execCostExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='cost_fixes') }}{{ querystring|default('') }}">Cost fixes</a>
-              <a id="execPromoteExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='promote_candidates') }}{{ querystring|default('') }}">Promote</a>
+              <a id="execPricingExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='pricing_fixes') }}{{ querystring|default('')|replace('?', '&', 1) }}">Pricing fixes</a>
+              <a id="execCostExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='cost_fixes') }}{{ querystring|default('')|replace('?', '&', 1) }}">Cost fixes</a>
+              <a id="execPromoteExport" class="btn btn-outline-secondary" href="{{ url_for('products.export_execution_csv', list='promote_candidates') }}{{ querystring|default('')|replace('?', '&', 1) }}">Promote</a>
             </div>
           </div>
           <div class="card-body">
