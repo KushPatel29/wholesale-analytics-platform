@@ -64,7 +64,8 @@
 {% set hero_next_move = header_summary.get("primary_opportunity_detail") or performance_story.get("recommended_action") or "Start with the scorecard, then inspect the customer, pricing, and basket sections to confirm the next move." %}
 {% set active_scope_note = "Current view honors the selected filter window and your current RBAC scope." %}
 {% if meta.get("window_start") and meta.get("window_end") %}
-  {% set active_scope_note = "Current scoped window: " ~ meta.get("window_start") ~ " to " ~ meta.get("window_end") ~ ". " ~ rolling_window_note %}
+  {# Rendered for a reader, not for a log: "Oct 1, 2025 - Jul 6, 2026". #}
+  {% set active_scope_note = "Current scoped window: " ~ (meta.get("window_start") | day_range(meta.get("window_end"))) ~ ". " ~ rolling_window_note %}
 {% endif %}
 
 <div class="container-fluid py-3 pb-4 product-drilldown-v2">
@@ -163,7 +164,7 @@
             {% else %}
               <span class="product-v2-chip is-accent">Margin visibility: restricted</span>
             {% endif %}
-            <span class="product-v2-chip">Last sold: {{ kpis.get("last_sold") or "—" }}</span>
+            <span class="product-v2-chip">Last sold: {{ kpis.get("last_sold") | day }}</span>
             <span class="product-v2-chip {{ tone_class('good' if (header_summary.get('data_confidence_score') or 0) >= 75 else 'warn') }}">Data confidence: {{ header_summary.get("data_confidence_label") or "Watch" }}</span>
           </div>
           <div class="product-v2-story-grid mt-3">
@@ -1005,7 +1006,7 @@
                       <td class="text-end">{{ fmt_currency(row.get("asp_lb")) }}</td>
                       <td class="text-end">{{ fmt_number(row.get("orders")) }}</td>
                       <td class="text-end">{{ fmt_number(row.get("cadence_days"), 1) }} d</td>
-                      <td>{{ row.get("last_order_date") or "—" }}</td>
+                      <td>{{ row.get("last_order_date") | day }}</td>
                       <td><span class="badge {{ tone_class('warn' if row.get('risk_flag') == 'At risk' else 'good') }}">{{ row.get("risk_flag") or "Active" }}</span></td>
                     </tr>
                   {% endfor %}
@@ -1213,7 +1214,16 @@
   const trendV2 = {{ trend|tojson }};
   const seriesV2 = {{ time_series|tojson }};
   const distributionsV2 = {{ distributions|tojson }};
-  const customersV2 = {{ customers|tojson }};
+  {# Only the one series the client draws.
+
+     This was `{{ '{{ customers|tojson }}' }}` - 74 KB of a 449 KB page: 58 customer
+     rows at 24 fields, plus top_rows, top_profit_rows, top_weight_rows,
+     at_risk_rows and drop_signals, which are subsets of those same rows
+     serialised a second time. Every one of those is rendered into HTML by Jinja
+     further up this template, so the JSON copy was never read. The only
+     client-side reference to customersV2 in this file is the monthly active
+     customers chart below. #}
+  const customersV2 = { monthly_active_customers: {{ (customers.get("monthly_active_customers") or [])|tojson }} };
   const basketV2 = {{ basket|tojson }};
   const forecastFeatureEnabledV2 = {{ "true" if forecast_feature_enabled else "false" }};
   const initialForecastV2 = {{ forecast|tojson }};
@@ -2171,7 +2181,7 @@
         <td class="text-end">${money(row.uplift_to_target)}</td>
         <td class="text-end">${num(row.orders, 0)}</td>
         <td class="text-end">${num(row.cadence_days, 1)}</td>
-        <td>${escapeHtml(row.last_order_date || "—")}</td>
+        <td>${escapeHtml(window.WAFormat.day(row.last_order_date))}</td>
       </tr>`;
     }).join("");
     bindMarginRiskRowInteractions();

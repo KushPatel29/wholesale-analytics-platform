@@ -196,6 +196,52 @@ _BASKET_PAGE_FIELDS = (
 )
 
 
+# The twelve fields the margin-risk table renders, plus the ten its column
+# headers sort on and the two its search box matches - all within this set. The
+# rows carry 29.
+_MARGIN_RISK_PAGE_FIELDS = (
+    "customer_id",
+    "customer_name",
+    "revenue",
+    "profit",
+    "margin_pct",
+    "orders",
+    "weight_lb",
+    "asp_lb",
+    "cadence_days",
+    "last_order_date",
+    "target_gap_pp",
+    "uplift_to_target",
+)
+
+
+def _trim_margin_risk_for_page(margin_risk: Any) -> Dict[str, Any]:
+    """
+    Project the margin-risk rows to the columns the table shows.
+
+    The rows cannot be capped - the table sorts and searches the whole set
+    client-side - but 17 of their 29 fields are never read by anything in the
+    page. Keeping the row count and dropping the unread fields is the version of
+    this trim that does not change behaviour.
+
+    Server-rendered stat tiles read `summary` and `target_margin_pct`, which are
+    untouched, and exports read context["datasets"] separately.
+    """
+    if not isinstance(margin_risk, dict):
+        return {}
+    rows = margin_risk.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return margin_risk
+
+    trimmed = dict(margin_risk)
+    trimmed["rows"] = [
+        {field: row.get(field) for field in _MARGIN_RISK_PAGE_FIELDS if field in row}
+        for row in rows
+        if isinstance(row, dict)
+    ]
+    return trimmed
+
+
 def _trim_basket_for_page(basket: Any) -> Dict[str, Any]:
     """
     Cut the co-purchase payload down to what the page draws.
@@ -5309,6 +5355,7 @@ def drilldown(product_id: str):
         # Trim what the *page* embeds. The export path reads context["datasets"],
         # which is untouched, so the CSV still carries every row.
         page_basket = _trim_basket_for_page(context.get("basket") or {})
+        page_margin_risk = _trim_margin_risk_for_page(context.get("margin_risk") or {})
 
         return render_template(
             "products/product_drilldown_v2.html",
@@ -5335,7 +5382,7 @@ def drilldown(product_id: str):
             margin_profile=context.get("margin_profile") or {},
             performance_story=context.get("performance_story") or {},
             price_volume=context.get("price_volume") or {},
-            margin_risk=context.get("margin_risk") or {},
+            margin_risk=page_margin_risk,
             weight_analytics=context.get("weight_analytics") or {},
             decision_panel=context.get("decision_panel") or {},
             risk_opportunity=context.get("risk_opportunity") or {},
