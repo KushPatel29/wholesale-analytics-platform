@@ -959,9 +959,14 @@
   #overviewPage #commercialShapeCard .chart-placeholder canvas {
     height: 290px !important;
   }
+  /* `minmax(0, 1fr)` lets a column shrink to nothing. Inside the concentration
+     panel, which sits in a col-xl-8 beside a chart, three of them collapsed to
+     ~54px and truncated their own labels and currency values mid-character -
+     "Watchlist size", "SKU watchlist" and a negative margin figure were all cut
+     off. A real minimum wraps the row instead of shredding its contents. */
   #overviewPage .focus-summary-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 0.75rem;
     margin-bottom: 0.85rem;
   }
@@ -969,6 +974,18 @@
     #overviewPage .focus-summary-grid {
       grid-template-columns: 1fr;
     }
+  }
+  /* Labels wrap to a second line rather than truncate; a currency value never
+     truncates at all. */
+  #overviewPage .focus-summary-card .focus-label,
+  #overviewPage .focus-summary-card .focus-title,
+  #overviewPage .focus-summary-card .focus-detail {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  #overviewPage .focus-summary-card .focus-value {
+    overflow-wrap: normal;
+    white-space: nowrap;
   }
   #overviewPage .focus-summary-card {
     border: 1px solid var(--wa-info);

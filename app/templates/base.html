@@ -147,7 +147,10 @@
              `fill="currentColor"` so it follows the theme, and an external SVG
              cannot see the page's colour - it rendered black on the dark
              navbar. Inlining also removes a request. #}
-          <svg class="navbar-brand-img" viewBox="0 0 168 40" width="146" height="35"
+          {# viewBox widened from 168: "RETAIL GROUP" at 2.2 letter-spacing
+             overran it, so the wordmark was clipped in the header on every
+             page of the app. #}
+          <svg class="navbar-brand-img" viewBox="0 0 180 40" width="156" height="35"
                role="img" aria-label="Northgate Retail Group" focusable="false">
             <rect x="2" y="24" width="9" height="12" rx="2" fill="#7cc4a4"/>
             <rect x="13.5" y="16" width="9" height="20" rx="2" fill="#4da37e"/>
@@ -155,7 +158,7 @@
             <text x="42" y="19" font-family="Manrope, Segoe UI, system-ui, sans-serif" font-size="13.5"
                   font-weight="700" letter-spacing="0.4" fill="currentColor">NORTHGATE</text>
             <text x="42" y="32" font-family="Manrope, Segoe UI, system-ui, sans-serif" font-size="10.5"
-                  font-weight="500" letter-spacing="2.2" fill="currentColor" opacity="0.66">RETAIL GROUP</text>
+                  font-weight="500" letter-spacing="1.9" fill="currentColor" opacity="0.66">RETAIL GROUP</text>
           </svg>
           <span class="fw-semibold small text-uppercase navbar-brand-copy">Analytics</span>
         </a>
