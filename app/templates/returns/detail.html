@@ -1,4 +1,6 @@
 {% extends "returns/base.html" %}
+{# Data entry, not analysis: no global filter bar here. #}
+{% set hide_global_filters = true %}
 {% set can_wh_approve = can_permission('returns.approve.wh') or can_permission('returns.warehouse.receive') or can_permission('admin.returns.manage') %}
 {% set can_mgr_approve = can_permission('returns.approve.mgr') or can_permission('returns.ops.approve') or can_permission('admin.returns.manage') %}
 {% set can_edit_receiving = can_wh_approve or can_mgr_approve %}

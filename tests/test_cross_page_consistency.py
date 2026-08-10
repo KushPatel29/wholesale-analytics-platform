@@ -37,13 +37,22 @@ _MONEY = re.compile(r"\$([\d,]{7,})")
 _PERCENT = re.compile(r"(\d{1,3}\.\d)%")
 
 
+FEATURE_FLAGS = (
+    "OVERVIEW_V2", "OVERVIEW_V3", "PRODUCTS_V3", "PRODUCTS_V4",
+    "SUPPLIER_DRILLDOWN_V2", "REGIONS_V2", "SALESREPS_V2",
+    "CUSTOMERS_KPIS_V3", "RETURNS_ENABLED", "LABOR_ANALYTICS_ENABLED",
+)
+
+
 @pytest.fixture(scope="module")
 def demo_client():
-    for flag in (
-        "OVERVIEW_V2", "OVERVIEW_V3", "PRODUCTS_V3", "PRODUCTS_V4",
-        "SUPPLIER_DRILLDOWN_V2", "REGIONS_V2", "SALESREPS_V2",
-        "CUSTOMERS_KPIS_V3", "RETURNS_ENABLED", "LABOR_ANALYTICS_ENABLED",
-    ):
+    # Restore os.environ afterwards. Setting these permanently leaked into
+    # later modules and changed which template `customers` renders - this file
+    # sorts before test_customers_kpis_v2.py, so it broke two of its tests that
+    # pass in isolation. Feature flags set by one test module must not decide
+    # what another one is testing.
+    previous = {flag: os.environ.get(flag) for flag in FEATURE_FLAGS}
+    for flag in FEATURE_FLAGS:
         os.environ[flag] = "1"
 
     app = create_app()
@@ -68,7 +77,13 @@ def demo_client():
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
-    return client
+    yield client
+
+    for flag, value in previous.items():
+        if value is None:
+            os.environ.pop(flag, None)
+        else:
+            os.environ[flag] = value
 
 
 def _visible_text(html: str) -> str:

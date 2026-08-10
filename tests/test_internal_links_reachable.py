@@ -98,7 +98,10 @@ def demo_client():
     """
     import os
 
-    for flag in (
+    # Restored on teardown. Feature flags set by one test module must not decide
+    # what a later module is testing - leaking these changed which template
+    # `customers` renders and broke two tests that pass in isolation.
+    flags = (
         "OVERVIEW_V2",
         "OVERVIEW_V3",
         "PRODUCTS_V3",
@@ -112,7 +115,9 @@ def demo_client():
         "CUSTOMERS_KPIS_V3",
         "RETURNS_ENABLED",
         "LABOR_ANALYTICS_ENABLED",
-    ):
+    )
+    previous = {flag: os.environ.get(flag) for flag in flags}
+    for flag in flags:
         os.environ[flag] = "1"
 
     app = create_app()
@@ -140,7 +145,13 @@ def demo_client():
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
-    return client
+    yield client
+
+    for flag, value in previous.items():
+        if value is None:
+            os.environ.pop(flag, None)
+        else:
+            os.environ[flag] = value
 
 
 def _ok(status: int) -> bool:

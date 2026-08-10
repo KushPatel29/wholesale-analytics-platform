@@ -1,4 +1,6 @@
 {% extends "returns/base.html" %}
+{# Data entry, not analysis: no global filter bar here. #}
+{% set hide_global_filters = true %}
 {% set _returns_v2 = returns_v2_enabled if returns_v2_enabled is defined else false %}
 {% block content %}
 {% if _returns_v2 %}

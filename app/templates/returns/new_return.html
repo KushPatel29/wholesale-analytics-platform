@@ -1,4 +1,6 @@
 {% extends "returns/base.html" %}
+{# Data entry, not analysis: no global filter bar here. #}
+{% set hide_global_filters = true %}
 {% set _settings_defaults = returns_settings.get('defaults', {}) if returns_settings else {} %}
 {% set _return_type_options = returns_settings.get('return_type_options', ['Sales Return', 'Vendor Return', 'Production Return']) if returns_settings else ['Sales Return', 'Vendor Return', 'Production Return'] %}
 {% set _follow_up_options = (returns_settings.get('workflow_options', {}).get('follow_up_actions') or ['Credit', 'Replacement', 'Discount', 'No Action']) if returns_settings else ['Credit', 'Replacement', 'Discount', 'No Action'] %}
