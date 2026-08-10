@@ -178,6 +178,56 @@ def _product_forecast_v1_enabled() -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on", "y"}
 
 
+# The affinity chart renders `.slice(0, 10)`. Twenty-five leaves headroom for
+# the `lift` filter it applies afterwards without shipping the tail.
+_BASKET_PAGE_ROW_LIMIT = 25
+
+# The fields that chart reads: the y label, the x value, and the three numbers
+# in its hover template.
+_BASKET_PAGE_FIELDS = (
+    "product_id",
+    "sku",
+    "display_name",
+    "display_name_axis",
+    "lift",
+    "support",
+    "confidence",
+    "paired_revenue",
+)
+
+
+def _trim_basket_for_page(basket: Any) -> Dict[str, Any]:
+    """
+    Cut the co-purchase payload down to what the page draws.
+
+    The product drilldown embedded 261 affinity rows at 14 fields each - 124 KB
+    of a 572 KB page - and the chart that consumes them calls
+    `.slice(0, 10)`. So 251 rows were serialised, transferred, parsed and
+    discarded on every request, and this page was the slowest route in the app
+    at 27.5s cold on the hosted box.
+
+    Only the page payload is trimmed. Exports read `context["datasets"]`, which
+    still carries every row, so the CSV a reviewer downloads is unchanged.
+    """
+    if not isinstance(basket, dict):
+        return {}
+    rows = basket.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return basket
+
+    trimmed = dict(basket)
+    trimmed["rows"] = [
+        {field: row.get(field) for field in _BASKET_PAGE_FIELDS if field in row}
+        for row in rows[:_BASKET_PAGE_ROW_LIMIT]
+        if isinstance(row, dict)
+    ]
+    # The renderer never counts the list, but anything reading the payload
+    # should be able to tell that it is a top-N rather than the whole tail.
+    trimmed["rows_total"] = len(rows)
+    trimmed["rows_truncated"] = len(rows) > _BASKET_PAGE_ROW_LIMIT
+    return trimmed
+
+
 def _redact_product_drilldown_cost_fields(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Hide cost-sensitive values for users without cost permissions.
@@ -5256,6 +5306,10 @@ def drilldown(product_id: str):
         if not isinstance(meta_payload, dict):
             meta_payload = {}
 
+        # Trim what the *page* embeds. The export path reads context["datasets"],
+        # which is untouched, so the CSV still carries every row.
+        page_basket = _trim_basket_for_page(context.get("basket") or {})
+
         return render_template(
             "products/product_drilldown_v2.html",
             product_id=str(product_id),
@@ -5273,7 +5327,7 @@ def drilldown(product_id: str):
             regions=context.get("regions") or {},
             suppliers=context.get("suppliers") or {},
             ship_methods=context.get("ship_methods") or {},
-            basket=context.get("basket") or {},
+            basket=page_basket,
             classification=context.get("classification") or {},
             lifecycle=context.get("lifecycle") or {},
             lifecycle_insights=context.get("lifecycle_insights") or {},
