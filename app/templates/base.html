@@ -133,7 +133,7 @@
   {% elif request.endpoint and request.endpoint.startswith('admin.') %}
     {% set _page_tone = 'operations' %}
   {% endif %}
-  {% set _hide_global_filters = hide_global_filters if hide_global_filters is defined else (disable_global_filters if disable_global_filters is defined else (request.blueprint == 'admin' or _blueprint_name.startswith('returns_'))) %}
+  {% set _hide_global_filters = hide_global_filters if hide_global_filters is defined else (disable_global_filters if disable_global_filters is defined else (request.blueprint == 'admin')) %}
   {# data-data-through: the last date the dataset holds. Page scripts that
      compute "days since" must age against this, not against the browser clock -
      on a dataset that stops before today, wall-clock ageing marks every account
@@ -193,10 +193,10 @@
             {% endif %}
             {% if _has_salesreps %}
               {% if can_permission('page.salesreps.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ url_for('salesreps.index') }}">Sales Reps+</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ url_for('salesreps.index') }}">Sales Reps</a></li>
               {% endif %}
             {% else %}
-            <li class="nav-item"><a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Sales Reps+</a></li>
+            <li class="nav-item"><a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Sales Reps</a></li>
             {% endif %}
             {% if (returns_enabled if returns_enabled is defined else false) and (can_permission('page.returns.view') or can_permission('page.returns.customer_portal') or can_permission('page.returns.ops') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('returns_') %}active{% endif %}" href="{{ url_for('returns_portal.index') }}">Returns</a></li>

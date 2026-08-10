@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}Region Detail | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ajax' %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/regions_drilldown_v2.css') }}">
@@ -193,7 +194,7 @@
             <ul class="list-unstyled small mb-3" id="customerConcentrationSummary">
               <li>Top 1 share: —</li>
               <li>Top 5 share: —</li>
-              <li>HHI: —</li>
+              <li>HHI (customers): —</li>
               <li>Customers in scope: —</li>
             </ul>
             <div class="table-scroll">
@@ -309,7 +310,7 @@
               <li>Top 1 share: —</li>
               <li>Top 5 share: —</li>
               <li>Top 10 share: —</li>
-              <li>HHI: —</li>
+              <li>HHI (SKUs): —</li>
             </ul>
             <div class="table-scroll">
               <table class="table table-sm align-middle mb-0">

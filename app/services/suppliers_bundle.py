@@ -17,6 +17,7 @@ from flask import current_app
 from app.core.cache_manager import TTLValueCache
 from app.services import fact_schema as fs
 from app.services import fact_store
+from app.services import metrics
 from app.services import filters_service
 from app.services import margin_rules
 from app.services import presentation
@@ -2422,7 +2423,6 @@ def _segment_summary_from_frame(frame: pd.DataFrame) -> list[dict[str, Any]]:
             revenue=("revenue_current", "sum"),
             revenue_prior=("revenue_prior", "sum"),
             profit=("profit_current", "sum"),
-            avg_margin_pct=("margin_pct", "mean"),
             avg_orders=("orders_current", "mean"),
             median_days_since_last=("days_since_last_order", "median"),
             cost_coverage_pct=("cost_coverage_pct", "mean"),
@@ -2430,6 +2430,13 @@ def _segment_summary_from_frame(frame: pd.DataFrame) -> list[dict[str, Any]]:
         )
         .reset_index()
     )
+    # Revenue-weighted, from the summed totals - not the mean of each supplier's
+    # own margin %, which weights a $12k vendor the same as a $1.2m one and is
+    # why this page reported a different company margin from Customers.
+    grouped["avg_margin_pct"] = [
+        metrics.margin_pct(rev, profit=prof)
+        for rev, prof in zip(grouped["revenue"], grouped["profit"])
+    ]
     total_revenue = float(grouped["revenue"].sum()) if not grouped.empty else 0.0
     grouped["share_pct"] = (grouped["revenue"] / total_revenue * 100.0) if total_revenue > 0 else 0.0
     grouped["delta_revenue"] = grouped["revenue"] - grouped["revenue_prior"]
@@ -3237,12 +3244,17 @@ def _table_summary_from_frame(frame: pd.DataFrame) -> Dict[str, Any]:
             "avg_margin_pct": None,
         }
     profit_series = pd.to_numeric(frame.get("profit_current"), errors="coerce")
+    total_revenue = _clean_float(pd.to_numeric(frame.get("revenue_current"), errors="coerce").fillna(0.0).sum())
+    total_profit = _clean_optional_float(profit_series.sum(min_count=1))
     return {
         "supplier_count": int(frame["supplier_id"].nunique()) if "supplier_id" in frame.columns else int(len(frame.index)),
-        "revenue": _clean_float(pd.to_numeric(frame.get("revenue_current"), errors="coerce").fillna(0.0).sum()),
-        "profit": _clean_optional_float(profit_series.sum(min_count=1)),
+        "revenue": total_revenue,
+        "profit": total_profit,
         "missing_cost_revenue": _clean_float(pd.to_numeric(frame.get("missing_cost_revenue_current"), errors="coerce").fillna(0.0).sum()),
-        "avg_margin_pct": _clean_optional_float(pd.to_numeric(frame.get("margin_pct"), errors="coerce").mean()),
+        # Revenue-weighted. This was the mean of the per-supplier margin column,
+        # which is a different quantity and reported 19.5% where the rest of the
+        # app said 20.2% on identical revenue.
+        "avg_margin_pct": metrics.margin_pct(total_revenue, profit=total_profit),
     }
 
 

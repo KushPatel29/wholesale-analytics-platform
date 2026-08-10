@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Customer Lifetime Value | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 {% set clv = clv or {} %}
@@ -155,7 +156,7 @@
         <div class="small text-muted text-uppercase">CLV Concentration</div>
         <div class="small">Top 1 share: <strong>{{ fmt_percent(concentration.get('top1_share_pct')) }}</strong></div>
         <div class="small">Top 10 share: <strong>{{ fmt_percent(concentration.get('top10_share_pct')) }}</strong></div>
-        <div class="small">HHI: <strong>{{ fmt_int(concentration.get('hhi')) }}</strong></div>
+        <div class="small">HHI (customers): <strong>{{ fmt_int(concentration.get('hhi')) }}</strong></div>
       </div>
     </div>
   </div>

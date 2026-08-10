@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set filters_handler = 'ajax' %}
 {% set salesrep_drilldown_rev = config.get('STATIC_REV', '20260411') ~ '-salesrep-drilldown-final-3' %}
-{% block title %}Sales Rep Drilldown{% endblock %}
+{% block title %}Sales Rep Detail | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/salesrep_drilldown_v2.css', v=salesrep_drilldown_rev) }}">

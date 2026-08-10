@@ -590,7 +590,10 @@
   const renderConcentration = (payload = {}) => {
     setText(
       "regionsV2ConcentrationSummary",
-      `Top 1 ${fmtPercent(payload?.summary?.top1_share_pct)} | Top 5 ${fmtPercent(payload?.summary?.top5_share_pct)} | HHI ${payload?.summary?.hhi == null ? "-" : fmtInt.format(asNumber(payload.summary.hhi))}`
+      /* "HHI (regions)", never a bare "HHI": the same label appeared on three
+         pages measuring three different dimensions and reading 197, 378 and
+         1,933 for one company. */
+      `Top 1 ${fmtPercent(payload?.summary?.top1_share_pct)} | Top 5 ${fmtPercent(payload?.summary?.top5_share_pct)} | HHI (regions) ${payload?.summary?.hhi == null ? "—" : fmtInt.format(asNumber(payload.summary.hhi))}`
     );
     const tbody = document.getElementById("regionsV2ConcentrationBody");
     if (!tbody) return;

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set needs_chartjs = true %}
 {% set filters_handler = 'ajax' %}
-{% block title %}Business Performance{% endblock %}
+{% block title %}Business Performance | Northgate Retail Analytics{% endblock %}
 
 {% block content %}
 <style>
@@ -1080,7 +1080,7 @@
         <span class="context-chip"><i class="bi bi-diagram-3"></i>Scope <strong id="scopeModeChip">Enterprise</strong></span>
         <span class="context-chip"><i class="bi bi-shield-check"></i>Trust <strong id="heroTrustStatus">Watch</strong></span>
         <span class="context-chip"><i class="bi bi-calendar-event"></i>Data cutoff <strong id="dataCutoffChip">-</strong></span>
-        <span class="context-chip"><i class="bi bi-clock-history"></i>Last refresh <strong id="lastRefreshChip">{{ last_refresh or "unknown" }}</strong></span>
+        <span class="context-chip"><i class="bi bi-clock-history"></i>Last refresh <strong id="lastRefreshChip">{{ last_refresh | day if last_refresh else "unknown" }}</strong></span>
         <a href="#dataHealthSection" id="dataHealthBadgeLink" class="context-chip" role="button" aria-label="Jump to data trust panel">
           <i class="bi bi-arrow-down-right-circle"></i>Open trust center
         </a>
@@ -1261,7 +1261,7 @@
                 <div class="value" id="scoreReturningShare">-</div>
               </article>
               <article class="hero-side-metric">
-                <div class="label">Top 1 share / HHI</div>
+                <div class="label">Top 1 share / HHI (customers)</div>
                 <div class="value" id="scoreConcentration">-</div>
               </article>
               <article class="hero-side-metric">

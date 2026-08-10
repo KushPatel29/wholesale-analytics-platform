@@ -26,7 +26,11 @@ def index():
         filters=payload_safe.get("filters") or {},
         filter_options=payload_safe.get("filter_options") or {},
         export_urls=payload_safe.get("export_urls") or {},
-        hide_global_filters=True,
+        # The global filter bar renders here like everywhere else. It was hidden
+        # while this page ran on its own date window; now that Labor resolves
+        # its window from the shared filter (app/services/comparison.py), hiding
+        # the control that drives it left a visitor unable to see or change the
+        # window the page was reporting on.
     )
 
 

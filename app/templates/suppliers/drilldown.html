@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}Supplier Detail | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ajax' %}
 {% block content %}
 <div id="SupplierDrilldownMeta"
@@ -69,7 +70,7 @@
         <div class="card-body">
           <div class="text-muted small"><i class="bi bi-box-seam me-1"></i>Product Concentration</div>
           <div class="fs-5 fw-bold" id="kpiTopProdShare">—</div>
-          <div class="text-muted small" id="kpiProdHHI">HHI: —</div>
+          <div class="text-muted small" id="kpiProdHHI">HHI (SKUs): —</div>
         </div>
       </div>
     </div>
@@ -78,7 +79,7 @@
         <div class="card-body">
           <div class="text-muted small"><i class="bi bi-people me-1"></i>Customer Concentration</div>
           <div class="fs-5 fw-bold" id="kpiTopCustShare">—</div>
-          <div class="text-muted small" id="kpiCustHHI">HHI: —</div>
+          <div class="text-muted small" id="kpiCustHHI">HHI (customers): —</div>
         </div>
       </div>
     </div>

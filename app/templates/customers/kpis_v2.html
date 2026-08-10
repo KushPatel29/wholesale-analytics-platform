@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Customers | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 {% set summary = summary or {} %}
@@ -110,7 +111,7 @@
         <div class="small text-uppercase text-muted">Concentration <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="{{ (definitions.get('kpis') or {}).get('concentration') }}"></i></div>
         <div class="small">Top 1: <span class="fw-semibold">{{ fmt_percent(summary.get('top1_share_pct')) }}</span></div>
         <div class="small">Top 5: <span class="fw-semibold">{{ fmt_percent(summary.get('top5_share_pct')) }}</span></div>
-        <div class="small">HHI: <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div>
+        <div class="small">HHI (customers): <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div>
       </div>
     </div>
   </div>

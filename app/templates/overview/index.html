@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set filters_handler = 'ajax' %}
-{% block title %}Business Performance{% endblock %}
+{% block title %}Business Performance | Northgate Retail Analytics{% endblock %}
 
 {% block content %}
 <style>
@@ -109,7 +109,7 @@
         <button id="downloadSnapshotBtn" class="btn btn-sm btn-primary" type="button" aria-label="Download snapshot">
           <i class="bi bi-download me-1"></i>Download Snapshot
         </button>
-        <div class="small text-muted">Last refresh <strong id="lastRefreshChip">{{ last_refresh or "unknown" }}</strong></div>
+        <div class="small text-muted">Last refresh <strong id="lastRefreshChip">{{ last_refresh | day if last_refresh else "unknown" }}</strong></div>
         <div class="small text-muted">Window <strong id="dataWindowChip">Loading...</strong></div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 {# templates/products/index.html #}
 {% extends 'base.html' %}
+{% block title %}Products | Northgate Retail Analytics{% endblock %}
 {% import 'products/_components.html' as products_ui %}
 {% set filters_handler = 'ajax' %}
 {% set products_v4_rev = config.get('STATIC_REV', '20260408') ~ '-products-live11' %}

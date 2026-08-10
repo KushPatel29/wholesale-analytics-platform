@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% set hide_global_filters = true %}
+{# The returns tracker has its own status/date form, but the global filter
+   bar is what every other page carries and its absence here read as an
+   inconsistency rather than a decision. #}
 {% block title %}{% block returns_title %}Returns{% endblock %} | Northgate Retail Analytics{% endblock %}
 {% block head_extras %}
 {{ super() }}

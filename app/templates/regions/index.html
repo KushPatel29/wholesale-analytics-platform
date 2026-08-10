@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %}Regions | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ajax' %}
 {% block content %}
 
@@ -85,7 +86,7 @@
         <div class="card-body">
           <div class="text-muted small">Revenue Concentration</div>
           <div class="fs-6 fw-bold">Top1 <span id="regionsKpiTop1">&mdash;</span> | Top5 <span id="regionsKpiTop5">&mdash;</span></div>
-          <div class="small text-muted">HHI <span id="regionsKpiHhi">&mdash;</span></div>
+          <div class="small text-muted">HHI (regions) <span id="regionsKpiHhi">&mdash;</span></div>
         </div>
       </div>
     </div>

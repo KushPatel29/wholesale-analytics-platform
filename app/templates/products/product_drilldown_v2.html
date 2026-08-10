@@ -4,7 +4,7 @@
    not at the end of <body>. See base.html. #}
 {% set needs_early_charts = true %}
 {% set filters_handler = "ssr" %}
-{% block title %}Product Intelligence Workspace · {{ product_name }}{% endblock %}
+{% block title %}{{ product_name }} | Northgate Retail Analytics{% endblock %}
 {% block head_extras %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/product_drilldown_v2.css', v='20260325-theme-refine') }}">
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Customers | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 {% set summary = summary or {} %}
@@ -205,7 +206,7 @@
     <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Reactivation rate</div><div class="h5 mb-0">{{ fmt_percent(summary.get('reactivation_rate_pct')) }}</div></div></div>
   </div>
   <div class="col-12 col-md-6 col-xl-2">
-    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Concentration</div><div class="small">Top 1: <span class="fw-semibold">{{ fmt_percent(summary.get('top1_share_pct')) }}</span></div><div class="small">HHI: <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div></div></div>
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Concentration</div><div class="small">Top 1: <span class="fw-semibold">{{ fmt_percent(summary.get('top1_share_pct')) }}</span></div><div class="small">HHI (customers): <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div></div></div>
   </div>
 </section>
 
