@@ -1350,8 +1350,47 @@ def _kpis_charts_sql(scoped_cte: str, top_n: int) -> str:
     """
 
 
+def _drop_partial_boundary_months(monthly: list[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Drop a first or last month the window only partly covers.
+
+    A month that the window clips reports a few days of trade next to full
+    months, so the series dives at one or both ends and the chart reads as a
+    business falling off a cliff. It was doing both: the window ran to
+    2026-07-06 while the data stopped a few days in, and the leading month was
+    a sliver of September.
+
+    Only the two boundary entries are considered - an interior month that is
+    genuinely small is real and must stay.
+    """
+    if len(monthly) < 3:
+        return list(monthly)
+
+    def revenue(item: Mapping[str, Any]) -> float:
+        try:
+            return float(item.get("revenue") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    interior = [revenue(item) for item in monthly[1:-1]]
+    if not interior:
+        return list(monthly)
+    typical = sorted(interior)[len(interior) // 2]
+    if typical <= 0:
+        return list(monthly)
+
+    # A third of the median month is well below seasonal variation and well
+    # above the rounding noise of a complete but quiet month.
+    threshold = typical / 3.0
+    trimmed = list(monthly)
+    if revenue(trimmed[-1]) < threshold:
+        trimmed = trimmed[:-1]
+    if len(trimmed) > 2 and revenue(trimmed[0]) < threshold:
+        trimmed = trimmed[1:]
+    return trimmed
+
+
 def _parse_kpis_charts_row(row: Mapping[str, Any], start_iso: str | None, end_iso: str | None, top_n: int) -> Dict[str, Any]:
-    monthly = _struct_list(row.get("monthly"))
+    monthly = _drop_partial_boundary_months(_struct_list(row.get("monthly")))
     trend_labels = [str(item.get("month")) for item in monthly if item.get("month") is not None]
     trend_revenue = [_clean_float(item.get("revenue")) for item in monthly]
     trend_cost = [_clean_optional_float(item.get("cost")) for item in monthly]
