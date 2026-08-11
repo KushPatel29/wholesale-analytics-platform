@@ -15,3 +15,6 @@ ruff>=0.6
 black>=24.8
 bandit>=1.7
 cachetools>=5.3
+
+# The static build freezes every page in a real browser (build_static.py).
+playwright>=1.40

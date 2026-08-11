@@ -111,6 +111,29 @@ string drift real ERP extracts have, and moves rows between partitions without
 leaving duplicates behind. The seeder calls this same function — the demo data
 is not loaded through a special path.
 
+**Two tiers: a prerendered site, and the app behind it.** The demo runs on a
+fixed synthetic snapshot, so every number any page can display is knowable
+before a visitor arrives. `build_static.py` walks the real Flask app once and
+writes `dist/` — each page for each date preset, with every API payload that
+page would have fetched already embedded in the HTML. A small replay shim
+answers `fetch`/`XHR` from those payloads, so the page scripts are unchanged
+and nothing touches the network.
+
+The reason is arithmetic rather than taste: a spun-down free instance costs
+30–50 seconds before any application code runs, and that latency cannot be
+optimised, only avoided. The static tier is what a reviewer lands on; the Flask
+app stays for filter combinations outside the presets, the returns workflow and
+admin, linked as "Open the live app".
+
+```bash
+python build_static.py --out dist            # every page × every preset
+python scripts/check_static_build.py dist    # asserts it is actually static
+```
+
+`check_static_build.py` fails the build if a page lost its embedded payload,
+still carries a loading state, or links to a live API path — the failure modes
+that would quietly put a network request back on the load path.
+
 ---
 
 ## Finding a row-level security bypass

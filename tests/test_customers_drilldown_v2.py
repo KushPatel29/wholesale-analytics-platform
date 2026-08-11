@@ -582,7 +582,10 @@ def test_customers_drilldown_v2_moves_shared_scripts_below_hero_and_defers_page_
 
     hero_idx = body.index('class="ciw-title"')
     assert body.index("js/auth-fetch.js") > hero_idx
-    assert body.index("https://cdn.plot.ly/plotly-2.35.2.min.js") > hero_idx
+    # Matched by filename, not by full URL: this asserts *where* the renderer
+    # loads relative to the hero, which is the thing that matters, and it used
+    # to name a cdn.plot.ly URL that broke the moment Plotly was self-hosted.
+    assert body.index("plotly-2.35.2.min.js") > hero_idx
     assert re.search(r'customer_drilldown_v2\.js(?:\?[^"]+)?"\s+defer', body)
 
 

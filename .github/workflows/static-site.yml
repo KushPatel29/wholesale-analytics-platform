@@ -1,0 +1,77 @@
+# Publish the prerendered demo to GitHub Pages.
+#
+# The live Flask app stays where it is; this is the copy a reviewer lands on.
+# It exists because the free Render instance spins down, and a spun-down
+# container costs 30-50s before any application code runs. That delay is not
+# something the app can optimise away - it can only be avoided, and a CDN
+# avoids it.
+name: Static site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages needs these; `concurrency` stops two pushes racing to deploy.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          # build_static.py freezes each page in a real browser: that is what
+          # turns JS-drawn charts into SVG that is present in the first paint,
+          # and what lets it drop the payloads once they have been rendered.
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Seed the synthetic dataset and demo logins
+        run: |
+          cp .env.demo .env
+          python -m seed.generate_synthetic_data --fiscal-years 3 --customers 110 --products 320 --suppliers 24
+          python manage.py init-auth-db
+          python manage.py seed-demo-users
+
+      - name: Prerender every page and scope
+        env:
+          PARQUET_PATH: cache/fact_dataset
+          # Pins the prebuilt-cache fingerprint to the commit, so a build never
+          # reuses a value produced by different code.
+          APP_BUILD_ID: ${{ github.sha }}
+          STATIC_LIVE_URL: https://wholesale-analytics-platform.onrender.com
+        run: python build_static.py --out dist --clean
+
+      - name: Check the build is actually static
+        run: python scripts/check_static_build.py dist
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

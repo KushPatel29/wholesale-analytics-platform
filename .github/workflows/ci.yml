@@ -82,4 +82,16 @@ jobs:
           pytest -q -o addopts="" -rs \
             tests/test_overview_parity.py \
             tests/test_bundle_endpoints.py \
-            tests/test_overview_bundle_payload.py
+            tests/test_overview_bundle_payload.py \
+            tests/test_page_load_budgets.py
+
+      # Proves the static site can be produced from a clean checkout, and that
+      # what it produces has no data request left in it. A page that still
+      # fetches on load is the whole failure mode this build exists to remove,
+      # so it fails the build rather than being noticed by a visitor.
+      - name: Build the static site and check it makes no data requests
+        env:
+          PARQUET_PATH: cache/fact_dataset
+        run: |
+          python build_static.py --out dist --scopes current_fy --no-drilldowns --clean
+          python scripts/check_static_build.py dist

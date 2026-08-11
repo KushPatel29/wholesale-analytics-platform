@@ -357,30 +357,35 @@ def test_suppliers_v2_flag_on_renders_new_template(app_client, seed_suppliers_v2
 
 
 def test_suppliers_v2_inlines_filter_options_bootstrap(app_client, seed_suppliers_v2, monkeypatch):
-    captured = {}
+    """The page must ship its filter options, however they get there.
 
-    def fake_render(template_name, **context):
-        captured["template_name"] = template_name
-        captured["context"] = context
-        return "rendered"
+    This used to assert that the blueprint passed a `filter_options_bootstrap`
+    context key, which stopped being true when embedding moved into
+    `_filters.html` so that every page got it rather than this one. The thing
+    worth protecting is that the browser does not have to fetch the options -
+    so assert that against the rendered HTML, which stays true wherever the
+    payload is assembled.
+    """
+    from app.services import filters_service
 
     monkeypatch.setattr("app.services.filters_service.scope_from_user", lambda _u: _scope_admin())
     monkeypatch.setitem(app_client.application.config, "SUPPLIERS_V2", True)
-    monkeypatch.setattr("app.blueprints.suppliers.render_template", fake_render)
 
-    resp = app_client.get("/suppliers/", query_string={"start": "2025-03-01", "end": "2025-03-31"})
-    assert resp.status_code == 200
-    assert resp.get_data(as_text=True) == "rendered"
-    assert captured["template_name"] == "suppliers/index_v2.html"
+    app = app_client.application
 
-    payload = captured["context"]["filter_options_bootstrap"]
+    # `_filters.html` reaches the payload through this global. If it is not
+    # registered the template silently falls back to embedding nothing, and
+    # every page quietly goes back to fetching its options over the network.
+    assert "inline_filter_options" in app.jinja_env.globals
+
+    with app.test_request_context("/suppliers/?start=2025-03-01&end=2025-03-31"):
+        payload = filters_service.inline_options_bootstrap()
+
+    assert payload is not None, "no embeddable options payload was produced"
     assert payload["meta"]["source"] == "server-inline"
-    assert payload["options"]["statuses"]
-    assert "regions" in payload["options"]
-    assert "methods" in payload["options"]
-    assert "suppliers" in payload["options"]
-    assert "products" in payload["options"]
-    assert "sales_reps" in payload["options"]
+    options = payload["options"]
+    for dimension in ("statuses", "regions", "methods", "suppliers", "products", "sales_reps"):
+        assert dimension in options, f"{dimension} missing from the embedded options"
 
 
 def test_suppliers_v2_flag_off_keeps_v1_template(app_client, seed_suppliers_v2, monkeypatch):

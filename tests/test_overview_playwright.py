@@ -17,6 +17,15 @@ try:
 except Exception:
     pytest.skip("Playwright browser not available in this environment", allow_module_level=True)
 
+# The `page` fixture comes from the pytest-playwright plugin, which is a
+# separate package from `playwright` itself. Installing playwright for the
+# static build made the two module-level guards above pass while the fixture
+# was still missing, turning a clean skip into a collection error.
+pytest.importorskip(
+    "pytest_playwright",
+    reason="pytest-playwright provides the `page` fixture these tests take",
+)
+
 def test_overview_page_loads(page: Page):
     """Test that overview page loads successfully"""
     # Navigate to login

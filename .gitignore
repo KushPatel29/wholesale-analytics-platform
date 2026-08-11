@@ -85,3 +85,6 @@ test-results/
 /quick_*_check.py
 /simulate_*.py
 /test_*.py
+
+# Static prerendered site (build artefact of build_static.py)
+/dist/
