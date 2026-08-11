@@ -4410,6 +4410,42 @@
     if (group === "summary") renderSummaryBundle(payload);
     if (group === "detail") renderDetailBundle(payload);
     if (group === "table") renderTableBundle(payload);
+    if (group === "summary") scheduleRemainingGroups();
+  };
+
+  /* Pull the rest of the page in once the summary has painted.
+   *
+   * The remaining sections were loaded by an IntersectionObserver whose root is
+   * the viewport, so it only fires when the *document* scrolls. Wherever it does
+   * not - a shell whose inner element scrolls, a full-height render, an
+   * automated capture - "lazy" quietly became "never": the pricing section was
+   * never requested, and the price-vs-velocity map and performance bubble stayed
+   * 340px of blank on a page that otherwise looked complete. An empty chart
+   * frame is indistinguishable from an empty dataset, so nothing reported it.
+   *
+   * Anchoring to the summary payload instead of to the observer's setup makes
+   * this run on every path that renders the page, and idle keeps it behind first
+   * paint. The observer still runs and simply finds the work already done.
+   */
+  const scheduleRemainingGroups = ({ force = false } = {}) => {
+    const pull = () => {
+      ["detail", "table"].forEach((group) => {
+        const groupState = requestState[group];
+        if (!groupState || groupState.loading) return;
+        // `force` is for the restored-snapshot path. Those `loaded` flags were
+        // written by a previous visit and describe a DOM that no longer exists,
+        // so trusting them is how a section stays permanently unrendered: the
+        // flag says loaded, the page shows an empty frame, and nothing ever
+        // asks again.
+        if (groupState.loaded && !force) return;
+        ensureGroupLoaded(group, { force });
+      });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(pull, { timeout: 2000 });
+    } else {
+      window.setTimeout(pull, 600);
+    }
   };
 
   const fetchBundleSection = async (group, { force = false } = {}) => {
@@ -4861,6 +4897,11 @@
       sectionObserver.observe(node);
     });
 
+    // This observer is now an optimisation rather than the only trigger: the
+    // remaining groups are pulled in from `scheduleRemainingGroups` once the
+    // summary lands, because the observer never fires in layouts where the
+    // document itself does not scroll.
+    //
     // Anchor navigation must also load the destination explicitly. This keeps
     // first paint summary-only on small hosts while making "Pricing", "Table",
     // and action links reliable even in layouts whose scrolling element is not
@@ -4974,6 +5015,12 @@
     const snapshot = restoreSnapshot(state.qs, { restoreScroll: true });
     if (snapshot?.fresh) {
       setupLazySectionObserver();
+      // A restored snapshot only holds what the previous visit had actually
+      // rendered. If the pricing section was never loaded then - and it was
+      // not, because its observer does not fire in this layout - returning
+      // here left those charts blank on every subsequent visit too, with no
+      // request in the network panel to explain why.
+      scheduleRemainingGroups({ force: true });
       dispatchGlobalApplyAck();
       return;
     }
