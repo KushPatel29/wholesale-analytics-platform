@@ -1,0 +1,56 @@
+name: Deploy verified static artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the verified artifact
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/KushPatel29/wholesale-analytics-platform/releases/download/static-pages-6fa7fbf/dist.zip \
+            --output /tmp/dist.zip
+          echo "588b2a16432a0e8d047a8f457d49922ee207bfea827d9143d844673100339937  /tmp/dist.zip" \
+            | sha256sum --check
+          mkdir dist
+          unzip -q /tmp/dist.zip -d dist
+
+      - name: Check the build is actually static
+        run: python scripts/check_static_build.py dist
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Lighthouse performance budgets
+        run: |
+          npm install --global @lhci/cli@0.15.1
+          lhci autorun --config=./lighthouserc.json
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
