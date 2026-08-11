@@ -160,6 +160,146 @@ class ReportWorkspace {
         </section>
       `;
     }).join('');
+    // Sections are built as HTML strings, so anything that needs a live element
+    // has to be drawn after they are in the document.
+    this.drawCharts();
+  }
+
+  /* The two figures on this page that are genuinely two-dimensional.
+   *
+   * Both were rendered as grouped lists. A list can tell you Electronics is
+   * down 25.5% and 92.4% on time; it cannot show you that one department sits
+   * alone in the corner where demand is climbing into a lane that already
+   * misses its dates. That is the entire question this page exists to answer,
+   * so it should be the thing you see first. */
+  drawCharts() {
+    const draw = () => {
+      this.drawQuadrantChart();
+      this.drawDemandChart();
+    };
+    if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
+      window.ChartUtils.whenPlotlyReady(draw);
+    } else if (window.Plotly) {
+      draw();
+    }
+  }
+
+  _plotTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (css.getPropertyValue(name) || '').trim() || fallback;
+    return {
+      text: pick('--wa-text-dim', '#94a3b8'),
+      grid: pick('--wa-border', 'rgba(148,163,184,.22)'),
+      accent: pick('--wa-accent', '#34d399'),
+      danger: pick('--wa-danger', '#f87171'),
+      muted: pick('--wa-text-dim', '#64748b'),
+    };
+  }
+
+  drawQuadrantChart() {
+    const host = document.getElementById('planQuadrantChart');
+    const points = this._plan().matrix || [];
+    if (!host || !points.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const target = Number(this._plan().headline?.service_target_pct) || 92;
+    const revenues = points.map(p => Number(p.revenue) || 0);
+    const maxRevenue = Math.max(...revenues, 1);
+
+    // Only "at risk" is coloured. Everything else is context, and colouring all
+    // four quadrants would make the one that matters compete with three that
+    // do not.
+    const atRisk = points.filter(p => p.quadrant === 'at_risk');
+    const others = points.filter(p => p.quadrant !== 'at_risk');
+    const series = (rows, colour, name) => ({
+      x: rows.map(p => Number(p.change_pct) || 0),
+      y: rows.map(p => Number(p.on_time_pct) || 0),
+      text: rows.map(p => p.label),
+      name,
+      type: 'scatter',
+      mode: 'markers+text',
+      textposition: 'top center',
+      textfont: { size: 10, color: theme.text },
+      marker: {
+        color: colour,
+        opacity: colour === theme.danger ? 0.9 : 0.55,
+        size: rows.map(p => 14 + 34 * Math.sqrt((Number(p.revenue) || 0) / maxRevenue)),
+        line: { width: 1, color: 'rgba(0,0,0,.35)' },
+      },
+      hovertemplate:
+        '<b>%{text}</b><br>Demand %{x:+.1f}%<br>On time %{y:.1f}%<extra></extra>',
+    });
+
+    const data = [];
+    if (others.length) data.push(series(others, theme.muted, 'Within tolerance'));
+    if (atRisk.length) data.push(series(atRisk, theme.danger, 'Growing and unreliable'));
+
+    Plotly.newPlot(host, data, {
+      margin: { l: 54, r: 18, t: 10, b: 44 },
+      height: 380,
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      xaxis: {
+        title: 'Demand change vs prior window',
+        ticksuffix: '%', zeroline: false,
+        gridcolor: theme.grid, linecolor: theme.grid,
+      },
+      yaxis: {
+        title: 'On-time delivery', ticksuffix: '%',
+        gridcolor: theme.grid, linecolor: theme.grid,
+      },
+      // The two lines that turn a scatter into a quadrant: no demand growth,
+      // and the service level the business has committed to.
+      shapes: [
+        { type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1,
+          line: { color: theme.grid, width: 1, dash: 'dot' } },
+        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: target, y1: target,
+          line: { color: theme.grid, width: 1, dash: 'dot' } },
+      ],
+      annotations: [{
+        xref: 'paper', yref: 'y', x: 1, y: target, xanchor: 'right', yanchor: 'bottom',
+        text: `Service target ${target}%`, showarrow: false,
+        font: { size: 10, color: theme.text },
+      }],
+      showlegend: data.length > 1,
+      legend: { orientation: 'h', y: -0.22, font: { size: 10 } },
+    }, { displayModeBar: false, responsive: true });
+  }
+
+  drawDemandChart() {
+    const host = document.getElementById('planDemandChart');
+    const rows = (this._plan().demand || []).slice(0, 10);
+    if (!host || !rows.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const ordered = [...rows].sort(
+      (a, b) => (Number(a.change_pct) || 0) - (Number(b.change_pct) || 0)
+    );
+
+    Plotly.newPlot(host, [{
+      type: 'bar',
+      orientation: 'h',
+      x: ordered.map(r => Number(r.change_pct) || 0),
+      y: ordered.map(r => r.label),
+      marker: {
+        color: ordered.map(r => ((Number(r.change_pct) || 0) < 0 ? theme.danger : theme.accent)),
+        opacity: 0.85,
+      },
+      hovertemplate: '<b>%{y}</b><br>%{x:+.1f}% vs prior window<extra></extra>',
+    }], {
+      margin: { l: 150, r: 24, t: 10, b: 38 },
+      height: Math.max(220, 30 * ordered.length + 60),
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      xaxis: {
+        title: 'Change vs prior window', ticksuffix: '%',
+        zerolinecolor: theme.grid, gridcolor: theme.grid, linecolor: theme.grid,
+      },
+      yaxis: { automargin: true, gridcolor: 'rgba(0,0,0,0)' },
+      showlegend: false,
+    }, { displayModeBar: false, responsive: true });
   }
 
   createSectionHeader(id, title) {
@@ -289,6 +429,8 @@ class ReportWorkspace {
           Half-and-half rather than a fitted trend, because the window is yours to change
           and a slope through four points claims more than it knows.
         </p>
+        <div id="planDemandChart" class="plan-chart" role="img"
+             aria-label="Department demand change against the prior window"></div>
         <table class="plan-table">
           <thead>
             <tr><th>Department</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Change</th><th>Direction</th></tr>
@@ -498,6 +640,8 @@ class ReportWorkspace {
           Demand growth against service level. Only one quadrant gets a colour, because
           only one of them means the problem grows while you look at it.
         </p>
+        <div id="planQuadrantChart" class="plan-chart" role="img"
+             aria-label="Departments plotted by demand change against on-time delivery"></div>
         <div class="plan-quadrants">
           ${order.filter(q => groups[q]).map(q => `
             <section class="plan-quadrant plan-quadrant--${q}">

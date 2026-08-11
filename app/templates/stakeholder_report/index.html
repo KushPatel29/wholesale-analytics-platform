@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% set filters_handler = 'ajax' %}
+{# The quadrant and demand figures are Plotly. Opting in here rather than
+   adding this blueprint to the list in base.html keeps that decision next to
+   the page that made it. The renderer still loads on idle, after the KPIs. #}
+{% set needs_plotly = true %}
 {% block title %}Demand & Supply Planner | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
@@ -417,6 +421,15 @@
   max-width: 74ch;
   margin-bottom: 1.5rem;
   line-height: 1.6;
+}
+
+/* Figures sit above the list that repeats them: the picture answers "which
+   department is the problem", the list answers "by exactly how much". The
+   min-height is reserved so the section does not jump when Plotly - which is
+   loaded on idle - finally draws. */
+.plan-chart {
+  margin: 0 0 1.5rem;
+  min-height: 220px;
 }
 
 /* ---- headline figures ---------------------------------------------------- */
