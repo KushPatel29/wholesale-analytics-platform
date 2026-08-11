@@ -447,8 +447,36 @@
   }
 
   // Export to global scope
+  /* Run `draw` once Plotly exists.
+   *
+   * Plotly is fetched in a requestIdleCallback so a megabyte of renderer cannot
+   * hold up the KPIs, which means page code frequently has its data *before*
+   * the renderer arrives. Drawing straight away is a race, and every page that
+   * lost it left an empty frame or a "Plotly not loaded." message that nothing
+   * ever revisited. It only looked fine while the payloads were slow enough to
+   * lose the race the other way.
+   *
+   * The timeout is a backstop for the renderer genuinely never arriving, so the
+   * caller's own "no chart" handling runs rather than the frame sitting blank.
+   */
+  function whenPlotlyReady(draw, timeoutMs) {
+    if (window.Plotly) {
+      draw();
+      return;
+    }
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      draw();
+    };
+    window.addEventListener('wa:plotlyready', run, { once: true });
+    window.setTimeout(run, typeof timeoutMs === 'number' ? timeoutMs : 8000);
+  }
+
   window.ChartUtils = {
     hasData,
+    whenPlotlyReady,
     showLoadingSpinner,
     showEmptyState,
     plotlyToAOA,

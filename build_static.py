@@ -1014,7 +1014,36 @@ class Builder:
                   scrollTo(0, 0);
                 }"""
             )
+            # Wait for the charts to actually exist before freezing them.
+            #
+            # The renderer is fetched in a `requestIdleCallback` after `load`,
+            # deliberately, so a megabyte of Plotly cannot hold up the KPIs. That
+            # means it arrives well after `networkidle`, and a fixed 350ms settle
+            # froze several pages - suppliers, regions, planning - with zero
+            # charts in them. Wait for the count of drawn plots to stop moving.
             page.wait_for_timeout(350)
+            try:
+                page.wait_for_function(
+                    """() => {
+                      const hosts = document.querySelectorAll(
+                        '[id$="Chart"],[id*="chart"],.js-plotly-plot,canvas'
+                      ).length;
+                      if (!hosts) return true;              // nothing to draw
+                      const drawn = document.querySelectorAll('.js-plotly-plot,canvas').length;
+                      if (!drawn) return false;
+                      const prev = window.__waDrawn;
+                      window.__waDrawn = drawn;
+                      return prev === drawn;                // stable across two checks
+                    }""",
+                    timeout=20_000,
+                    polling=400,
+                )
+            except Exception:
+                # A page with no charts, or one whose renderer never settles,
+                # still gets frozen - just without them - rather than failing
+                # the whole build.
+                pass
+            page.wait_for_timeout(400)
             misses = page.evaluate("window.__staticMisses || []")
             if misses:
                 raise RuntimeError(f"uncaptured same-origin requests: {sorted(set(misses))}")

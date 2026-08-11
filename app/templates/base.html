@@ -28,7 +28,7 @@
        before first paint, and the strict CSP the static host applies blocks
        external hosts outright. Vendored alongside chart.js, same as before. #}
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260811-instant-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260811-instant-2') }}">
     {% if request.blueprint == 'overview_page' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
     {% endif %}
@@ -62,7 +62,7 @@
        what tests/test_customers_drilldown_v2.py pins. #}
     {% if current_user.is_authenticated and (needs_early_charts | default(false)) %}
     <script src="{{ url_for('static', filename='vendor/plotly/plotly-2.35.2.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-1') }}"></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-2') }}"></script>
     {% elif _needs_plotly %}
     {# Primary workspaces only use Plotly's scatter/bar/pie traces. The basic
        build is much smaller than the all-trace bundle. Load it after the data
@@ -93,9 +93,9 @@
         }, { once: true });
       })();
     </script>
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-1') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-2') }}" defer></script>
     {% elif _needs_chartjs %}
-    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-1') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-2') }}" defer></script>
     {% endif %}
     {% block head_extras %}{% endblock %}
     <script>

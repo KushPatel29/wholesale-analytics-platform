@@ -472,6 +472,12 @@
   };
 
   const renderCharts = (payload = {}) => {
+    // Plotly arrives on idle, often after this payload; without it the
+    // renderers below bail and leave empty frames nothing revisits.
+    if (!window.Plotly && window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
+      window.ChartUtils.whenPlotlyReady(() => renderCharts(payload));
+      return;
+    }
     const trend = payload.trend || {};
     const charts = payload.charts || {};
     const topProducts = charts.top_products || {};

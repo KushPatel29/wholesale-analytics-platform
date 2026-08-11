@@ -377,12 +377,23 @@
     weekdayRevenue = charts.weekday_revenue || [];
 
     renderKpis(payload.kpis || {});
-    renderTrend();
-    renderTopCustomers();
-    renderTopProducts();
-    renderShippingMix();
-    renderWeekdayRevenue();
     renderChurnRows(churnRows);
+
+    // The five chart renderers below all return early without Plotly, which
+    // loads on idle and so usually arrives after this payload. Nothing asked
+    // them a second time, so the page settled with empty frames.
+    const drawCharts = () => {
+      renderTrend();
+      renderTopCustomers();
+      renderTopProducts();
+      renderShippingMix();
+      renderWeekdayRevenue();
+    };
+    if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
+      window.ChartUtils.whenPlotlyReady(drawCharts);
+    } else {
+      drawCharts();
+    }
   };
 
   const consumeApplyId = () => {

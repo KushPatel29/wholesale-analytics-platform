@@ -416,8 +416,18 @@
         margin_pct: null,
       }));
     }
-    renderChart();
-    renderProfitabilityChart();
+    // Plotly loads on idle and routinely arrives after this payload does; both
+    // renderers return early without it and nothing asked them again, so the
+    // page settled with two empty frames.
+    const draw = () => {
+      renderChart();
+      renderProfitabilityChart();
+    };
+    if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
+      window.ChartUtils.whenPlotlyReady(draw);
+    } else {
+      draw();
+    }
   };
 
   const dispatchApplied = () => {

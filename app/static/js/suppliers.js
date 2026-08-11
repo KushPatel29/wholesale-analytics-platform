@@ -218,6 +218,14 @@
     setText("kpiTop5", pct1(kpis.concentration_top5_share));
   };
 
+  /* Shared with every other Plotly page - see ChartUtils.whenPlotlyReady. The
+     local fallback covers chart-utils.js failing to load, in which case the
+     charts cannot draw anyway and the caller's own empty-state runs. */
+  const whenPlotlyReady = (draw) =>
+    window.ChartUtils && window.ChartUtils.whenPlotlyReady
+      ? window.ChartUtils.whenPlotlyReady(draw)
+      : draw();
+
   const renderTrend = (trend = {}) => {
     const labels = Array.isArray(trend.labels) ? trend.labels : [];
     const revenue = Array.isArray(trend.revenue) ? trend.revenue : [];
@@ -539,8 +547,15 @@
       payload = window.normalizeBundlePayload ? window.normalizeBundlePayload(json) : json;
       renderKpis(payload.kpis || {});
       if (!append) {
-        renderTrend((payload.charts || {}).trend_12m || {});
-        renderTopSuppliers((payload.charts || {}).top_suppliers || {});
+        // Plotly is fetched in an idle callback so it cannot hold up the KPIs,
+        // which means it routinely arrives *after* this payload does. Drawing
+        // immediately raced it and lost - the charts were replaced with
+        // "Plotly not loaded." and never redrawn, because nothing asked again.
+        // It only looked fine while the bundle was slow enough to lose the race.
+        whenPlotlyReady(() => {
+          renderTrend((payload.charts || {}).trend_12m || {});
+          renderTopSuppliers((payload.charts || {}).top_suppliers || {});
+        });
       }
       renderTable(payload.table || {}, { append });
       updateExportLinks();
