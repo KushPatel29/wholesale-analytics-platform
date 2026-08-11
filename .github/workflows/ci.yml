@@ -58,7 +58,10 @@ jobs:
       # The promise on the README is that a clean clone produces a working
       # dashboard with no database. This job is what keeps that true.
       - name: Generate the synthetic dataset
-        run: python -m seed.generate_synthetic_data --months 6
+        # Match the bounded portfolio dataset used by the Pages release. The
+        # generator's much larger defaults produce a ~60 MB finest-grain cube,
+        # outside the build's deliberately measured ~50 MB in-memory budget.
+        run: python -m seed.generate_synthetic_data --months 6 --customers 110 --products 320 --suppliers 24
 
       - name: Seed auth and demo logins
         run: |
