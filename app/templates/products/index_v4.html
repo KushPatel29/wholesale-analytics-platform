@@ -89,13 +89,16 @@
 
         <div class="products-context-strip mt-3">
           <div class="products-context-label">Filter-aware comparison</div>
-          <div id="comparisonContextNote" class="products-context-value">Building current window and prior comparable window...</div>
+          {# Placeholders are an em-dash, not a sentence about what is happening.
+             These are replaced in one pass when the payload lands; narrating
+             steps that are not being performed reads as a stalled page. #}
+          <div id="comparisonContextNote" class="products-context-value">&mdash;</div>
         </div>
         <div class="products-context-strip mt-2">
           <div class="products-context-label">Active scope</div>
-          <div id="activeFilterSummary" class="products-context-value">Reading selected filters and watchlists...</div>
+          <div id="activeFilterSummary" class="products-context-value">&mdash;</div>
         </div>
-        <div id="portfolioStoryNote" class="products-context-story mt-2">Summarizing the visible portfolio...</div>
+        <div id="portfolioStoryNote" class="products-context-story mt-2"></div>
       </div>
 
       <div class="d-flex flex-wrap gap-2">

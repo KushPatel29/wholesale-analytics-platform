@@ -763,14 +763,13 @@
 
       <!-- Main Content -->
       <div>
-        <div id="reportContent">
-          <!-- Sections will be rendered here dynamically -->
-          <div class="text-center py-5 mt-5">
-            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
-            <h4 class="fw-bold">Reading demand and delivery history…</h4>
-            <p class="text-muted small">Comparing the two halves of the active window.</p>
-          </div>
-        </div>
+        {# Sections render here from the planner bundle. Deliberately empty:
+           the spinner that used to sit here was the most visible symptom of
+           the filter-options stall - it stayed on screen for the full 20s
+           client timeout and read as a page that had died. With the payload
+           embedded there is nothing to wait for, and an empty container for
+           one frame beats a spinner that outlives its own data. #}
+        <div id="reportContent"></div>
       </div>
     </div>
   </div>

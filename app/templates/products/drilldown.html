@@ -701,7 +701,7 @@
     return () => p || (p = new Promise((resolve, reject) => {
       if (window.Plotly) return resolve(window.Plotly);
       const s = document.createElement('script');
-      s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+      s.src = (window.__WA_PLOTLY_FULL__ || '/static/vendor/plotly/plotly-2.35.2.min.js');
       s.async = true;
       s.onload = () => window.Plotly ? resolve(window.Plotly) : reject(new Error('Plotly failed to initialize'));
       s.onerror = () => reject(new Error('Failed to load Plotly'));

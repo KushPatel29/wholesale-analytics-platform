@@ -2251,7 +2251,11 @@ a:focus {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--wa-text);
-  line-height: 1;
+  /* Not `1`: a line box exactly as tall as the font size leaves glyph ink
+     outside it, and these values sit in boxes with `overflow: hidden`, so the
+     tail of a `$` or a comma gets shaved. Measured 23.2px of type in a 25px
+     box against 28px of ink. */
+  line-height: 1.15;
 }
 
 .kpi-subtitle {
@@ -5853,7 +5857,10 @@ small.text-muted,
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--wa-text);
-  line-height: 1.05;
+  /* Tracking is tight on purpose; the leading is not. Several of these figures
+     sit in `overflow: hidden` boxes, and a line box this close to the font
+     size clips the descender of a `$` and the tails of commas. */
+  line-height: 1.25;
 }
 
 /* ---- tables -------------------------------------------------------------- */

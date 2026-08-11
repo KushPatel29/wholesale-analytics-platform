@@ -513,7 +513,36 @@
       this.tomselect = api;
     }
 
+    /* Rows are four DOM nodes each and every dimension panel starts hidden, so
+       building them all up front spends most of a page's node budget on markup
+       nobody has asked to see: the filter bar was 2,223 of Labor's 7,631 nodes
+       and 55% of Overview's, almost all of it inside `hidden` panels.
+
+       Deferred until the panel is opened or searched. Selection state is not
+       affected: `valueSet` is the source of truth, `getValues` reads it
+       directly, and the checkbox for each row is initialised from it whenever
+       the row is finally built. */
     buildRows() {
+      this.rowsBuilt = false;
+      this.rows = [];
+      if (this.isPanelVisible()) this.ensureRows();
+      else this.updateListState();
+    }
+
+    isPanelVisible() {
+      const panel = this.mount ? this.mount.closest(".filter-workspace") : null;
+      if (!panel) return true;
+      return !panel.hasAttribute("hidden");
+    }
+
+    ensureRows() {
+      if (this.rowsBuilt) return;
+      this.rowsBuilt = true;
+      this.buildRowsNow();
+      if (this.lastQuery) this.applyFilter(this.lastQuery);
+    }
+
+    buildRowsNow() {
       const fragment = document.createDocumentFragment();
       this.rows = Array.from(this.select.options)
         .filter((opt) => !/^all$/i.test(String(opt.value || "")))
@@ -550,6 +579,14 @@
     applyFilter(query) {
       const needle = String(query || "").trim().toLowerCase();
       this.lastQuery = needle;
+      /* An empty query means "show everything", which is already true of rows
+         that do not exist yet. Building them here would defeat the deferral
+         entirely, because the constructor calls applyFilter("") once. */
+      if (needle) this.ensureRows();
+      if (!this.rowsBuilt) {
+        this.updateListState();
+        return;
+      }
       this.rows.forEach((row) => {
         const text = row.querySelector(".msx-label")?.textContent?.toLowerCase() || "";
         row.style.display = !needle || text.includes(needle) ? "" : "none";
@@ -558,8 +595,13 @@
     }
 
     updateListState() {
-      const totalRows = Array.isArray(this.rows) ? this.rows.length : 0;
-      const visibleRows = (this.rows || []).filter((row) => row.style.display !== "none").length;
+      /* Availability is a property of the option list, not of whether rows have
+         been materialised yet - reading it off `this.rows` would report every
+         unopened panel as "No options available for the current scope". */
+      const totalRows = this.select ? this.select.options.length : 0;
+      const visibleRows = this.rowsBuilt
+        ? (this.rows || []).filter((row) => row.style.display !== "none").length
+        : totalRows;
       let message = "";
       if (!totalRows) {
         message = "No options available for the current scope.";
@@ -574,6 +616,7 @@
     }
 
     bulkAction(action) {
+      this.ensureRows();
       const visible = this.rows.filter((row) => row.style.display !== "none");
       if (action === "all") {
         this.valueSet.clear();
@@ -1148,7 +1191,7 @@
             bucket: "ship_methods",
             value: item.value,
           }));
-          ["customers", "suppliers", "products", "sales_reps"].forEach((key) => {
+          ["customers", "suppliers", "products", "sales_reps", "protein_groups"].forEach((key) => {
             output.options[key] = aliasOptions(rawOptions, [key]).map(normalizeItem).filter(Boolean).map((item) => ({
               id: item.value,
               label: item.label || item.value,
@@ -1960,6 +2003,13 @@
       const isActive = state.activeDimensionKey && String(panel.dataset.filterKey || "") === state.activeDimensionKey;
       panel.hidden = !isActive;
       panel.classList.toggle("is-active", !!isActive);
+      // The panel is the trigger for materialising its rows; see
+      // MultiSelectX.buildRows for why they are not built up front.
+      if (isActive) {
+        panel.querySelectorAll("select[data-msx]").forEach((select) => {
+          if (select._msx && typeof select._msx.ensureRows === "function") select._msx.ensureRows();
+        });
+      }
     });
 
     document.getElementById("filtersWorkspaceEmpty")?.classList.toggle("d-none", !!state.activeDimensionKey);

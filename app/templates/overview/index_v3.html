@@ -619,7 +619,10 @@
   }
   #overviewPage .kpi-value {
     font-size: clamp(1.45rem, 1.9vw, 2rem);
-    line-height: 1.08;
+    /* `overflow: hidden` below clips whatever leaves the line box, so the line
+       box has to be taller than the glyph ink or the tail of a `$` and the
+       commas get shaved. At 1.08 the box was 25px against 28px of ink. */
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1077,11 +1080,23 @@
       <nav class="overview-tour" aria-label="Suggested tour">
         <span class="overview-tour__lead">New here? Five minutes, in order:</span>
         <ol class="overview-tour__steps">
+          {# Each step is gated on the same permission as the nav entry and the
+             hero links below. Ungated, this list sent a sales or warehouse
+             login straight into a Forbidden page: they can read Overview but
+             hold neither page.regions.view nor page.suppliers.view. #}
           <li><a href="#scorecardSection">Read the scorecard &mdash; revenue, margin and the year-over-year column</a></li>
+          {% if can_permission('page.customers.view') %}
           <li><a href="/customers/">Open Customers &mdash; RFM bands, cohort retention, churn risk</a></li>
+          {% endif %}
+          {% if can_permission('page.products.view') %}
           <li><a href="/products/">Open Products &mdash; find the department whose margin collapsed</a></li>
+          {% endif %}
+          {% if can_permission('page.regions.view') %}
           <li><a href="/regions/">Open Regions &mdash; one territory is down sharply; the others are not</a></li>
+          {% endif %}
+          {% if can_permission('page.suppliers.view') %}
           <li><a href="/suppliers/">Open Suppliers &mdash; one vendor has crossed into loss</a></li>
+          {% endif %}
         </ol>
       </nav>
       {% endif %}
