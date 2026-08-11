@@ -79,6 +79,7 @@ class TTLValueCache:
         Returns (value, cache_hit_flag).
         """
         now = time.time()
+        wait_for: Future | None = None
         with self._lock:
             payload = self._store.get(key)
             if payload:
@@ -88,9 +89,16 @@ class TTLValueCache:
                 self._store.pop(key, None)
             inflight = self._inflight.get(key)
             if inflight:
-                return inflight.result(), True
-            fut: Future = Future()
-            self._inflight[key] = fut
+                # Never wait while holding the cache lock. The builder must
+                # acquire this same lock to publish its result; waiting here
+                # deadlocks every concurrent request behind the first miss.
+                wait_for = inflight
+            else:
+                fut: Future = Future()
+                self._inflight[key] = fut
+
+        if wait_for is not None:
+            return wait_for.result(), True
 
         try:
             value = builder()
