@@ -12,6 +12,8 @@ __pycache__/
 .pytest_tmp_local/
 .pytest_tmp_work/
 .ruff_cache/
+.lighthouseci/
+lhci-reports*/
 .mypy_cache/
 .coverage
 .coverage.*
@@ -86,5 +88,5 @@ test-results/
 /simulate_*.py
 /test_*.py
 
-# Static prerendered site (build artefact of build_static.py)
-/dist/
+# Static prerendered sites (build artefacts of build_static.py)
+/dist*/

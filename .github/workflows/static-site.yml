@@ -58,12 +58,23 @@ jobs:
           # Let the build populate that cache as it goes. Scopes and drilldowns
           # re-ask for overlapping aggregates constantly, and with the cache
           # read-only every one of them recomputed from DuckDB.
+          DEMO_PREBUILT_CACHE_DIR: cache/demo-prebuilt
+          DEMO_PREBUILT_CACHE_READ: "1"
           DEMO_PREBUILT_CACHE_WRITE: "1"
           STATIC_LIVE_URL: https://wholesale-analytics-platform.onrender.com
         run: python build_static.py --out dist --clean
 
       - name: Check the build is actually static
         run: python scripts/check_static_build.py dist
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Lighthouse performance budgets
+        run: |
+          npm install --global @lhci/cli@0.15.1
+          lhci autorun --config=./lighthouserc.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

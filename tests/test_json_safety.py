@@ -100,3 +100,26 @@ def test_products_table_api_sanitizes(client, monkeypatch):
     data = resp.get_json()
     assert data["rows"][0]["Revenue"] is None
     assert data["rows"][0]["Margin%"] is None
+
+
+def test_products_drilldown_bundle_sanitizes_pandas_na(client, monkeypatch):
+    from app.services import bundle_service
+
+    monkeypatch.setattr(
+        bundle_service,
+        "drilldown",
+        lambda *_args, **_kwargs: {
+            "meta": {"page_id": "products_drilldown"},
+            "kpis": {"margin_pct": pd.NA},
+            "trend": {"revenue": [pd.NA]},
+            "table": {"rows": [{"supplier": pd.NA}]},
+        },
+    )
+
+    response = client.get("/products/api/drilldown/bundle?product_id=P10000")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["kpis"]["margin_pct"] is None
+    assert payload["trend"]["revenue"] == [None]
+    assert payload["table"]["rows"][0]["supplier"] is None

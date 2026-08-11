@@ -4381,7 +4381,7 @@ def api_segments():
 def api_bundle():
     from app.services import bundle_service
 
-    payload = bundle_service.bundle("products", request.args)
+    payload = _json_safe_payload(bundle_service.bundle("products", request.args))
     return jsonify(payload)
 
 
@@ -4409,7 +4409,7 @@ def api_recommendations():
 def api_drilldown_bundle():
     from app.services import bundle_service
 
-    payload = bundle_service.drilldown("products", request.args)
+    payload = _json_safe_payload(bundle_service.drilldown("products", request.args))
     status_code = 200
     if isinstance(payload, dict) and payload.get("error"):
         message = str(payload.get("error", {}).get("message", "")).lower()

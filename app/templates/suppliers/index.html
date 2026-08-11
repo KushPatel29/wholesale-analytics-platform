@@ -79,7 +79,7 @@
       <div class="card text-center shadow-sm h-100 kpi-card">
         <div class="card-body">
           <div class="text-muted small"><i class="bi bi-bullseye me-1"></i>HHI (Market Conc.)</div>
-          <div class="fs-4 fw-bold" id="kpiHHI">{{ (kpis.concentration_hhi if kpis else 0)|round(0) }}</div>
+          <div class="fs-4 fw-bold" id="kpiHHI">{{ (kpis.concentration_hhi if kpis else 0)|default(0, true)|round(0) }}</div>
           <div class="text-muted small">0–10,000 (higher = concentrated)</div>
         </div>
       </div>
@@ -89,9 +89,9 @@
         <div class="card-body">
           <div class="text-muted small"><i class="bi bi-graph-up-arrow me-1"></i>Top1 / Top5 Share</div>
           <div class="fs-6 fw-bold">
-            <span id="kpiTop1">{{ (kpis.concentration_top1_share if kpis else 0)|round(1) }}%</span>
+            <span id="kpiTop1">{{ (kpis.concentration_top1_share if kpis else 0)|default(0, true)|round(1) }}%</span>
             <span class="text-muted">·</span>
-            <span id="kpiTop5">{{ (kpis.concentration_top5_share if kpis else 0)|round(1) }}%</span>
+            <span id="kpiTop5">{{ (kpis.concentration_top5_share if kpis else 0)|default(0, true)|round(1) }}%</span>
           </div>
         </div>
       </div>

@@ -916,7 +916,7 @@ def bundle(page: str, args: Any) -> Dict[str, Any]:
                 meta.setdefault("query_budget_exceeded", True)
     except Exception:
         pass
-    return payload
+    return to_json_safe(payload)
 
 
 def drilldown(entity: str, args: Any) -> Dict[str, Any]:
@@ -1063,4 +1063,4 @@ def drilldown(entity: str, args: Any) -> Dict[str, Any]:
                 meta.setdefault("query_budget_exceeded", True)
     except Exception:
         pass
-    return payload
+    return to_json_safe(payload)

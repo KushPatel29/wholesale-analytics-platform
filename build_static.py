@@ -23,6 +23,7 @@ import base64
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shutil
 import sys
@@ -379,7 +380,9 @@ STATIC_CRITICAL_CSS = """
   padding:.45rem .8rem;background:transparent;color:inherit;font-weight:650}
 .static-detail-tabs__list button.is-active{background:var(--wa-accent);color:#fff}
 .static-detail-tabs__panel[hidden]{display:none}.static-chart{display:block;width:100%;height:auto;min-height:180px;
-  object-fit:contain}.static-demo-banner{content-visibility:auto}
+  object-fit:contain}
+body[data-static-page] *,body[data-static-page] *::before,body[data-static-page] *::after{
+  animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media(max-width:640px){.static-scope-note{width:100%;margin-left:0}.static-scope-bar select{width:100%}}
 """
 
@@ -405,13 +408,12 @@ REMOTE_ASSETS: dict[str, str] = {
 # Sections kept in the first-paint DOM. Every remaining section is still in the
 # HTML, inside a template-backed tab, but does not count toward layout or DOM
 # cost until the reviewer explicitly opens it.
-SECTION_RULES: dict[str, tuple[str, int]] = {
-    # 6, not 4: the trend workspace is the sixth section, and it holds the
-    # charts. Cutting at 4 met the node budget with a first paint that had no
-    # picture in it at all - the landing page is the one place the chart has to
-    # be there when the HTML arrives, not one click away.
-    "overview": ("#overviewPage > section, #overviewPage > div > section", 6),
-    "products": ("#products-main > section", 3),
+SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
+    # Keep the executive scan and the sixth-section trend workspace. The three
+    # narrative blocks between them remain available as build-time-rendered
+    # tabs, but no longer make the landing page eight screens tall.
+    "overview": ("#overviewPage > section, #overviewPage > div > section", (0, 1, 5)),
+    "products": ("#products-main > section", 2),
     "inventory": ("#InventoryApp > section", 4),
     "customers": ("main.app-main > section", 4),
     "labor": ("#LaborPage > section", 3),
@@ -419,6 +421,18 @@ SECTION_RULES: dict[str, tuple[str, int]] = {
     "regions": ("#RegionsOverviewV2App > section", 4),
     "suppliers": ("#SuppliersPage > section, #SuppliersV2App > section", 4),
     "salesreps": ("#SalesRepsApp > section", 3),
+}
+
+# Drilldowns use different DOM shells from their overview pages. Keep the
+# identity/scorecard story in first paint and externalize the long analytical
+# workbench into the same build-rendered tabs used by the overview pages.
+DRILLDOWN_SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
+    "customers": (
+        "main.app-main > div:not(#GlobalFilters):not(#savedViewsSection):not(.position-fixed)",
+        4,
+    ),
+    "products": (".product-drilldown-v2 > section", 3),
+    "regions": (".region-drilldown-v2 > section", 3),
 }
 
 
@@ -434,6 +448,7 @@ class Builder:
         self.app = None
         self.client = None
         self.presets: list[str] = []
+        self.drilldown_ids: dict[str, list[str]] = {}
         self.fragments: dict[tuple[str, str], dict[str, str]] = {}
         self.targets: list[dict[str, Any]] = []
         self.stats = {
@@ -727,26 +742,40 @@ class Builder:
             "regions_drilldown": "drilldowns/regions/",
             "suppliers_drilldown": "drilldowns/suppliers/",
         }
+        allowed = {
+            "customers": self.drilldown_ids.get("customers", []),
+            "products": self.drilldown_ids.get("products", []),
+            "suppliers": self.drilldown_ids.get("suppliers", []),
+            "regions": [slugify(value) for value in self.drilldown_ids.get("regions", [])],
+        }
         page.evaluate(
-            """({routes, drills, base, liveUrl}) => {
+            """({routes, drills, allowed, base, liveUrl}) => {
               const slug = (v) => String(v).toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'item';
+              const built = Object.fromEntries(
+                Object.entries(allowed).map(([key, values]) => [key, new Set(values)])
+              );
+              const decoded = (value) => {
+                try { return decodeURIComponent(value); } catch (_) { return value; }
+              };
 
               const target = (path) => {
                 path = path.replace(/\\/+$/, '');
                 if (path === '' ) return base + 'index.html';
                 if (Object.prototype.hasOwnProperty.call(routes, path)) return base + routes[path];
                 let m;
-                if ((m = path.match(/^\\/customers\\/drilldown\\/([^/]+)$/)))
-                  return base + drills.customers_drilldown + m[1] + '.html';
-                if ((m = path.match(/^\\/products\\/([^/]+)\\/drilldown$/)))
-                  return base + drills.products_drilldown + m[1] + '.html';
+                if ((m = path.match(/^\\/customers\\/drilldown\\/([^/]+)$/)) &&
+                    built.customers.has(decoded(m[1])))
+                  return base + drills.customers_drilldown + decoded(m[1]) + '.html';
+                if ((m = path.match(/^\\/products\\/([^/]+)\\/drilldown$/)) &&
+                    built.products.has(decoded(m[1])))
+                  return base + drills.products_drilldown + decoded(m[1]) + '.html';
                 if ((m = path.match(/^\\/regions\\/(?:drilldown\\/)?([^/]+)$/)) &&
-                    !['export', 'export_momentum'].includes(m[1]))
-                  return base + drills.regions_drilldown + slug(decodeURIComponent(m[1])) + '.html';
+                    built.regions.has(slug(decoded(m[1]))))
+                  return base + drills.regions_drilldown + slug(decoded(m[1])) + '.html';
                 if ((m = path.match(/^\\/suppliers\\/(?:drilldown\\/)?([^/]+)$/)) &&
-                    !m[1].startsWith('api') && m[1] !== 'export')
-                  return base + drills.suppliers_drilldown + m[1] + '.html';
+                    built.suppliers.has(decoded(m[1])))
+                  return base + drills.suppliers_drilldown + decoded(m[1]) + '.html';
                 return null;   // not part of this build
               };
 
@@ -764,24 +793,28 @@ class Builder:
               };
               fix(document);
             }""",
-            {"routes": routes, "drills": drills, "base": base,
+            {"routes": routes, "drills": drills, "allowed": allowed, "base": base,
              "liveUrl": self.live_url.rstrip("/")},
         )
 
-    @staticmethod
-    def drilldown_path(path: str) -> str | None:
+    def drilldown_path(self, path: str) -> str | None:
         m = re.match(r"^/customers/drilldown/([^/]+)$", path)
-        if m:
-            return f"drilldowns/customers/{m.group(1)}.html"
+        customer = urllib.parse.unquote(m.group(1)) if m else ""
+        if customer in self.drilldown_ids.get("customers", []):
+            return f"drilldowns/customers/{customer}.html"
         m = re.match(r"^/products/([^/]+)/drilldown$", path)
-        if m:
-            return f"drilldowns/products/{m.group(1)}.html"
+        product = urllib.parse.unquote(m.group(1)) if m else ""
+        if product in self.drilldown_ids.get("products", []):
+            return f"drilldowns/products/{product}.html"
         m = re.match(r"^/regions/(?:drilldown/)?([^/]+)$", path)
-        if m and m.group(1) not in {"export", "export_momentum"}:
-            return f"drilldowns/regions/{slugify(m.group(1))}.html"
+        region = slugify(urllib.parse.unquote(m.group(1))) if m else ""
+        region_slugs = {slugify(value) for value in self.drilldown_ids.get("regions", [])}
+        if region in region_slugs:
+            return f"drilldowns/regions/{region}.html"
         m = re.match(r"^/suppliers/(?:drilldown/)?([^/]+)$", path)
-        if m and not m.group(1).startswith("api") and m.group(1) != "export":
-            return f"drilldowns/suppliers/{m.group(1)}.html"
+        supplier = urllib.parse.unquote(m.group(1)) if m else ""
+        if supplier in self.drilldown_ids.get("suppliers", []):
+            return f"drilldowns/suppliers/{supplier}.html"
         return None
 
     # -- write ---------------------------------------------------------------
@@ -830,6 +863,22 @@ class Builder:
         "regions": (("/api/regions/drilldown/bundle", "region_id"),),
     }
 
+    def prepare_drilldown_ids(self, limit: int | None = None) -> None:
+        for name, lister in (
+            ("customers", self.list_customers),
+            ("products", self.list_products),
+            ("suppliers", self.list_suppliers),
+            ("regions", self.list_regions),
+        ):
+            try:
+                ids = lister()
+            except Exception as exc:
+                self.log(f"  ! could not list {name}: {exc}")
+                ids = []
+            if limit is not None:
+                ids = ids[:limit]
+            self.drilldown_ids[name] = ids
+
     def build_drilldowns(self, preset: str, limit: int | None = None) -> None:
         args = self.scope_args(preset)
         specs = [
@@ -839,13 +888,16 @@ class Builder:
             ("regions", "/regions/{id}", self.list_regions, "drilldowns/regions/{slug}.html"),
         ]
         for name, route_tpl, lister, out_tpl in specs:
-            try:
-                ids = lister()
-            except Exception as exc:
-                self.log(f"  ! could not list {name}: {exc}")
-                continue
-            if limit:
-                ids = ids[:limit]
+            ids = self.drilldown_ids.get(name)
+            if ids is None:
+                try:
+                    ids = lister()
+                except Exception as exc:
+                    self.log(f"  ! could not list {name}: {exc}")
+                    continue
+                if limit is not None:
+                    ids = ids[:limit]
+                self.drilldown_ids[name] = ids
             ok = 0
             for ident in ids:
                 route = route_tpl.format(id=ident)
@@ -1112,12 +1164,16 @@ class Builder:
 
             charts = self._freeze_charts(page, base)
 
-            selector, keep = SECTION_RULES.get(page_key, ("", 0))
+            section_rules = DRILLDOWN_SECTION_RULES if rel.startswith("drilldowns/") else SECTION_RULES
+            selector, keep = section_rules.get(page_key, ("", 0))
             if selector:
                 page.evaluate(
                     """({selector, keep}) => {
                       const sections = [...document.querySelectorAll(selector)].filter(el => el.isConnected);
-                      const secondary = sections.slice(keep);
+                      const kept = new Set(Array.isArray(keep)
+                        ? keep
+                        : sections.map((_, index) => index).slice(0, keep));
+                      const secondary = sections.filter((_, index) => !kept.has(index));
                       if (!secondary.length) return;
                       const tabs = document.createElement('section');
                       tabs.className = 'static-detail-tabs'; tabs.dataset.staticTabs = '1';
@@ -1129,7 +1185,7 @@ class Builder:
                       secondary.forEach((section, index) => {
                         const template = document.createElement('template');
                         template.id = `static-tab-${index}`;
-                        const heading = section.querySelector('h2,h3,h4');
+                        const heading = section.querySelector('h2,h3,h4,h5');
                         const label = (heading?.textContent || `Section ${index + 1}`).trim();
                         template.content.append(section);
                         tabs.append(template);
@@ -1190,7 +1246,21 @@ class Builder:
             page.evaluate(
                 """({options, filterOptions, config, criticalCss}) => {
                   document.getElementById('GlobalFilters')?.remove();
+                  /* The static transform deliberately strips dead filter UI
+                     before browser parsing. Guard against any malformed legacy
+                     wrapper leaving its form orphaned outside GlobalFilters: a
+                     preset-only CDN page must never devote a screen to a form
+                     it cannot submit. */
+                  document.querySelectorAll(
+                    '#filtersBody,#filtersForm,.filters-form,form[id$="_proxy_form"]'
+                  ).forEach(el => el.remove());
                   document.getElementById('savedViewsSection')?.remove();
+                  document.querySelectorAll('#js-plotly-tester,.plotly-notifier').forEach(el => el.remove());
+                  /* Put the actual business story above the instructional
+                     guide. The guide remains available at the end of main,
+                     but cannot become a mobile LCP gate before the hero. */
+                  const guide = document.querySelector('main.app-main > .page-guide');
+                  if (guide) guide.parentElement.append(guide);
                   document.querySelectorAll('script').forEach(el => el.remove());
                   document.querySelectorAll('link[rel="modulepreload"],link[rel="preload"][as="script"]').forEach(el => el.remove());
                   document.querySelectorAll('.filters-loading-overlay,#filtersRetryWrap,#filtersErrorBanner,#filtersPendingState,.spinner-border,.skeleton,[class*="-skeleton"],[class*="_skeleton"]').forEach(el => el.remove());
@@ -1279,6 +1349,17 @@ class Builder:
                     "main": stats["main"],
                     "path": f"?preset={urllib.parse.quote(preset)}",
                 }
+            self.manifest.setdefault("rendered_pages", []).append(
+                {
+                    "path": rel,
+                    "page": page_key,
+                    "preset": preset,
+                    "kb": round(len(html.encode("utf-8")) / 1024, 1),
+                    "nodes": stats["nodes"],
+                    "height": stats["height"],
+                    "charts": charts,
+                }
+            )
             for entry in self.manifest["pages"]:
                 if entry.get("path") == rel:
                     entry.update(
@@ -1309,7 +1390,15 @@ class Builder:
             def log_message(self, _format: str, *args: Any) -> None:
                 return
 
-        server = ThreadingHTTPServer(
+        class QuietServer(ThreadingHTTPServer):
+            def handle_error(self, _request: Any, _client_address: Any) -> None:
+                # Chromium intentionally abandons low-priority asset reads when
+                # a frozen page closes. They are harmless client disconnects,
+                # not build failures, and should not bury the build summary in
+                # socketserver tracebacks on Windows.
+                return
+
+        server = QuietServer(
             ("127.0.0.1", 0), partial(QuietHandler, directory=str(self.out))
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1347,20 +1436,64 @@ class Builder:
         static_root = self.out / "static"
         mapping: dict[str, str] = {}
         originals = [path for path in static_root.rglob("*") if path.is_file()]
-        for source in originals:
-            rel = source.relative_to(self.out).as_posix()
-            raw = source.read_bytes()
+
+        def fingerprint(source: Path, raw: bytes) -> str:
             digest = hashlib.sha256(raw).hexdigest()[:12]
             target = source.with_name(f"{source.stem}.{digest}{source.suffix}")
             if target != source and not target.exists():
-                shutil.copy2(source, target)
-            mapping[rel] = target.relative_to(self.out).as_posix()
+                target.write_bytes(raw)
+            return target.relative_to(self.out).as_posix()
+
+        # Fingerprint dependencies before stylesheets. CSS has relative font
+        # and image URLs, so its final bytes (and therefore its own digest) are
+        # only knowable after those references point at their hashed files.
+        for source in originals:
+            if source.suffix.lower() == ".css":
+                continue
+            rel = source.relative_to(self.out).as_posix()
+            # Chart files are born content-addressed in `_write_chart_asset`.
+            # Hashing `0123abcd....svg` a second time only doubles a large
+            # artifact directory and makes every HTML rewrite quadratic.
+            if re.fullmatch(r"static/charts/[0-9a-f]{16}\.svg", rel):
+                mapping[rel] = rel
+                continue
+            mapping[rel] = fingerprint(source, source.read_bytes())
+
+        css_dependencies = [
+            (old, new)
+            for old, new in mapping.items()
+            if not old.startswith("static/charts/")
+        ]
+        for source in (path for path in originals if path.suffix.lower() == ".css"):
+            rel = source.relative_to(self.out).as_posix()
+            parent = source.relative_to(self.out).parent.as_posix()
+            text = source.read_text(encoding="utf-8")
+            for old, new in sorted(css_dependencies, key=lambda item: len(item[0]), reverse=True):
+                old_ref = posixpath.relpath(old, parent)
+                new_ref = posixpath.relpath(new, parent)
+                # A delimiter assertion matters here: `icon.woff` is a prefix
+                # of `icon.woff2`. Without it the shorter mapping produced a
+                # nonexistent `icon.<woff hash>.woff2` URL on every page.
+                pattern = rf"{re.escape(old_ref)}(?:\?[^\"')\s]*)?(?=[\"')\s]|$)"
+                text = re.sub(pattern, new_ref, text)
+            mapping[rel] = fingerprint(source, text.encode("utf-8"))
+
+        # One scan per document, rather than one regex scan per asset. A full
+        # build has thousands of chart files and hundreds of documents; the
+        # old nested loop did millions of whole-document regex passes.
+        static_ref = re.compile(
+            r"((?:\.\./)*)(static/[^\"'<>\s?#)]+)"
+            r"(?:\?[^\"'<>\s]*)?(?=[\"'<>\s)]|$)"
+        )
 
         def rewrite(text: str) -> str:
-            for old, new in mapping.items():
-                pattern = rf"((?:\.\./)*){re.escape(old)}(?:\?[^\"'<>\s]*)?"
-                text = re.sub(pattern, lambda match: f"{match.group(1)}{new}", text)
-            return text
+            def replace(match: re.Match[str]) -> str:
+                replacement = mapping.get(match.group(2))
+                if replacement is None:
+                    return match.group(0)
+                return f"{match.group(1)}{replacement}"
+
+            return static_ref.sub(replace, text)
 
         for path in self.out.rglob("*.html"):
             path.write_text(rewrite(path.read_text(encoding="utf-8")), encoding="utf-8")
@@ -1408,6 +1541,9 @@ class Builder:
         self.log("\noffline cube")
         self.precompute_cube()
 
+        if drilldowns:
+            self.prepare_drilldown_ids(drilldown_limit)
+
         default = presets[0]
         self.log(f"\ndefault scope: {default}")
         for page in PAGES:
@@ -1428,8 +1564,11 @@ class Builder:
 
         self.log("\nprerender final DOM and charts")
         self.freeze_pages()
-        self.fingerprint_assets()
         self.write_preset_fragments()
+        # Fragments can contain images and other static references too. Write
+        # them before the single fingerprint pass so preset-switched content
+        # receives the same immutable asset URLs as full pages.
+        self.fingerprint_assets()
         self.write_meta(presets)
 
         s = self.stats

@@ -15,14 +15,18 @@ left to fetch, and no text claiming something is still loading.
 """
 from __future__ import annotations
 
+import html as html_stdlib
 import json
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
 # HTML is measured uncompressed; a CDN will gzip it, but parse cost is here.
-MAX_PAGE_KB = 400
-WARN_PAGE_KB = 150
+MAX_PAGE_KB = 100
+MAX_FRAGMENT_KB = 400
+MAX_PAGE_NODES = 1_499
+MAX_PAGE_HEIGHT = 3_999
 
 # Text that means the page is waiting. On a prerendered page there is nothing
 # to wait for, so any of these is a bug.
@@ -48,7 +52,24 @@ APP_SCRIPTS = [
 
 # A same-origin API path in an href/src would be a real request at runtime.
 API_ATTR_RE = re.compile(r'(?:href|src)="(/?(?:[^"]*/)?api/[^"]*)"')
+LOCAL_ATTR_RE = re.compile(r'\s(?:href|src|action)="([^"]+)"')
+CSS_URL_RE = re.compile(r"url\(([^)]+)\)")
 FROZEN_MARKER = "data-static-page"
+
+
+def _local_target(dist: Path, base: Path, raw: str) -> Path | None:
+    value = html_stdlib.unescape(raw).strip().strip("'\"")
+    if not value or value.startswith(("#", "//")):
+        return None
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme or not parsed.path:
+        return None
+    path = urllib.parse.unquote(parsed.path)
+    target = dist / path.lstrip("/") if path.startswith("/") else base / path
+    target = target.resolve()
+    if path.endswith("/") or target.is_dir():
+        target /= "index.html"
+    return target
 
 
 def check(dist: Path) -> int:
@@ -63,6 +84,7 @@ def check(dist: Path) -> int:
 
     manifest_path = dist / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    includes_drilldowns = bool(manifest.get("drilldowns"))
 
     failures: list[str] = []
     warnings: list[str] = []
@@ -80,10 +102,9 @@ def check(dist: Path) -> int:
         # not pages, so they carry no page marker - but they must still be inert.
         is_fragment = rel.startswith("data/")
 
-        if kb > MAX_PAGE_KB:
-            failures.append(f"{rel}: {kb:.0f} KB exceeds the {MAX_PAGE_KB} KB budget")
-        elif kb > WARN_PAGE_KB and not is_fragment:
-            warnings.append(f"{rel}: {kb:.0f} KB (over the {WARN_PAGE_KB} KB target)")
+        size_budget = MAX_FRAGMENT_KB if is_fragment else MAX_PAGE_KB
+        if kb > size_budget:
+            failures.append(f"{rel}: {kb:.0f} KB exceeds the {size_budget} KB budget")
 
         if is_fragment:
             for marker in LOADING_MARKERS:
@@ -91,6 +112,21 @@ def check(dist: Path) -> int:
                     failures.append(f"{rel}: fragment still shows a loading state ({marker!r})")
             for match in API_ATTR_RE.finditer(html):
                 failures.append(f"{rel}: fragment links to a live API path {match.group(1)[:60]}")
+            if includes_drilldowns:
+                # Section fragments are inserted into pages at different
+                # directory depths, so their ordinary relative URLs cannot be
+                # resolved against the fragment file itself. Drilldown links
+                # have a stable root marker; validate the referenced entity
+                # file directly so links inside closed tabs are crawled too.
+                for match in LOCAL_ATTR_RE.finditer(html):
+                    raw = html_stdlib.unescape(match.group(1))
+                    path = urllib.parse.urlsplit(raw).path
+                    if "drilldowns/" not in path:
+                        continue
+                    suffix = path.split("drilldowns/", 1)[1]
+                    target = (dist / "drilldowns" / urllib.parse.unquote(suffix)).resolve()
+                    if not target.exists():
+                        failures.append(f"{rel}: missing fragment drilldown link {path[:60]}")
             continue
 
         if FROZEN_MARKER not in html:
@@ -115,9 +151,54 @@ def check(dist: Path) -> int:
         for match in API_ATTR_RE.finditer(html):
             failures.append(f"{rel}: links to a live API path {match.group(1)[:60]}")
 
+        for match in LOCAL_ATTR_RE.finditer(html):
+            target = _local_target(dist, page.parent, match.group(1))
+            if target is None:
+                continue
+            try:
+                target.relative_to(dist)
+            except ValueError:
+                failures.append(f"{rel}: local link escapes the build root ({match.group(1)[:60]})")
+                continue
+            if not target.exists():
+                target_rel = target.relative_to(dist).as_posix()
+                if not includes_drilldowns and target_rel.startswith("drilldowns/"):
+                    # CI's fast smoke build deliberately uses --no-drilldowns;
+                    # the full publish build includes them and checks the links.
+                    continue
+                failures.append(f"{rel}: missing local asset or page {match.group(1)[:60]}")
+
         # The options the filter control needs, embedded rather than fetched.
         if '"filter-options"' not in html and "id=\"filter-options\"" not in html:
             warnings.append(f"{rel}: no embedded filter options block")
+
+    # A stylesheet can exist while its font or background asset does not. This
+    # is especially easy to miss after content hashing because CSS URLs are
+    # relative to the stylesheet, not the HTML document that loaded it.
+    for stylesheet in sorted((dist / "static").rglob("*.css")):
+        rel = stylesheet.relative_to(dist).as_posix()
+        css = stylesheet.read_text(encoding="utf-8")
+        for match in CSS_URL_RE.finditer(css):
+            target = _local_target(dist, stylesheet.parent, match.group(1))
+            if target is None:
+                continue
+            try:
+                target.relative_to(dist)
+            except ValueError:
+                failures.append(f"{rel}: CSS URL escapes the build root ({match.group(1)[:60]})")
+                continue
+            if not target.exists():
+                failures.append(f"{rel}: missing CSS asset {match.group(1)[:60]}")
+
+    budget_entries = manifest.get("rendered_pages") or manifest.get("pages", [])
+    for entry in budget_entries:
+        rel = str(entry.get("path") or entry.get("key") or "page")
+        nodes = int(entry.get("nodes") or 0)
+        height = int(entry.get("height") or 0)
+        if nodes > MAX_PAGE_NODES:
+            failures.append(f"{rel}: {nodes} first-paint nodes exceed the {MAX_PAGE_NODES} budget")
+        if height > MAX_PAGE_HEIGHT:
+            failures.append(f"{rel}: {height}px first-paint height exceeds the {MAX_PAGE_HEIGHT}px budget")
 
     print(f"checked {len(pages)} pages ({frozen} frozen), {total_kb/1024:.1f} MB of HTML")
     if manifest:
