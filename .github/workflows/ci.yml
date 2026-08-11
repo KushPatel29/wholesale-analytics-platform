@@ -54,6 +54,10 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
+      - name: Install browser used by the static freeze smoke
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
 
       # The promise on the README is that a clean clone produces a working
       # dashboard with no database. This job is what keeps that true.
