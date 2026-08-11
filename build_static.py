@@ -706,6 +706,68 @@ class Builder:
 
         return self.LINK_RE.sub(sub, html)
 
+    def _rewrite_live_links(self, page: Any, base: str) -> None:
+        """Point app links at their static files, after the page has built them.
+
+        `rewrite_links` only sees the HTML the server rendered. Every table here
+        builds its rows from the payload, so the links that matter most - the
+        supplier, region, customer and product a reviewer actually clicks - are
+        created by JavaScript and never passed through it. They survived into
+        the frozen output still pointing at `/suppliers/S1000?start=...`, which
+        on a project Pages site is not even the right host.
+
+        Rules are handed in rather than reimplemented, so the two paths cannot
+        drift: whatever `drilldown_path` and the page table say here is what the
+        pre-freeze rewriter said.
+        """
+        routes = {p.route.rstrip("/"): p.out for p in PAGES}
+        drills = {
+            "customers_drilldown": "drilldowns/customers/",
+            "products_drilldown": "drilldowns/products/",
+            "regions_drilldown": "drilldowns/regions/",
+            "suppliers_drilldown": "drilldowns/suppliers/",
+        }
+        page.evaluate(
+            """({routes, drills, base, liveUrl}) => {
+              const slug = (v) => String(v).toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'item';
+
+              const target = (path) => {
+                path = path.replace(/\\/+$/, '');
+                if (path === '' ) return base + 'index.html';
+                if (Object.prototype.hasOwnProperty.call(routes, path)) return base + routes[path];
+                let m;
+                if ((m = path.match(/^\\/customers\\/drilldown\\/([^/]+)$/)))
+                  return base + drills.customers_drilldown + m[1] + '.html';
+                if ((m = path.match(/^\\/products\\/([^/]+)\\/drilldown$/)))
+                  return base + drills.products_drilldown + m[1] + '.html';
+                if ((m = path.match(/^\\/regions\\/(?:drilldown\\/)?([^/]+)$/)) &&
+                    !['export', 'export_momentum'].includes(m[1]))
+                  return base + drills.regions_drilldown + slug(decodeURIComponent(m[1])) + '.html';
+                if ((m = path.match(/^\\/suppliers\\/(?:drilldown\\/)?([^/]+)$/)) &&
+                    !m[1].startsWith('api') && m[1] !== 'export')
+                  return base + drills.suppliers_drilldown + m[1] + '.html';
+                return null;   // not part of this build
+              };
+
+              const fix = (root) => {
+                root.querySelectorAll('a[href]').forEach((a) => {
+                  const raw = a.getAttribute('href') || '';
+                  if (!raw.startsWith('/') || raw.startsWith('//')) return;
+                  const path = raw.split('?')[0].split('#')[0];
+                  const dest = target(path);
+                  // Everything this build does not cover - exports, admin,
+                  // auth, returns - goes to the running app rather than 404.
+                  a.setAttribute('href', dest !== null ? dest : liveUrl + raw);
+                });
+                root.querySelectorAll('template').forEach((t) => fix(t.content));
+              };
+              fix(document);
+            }""",
+            {"routes": routes, "drills": drills, "base": base,
+             "liveUrl": self.live_url.rstrip("/")},
+        )
+
     @staticmethod
     def drilldown_path(path: str) -> str | None:
         m = re.match(r"^/customers/drilldown/([^/]+)$", path)
@@ -1111,6 +1173,7 @@ class Builder:
                   scrub(document);
                 }"""
             )
+            self._rewrite_live_links(page, base)
             self._externalize_closed_tabs(page, base)
 
             preset_options = [
