@@ -186,6 +186,17 @@ def register_blueprints(app: Flask) -> None:
         except Exception:
             return {"page_guide": None}
 
+    # Exposed as a global rather than a context processor on purpose: a context
+    # processor runs for every template render, including partials and error
+    # pages that have no filter bar, and this one costs a query on a cold cache.
+    # As a global it is only evaluated where `_filters.html` actually asks.
+    def _inline_filter_options():
+        from .services import filters_service
+
+        return filters_service.inline_options_bootstrap()
+
+    app.jinja_env.globals["inline_filter_options"] = _inline_filter_options
+
     @app.context_processor
     def _inject_active_drilldown_context():
         try:
@@ -530,7 +541,10 @@ def create_app() -> Flask:
     validate_config_settings(app.config, strict=strict_validation)
     # Configure JSON logs to rotating file
     try:
-        configure_json_logging(app.logger, log_path="logs/app.jsonl")
+        # Overridable so a second process (a static build, a test run) can keep
+        # its own file. Two processes sharing one rotating handler fight over
+        # the rename on Windows and each rotation raises into stderr.
+        configure_json_logging(app.logger, log_path=os.getenv("LOG_PATH", "logs/app.jsonl"))
         import logging as _logging
         _logging.getLogger("werkzeug").setLevel(_logging.WARNING)
     except Exception:

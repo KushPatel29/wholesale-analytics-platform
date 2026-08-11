@@ -26,7 +26,11 @@
 {% set _api_reset_url = filter_api.api_reset_url if filter_api is defined else '/api/filters/reset' %}
 {% set _dataset_version = filter_api.dataset_version if filter_api is defined else '' %}
 {% set _scope_bootstrap = access_scope.as_dict(include_allowed=False) if access_scope is defined and access_scope else {} %}
-{% set _inline_options_bootstrap = filter_options_bootstrap if filter_options_bootstrap is defined else None %}
+{# Embed the option lists rather than letting the bar fetch them. A blueprint
+   may pass `filter_options_bootstrap` itself; otherwise every page picks the
+   payload up here, which is what keeps /api/filters/options off the load path
+   app-wide instead of on the one page that remembered to do it. #}
+{% set _inline_options_bootstrap = filter_options_bootstrap if filter_options_bootstrap is defined and filter_options_bootstrap else inline_filter_options() %}
 {% set _filters_bootstrap = {
   'defaults': _summary_payload,
   'dataset_version': _dataset_version,

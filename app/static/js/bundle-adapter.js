@@ -171,6 +171,11 @@
       source.options && typeof source.options === "object" ? source.options : source;
     const out = { ...source };
     const options = {};
+    // This list is exhaustive, not illustrative: `out.options` below is rebuilt
+    // from it, so a dimension missing here is discarded no matter what the
+    // server sent. `protein_groups` (the Department filter) was absent, which
+    // emptied that dropdown on every page even once the server started
+    // returning its values.
     const canonicalKeys = [
       "regions",
       "methods",
@@ -180,12 +185,14 @@
       "products",
       "sales_reps",
       "statuses",
+      "protein_groups",
     ];
     const aliases = {
       methods: ["methods", "ship_methods", "shipping_methods", "shippingMethods"],
       ship_methods: ["ship_methods", "shipping_methods", "methods"],
       sales_reps: ["sales_reps", "salesRep", "salesRepIds", "salesreps"],
       statuses: ["statuses", "status"],
+      protein_groups: ["protein_groups", "protein_group", "meat_type", "species", "departments"],
     };
     let dropped = 0;
 

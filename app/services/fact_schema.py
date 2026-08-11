@@ -31,8 +31,14 @@ class FactColumns:
 
 CANON = FactColumns()
 
+# `ProteinType` is what the warehouse actually calls the department, and it
+# leads this list because it is the column the seeded fact table ships. Without
+# it nothing here matched, `choose_column` returned None, and the Department
+# filter rendered an empty dropdown on every page in the app.
 PROTEIN_CANDIDATES: tuple[str, ...] = (
+    "ProteinType",
     "ProteinGroup",
+    "ProteinName",
     "ProteinCategory",
     "MeatType",
     "Species",

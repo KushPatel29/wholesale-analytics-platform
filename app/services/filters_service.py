@@ -1059,6 +1059,95 @@ def validate_filters(
     return params, meta
 
 
+def inline_options_bootstrap(
+    filters: Any = None,
+    scope: Optional[Dict[str, Any]] = None,
+    *,
+    user: Any = None,
+) -> Optional[Dict[str, Any]]:
+    """Build the options payload a page can embed instead of fetching.
+
+    Every page renders the global filter bar, and the bar used to open its life
+    with an XHR to /api/filters/options. That request gates first paint on every
+    page in the app, so it is the one thing worth removing from the load path
+    entirely.
+
+    Two rules make the embedded copy actually useful:
+
+    - **Always the full dimension set.** The cache key carries the requested
+      dimension list, so asking for a subset here would just mint a second key
+      for the same window and miss the entry the other caller warmed. Serving
+      every dimension also means the browser has nothing left to defer, which
+      is what takes the page to zero options requests rather than one fewer.
+    - **Never raise.** A page that renders without embedded options is merely
+      back to fetching them; a page that 500s because the embed failed is worse
+      than the problem being solved.
+    """
+    try:
+        from flask import current_app, request, session
+        from flask_login import current_user
+        from app.services.filters import resolve_filters
+
+        if user is None:
+            user = current_user
+        if filters is None:
+            if not has_request_context():
+                return None
+            filters, _meta = resolve_filters(
+                request,
+                user,
+                session_obj=session,
+                source=request.args or {},
+                sticky_enabled=bool(current_app.config.get("STICKY_FILTERS", True)),
+            )
+        scope_payload = scope if scope is not None else scope_from_user(user)
+        payload = load_filter_options(
+            normalize_filters(filters),
+            scope_payload,
+            requested_keys=OPTION_KEYS,
+            use_cache=True,
+        )
+    except Exception:
+        logger.exception("filters.inline_options_failed")
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    payload = copy.deepcopy(payload)
+    payload["options"] = _compact_option_items(payload.get("options"))
+    payload.setdefault("meta", {})
+    payload["meta"]["source"] = "server-inline"
+    return payload
+
+
+def _compact_option_items(options: Any) -> Dict[str, list]:
+    """Drop the option fields the browser regenerates anyway.
+
+    The wire format repeats `bucket` (always the dimension key) and `id` (equal
+    to `value` for every dimension we emit) on every item. Harmless over XHR,
+    but this copy is embedded in the HTML of every page, and with 320 products
+    those two fields are most of its weight. `normalizeOptionsPayload` rebuilds
+    both from `value`, so shipping them is pure duplication.
+    """
+    if not isinstance(options, dict):
+        return {}
+    compacted: Dict[str, list] = {}
+    for key, items in options.items():
+        if not isinstance(items, list):
+            compacted[key] = items
+            continue
+        out = []
+        for item in items:
+            if not isinstance(item, dict):
+                out.append(item)
+                continue
+            value = item.get("value", item.get("id"))
+            label = item.get("label", value)
+            out.append({"value": value} if label == value else {"value": value, "label": label})
+        compacted[key] = out
+    return compacted
+
+
 def options_etag(payload: Dict[str, Any]) -> str:
     basis = {
         "dataset_version": payload.get("dataset_version"),

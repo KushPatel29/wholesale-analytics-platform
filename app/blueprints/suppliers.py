@@ -1186,7 +1186,10 @@ def index():
         except Exception:  # pragma: no cover - defensive
             logger.exception("suppliers.bundle_render_failed")
             payload = {"kpis": {}, "charts": {}, "table": {"rows": []}, "meta": {}}
-        filter_options_bootstrap = None
+        # Embedded filter options now come from `_filters.html` for every page
+        # (see filters_service.inline_options_bootstrap). This page used to build
+        # its own with a seven-dimension request, which minted a second cache key
+        # for the same window and left the browser to fetch the rest anyway.
         try:
             filters_norm, _meta = resolve_filters(
                 request,
@@ -1196,18 +1199,6 @@ def index():
                 sticky_enabled=bool(current_app.config.get("STICKY_FILTERS", True)),
             )
             filters_norm_dict = filters_to_store(filters_norm)
-            try:
-                filter_options_bootstrap = filters_service.load_filter_options(
-                    filters_norm,
-                    filters_service.scope_from_user(current_user),
-                    requested_keys=("statuses", "regions", "methods", "customers", "suppliers", "products", "sales_reps"),
-                    use_cache=True,
-                )
-                if isinstance(filter_options_bootstrap, dict):
-                    filter_options_bootstrap.setdefault("meta", {})
-                    filter_options_bootstrap["meta"]["source"] = "server-inline"
-            except Exception:
-                logger.exception("suppliers.inline_filter_options_failed")
         except Exception:
             filters_norm_dict = {}
         kpis_payload = payload.get("kpis", {}) if isinstance(payload, dict) else {}
@@ -1297,7 +1288,6 @@ def index():
             show_costs=can_view_costs(current_user),
             suppliers_v2=suppliers_v2,
             payload=payload,
-            filter_options_bootstrap=filter_options_bootstrap,
         )
     try:
         base_df = get_fact_df()
