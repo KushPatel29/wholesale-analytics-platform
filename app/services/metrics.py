@@ -23,7 +23,7 @@ That keeps it testable and keeps the aggregation where it already lives.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 # ─────────────────────────────────────────────────────────────────────────────

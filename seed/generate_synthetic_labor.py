@@ -45,7 +45,10 @@ def _fact_anchor() -> date:
 
 
 def generate(*, days: int = 210, seed: int = 4207, output: Path = Path("cache/labor/fact_dataset")) -> dict[str, object]:
-    rng = np.random.default_rng(seed)
+    # No generator is held at this level on purpose: every day draws from its
+    # own `default_rng(seed + day_seed)` below, so a day's rows depend only on
+    # its own seed and the output stays reproducible whatever order days are
+    # generated in.
     end = _fact_anchor()
     start = end - timedelta(days=max(days, 90) - 1)
     loaded_at = datetime.now(timezone.utc).replace(microsecond=0)

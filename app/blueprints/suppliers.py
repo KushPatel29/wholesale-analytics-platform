@@ -32,7 +32,7 @@ from ..core.filters import build_global_filter_form
 from ..core.rbac import can_view_costs, requires_roles
 from app.services import fact_store
 from ..services import analytics_utils as au
-from app.services import bundle_service, filters_service
+from app.services import bundle_service
 from app.services.filters import filters_to_store, resolve_filters
 from app.core.features import legacy_pandas_enabled
 
