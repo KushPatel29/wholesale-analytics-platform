@@ -55,6 +55,10 @@ jobs:
           # Pins the prebuilt-cache fingerprint to the commit, so a build never
           # reuses a value produced by different code.
           APP_BUILD_ID: ${{ github.sha }}
+          # Let the build populate that cache as it goes. Scopes and drilldowns
+          # re-ask for overlapping aggregates constantly, and with the cache
+          # read-only every one of them recomputed from DuckDB.
+          DEMO_PREBUILT_CACHE_WRITE: "1"
           STATIC_LIVE_URL: https://wholesale-analytics-platform.onrender.com
         run: python build_static.py --out dist --clean
 
