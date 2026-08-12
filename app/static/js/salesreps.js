@@ -5374,6 +5374,19 @@
         
         renderTrend(payload.charts?.trend || payload.trend || {});
         renderConcentration(payload.charts?.concentration || []);
+
+        // Restored. The performance pass removed these six call sites and their
+        // markup but left both the renderers below and the server-side series:
+        // the bundle was still computing and shipping `monthly_compare`,
+        // `transfers`, `pareto`, `scatter`, `profit_vs_revenue` and
+        // `asp_leaders` - 95 KB of a 290 KB payload - to a page that drew none
+        // of it. These are the charts, not new ones; the data was never gone.
+        renderMonthlyCompare(payload.charts?.monthly_compare || payload.trend?.monthly_compare || {});
+        renderTransfers(payload.charts?.transfers || []);
+        renderPareto(payload.charts?.pareto || payload.table?.rows || []);
+        renderEfficiency(payload.charts?.scatter || []);
+        renderProfitRevenue(payload.charts?.profit_vs_revenue || []);
+        renderAspLeaders(payload.charts?.asp_leaders || []);
       } catch (err) {
         logError("Deferred chart rendering failed", err);
       } finally {

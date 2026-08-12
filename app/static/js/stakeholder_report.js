@@ -176,6 +176,7 @@ class ReportWorkspace {
     const draw = () => {
       this.drawQuadrantChart();
       this.drawDemandChart();
+      this.drawExposureChart();
     };
     if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
       window.ChartUtils.whenPlotlyReady(draw);
@@ -267,6 +268,77 @@ class ReportWorkspace {
     }, { displayModeBar: false, responsive: true });
   }
 
+  /* Concentration on its own is not a finding. The table below lists share and
+   * the vendor's on-time rate in adjacent columns, which leaves the reader to
+   * join them by eye across six rows; the point of the section is the *pair*.
+   * Plotting one against the other puts the departments that are both
+   * single-sourced and badly served in their own corner, which is the only
+   * quadrant anyone has to act on this week. */
+  drawExposureChart() {
+    const host = document.getElementById('planExposureChart');
+    const rows = (this._plan().concentration || []).filter(
+      r => Number.isFinite(Number(r.share_pct)) && Number.isFinite(Number(r.vendor_on_time_pct))
+    );
+    if (!host || !rows.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const warn = this._plan().thresholds?.concentration_warn_pct ?? 45;
+    const target = this._plan().thresholds?.service_target_pct ?? 92;
+    const revenues = rows.map(r => Number(r.revenue) || 0);
+    const maxRevenue = Math.max(...revenues, 1);
+
+    const atRisk = r => Number(r.share_pct) >= warn && Number(r.vendor_on_time_pct) < target;
+
+    Plotly.newPlot(host, [{
+      type: 'scatter',
+      mode: 'markers+text',
+      x: rows.map(r => Number(r.share_pct)),
+      y: rows.map(r => Number(r.vendor_on_time_pct)),
+      text: rows.map(r => r.department),
+      textposition: 'top center',
+      textfont: { size: 9, color: theme.text },
+      marker: {
+        // Area-proportional, so a department carrying twice the revenue looks
+        // twice as big rather than twice as wide.
+        size: revenues.map(v => 12 + 26 * Math.sqrt(v / maxRevenue)),
+        color: rows.map(r => (atRisk(r) ? theme.danger : theme.accent)),
+        opacity: 0.75,
+        line: { width: 1, color: 'rgba(0,0,0,.25)' },
+      },
+      customdata: rows.map(r => [r.vendor, r.vendor_count, r.revenue]),
+      hovertemplate:
+        '<b>%{text}</b><br>%{customdata[0]}<br>%{x:.0f}% of the department'
+        + '<br>%{y:.0f}% on time<br>%{customdata[1]} vendors available<extra></extra>',
+    }], {
+      margin: { l: 56, r: 24, t: 10, b: 46 },
+      height: 300,
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: {
+        title: 'Share carried by the largest vendor', ticksuffix: '%',
+        gridcolor: theme.grid, linecolor: theme.grid, zeroline: false,
+      },
+      yaxis: {
+        title: 'That vendor’s on-time rate', ticksuffix: '%',
+        gridcolor: theme.grid, linecolor: theme.grid, zeroline: false,
+      },
+      shapes: [
+        // The two thresholds the page already judges every other number by.
+        { type: 'line', x0: warn, x1: warn, yref: 'paper', y0: 0, y1: 1,
+          line: { color: theme.grid, width: 1, dash: 'dash' } },
+        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: target, y1: target,
+          line: { color: theme.grid, width: 1, dash: 'dash' } },
+      ],
+      annotations: [
+        { xref: 'paper', yref: 'paper', x: 1, y: 0, xanchor: 'right', yanchor: 'bottom',
+          text: 'single-sourced and missing dates', showarrow: false,
+          font: { size: 9, color: theme.danger } },
+      ],
+    }, { displayModeBar: false, responsive: true });
+  }
+
   drawDemandChart() {
     const host = document.getElementById('planDemandChart');
     const rows = (this._plan().demand || []).slice(0, 10);
@@ -332,15 +404,21 @@ class ReportWorkspace {
     return this.state.data?.planning || {};
   }
 
+  /* House rules (app/static/js/format.js), not a private compact format. This
+   * printed "Revenue exposed $1.2M" where every other page prints the same
+   * figure in full, and `formatting.py` is explicit that compact currency is
+   * for axis ticks and narrow cards only - never a KPI a reader might
+   * reconcile against another page, because the rounding differs by design. */
   _money(value) {
+    const F = window.WAFormat;
+    if (F) return F.currency(value);
     const n = Number(value);
-    if (!Number.isFinite(n)) return '—';
-    if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-    if (Math.abs(n) >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
-    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
   }
 
   _pct(value, digits = 1) {
+    const F = window.WAFormat;
+    if (F) return F.percent(value, { decimals: digits });
     const n = Number(value);
     return Number.isFinite(n) ? `${n.toFixed(digits)}%` : '—';
   }
@@ -681,6 +759,8 @@ class ReportWorkspace {
           Over ${warn}% is single-sourced in practice, whatever the contract says —
           and it only matters next to that vendor's service record.
         </p>
+        <div id="planExposureChart" class="plan-chart" role="img"
+             aria-label="Top-vendor share of each department against that vendor's on-time rate"></div>
         <table class="plan-table">
           <thead>
             <tr><th>Department</th><th>Largest vendor</th><th class="num">Share</th><th class="num">Vendors</th><th class="num">Their on-time</th></tr>

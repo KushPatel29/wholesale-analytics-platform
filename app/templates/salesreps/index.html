@@ -333,7 +333,44 @@
     <div>
       <p class="sr-section-kicker mb-1">Trend Intelligence</p>
       <h3 class="mb-1">Current Versus Prior Performance And Rep Momentum</h3>
-      <p class="text-muted mb-0" id="srSectionTrendSubtitle">One focused trend and one leaderboard keep performance movement easy to scan.</p>
+      <p class="text-muted mb-0" id="srSectionTrendSubtitle">Aligned current-period trends, prior-year comparisons, transfer exposure, and rep-level performance movement.</p>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Current vs Prior-Year Trend</div>
+            <div class="text-muted small">Current-owner history appends to the active book so period-over-period comparisons stay meaningful.</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="position-relative">
+            <div style="height:320px" class="sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="monthlyCompareChart"></canvas></div>
+            <button id="btnMonthlyComparePng"
+                    class="btn btn-sm btn-outline-secondary sr-chart-dl-btn"
+                    title="Download chart as PNG"
+                    style="position:absolute;top:6px;right:6px;display:none;font-size:0.75rem;padding:2px 10px;border-radius:20px">
+              &#11015; PNG
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Transferred Revenue</div>
+            <div class="text-muted small">Transferred-in versus transferred-out revenue by current owner.</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="transferChart"></canvas></div>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -418,7 +455,7 @@
   </section>
 
   <section class="row g-3 mb-4">
-    <div class="col-12">
+    <div class="col-12 col-xl-4">
       <article class="card shadow-sm border-0 h-100">
         <div class="card-header bg-white border-0 sr-section-header">
           <div class="fw-semibold">Concentration Risk By Rep</div>
@@ -429,6 +466,31 @@
         </div>
       </article>
     </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Rep Efficiency</div>
+          <div class="text-muted small">Revenue versus customer count, with bubble size reflecting profit contribution.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="effChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-4">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Profit Versus Revenue</div>
+          <div class="text-muted small">Quadrant view of large books, high-profit books, and underperforming owner portfolios.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bubble"><canvas id="profitRevenueChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Phase 3F: upgraded section header -->
   </section>
 
   <!-- Phase 3F: upgraded section header -->
@@ -621,10 +683,36 @@
   <section class="sr-section-heading mb-3">
     <div>
       <p class="sr-section-kicker mb-1">Rep Ranking / Comparison</p>
-      <h3 class="mb-1">Full Rep Comparison</h3>
+      <h3 class="mb-1">Share, Pricing Leadership, And Full Rep Comparison</h3>
       <p class="text-muted mb-0" id="srSectionComparisonSubtitle">Searchable, sortable owner performance with selectable executive and risk views.</p>
     </div>
   </section>
+
+    <div class="col-12 col-xl-7">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">Revenue Share Concentration</div>
+          <div class="text-muted small">Top rep contribution and cumulative concentration under the selected metric.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-16x9 sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="revenueShareChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-xl-5">
+      <article class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-0 sr-section-header">
+          <div class="fw-semibold">ASP Leaders</div>
+          <div class="text-muted small">Top average selling price leaders across the visible owner book.</div>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3 sr-chart-shell sr-chart-shell--loading sr-chart-shell--bar"><canvas id="aspChart"></canvas></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="card shadow-sm border-0 mb-4" id="srTableSection">
 
   <section class="card shadow-sm border-0 mb-4" id="srTableSection">
     <div class="card-header bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -802,5 +890,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/salesreps.js', v='20260810-demo-ready-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/salesreps.js', v='20260813-restore-1') }}" defer></script>
 {% endblock %}

@@ -404,7 +404,10 @@ SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
     # tabs, but no longer make the landing page eight screens tall.
     "overview": ("#overviewPage > section, #overviewPage > div > section", (0, 1, 5)),
     "products": ("#products-main > section", 2),
-    "inventory": ("#InventoryApp > section", 4),
+    # Five, not four: the fifth is the concentration/distribution charts, and a
+    # Pareto curve behind a tab is a chart nobody sees. The page has the room -
+    # it froze at 227 nodes and 1,552px against budgets of 1,499 and 3,999.
+    "inventory": ("#InventoryApp > section", 5),
     "customers": ("main.app-main > section", 4),
     "labor": ("#LaborPage > section", 3),
     "planning": ("#reportContent > .report-section", 2),

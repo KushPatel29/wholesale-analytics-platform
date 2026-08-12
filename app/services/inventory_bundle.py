@@ -52,8 +52,22 @@ def _is_perishable(category: str, protein: str) -> bool:
     return any(token in text for token in ("fresh", "produce", "dairy", "frozen", "meat", "seafood", "perishable"))
 
 
+# Perishable departments run short cover by design, so one cover target across
+# the chain would flag all of fresh as a problem. Named because the cover chart
+# draws these as guide bands and must use the same numbers the posture rules do.
+TARGET_DAYS_PERISHABLE = 14.0
+TARGET_DAYS_AMBIENT = 45.0
+
+
 def _target_days(row: dict[str, Any]) -> float:
-    return 14.0 if _is_perishable(str(row.get("category") or ""), str(row.get("protein") or "")) else 45.0
+    perishable = _is_perishable(str(row.get("category") or ""), str(row.get("protein") or ""))
+    return TARGET_DAYS_PERISHABLE if perishable else TARGET_DAYS_AMBIENT
+
+
+def _round_opt(value: Any, digits: int = 1) -> float | None:
+    """Round while preserving None, so a missing value stays missing."""
+    number = _optional_number(value)
+    return None if number is None else round(number, digits)
 
 
 def _stock_posture(row: dict[str, Any]) -> tuple[str, str, int]:
@@ -207,6 +221,95 @@ def _classify_rows(rows: list[dict[str, Any]], window_end: str | None) -> None:
         row["supplier"] = _safe_text(row.get("supplier"), "Unassigned")
 
 
+def _chart_series(rows: list[dict[str, Any]], *, total_inventory: float) -> dict[str, Any]:
+    """
+    The three shapes a ranked bar list cannot show.
+
+    The page already renders ABC, movement and aging as bar lists, which is the
+    right form for a composition but loses the thing each diagnostic is
+    actually for:
+
+      * ABC is a *concentration* claim - "80% of value sits in these SKUs" -
+        and that is a cumulative curve, not three totals.
+      * Cover is a *distribution*. A mean of 34 days hides both the SKU at 2
+        days and the one at 155, which are the only two worth acting on.
+      * Movement is a *relationship* between usage and value. Collapsing it to
+        four quadrant counts discards both axes.
+
+    Emitted as parallel arrays rather than a list of objects: same numbers, a
+    third of the bytes, and it is the shape a plotting library wants anyway.
+    Charts are frozen to SVG at build time, so none of this reaches a static
+    visitor - it only has to be small enough for the live app.
+    """
+    ordered = sorted(rows, key=lambda row: _number(row.get("inventory_value")), reverse=True)
+
+    # ABC: cumulative share of inventory value against SKU rank, as percentages
+    # so the axis needs no client arithmetic.
+    cumulative = 0.0
+    cum_share: list[float] = []
+    sku_share: list[float] = []
+    for index, row in enumerate(ordered, start=1):
+        cumulative += _number(row.get("inventory_value"))
+        cum_share.append(round(cumulative / total_inventory * 100.0, 2) if total_inventory else 0.0)
+        sku_share.append(round(index / len(ordered) * 100.0, 2) if ordered else 0.0)
+
+    def _class_edge(label: str) -> int | None:
+        """1-based rank of the last SKU in a class, for the band boundaries."""
+        last = None
+        for index, row in enumerate(ordered, start=1):
+            if row.get("abc_class") == label:
+                last = index
+        return last
+
+    # Cover: fixed bins so the shape is comparable between scopes, with an
+    # explicit overflow bucket rather than a long empty tail.
+    edges = [0, 7, 14, 21, 30, 45, 60, 90, 120]
+    bins: list[dict[str, Any]] = []
+    for low, high in zip(edges, edges[1:]):
+        bucket = [r for r in rows if low <= _number(r.get("days_supply")) < high]
+        bins.append({
+            "label": f"{low}-{high}",
+            "low": low,
+            "high": high,
+            "skus": len(bucket),
+            "value": round(sum(_number(r.get("inventory_value")) for r in bucket), 2),
+        })
+    tail = [r for r in rows if _number(r.get("days_supply")) >= edges[-1]]
+    bins.append({
+        "label": f"{edges[-1]}+",
+        "low": edges[-1],
+        "high": None,
+        "skus": len(tail),
+        "value": round(sum(_number(r.get("inventory_value")) for r in tail), 2),
+    })
+
+    # Movement: one point per SKU. 300-odd points is a scatter, not a payload
+    # problem, and sampling would hide exactly the outliers worth seeing.
+    return {
+        "abc_pareto": {
+            "sku_share_pct": sku_share,
+            "cum_value_pct": cum_share,
+            "a_edge": _class_edge("A"),
+            "b_edge": _class_edge("B"),
+            "sku_count": len(ordered),
+        },
+        "cover_histogram": {
+            "bins": bins,
+            "target_perishable_days": TARGET_DAYS_PERISHABLE,
+            "target_ambient_days": TARGET_DAYS_AMBIENT,
+        },
+        "movement": {
+            "usage": [round(_number(r.get("avg_weekly_usage")), 3) for r in rows],
+            "value": [round(_number(r.get("inventory_value")), 2) for r in rows],
+            "days_supply": [_round_opt(r.get("days_supply")) for r in rows],
+            "svsi": [_round_opt(r.get("svsi"), 2) for r in rows],
+            "quadrant": [str(r.get("movement_quadrant") or "") for r in rows],
+            "posture": [str(r.get("posture") or "") for r in rows],
+            "label": [str(r.get("product_name") or "") for r in rows],
+        },
+    }
+
+
 def _group_summary(rows: Iterable[dict[str, Any]], key: str, *, order: Iterable[str] | None = None) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "inventory_value": 0.0, "usage_units": 0.0})
     for row in rows:
@@ -295,6 +398,7 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
     abc = _group_summary(rows, "abc_class", order=("A", "B", "C"))
     aging = _group_summary(rows, "aging_bucket", order=("0-30", "31-60", "61-90", "91-180", "181-365", "365+"))
     quadrants = _group_summary(rows, "movement_quadrant", order=("Core / protect", "Fast / lean", "Slow / cash tied", "Tail / monitor"))
+    charts = _chart_series(rows, total_inventory=inventory_value)
 
     total_holding = inventory_value * ANNUAL_HOLDING_RATE
     holding_cost = {
@@ -358,6 +462,7 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
         "posture": posture,
         "abc": abc,
         "aging": aging,
+        "charts": charts,
         "movement_quadrants": quadrants,
         "holding_cost": holding_cost,
         "suppliers": _supplier_summary(rows),

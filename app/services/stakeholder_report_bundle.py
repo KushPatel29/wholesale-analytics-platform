@@ -21,13 +21,39 @@ from app.services import (
 )
 from app.core.exports import fmt_currency, fmt_percent
 
+# This bundle read `SELECT *` - 81 columns and ~25 MB of pandas for a filtered
+# year - then used about a quarter of them. `query_fact` already supports a
+# projection and force-includes the canonical date/revenue/cost/qty/weight
+# columns, so naming the rest is enough.
+#
+# Anything the KPI block, the period split, or `planning.build_planning` and
+# `build_inventory` touch has to be listed here: a column that is missing is
+# not an error, it silently changes a number. `tests/test_planning_projection.py`
+# pins the payload against an unprojected read for exactly that reason.
+PLANNING_COLUMNS = [
+    # identity and period
+    "Date", "OrderId", "CustomerId",
+    # measures the KPI strip reads
+    "WeightLb", "QtyShippedLb", "pack_weight_lb_sum", "CostPrice",
+    # department, however this dataset spells it
+    "ProteinType", "ProteinName", "ProductCategory", "Category",
+    # service and vendor breakdowns
+    "ShippingMethodName", "SupplierName", "IsLate",
+    # product identity for the SKU-level inventory view
+    "ProductId", "ProductName", "SKU", "UnitOfBillingId",
+    # inventory position and availability
+    "IsShortShip", "IsStockout", "BackorderQty", "QuantityOrdered",
+    "DaysOfSupply", "OnHandQty", "OnHandValue", "ReorderPointQty",
+]
+
+
 def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, Any]:
     """
     Synthesizes a live stakeholder executive report bundle for the Northgate Retail Analytics demo company.
     Professional Business Analyst perspective, MTD-aware and pace-calculated.
     """
     # 1) Core Dataset & KPIs
-    scoped_df = fact_store.query_fact(filters=filters, scope=scope)
+    scoped_df = fact_store.query_fact(filters=filters, scope=scope, columns=PLANNING_COLUMNS)
     kpis = overview_query._kpis(scoped_df)
     
     # Calculate Margin

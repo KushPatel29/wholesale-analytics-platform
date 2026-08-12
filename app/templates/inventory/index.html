@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% set filters_handler = 'ajax' %}
+{# `inventory` is not one of the blueprints base.html loads Plotly for, and this
+   page draws three real charts, so it asks for the libraries explicitly. The
+   static build strips every <script> once it has frozen the charts to SVG, so
+   this costs the published pages nothing. #}
+{% set needs_plotly = true %}
 {% block title %}Inventory Analysis | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260809-showcase-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260813-charts-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -53,6 +58,36 @@
       <p>Critical and Reorder protect service. Healthy protects flow. Excess releases cash.</p>
     </div>
     <div class="stock-posture-rail" id="inventoryPosture"></div>
+  </section>
+
+  {# Three shapes the bar lists above cannot carry: a concentration curve, a
+     distribution, and a two-axis relationship. Each states its own reading so
+     the picture is not left to interpretation. #}
+  <section class="inventory-section">
+    <div class="inventory-section__head">
+      <div><span>Concentration and distribution</span><h2>Where the value sits, and how cover is spread</h2></div>
+      <p>The bar lists above total each class. These show the shape behind those totals.</p>
+    </div>
+    <div class="inventory-charts">
+      <article class="inventory-panel">
+        <h3>ABC concentration</h3>
+        <p class="inventory-panel__copy" id="inventoryParetoRead">Cumulative share of inventory value as SKUs are added, richest first.</p>
+        <div id="inventoryParetoChart" class="inventory-chart" role="img"
+             aria-label="Cumulative share of inventory value against share of SKUs"></div>
+      </article>
+      <article class="inventory-panel">
+        <h3>Cover distribution</h3>
+        <p class="inventory-panel__copy" id="inventoryCoverRead">Days of supply across the portfolio, against the 14-day perishable and 45-day ambient targets.</p>
+        <div id="inventoryCoverChart" class="inventory-chart" role="img"
+             aria-label="Distribution of days of supply across SKUs with cover targets"></div>
+      </article>
+    </div>
+    <article class="inventory-panel mt-3">
+      <h3>Movement: usage against value</h3>
+      <p class="inventory-panel__copy" id="inventoryMovementRead">Each point is a SKU. Weekly usage against inventory value, split at the portfolio medians.</p>
+      <div id="inventoryMovementChart" class="inventory-chart inventory-chart--tall" role="img"
+           aria-label="Weekly usage against inventory value for every SKU, coloured by movement quadrant"></div>
+    </article>
   </section>
 
   <section class="inventory-action-grid">
@@ -138,5 +173,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/inventory.js', v='20260809-showcase-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-charts-1') }}" defer></script>
 {% endblock %}

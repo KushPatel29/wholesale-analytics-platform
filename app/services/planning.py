@@ -733,6 +733,11 @@ def _inventory_actions(scorecard: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def build_inventory(frame: pd.DataFrame) -> Dict[str, Any]:
     """Availability and inventory position, for the planner and the pages."""
     dept_col = _department_column(frame)
+    # One department scorecard, used twice. `_inventory_by` runs a groupby and
+    # then `_availability` + `_inventory_position` per group, so computing it
+    # again for `actions` doubled the most expensive call in this function for
+    # an identical result.
+    by_department = _inventory_by(frame, dept_col)
     return {
         "headline": {**_availability(frame), **_inventory_position(frame)},
         "targets": {
@@ -742,10 +747,10 @@ def build_inventory(frame: pd.DataFrame) -> Dict[str, Any]:
             "cover_days_ambient": COVER_TARGET_DAYS_AMBIENT,
             "excess_cover_multiple": EXCESS_COVER_MULTIPLE,
         },
-        "by_department": _inventory_by(frame, dept_col),
+        "by_department": by_department,
         "by_lane": _inventory_by(frame, "ShippingMethodName", limit=8),
         "by_vendor": _inventory_by(frame, "SupplierName", limit=8),
-        "actions": _inventory_actions(_inventory_by(frame, dept_col)),
+        "actions": _inventory_actions(by_department),
     }
 
 # ---------------------------------------------------------------------------

@@ -112,6 +112,182 @@
     document.getElementById("inventoryNext").disabled = state.page >= totalPages;
   };
 
+  // ---------------------------------------------------------------------
+  // Charts
+  //
+  // Three shapes the bar lists cannot carry: ABC is a concentration claim and
+  // wants a cumulative curve; cover is a distribution whose mean hides both
+  // ends; movement is a relationship between two axes. Plotly is fetched on
+  // idle after first paint, so every draw waits for it and the page is
+  // complete without it - the static build freezes these to SVG anyway.
+  // ---------------------------------------------------------------------
+  const plotTheme = () => {
+    const css = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
+    return {
+      text: pick("--wa-text-dim", "#94a3b8"),
+      grid: pick("--wa-border", "rgba(148,163,184,.22)"),
+      accent: pick("--wa-accent", "#34d399"),
+      danger: pick("--wa-danger", "#f87171"),
+      warn: pick("--wa-warning", "#fbbf24"),
+      info: pick("--wa-info", "#60a5fa"),
+    };
+  };
+
+  const baseLayout = (theme, extra) => Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: theme.text, size: 11 },
+    margin: { l: 56, r: 18, t: 12, b: 44 },
+    showlegend: false,
+  }, extra || {});
+
+  const drawPareto = (charts, theme) => {
+    const host = document.getElementById("inventoryParetoChart");
+    const data = charts?.abc_pareto;
+    if (!host || !data?.cum_value_pct?.length) return;
+    const skuPct = data.sku_share_pct;
+    const cumPct = data.cum_value_pct;
+    const aEdge = data.a_edge ? (data.a_edge / data.sku_count) * 100 : null;
+
+    // The headline reading, stated rather than left to the eye.
+    const aShare = data.a_edge ? (data.a_edge / data.sku_count) * 100 : null;
+    if (aShare != null) {
+      text("inventoryParetoRead",
+        `The top ${aShare.toFixed(0)}% of SKUs (class A) hold 80% of inventory value. `
+        + `The curve's steepness is the concentration.`);
+    }
+
+    const shapes = [];
+    if (aEdge != null) {
+      shapes.push({
+        type: "rect", xref: "x", yref: "paper", x0: 0, x1: aEdge, y0: 0, y1: 1,
+        fillcolor: theme.accent, opacity: 0.10, line: { width: 0 }, layer: "below",
+      });
+    }
+    window.Plotly.newPlot(host, [
+      {
+        type: "scatter", mode: "lines", x: skuPct, y: cumPct,
+        line: { color: theme.accent, width: 3 },
+        hovertemplate: "Top %{x:.0f}% of SKUs<br>%{y:.1f}% of inventory value<extra></extra>",
+        name: "Cumulative value",
+      },
+      {
+        // Perfect-evenness reference: without it "steep" has nothing to be steep against.
+        type: "scatter", mode: "lines", x: [0, 100], y: [0, 100],
+        line: { color: theme.grid, width: 1, dash: "dot" },
+        hoverinfo: "skip", name: "Even distribution",
+      },
+    ], baseLayout(theme, {
+      height: 260,
+      xaxis: { title: "Share of SKUs", ticksuffix: "%", range: [0, 100], gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
+      yaxis: { title: "Share of value", ticksuffix: "%", range: [0, 100], gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
+      shapes,
+    }), { displayModeBar: false, responsive: true });
+  };
+
+  const drawCover = (charts, theme) => {
+    const host = document.getElementById("inventoryCoverChart");
+    const data = charts?.cover_histogram;
+    if (!host || !data?.bins?.length) return;
+    const bins = data.bins;
+    const perishable = num(data.target_perishable_days);
+    const ambient = num(data.target_ambient_days);
+
+    // Colour by where a bucket sits against the two targets: short of the
+    // perishable target is a service risk, past the ambient target is cash.
+    const colour = (bin) => {
+      if (bin.high != null && bin.high <= perishable) return theme.danger;
+      if (bin.low >= ambient) return theme.warn;
+      return theme.accent;
+    };
+    const short = bins.filter((b) => b.high != null && b.high <= perishable).reduce((a, b) => a + num(b.skus), 0);
+    const over = bins.filter((b) => b.low >= ambient).reduce((a, b) => a + num(b.skus), 0);
+    text("inventoryCoverRead",
+      `${fmt(short)} SKUs sit under the ${perishable}-day perishable target; `
+      + `${fmt(over)} carry more than the ${ambient}-day ambient target. The middle is working stock.`);
+
+    window.Plotly.newPlot(host, [{
+      type: "bar",
+      x: bins.map((b) => b.label),
+      y: bins.map((b) => num(b.skus)),
+      marker: { color: bins.map(colour), opacity: 0.85 },
+      customdata: bins.map((b) => num(b.value)),
+      hovertemplate: "%{x} days of supply<br>%{y} SKUs<br>%{customdata:$,.0f} of stock<extra></extra>",
+    }], baseLayout(theme, {
+      height: 260,
+      xaxis: { title: "Days of supply", gridcolor: "rgba(0,0,0,0)", linecolor: theme.grid },
+      yaxis: { title: "SKUs", gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
+    }), { displayModeBar: false, responsive: true });
+  };
+
+  const drawMovement = (charts, theme) => {
+    const host = document.getElementById("inventoryMovementChart");
+    const data = charts?.movement;
+    if (!host || !data?.value?.length) return;
+
+    const palette = {
+      "Core / protect": theme.accent,
+      "Fast / lean": theme.info,
+      "Slow / cash tied": theme.warn,
+      "Tail / monitor": theme.text,
+    };
+    const groups = new Map();
+    data.value.forEach((value, i) => {
+      const key = data.quadrant[i] || "Unclassified";
+      if (!groups.has(key)) groups.set(key, { x: [], y: [], label: [], days: [] });
+      const bucket = groups.get(key);
+      bucket.x.push(num(data.usage[i]));
+      bucket.y.push(num(value));
+      bucket.label.push(data.label[i]);
+      bucket.days.push(data.days_supply[i]);
+    });
+
+    const slow = groups.get("Slow / cash tied");
+    if (slow) {
+      const tied = slow.y.reduce((a, b) => a + b, 0);
+      text("inventoryMovementRead",
+        `Each point is a SKU: weekly usage against inventory value, split at the portfolio medians. `
+        + `${fmt(slow.y.length)} SKUs in "slow / cash tied" hold ${money(tied)} — high value, low movement.`);
+    }
+
+    const traces = [...groups.entries()].map(([name, bucket]) => ({
+      // Deliberately `scatter`, not `scattergl`: the static build freezes every
+      // chart through `Plotly.toImage(..., {format:'svg'})`, and a WebGL trace
+      // has nothing for the SVG exporter to serialise - it would publish a
+      // blank frame. A few hundred SVG markers is well inside comfort.
+      type: "scatter", mode: "markers", name,
+      x: bucket.x, y: bucket.y,
+      customdata: bucket.label.map((label, i) => [label, bucket.days[i]]),
+      marker: { size: 7, opacity: 0.72, color: palette[name] || theme.text },
+      hovertemplate: "<b>%{customdata[0]}</b><br>%{x:,.1f} units/week<br>%{y:$,.0f} on hand<br>%{customdata[1]} days of supply<extra>" + name + "</extra>",
+    }));
+
+    window.Plotly.newPlot(host, traces, baseLayout(theme, {
+      height: 380,
+      showlegend: true,
+      legend: { orientation: "h", y: -0.18, font: { size: 10 } },
+      margin: { l: 68, r: 18, t: 12, b: 56 },
+      // Both axes are heavily skewed - a handful of SKUs carry most of the
+      // value - so a linear scale would stack every other point on the origin.
+      xaxis: { title: "Average weekly usage (units)", type: "log", gridcolor: theme.grid, linecolor: theme.grid },
+      yaxis: { title: "Inventory value", type: "log", tickprefix: "$", gridcolor: theme.grid, linecolor: theme.grid },
+    }), { displayModeBar: false, responsive: true });
+  };
+
+  const drawCharts = (payload) => {
+    const charts = payload?.charts;
+    if (!charts) return;
+    const draw = () => {
+      const theme = plotTheme();
+      try { drawPareto(charts, theme); } catch (error) { console.warn("pareto chart failed", error); }
+      try { drawCover(charts, theme); } catch (error) { console.warn("cover chart failed", error); }
+      try { drawMovement(charts, theme); } catch (error) { console.warn("movement chart failed", error); }
+    };
+    if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) window.ChartUtils.whenPlotlyReady(draw);
+    else if (window.Plotly) draw();
+  };
+
   const render = (payload) => {
     state.payload = payload;
     renderInsights(payload.insights);
@@ -128,6 +304,7 @@
     renderMatrix(payload.demand_matrix);
     renderSuppliers(payload.suppliers);
     renderTable(payload.table);
+    drawCharts(payload);
     text("inventorySource", payload.meta?.inventory_source || "Latest observed SKU inventory snapshot");
     document.getElementById("inventoryExportBtn").disabled = false;
   };
