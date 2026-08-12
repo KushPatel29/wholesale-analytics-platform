@@ -28,8 +28,15 @@ jobs:
           mkdir dist
           unzip -q /tmp/dist.zip -d dist
 
+      - name: Overlay the verified instant-load runtime
+        run: python scripts/patch_verified_static.py dist --version "${GITHUB_SHA::12}"
+
       - name: Check the build is actually static
-        run: python scripts/check_static_build.py dist
+        run: |
+          python scripts/check_static_build.py dist
+          pip install playwright
+          python -m playwright install --with-deps chromium
+          python scripts/check_static_no_network.py dist
 
       - uses: actions/setup-node@v5
         with:
