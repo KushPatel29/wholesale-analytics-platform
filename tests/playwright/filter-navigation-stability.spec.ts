@@ -31,8 +31,8 @@ async function waitForArmedFiltersChanged(page: Page, key: string): Promise<void
 
 async function expectFiltersHealthy(page: Page): Promise<void> {
   await expect(page.locator('#filtersApplySpinner')).toHaveClass(/d-none/);
-  await expect(page.locator('#filtersErrorBanner')).toBeHidden();
-  await expect(page.locator('#filtersRetryWrap')).toBeHidden();
+  await expect(page.locator('#filter-options')).toBeAttached();
+  await expect(page.locator('#GlobalFilters')).toHaveAttribute('data-filters-state', 'ready');
 }
 
 test.describe('Filter navigation stability', () => {

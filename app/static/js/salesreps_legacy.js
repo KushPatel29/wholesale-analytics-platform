@@ -42,8 +42,7 @@
     };
     if (window.filtersReady && typeof window.filtersReady.then === "function") {
       try {
-        const timeout = new Promise((resolve) => setTimeout(() => resolve(fallbackState()), 1500));
-        return await Promise.race([window.filtersReady, timeout]);
+        return await window.filtersReady;
       } catch (err) {
         console.warn("[salesreps] filtersReady rejected", err);
       }

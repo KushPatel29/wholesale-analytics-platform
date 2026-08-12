@@ -30,6 +30,10 @@ from app.services.filters import (
 
 logger = logging.getLogger(__name__)
 
+
+class FilterOptionsArtifactMissing(RuntimeError):
+    """Raised when a runtime caller asks for an option set the build did not package."""
+
 OPTIONS_TTL_MINUTES = int(os.getenv("FILTER_OPTIONS_TTL_MINUTES", os.getenv("FILTER_OPTIONS_TTL", "1060")))
 OPTIONS_TTL_SECONDS = max(60, OPTIONS_TTL_MINUTES * 60)
 OPTIONS_STALE_TTL_MINUTES = max(OPTIONS_TTL_MINUTES, int(os.getenv("FILTER_OPTIONS_STALE_TTL_MINUTES", "2880")))
@@ -821,8 +825,8 @@ def _clamp_window_to_data(params: Any) -> Any:
     in JavaScript and sends an explicit end of *today*, so the key changed every
     midnight - which meant the cache built into the demo image had a one-day
     shelf life. From day two, every visitor to a container that had been up for
-    a week paid the full uncached build, and on a free-tier box that exceeded
-    the client's 20-second timeout and rendered "Options request timed out".
+    a week paid the full uncached build, and on a free-tier box the client gave
+    up before the option list arrived.
 
     Clamping to the cutoff makes the key stable for as long as the dataset is,
     which is the life of the image.
@@ -853,6 +857,7 @@ def get_filter_options(
     *,
     use_cache: bool = True,
     requested_keys: Any = None,
+    allow_compute: bool = True,
 ) -> Dict[str, Any]:
     params = _clamp_window_to_data(normalize_filters(filters))
     scope_payload = scope or {}
@@ -879,6 +884,8 @@ def get_filter_options(
         return payload
 
     if not use_cache:
+        if not allow_compute:
+            raise FilterOptionsArtifactMissing(f"No precomputed filter options for key {key}.")
         payload = _build()
         payload.setdefault("meta", {})
         payload["meta"]["cache_key"] = key
@@ -906,6 +913,8 @@ def get_filter_options(
                     hit = True
                     prebuilt_hit = True
                 else:
+                    if not allow_compute:
+                        raise FilterOptionsArtifactMissing(f"No precomputed filter options for key {key}.")
                     result, hit = _OPTIONS_CACHE.get_or_compute(key, OPTIONS_TTL_SECONDS, _build)
                     if not hit:
                         prebuilt_cache.save("filter-options", key, result)
@@ -952,6 +961,7 @@ def load_filter_options(
     *,
     requested_keys: Any = None,
     use_cache: bool = True,
+    allow_compute: bool = True,
 ) -> Dict[str, Any]:
     """
     Call the active options loader while tolerating older/narrower call signatures.
@@ -992,6 +1002,8 @@ def load_filter_options(
         kwargs["requested_keys"] = requested_keys
     if accepts_kwargs or "use_cache" in accepted_names:
         kwargs["use_cache"] = use_cache
+    if accepts_kwargs or "allow_compute" in accepted_names:
+        kwargs["allow_compute"] = allow_compute
 
     if accepts_scope:
         return loader(filters, scope_payload, **kwargs)
@@ -1079,9 +1091,9 @@ def inline_options_bootstrap(
       for the same window and miss the entry the other caller warmed. Serving
       every dimension also means the browser has nothing left to defer, which
       is what takes the page to zero options requests rather than one fewer.
-    - **Never raise.** A page that renders without embedded options is merely
-      back to fetching them; a page that 500s because the embed failed is worse
-      than the problem being solved.
+    - **Never raise.** A missing artifact degrades to the options already in
+      the server-rendered selects. It must never resurrect a page-load fetch,
+      and it must not turn an analytics page into a 500 either.
     """
     try:
         from flask import current_app, request, session
@@ -1101,11 +1113,17 @@ def inline_options_bootstrap(
                 sticky_enabled=bool(current_app.config.get("STICKY_FILTERS", True)),
             )
         scope_payload = scope if scope is not None else scope_from_user(user)
+        prebuilt_read = str(os.getenv("DEMO_PREBUILT_CACHE_READ", "")).strip().lower() in {"1", "true", "yes", "on"}
+        prebuilt_write = str(os.getenv("DEMO_PREBUILT_CACHE_WRITE", "")).strip().lower() in {"1", "true", "yes", "on"}
         payload = load_filter_options(
             normalize_filters(filters),
             scope_payload,
             requested_keys=OPTION_KEYS,
             use_cache=True,
+            # Production demo requests must read the artifact packaged by the
+            # image build. Development may still build it locally, and the
+            # build command explicitly enables writes before rendering pages.
+            allow_compute=not prebuilt_read or prebuilt_write,
         )
     except Exception:
         logger.exception("filters.inline_options_failed")

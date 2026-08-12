@@ -145,25 +145,9 @@ class TestWarmup:
         assert "sort_by=priority" in extras["/api/inventory/bundle"]
         assert all("date_type=fiscal" in v for v in extras.values())
 
-    def test_warms_the_filter_options_every_page_requests(self):
-        """The deferred options call runs on every page and was the slowest XHR
-        on the ones that render server-side."""
-        phases = {phase for _, phase, _ in warmup.FILTER_OPTION_PHASES}
-        assert phases == {"bootstrap", "deferred"}
-        assert "customers" in warmup.PAGES_WITH_FILTER_OPTIONS
-
-    def test_deferred_filter_options_are_warmed_with_the_date_window(self):
-        """
-        The deferred call is the expensive one - about ten seconds cold - and
-        the page sends it with the window and every dimension. Warmed without
-        the window it lands under a different key and stays cold.
-        """
-        deferred = [p for p in warmup.FILTER_OPTION_PHASES if p[1] == "deferred"]
-        assert deferred, "no deferred phase configured"
-        dimensions, _, with_window = deferred[0]
-        assert with_window is True
-        for required in ("customers", "products", "suppliers", "sales_reps"):
-            assert required in dimensions
+    def test_does_not_warm_filter_options_endpoint(self):
+        """Filter options are embedded in HTML; warming the old XHR hides regressions."""
+        assert all("/api/filters/options" not in path for path in warmup.primary_paths())
 
     def test_bundle_warmup_uses_the_window_the_front_end_sends(self):
         """
@@ -464,11 +448,9 @@ class TestWarmupOrder:
     """
     Order matters more than coverage on a cold container.
 
-    Every page blocks on /api/filters/options before it renders a number, and
-    the front end aborts that request client-side. Warming it last - after
-    eleven pages and six bundles, each paced two seconds apart - meant a
-    visitor arriving in the first minute got `filters.init.degraded` and a
-    page with no filters, while the warm-up primed things nobody had asked for.
+    Filter options are embedded before the browser sees the page. The warm-up
+    must therefore cover actual data bundles without ever touching the retired
+    options XHR; warming it would conceal a page-load regression.
     """
 
     @staticmethod
@@ -487,18 +469,9 @@ class TestWarmupOrder:
         warmup._warm(object())
         return captured["gm"]
 
-    def test_filter_options_are_warmed_before_any_page(self, monkeypatch):
+    def test_filter_options_are_not_a_warmup_request(self, monkeypatch):
         paths = self._primary_paths(monkeypatch)
-        first_options = next(i for i, p in enumerate(paths) if p.startswith("/api/filters/options"))
-        first_page = next(i for i, p in enumerate(paths) if not p.startswith("/api/") and not p.startswith("/overview/api/"))
-        assert first_options < first_page, (
-            "the endpoint every page blocks on must be warmed before the pages themselves"
-        )
-
-    def test_both_option_phases_for_the_landing_page_come_first(self, monkeypatch):
-        paths = self._primary_paths(monkeypatch)
-        assert "phase=bootstrap" in paths[0] and "page=overview" in paths[0]
-        assert "phase=deferred" in paths[1] and "page=overview" in paths[1]
+        assert all("/api/filters/options" not in path for path in paths)
 
     def test_the_landing_bundle_precedes_the_other_bundles(self, monkeypatch):
         paths = self._primary_paths(monkeypatch)

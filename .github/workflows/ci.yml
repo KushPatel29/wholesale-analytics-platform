@@ -102,3 +102,4 @@ jobs:
         run: |
           python build_static.py --out dist --scopes current_fy --no-drilldowns --clean
           python scripts/check_static_build.py dist
+          python scripts/check_static_no_network.py dist

@@ -123,48 +123,15 @@ SECONDARY_PATHS: tuple[str, ...] = (
     "/salesreps/",
 )
 
-# The XHRs the pages fire after render. Warming the HTML alone was not enough:
-# a page came back in a second or two and then sat waiting on these, which is
-# where the work actually happens.
+# The data requests pages fire after render. Filter options are deliberately
+# absent: every page embeds them in its HTML, so warming an options endpoint
+# would hide a regression in the zero-request bootstrap contract.
 #
 # The query strings below are copied from what the front end actually sends,
 # because the cache key is built from the request arguments - a bundle warmed
 # without `_sections`, or without `date_type`, lands under a different key and
 # the visitor still pays full price. Verified by loading each page and reading
 # its network entries.
-PAGES_WITH_FILTER_OPTIONS: tuple[str, ...] = (
-    "overview",
-    "stakeholder-report",
-    "customers",
-    "products",
-    "inventory",
-    "suppliers",
-    "regions",
-    "salesreps",
-)
-
-# (dimensions, phase, whether the page sends the date window with it).
-# The deferred call carries the window and is the expensive one - about ten
-# seconds cold on the hosted box. Warming it without the window produced a
-# different cache key and left it cold.
-#
-# The requested dimension list is *also* part of the cache key, and the front
-# end sends one of two lists depending on how it bootstrapped: every dimension
-# when it restored from the DOM or from storage, and only the five it does not
-# already hold when it bootstrapped from the network (filters-enhanced.js,
-# `deferredDimensions`). Warming only the eight-dimension shape meant a
-# first-time visitor - who takes the network path, and is exactly the person
-# this cache exists for - asked for the five-dimension key and missed every
-# time. Both shapes are warmed; they cost one extra entry each.
-_DEFERRED_ALL = "statuses,regions,methods,customers,sales_reps,suppliers,products,protein_groups"
-_DEFERRED_REMAINING = "customers,sales_reps,suppliers,products,protein_groups"
-
-FILTER_OPTION_PHASES: tuple[tuple[str, str, bool], ...] = (
-    ("statuses,regions,methods", "bootstrap", False),
-    (_DEFERRED_ALL, "deferred", True),
-    (_DEFERRED_REMAINING, "deferred", True),
-)
-
 # endpoint -> extra arguments the page sends alongside the date window.
 BUNDLE_ENDPOINTS: tuple[tuple[str, str], ...] = (
     ("/api/stakeholder-report/bundle", "date_type=fiscal&_gf=1"),
@@ -224,25 +191,7 @@ def primary_paths() -> tuple[str, ...]:
     """Return the exact default requests used by the documented demo login."""
     window = _default_window_query()
 
-    def _options_path(page: str, dimensions: str, phase: str, with_window: bool) -> str:
-        if with_window:
-            return (
-                f"/api/filters/options?{window}&date_type=fiscal&_gf=1"
-                f"&dimensions={dimensions}&page={page}&phase={phase}"
-            )
-        return f"/api/filters/options?dimensions={dimensions}&page={page}&phase={phase}"
-
-    landing_options = tuple(
-        _options_path("overview", dimensions, phase, with_window)
-        for dimensions, phase, with_window in FILTER_OPTION_PHASES
-    )
     landing = ("/overview/api/bundle?" + window + "&date_type=fiscal&_gf=1", "/")
-    other_options = tuple(
-        _options_path(page, dimensions, phase, with_window)
-        for page in PAGES_WITH_FILTER_OPTIONS
-        if page != "overview"
-        for dimensions, phase, with_window in FILTER_OPTION_PHASES
-    )
     other_bundles = tuple(
         f"{endpoint}?{window}&{extra}"
         for endpoint, extra in BUNDLE_ENDPOINTS
@@ -269,9 +218,7 @@ def primary_paths() -> tuple[str, ...]:
     )
     remaining_pages = tuple(path for path in WARMUP_PATHS if path not in landing)
     return (
-        landing_options
-        + landing
-        + other_options
+        landing
         + other_bundles
         + product_lazy_bundles
         + filtered_server_pages

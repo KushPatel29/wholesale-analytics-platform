@@ -1,0 +1,24 @@
+name: Keep live demo warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-live-demo-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Require the live demo to be ready
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 5 --max-time 45 \
+            https://wholesale-analytics-platform.onrender.com/healthz

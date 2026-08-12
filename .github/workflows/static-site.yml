@@ -65,7 +65,9 @@ jobs:
         run: python build_static.py --out dist --clean
 
       - name: Check the build is actually static
-        run: python scripts/check_static_build.py dist
+        run: |
+          python scripts/check_static_build.py dist
+          python scripts/check_static_no_network.py dist
 
       - uses: actions/setup-node@v5
         with:

@@ -143,13 +143,23 @@ def options() -> Any:
     started = time.perf_counter()
     payload_error = None
     try:
-        payload = filters_service.get_filter_options(params, scope, requested_keys=requested_dimensions)
+        payload = filters_service.get_filter_options(
+            params,
+            scope,
+            requested_keys=requested_dimensions,
+            allow_compute=False,
+        )
         validated_params, payload_meta = filters_service.sanitize_filters_against_options(params, payload)
         if payload_meta.get("sanitized"):
             params = validated_params
             if sticky_enabled and not v2_mode:
                 write_sticky_filters_to_session(session, params, user_id=current_user.get_id())
-            payload = filters_service.get_filter_options(params, scope, requested_keys=requested_dimensions)
+            payload = filters_service.get_filter_options(
+                params,
+                scope,
+                requested_keys=requested_dimensions,
+                allow_compute=False,
+            )
         merged_filter_meta = _merge_filter_meta(_meta, payload_meta)
     except Exception as exc:
         payload_error = exc

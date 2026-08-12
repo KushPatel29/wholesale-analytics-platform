@@ -5474,8 +5474,7 @@
     };
     if (window.filtersReady && typeof window.filtersReady.then === "function") {
       try {
-        const timeout = new Promise((resolve) => setTimeout(() => resolve(fallback()), 1500));
-        return await Promise.race([window.filtersReady, timeout]);
+        return await window.filtersReady;
       } catch (_e) {
         return fallback();
       }

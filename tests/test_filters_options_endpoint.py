@@ -80,6 +80,43 @@ def test_filters_options_etag_and_schema(monkeypatch, authed_client):
     assert resp_304.get_data() in (b"",)
 
 
+def test_filters_options_endpoint_is_prebuilt_only(monkeypatch, authed_client):
+    """The retained endpoint may read an artifact but must never query facts."""
+    captured = {}
+
+    def _stub(*_args, **kwargs):
+        captured["allow_compute"] = kwargs.get("allow_compute")
+        return copy.deepcopy(_stub_options_payload())
+
+    monkeypatch.setattr("app.services.filters_service.get_filter_options", _stub)
+    resp = authed_client.get("/api/filters/options")
+
+    assert resp.status_code == 200
+    assert captured["allow_compute"] is False
+
+
+def test_prebuilt_only_miss_never_calls_fact_builder(monkeypatch):
+    from app.core.cache_manager import TTLValueCache
+
+    monkeypatch.setattr(filters_service, "_OPTIONS_CACHE", TTLValueCache(maxsize=2))
+    monkeypatch.setattr(filters_service, "_OPTIONS_STALE_CACHE", TTLValueCache(maxsize=2))
+    monkeypatch.setattr(filters_service.fact_store, "cache_buster", lambda: "prebuilt-only-test")
+    monkeypatch.setattr(filters_service.prebuilt_cache, "load", lambda *_args, **_kwargs: None)
+
+    def _must_not_build(*_args, **_kwargs):
+        raise AssertionError("fact-table option builder was called")
+
+    monkeypatch.setattr(filters_service, "_options_payload", _must_not_build)
+
+    with pytest.raises(filters_service.FilterOptionsArtifactMissing):
+        filters_service.get_filter_options(
+            {},
+            {"scope_mode": "all", "scope_hash": "prebuilt-only"},
+            requested_keys=("regions",),
+            allow_compute=False,
+        )
+
+
 def test_filters_schema_uses_canonical_field_names(authed_client):
     resp = authed_client.get("/api/filters/schema")
     assert resp.status_code == 200

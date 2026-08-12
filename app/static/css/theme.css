@@ -665,26 +665,6 @@ a:focus {
   border-radius: 999px;
 }
 
-.filters-loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: var(--wa-surface);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  border-radius: inherit;
-  z-index: 30;
-}
-
-.filters-loading-overlay .spinner-border {
-  color: var(--wa-primary);
-}
-
-.filters-loading-overlay .fw-semibold {
-  color: var(--wa-primary);
-}
-
 #filtersToggleIcon {
   transition: transform 0.3s ease;
 }
@@ -1789,19 +1769,6 @@ a:focus {
 
 .filters-shell .msx-footnote {
   color: var(--wa-text);
-}
-
-.filters-loading-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--wa-surface);
-  backdrop-filter: blur(5px);
-  z-index: 20;
 }
 
 @media (max-width: 991.98px) {
@@ -3154,11 +3121,6 @@ body.theme-wa-future {
   background: linear-gradient(180deg, var(--wa-surface), var(--wa-surface));
   border-color: var(--wa-hairline);
   box-shadow: var(--wa-shadow-xs);
-}
-
-.theme-wa-future .filters-loading-overlay {
-  background: var(--wa-surface);
-  backdrop-filter: blur(16px);
 }
 
 .theme-wa-future .alert {
@@ -4930,29 +4892,6 @@ body.theme-wa-future .filters-shell .msx,
 body.theme-wa-future .filters-actions {
   border-color: var(--wa-hairline);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-}
-
-body.theme-wa-future .filters-loading-overlay {
-  display: none;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  background: var(--wa-surface);
-  backdrop-filter: none !important;
-}
-
-body.theme-wa-future #GlobalFilters[data-filters-state="bootstrapping"] .filters-loading-overlay:not(.d-none) {
-  display: flex;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-
-body.theme-wa-future #GlobalFilters:not([data-filters-state="bootstrapping"]) .filters-loading-overlay {
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
 }
 
 body.theme-wa-future .bg-light {

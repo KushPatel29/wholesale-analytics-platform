@@ -83,9 +83,9 @@ def gm_client(app):
     return client
 
 
-def _bootstrap_payload(html: str) -> dict:
-    match = re.search(r'id="filtersBootstrapData"[^>]*>(.*?)</script>', html, re.S)
-    assert match, "the filter bar did not render its bootstrap script tag"
+def _inline_options_payload(html: str) -> dict:
+    match = re.search(r'id="filter-options"[^>]*>(.*?)</script>', html, re.S)
+    assert match, "the filter bar did not render its inline option script tag"
     return json.loads(match.group(1))
 
 
@@ -100,8 +100,8 @@ def test_page_embeds_filter_options(gm_client, label, path):
     resp = gm_client.get(path, follow_redirects=True)
     assert resp.status_code == 200, f"{path} returned {resp.status_code}"
 
-    payload = _bootstrap_payload(resp.get_data(as_text=True))
-    options = (payload.get("options_payload") or {}).get("options") or {}
+    payload = _inline_options_payload(resp.get_data(as_text=True))
+    options = payload.get("options") or {}
     assert options, f"{label} embedded no filter options; the bar will fetch them"
 
     empty = [d for d in CLIENT_DIMENSIONS if not options.get(d)]
@@ -110,6 +110,37 @@ def test_page_embeds_filter_options(gm_client, label, path):
         f"dimension it did not receive, which puts the request back on the "
         f"load path."
     )
+
+
+def test_filter_options_cannot_return_to_the_page_load_path():
+    """Source-level tripwire for the blocker that previously gated every page."""
+    template = (ROOT / "app" / "templates" / "_filters.html").read_text(encoding="utf-8")
+    client = (ROOT / "app" / "static" / "js" / "filters-enhanced.js").read_text(encoding="utf-8")
+
+    assert 'id="filter-options"' in template
+    for retired in (
+        "data-options-endpoint",
+        "filtersLoadingOverlay",
+        "filtersRetryBtn",
+        "filtersRetryWrap",
+        "filtersErrorBanner",
+        "Loading filters",
+        "Retry filters",
+    ):
+        assert retired not in template, f"retired filter loading UI returned: {retired}"
+
+    for retired in (
+        "/api/filters/options",
+        "fetchOptions",
+        "hydrateOptions",
+        "refreshOptionsInBackground",
+        "Options request timed out",
+        "Loading filters",
+        "Retry filters",
+    ):
+        assert retired not in client, f"retired page-load option request returned: {retired}"
+
+    assert 'parseInlineJson("filter-options")' in client
 
 
 def test_department_dimension_resolves_to_a_real_column():
@@ -273,3 +304,12 @@ def test_templates_do_not_animate_their_loading_strings():
         "a timer is writing loading text - that is a staged narrative, not "
         "progress:\n  " + "\n  ".join(suspicious)
     )
+
+
+def test_pages_do_not_race_inline_filters_against_artificial_waits():
+    offenders = []
+    for path in (ROOT / "app" / "static" / "js").glob("*.js"):
+        source = path.read_text(encoding="utf-8")
+        if "Promise.race([window.filtersReady" in source or "setTimeout(resolve, 250)" in source:
+            offenders.append(path.name)
+    assert not offenders, "artificial filter-readiness waits remain in: " + ", ".join(offenders)

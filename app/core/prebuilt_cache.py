@@ -15,6 +15,7 @@ import gzip
 import hashlib
 import os
 import pickle
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,8 @@ _TRUE_VALUES = {"1", "true", "yes", "on"}
 # in the browser while this cache kept serving the pre-fix series.
 _BUILDER_GLOBS = ("services/*_bundle.py", "services/bundle_*.py")
 _build_id_cache: str | None = None
+_runtime_ready_cache: bool | None = None
+_runtime_ready_lock = threading.Lock()
 
 
 def _enabled(name: str) -> bool:
@@ -102,6 +105,30 @@ def load(namespace: str, key: str) -> Any | None:
         return envelope.get("value")
     except (OSError, EOFError, pickle.PickleError, AttributeError, ValueError):
         return None
+
+
+def runtime_ready() -> bool:
+    """Load and validate the packaged filter artifacts before health is ready."""
+    global _runtime_ready_cache
+    if not _enabled("DEMO_PREBUILT_CACHE_READ"):
+        return True
+    if _runtime_ready_cache is True:
+        return True
+    with _runtime_ready_lock:
+        if _runtime_ready_cache is True:
+            return True
+        root = _cache_dir()
+        option_dir = root / "filter-options" if root is not None else None
+        files = sorted(option_dir.glob("*.pickle.gz")) if option_dir and option_dir.is_dir() else []
+        # Reading through `load` verifies the trusted envelope, key, format and
+        # builder fingerprint. The payload is small, and the immutable image
+        # means this check only has to pass once per process.
+        ready = bool(files) and all(
+            load("filter-options", path.name.removesuffix(".pickle.gz")) is not None for path in files
+        )
+        if ready:
+            _runtime_ready_cache = True
+        return ready
 
 
 def save(namespace: str, key: str, value: Any) -> bool:

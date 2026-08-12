@@ -633,7 +633,6 @@ def create_app() -> Flask:
             return {
                 "filter_api": {
                     "schema_url": url_for("filters_api.schema"),
-                    "options_url": url_for("filters_api.options"),
                     "apply_url": url_for("filters_actions.apply_filters"),
                     "reset_url": url_for("filters_actions.reset_filters"),
                     "dataset_version": _fact_store.cache_buster(),
@@ -645,7 +644,6 @@ def create_app() -> Flask:
             return {
                 "filter_api": {
                     "schema_url": "/api/filters/schema",
-                    "options_url": "/api/filters/options",
                     "apply_url": "/filters/apply",
                     "reset_url": "/filters/reset",
                     "dataset_version": "",
@@ -1098,11 +1096,13 @@ def create_app() -> Flask:
     @app.get("/healthz")
     def healthz():  # pragma: no cover - trivial
         from datetime import datetime, timezone
+        from app.core import prebuilt_cache
 
+        ready = prebuilt_cache.runtime_ready()
         return jsonify(
-            status="ok",
+            status="ok" if ready else "starting",
             time=datetime.now(tz=timezone.utc).isoformat(),
-        ), 200
+        ), 200 if ready else 503
 
     # Short aliases for auth routes (kept for backward compatibility)
     @app.get("/login")

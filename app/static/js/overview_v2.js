@@ -1163,14 +1163,13 @@
     };
     if (window.filtersReady && typeof window.filtersReady.then === "function") {
       try {
-        const timeout = new Promise((resolve) => setTimeout(() => resolve(fallback()), 1500));
-        await Promise.race([window.filtersReady, timeout]);
+        await window.filtersReady;
         return;
       } catch (_err) {
         return;
       }
     }
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    return fallback();
   }
 
   function renderContext(context) {

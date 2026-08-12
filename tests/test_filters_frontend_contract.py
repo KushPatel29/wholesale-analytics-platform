@@ -12,19 +12,6 @@ def test_filters_enhanced_frontend_contract(app):
         assert "const filters = getAppliedFilters();" in body
         assert "APPLY_ACK_TIMEOUT_MS" in body
         assert "dispatchGlobalFiltersApply" in body
-        # Pin that the budgets exist and stand in the right relation, not the
-        # numbers themselves. These are tuning values for whatever box the demo
-        # is on - a cold free-tier container needs far longer than a warm one -
-        # and asserting the literal turned a deliberate retune into a failure.
-        import re as _re
-
-        bootstrap_ms = int(_re.search(r"BOOTSTRAP_OPTIONS_TIMEOUT_MS = (\d+)", body).group(1))
-        deferred_ms = int(_re.search(r"DEFERRED_OPTIONS_TIMEOUT_MS = (\d+)", body).group(1))
-        assert bootstrap_ms >= 5000, "the bootstrap budget must survive a cold container"
-        assert deferred_ms > bootstrap_ms, (
-            "the deferred call fetches every dimension and is the expensive one, "
-            "so it must not be given a tighter budget than the bootstrap call"
-        )
         assert 'const BOOTSTRAP_OPTION_DIMENSIONS = ["statuses", "regions", "methods"];' in body
         assert 'const FISCAL_PRESETS = new Set([' in body
         assert '"current_fy"' in body
@@ -34,17 +21,17 @@ def test_filters_enhanced_frontend_contract(app):
         assert '"current_fm"' in body
         assert '"previous_fm"' in body
         assert '"fytd_comparison"' in body
-        assert 'const SCHEMA_REQUEST_TIMEOUT_MS = 2200;' in body
         assert "const getFiscalPeriods = (referenceDate = new Date()) => {" in body
-        assert 'passthrough.set("phase", String(phase || "interactive"));' in body
         assert 'if (!state.applyInFlight && !state.applyAckTimer)' in body
         assert 'const readInlineSchemaPayload = () => {' in body
         assert 'const readInlineOptionsPayload = () => {' in body
-        assert 'const optionsPayload = payload?.options_payload;' in body
+        assert 'parseInlineJson("filter-options")' in body
         assert 'applySchemaPayload(inlineSchemaPayload);' in body
         assert 'filters.schema.bootstrap.inline-missing' in body
-        assert 'applySchemaPayload(await fetchSchema({ timeoutMs: SCHEMA_REQUEST_TIMEOUT_MS }), { hydrateForm: false });' not in body
-        assert "refreshOptionsInBackground" in body
+        assert "fetchOptions" not in body
+        assert "hydrateOptions" not in body
+        assert "refreshOptionsInBackground" not in body
+        assert "/api/filters/options" not in body
         assert 'const OPTIONS_STORAGE_KEY = "wholesale.globalFilterOptions.v1";' in body
         assert 'const hydratePersistedOptions = ({ dimensions = [], syncFilters = false, source = "local-storage" } = {}) => {' in body
         assert 'else window.dispatchEvent(new CustomEvent("globalFilters:apply"' not in body
@@ -78,34 +65,22 @@ def test_global_filters_frontend_contract(app):
         assert "window.dispatchGlobalFiltersApply(detail);" in body
 
 
-def test_filters_enhanced_background_refresh_hardening_contract(app):
+def test_filters_enhanced_inline_bootstrap_contract(app):
     with app.test_client() as client:
         resp = client.get("/static/js/filters-enhanced.js")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
 
-        assert "optionsAbortMeta" in body
-        assert 'state.optionsAbortMeta.reason = "superseded";' in body
-        assert 'abortMeta.reason = "timeout";' in body
-        assert 'if (abortMeta.reason === "superseded") {' in body
-        assert 'recordOptionsFailure({ phase: requestPhase });' in body
-        assert 'const requestKeyParams = new URLSearchParams(passthrough);' in body
-        assert 'requestKeyParams.delete("phase");' in body
         assert 'const hasHydratableOptionsPayload = (payload) => {' in body
-        assert 'const resolveInlineDeferredDimensions = (payload) =>' in body
         assert 'let bootstrappedFromInline = false;' in body
         assert 'const inlineOptionsPayload = readInlineOptionsPayload();' in body
         assert 'bootstrappedFromInline = !!state.lastOptionsPayload;' in body
         assert 'bootstrappedFromStorage = !!hydratePersistedOptions({' in body
         assert "state.lastHealthyOptionsPayload" in body
-        assert "BACKGROUND_REFRESH_MIN_INTERVAL_MS" in body
-        assert "shouldSkipBackgroundRefresh(refreshKey)" in body
-        assert 'const hasUsableOptions = !!(state.lastHealthyOptionsPayload || state.lastOptionsPayload);' in body
-        assert 'state.optionsState = hasUsableOptions && state.lastHealthyOptionsPayload ? "ready" : hasUsableOptions ? "failed_partial" : "failed";' in body
-        assert 'if (hasUsableOptions) {' in body
-        assert "Using last known values while live refresh is unavailable." in body
-        assert 'console.warn(`filters.options.${phase}.fail page=${pageKey()} err=${err?.message || err}`);' in body
-        assert 'showFilterError(err?.message || "Some filter options are temporarily unavailable.");' in body
+        assert 'setLifecycle("failed_partial", "inline-options-missing");' in body
+        assert "BOOTSTRAP_OPTIONS_TIMEOUT_MS" not in body
+        assert "DEFERRED_OPTIONS_TIMEOUT_MS" not in body
+        assert "filtersRetryBtn" not in body
 
 
 @pytest.mark.parametrize(

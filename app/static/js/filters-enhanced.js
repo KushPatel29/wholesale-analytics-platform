@@ -112,17 +112,11 @@
   };
 
   const state = {
-    schemaEndpoint: "/api/filters/schema",
-    optionsEndpoint: "/api/filters/options",
     apiApplyEndpoint: "/api/filters/apply",
     apiResetEndpoint: "/api/filters/reset",
-    optionsAbort: null,
-    optionsAbortMeta: null,
-    optionsRequestId: 0,
     optionsEtag: null,
     lastOptionsPayload: null,
     lastHealthyOptionsPayload: null,
-    optionsFetchMs: null,
     datasetVersion: null,
     scopePayload: null,
     scopeNotice: "",
@@ -137,7 +131,6 @@
     initState: "idle",
     initStartedAt: null,
     retryTimer: null,
-    deferredHydrationTimer: null,
     activeDimensionKey: "",
     loadedDimensions: new Set(),
     optionsState: "idle",
@@ -150,12 +143,7 @@
     pendingHash: "",
     applyAckTimer: null,
     applyInFlight: false,
-    optionsFailureCount: 0,
-    optionsCooldownUntil: 0,
     dimensionHealth: {},
-    optionsInFlightKey: "",
-    optionsInFlightPromise: null,
-    backgroundRefreshTracker: Object.create(null),
     applySequence: 0,
     activeApplyId: "",
     activeApplyTargetUrl: "",
@@ -164,21 +152,7 @@
 
   const INIT_RETRY_MS = 2000;
   const INIT_RETRY_INTERVAL = 100;
-  // These are client-side aborts, so a timeout here reports as a filter
-  // failure even when the server answered fine a moment later - a flat
-  // 7003ms in the timings is this giving up, not the backend being slow.
-  //
-  // The old values assumed a warm process. On a free-tier container that has
-  // just come back from idle, the first request also pays the container start
-  // and a cold DuckDB, and both phases blew through their budget: the page
-  // rendered with `filters.init.degraded` and no filters at all. Being slow
-  // once is better than being broken once.
-  const BOOTSTRAP_OPTIONS_TIMEOUT_MS = 20000;
-  const DEFERRED_OPTIONS_TIMEOUT_MS = 45000;
-  const SCHEMA_REQUEST_TIMEOUT_MS = 2200;
   const APPLY_ACK_TIMEOUT_MS = 12000;
-  const OPTIONS_FAILURE_COOLDOWN_MS = 15000;
-  const BACKGROUND_REFRESH_MIN_INTERVAL_MS = 8000;
   const OPTIONS_STORAGE_KEY = "wholesale.globalFilterOptions.v1";
   const OPTIONS_STORAGE_TTL_MS = 1000 * 60 * 60 * 48;
   const INIT_EVENTS = ["DOMContentLoaded", "pageshow"];
@@ -240,8 +214,6 @@
     all_time: "All Time",
   };
 
-  const isBackgroundOptionsPhase = (phase) => ["deferred", "post-apply"].includes(String(phase || "").toLowerCase());
-  const isTimeoutError = (err) => /timed out/i.test(String(err?.message || err || ""));
   const clonePayload =
     typeof structuredClone === "function"
       ? (value) => structuredClone(value)
@@ -256,14 +228,6 @@
     Array.isArray(items)
       ? items.map((item) => (item && typeof item === "object" ? { ...item } : item))
       : [];
-
-  const recordOptionsFailure = ({ phase = "interactive" } = {}) => {
-    if (isBackgroundOptionsPhase(phase)) return;
-    state.optionsFailureCount += 1;
-    if (state.optionsFailureCount >= 3) {
-      state.optionsCooldownUntil = Date.now() + OPTIONS_FAILURE_COOLDOWN_MS;
-    }
-  };
 
   const rootEl = () => document.getElementById("GlobalFilters");
 
@@ -288,56 +252,6 @@
     state.activeApplyId = "";
     state.activeApplyTargetUrl = "";
     state.activeApplyQs = "";
-  };
-
-  const clearDeferredHydrationTimer = () => {
-    if (!state.deferredHydrationTimer) return;
-    window.clearTimeout(state.deferredHydrationTimer);
-    state.deferredHydrationTimer = null;
-  };
-
-  const dimensionsKey = (dimensions = []) => normalizeDimensionList(dimensions).join(",");
-
-  const backgroundRefreshKey = ({ dimensions = [], phase = "interactive" } = {}) =>
-    `${String(phase || "interactive").toLowerCase()}:${dimensionsKey(dimensions)}:${state.appliedQs || window.location.search || ""}`;
-
-  const shouldSkipBackgroundRefresh = (key) => {
-    if (!key || !state.lastOptionsPayload) return false;
-    const entry = state.backgroundRefreshTracker[key];
-    if (!entry || !entry.at) return false;
-    return Date.now() - Number(entry.at) < BACKGROUND_REFRESH_MIN_INTERVAL_MS;
-  };
-
-  const markBackgroundRefresh = (key, status) => {
-    if (!key) return;
-    state.backgroundRefreshTracker[key] = {
-      at: Date.now(),
-      status: String(status || ""),
-    };
-  };
-
-  const clearFilterError = () => {
-    const banner = document.getElementById("filtersErrorBanner");
-    const retryWrap = document.getElementById("filtersRetryWrap");
-    const retryBtn = document.getElementById("filtersRetryBtn");
-    if (banner) {
-      banner.classList.add("d-none");
-      banner.textContent = "";
-    }
-    retryWrap?.classList.add("d-none");
-    retryBtn?.classList.add("d-none");
-  };
-
-  const showFilterError = (message) => {
-    const banner = document.getElementById("filtersErrorBanner");
-    const retryWrap = document.getElementById("filtersRetryWrap");
-    const retryBtn = document.getElementById("filtersRetryBtn");
-    if (banner) {
-      banner.textContent = message || "Filters are temporarily unavailable.";
-      banner.classList.remove("d-none");
-    }
-    retryWrap?.classList.remove("d-none");
-    retryBtn?.classList.remove("d-none");
   };
 
   const parseInlineJson = (id) => {
@@ -1327,11 +1241,6 @@
   const resolveBootstrapDimensions = (filters) =>
     normalizeDimensionList([...BOOTSTRAP_OPTION_DIMENSIONS, ...selectedDimensionKeys(filters)]);
 
-  const resolveRemainingDimensions = () =>
-    normalizeDimensionList(
-      DIMENSIONS.map((config) => config.key).filter((key) => !state.loadedDimensions.has(key))
-    );
-
   const resolveDomBootstrapDimensions = () =>
     normalizeDimensionList(
       DIMENSIONS.filter((config) => document.getElementById(config.id)).map((config) => config.key)
@@ -1426,13 +1335,6 @@
       return stableList(payload?.filters?.[key]).length > 0;
     });
   };
-
-  const resolveInlineDeferredDimensions = (payload) =>
-    normalizeDimensionList([
-      ...resolveRemainingDimensions(),
-      ...(payload?.meta?.partial_failures || []),
-      ...(payload?.meta?.stale_dimensions || []),
-    ]);
 
   const optionsStorageUserId = () => {
     try {
@@ -1617,7 +1519,6 @@
       datasetVersion: state.datasetVersion,
       scope: state.scopePayload,
       optionsEtag: state.optionsEtag,
-      optionsMs: state.optionsFetchMs,
     };
     if (state.readyPublished) return state.lastReadyDetail;
     state.readyPublished = true;
@@ -1659,7 +1560,6 @@
     enhanceSelects();
     ensureDefaultPreset();
     updateNoticeBanner(state.scopeNotice);
-    clearFilterError();
     if (syncFilters) {
       state.baselineHash = filtersHash(activeFilters);
     }
@@ -1668,8 +1568,6 @@
     if (!mergedPayload?.meta?.degraded && hasUsableOptionsPayload(mergedPayload, Array.from(state.loadedDimensions))) {
       state.lastHealthyOptionsPayload = clonePayload(mergedPayload);
     }
-    state.optionsFailureCount = 0;
-    state.optionsCooldownUntil = 0;
     if (persist) persistOptionsPayload(mergedPayload);
     return mergedPayload;
   };
@@ -1680,61 +1578,6 @@
     const payload = buildDomOptionsPayload({ dimensions: requested, source });
     if (!hasUsableOptionsPayload(payload, requested)) return null;
     return applyOptionsPayload(payload, { syncFilters, persist: false });
-  };
-
-  const hydrateOptions = async ({ dimensions = [], timeoutMs = null, syncFilters = false, bypassCooldown = false, phase = "interactive" } = {}) => {
-    const requested = normalizeDimensionList(dimensions);
-    if (!requested.length) return state.lastOptionsPayload;
-    state.optionsState = "loading";
-    const payload = await fetchOptions({ dimensions: requested, timeoutMs, bypassCooldown, phase });
-    if (!payload) return state.lastOptionsPayload;
-    return applyOptionsPayload(payload, { syncFilters, persist: true });
-  };
-
-  const refreshOptionsInBackground = ({ dimensions = [], timeoutMs = DEFERRED_OPTIONS_TIMEOUT_MS, phase = "interactive" } = {}) => {
-    const requested = normalizeDimensionList(dimensions);
-    if (!requested.length) return Promise.resolve(state.lastOptionsPayload);
-    const refreshKey = backgroundRefreshKey({ dimensions: requested, phase });
-    if (shouldSkipBackgroundRefresh(refreshKey)) {
-      dlog("filters options refresh skipped", { page: pageKey(), phase, dimensions: requested });
-      return Promise.resolve(state.lastOptionsPayload);
-    }
-    markBackgroundRefresh(refreshKey, "started");
-    return hydrateOptions({ dimensions: requested, timeoutMs, phase })
-      .then((payload) => {
-        markBackgroundRefresh(refreshKey, "success");
-        if (state.optionsState === "ready" || state.optionsState === "failed_partial") clearFilterError();
-        return payload;
-      })
-      .catch((err) => {
-        markBackgroundRefresh(refreshKey, "failed");
-        if (!state.lastOptionsPayload) {
-          const persistedPayload = hydratePersistedOptions({
-            dimensions: requested,
-            syncFilters: false,
-            source: `local-storage-${phase}-fallback`,
-          });
-          if (!persistedPayload) {
-            const fallbackPayload = buildDomOptionsPayload({ dimensions: requested, source: `dom-${phase}-fallback` });
-            if (hasUsableOptionsPayload(fallbackPayload, requested)) {
-              applyOptionsPayload(fallbackPayload, { syncFilters: false, persist: false });
-            }
-          }
-        }
-        const hasUsableOptions = !!(state.lastHealthyOptionsPayload || state.lastOptionsPayload);
-        state.optionsState = hasUsableOptions && state.lastHealthyOptionsPayload ? "ready" : hasUsableOptions ? "failed_partial" : "failed";
-        if (hasUsableOptions) {
-          if (isBackgroundOptionsPhase(phase) || isTimeoutError(err)) {
-            dlog("filters options fallback", { page: pageKey(), phase, error: err?.message || err });
-          } else {
-            console.warn(`filters.options.${phase}.fail page=${pageKey()} err=${err?.message || err}`);
-          }
-        } else {
-          console.error(`filters.options.${phase}.fail page=${pageKey()} err=${err?.message || err}`);
-          showFilterError(err?.message || "Some filter options are temporarily unavailable.");
-        }
-        return state.lastOptionsPayload;
-      });
   };
 
   const enhanceSelects = () => {
@@ -1968,7 +1811,7 @@
     if (icon) icon.classList.toggle("d-none", state.lifecycle === "applying");
     const pendingState = document.getElementById("filtersPendingState");
     if (pendingState && state.lifecycle === "bootstrapping") {
-      pendingState.textContent = "Loading filters";
+      pendingState.textContent = "Applied state";
       pendingState.dataset.pending = "0";
     } else if (pendingState && state.lifecycle === "failed_partial") {
       pendingState.textContent = hasPendingChanges ? "Pending changes" : "Partial filter outage";
@@ -2473,9 +2316,6 @@
 
       const handlerMode = ((document.body.dataset && document.body.dataset.filtersHandler) || "ssr").toLowerCase();
       const isReset = window.__gfResetPending === true;
-      const banner = document.getElementById("filtersErrorBanner");
-      const retryWrap = document.getElementById("filtersRetryWrap");
-      const retryBtn = document.getElementById("filtersRetryBtn");
       try {
         let appliedFilters = filters;
         let responsePayload = null;
@@ -2495,12 +2335,6 @@
         if (window.history && typeof window.history.replaceState === "function") {
           window.history.replaceState({}, "", targetUrl);
         }
-        if (banner) {
-          banner.classList.add("d-none");
-          banner.textContent = "";
-        }
-        retryWrap?.classList.add("d-none");
-        retryBtn?.classList.add("d-none");
         window.__gfResetPending = false;
 
         if (handlerMode !== "ajax") {
@@ -2520,12 +2354,6 @@
           setLifecycle("failed_partial", "apply-timeout");
           const fallbackUrl = state.activeApplyTargetUrl || targetUrl;
           clearActiveApply();
-          if (banner) {
-            banner.textContent = "The page did not confirm the filter refresh. Reloading once to recover.";
-            banner.classList.remove("d-none");
-          }
-          retryWrap?.classList.remove("d-none");
-          retryBtn?.classList.remove("d-none");
           updateActionState();
           if (fallbackUrl) {
             filterNavigate(fallbackUrl, { reason: "apply-ack-timeout" });
@@ -2547,12 +2375,6 @@
         clearApplyAckTimer();
         clearActiveApply();
         setLifecycle(state.readyPublished ? "failed_partial" : "failed_fatal", "apply-request");
-        if (banner) {
-          banner.textContent = err?.message || "Failed to apply filters.";
-          banner.classList.remove("d-none");
-        }
-        retryWrap?.classList.remove("d-none");
-        retryBtn?.classList.remove("d-none");
         updateActionState();
         console.error("filters apply failed", err);
       }
@@ -2593,18 +2415,10 @@
       } catch (_err) {
         /* ignore */
       }
-      clearDeferredHydrationTimer();
-      refreshOptionsInBackground({
-        dimensions: Array.from(state.loadedDimensions),
-        timeoutMs: DEFERRED_OPTIONS_TIMEOUT_MS,
-        phase: "post-apply",
-      });
     });
   };
 
   const applyRootConfig = (root) => {
-    state.schemaEndpoint = root.dataset.schemaEndpoint || state.schemaEndpoint;
-    state.optionsEndpoint = root.dataset.optionsEndpoint || state.optionsEndpoint;
     state.apiApplyEndpoint = root.dataset.apiApplyEndpoint || state.apiApplyEndpoint;
     state.apiResetEndpoint = root.dataset.apiResetEndpoint || state.apiResetEndpoint;
     state.datasetVersion = root.dataset.datasetVersion || state.datasetVersion;
@@ -2618,8 +2432,7 @@
   };
 
   const readInlineOptionsPayload = () => {
-    const payload = readInlineSchemaPayload();
-    const optionsPayload = payload?.options_payload;
+    const optionsPayload = parseInlineJson("filter-options");
     return optionsPayload && typeof optionsPayload === "object" ? optionsPayload : null;
   };
 
@@ -2662,157 +2475,7 @@
     return payload;
   };
 
-  const fetchSchema = async ({ timeoutMs = SCHEMA_REQUEST_TIMEOUT_MS } = {}) => {
-    const controller = new AbortController();
-    let timeoutId = null;
-    if (timeoutMs && Number(timeoutMs) > 0 && typeof window !== "undefined" && typeof window.setTimeout === "function") {
-      timeoutId = window.setTimeout(() => {
-        try {
-          controller.abort();
-        } catch (_err) {
-          /* ignore */
-        }
-      }, Number(timeoutMs));
-    }
-    try {
-      const response = await authFetch(state.schemaEndpoint, { credentials: "same-origin", signal: controller.signal });
-      if (!response.ok) throw new Error(`Schema request failed (${response.status})`);
-      return response.json();
-    } catch (err) {
-      if (err?.name === "AbortError" && timeoutMs) {
-        throw new Error(`Schema request timed out (${timeoutMs}ms)`);
-      }
-      throw err;
-    } finally {
-      if (timeoutId) window.clearTimeout(timeoutId);
-    }
-  };
-
-  const refreshSchemaInBackground = ({ timeoutMs = SCHEMA_REQUEST_TIMEOUT_MS } = {}) => {
-    return fetchSchema({ timeoutMs })
-      .then((payload) => applySchemaPayload(payload, { hydrateForm: false }))
-      .catch((err) => {
-        console.warn(`filters.schema.refresh.fail page=${pageKey()} err=${err?.message || err}`);
-        return null;
-      });
-  };
-
-  const fetchOptions = async ({ dimensions = [], timeoutMs = null, bypassCooldown = false, phase = "interactive" } = {}) => {
-    const requestPhase = String(phase || "interactive");
-    if (!bypassCooldown && state.optionsCooldownUntil && Date.now() < state.optionsCooldownUntil) {
-      throw new Error("Filters are temporarily cooling down after repeated failures. Use Retry filters.");
-    }
-    const locationParams = new URLSearchParams(window.location.search || "");
-    const passthrough = new URLSearchParams();
-    locationParams.forEach((value, key) => {
-      if (!FILTER_KEY_REGEX.test(key)) return;
-      passthrough.append(key, value);
-    });
-
-    const requestedDimensions = normalizeDimensionList(dimensions);
-    if (requestedDimensions.length) {
-      passthrough.set("dimensions", requestedDimensions.join(","));
-    }
-    passthrough.set("page", pageKey());
-    passthrough.set("phase", String(phase || "interactive"));
-
-    const url = passthrough.toString() ? `${state.optionsEndpoint}?${passthrough.toString()}` : state.optionsEndpoint;
-    const requestKeyParams = new URLSearchParams(passthrough);
-    requestKeyParams.delete("phase");
-    const requestKey = JSON.stringify({
-      url: requestKeyParams.toString() ? `${state.optionsEndpoint}?${requestKeyParams.toString()}` : state.optionsEndpoint,
-      etag: state.optionsEtag || "",
-    });
-    if (state.optionsInFlightPromise && state.optionsInFlightKey === requestKey) {
-      return state.optionsInFlightPromise;
-    }
-    const headers = {};
-    if (state.optionsEtag) headers["If-None-Match"] = state.optionsEtag;
-
-    if (state.optionsAbort) {
-      try {
-        if (state.optionsAbortMeta && state.optionsAbortMeta.controller === state.optionsAbort) {
-          state.optionsAbortMeta.reason = "superseded";
-        }
-        state.optionsAbort.abort();
-      } catch (err) {
-          /* ignore */
-      }
-    }
-
-    state.optionsRequestId += 1;
-    const requestId = state.optionsRequestId;
-    const controller = new AbortController();
-    const abortMeta = { controller, reason: "", phase: requestPhase };
-    state.optionsAbort = controller;
-    state.optionsAbortMeta = abortMeta;
-    let timeoutId = null;
-    if (timeoutMs && Number(timeoutMs) > 0 && typeof window !== "undefined" && typeof window.setTimeout === "function") {
-      timeoutId = window.setTimeout(() => {
-        try {
-          abortMeta.reason = "timeout";
-          controller.abort();
-        } catch (err) {
-          /* ignore */
-        }
-      }, Number(timeoutMs));
-    }
-    const startedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
-    let requestPromise = null;
-    requestPromise = (async () => {
-      try {
-        const response = await authFetch(url, { credentials: "same-origin", headers, signal: controller.signal });
-        if (requestId !== state.optionsRequestId) return null;
-        const durationMs = Math.round(((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()) - startedAt);
-        state.optionsFetchMs = durationMs;
-        if (response.status === 304 && state.lastOptionsPayload) {
-          return state.lastOptionsPayload;
-        }
-        if (!response.ok) throw new Error(`Options request failed (${response.status})`);
-        state.optionsEtag = response.headers.get("ETag") || state.optionsEtag;
-        const payload = await response.json();
-        if (requestId !== state.optionsRequestId) return null;
-        return payload;
-      } catch (err) {
-        if (requestId !== state.optionsRequestId) {
-          return null;
-        }
-        if (err?.name === "AbortError") {
-          if (abortMeta.reason === "superseded") {
-            return null;
-          }
-          if (abortMeta.reason === "timeout" && timeoutMs) {
-            recordOptionsFailure({ phase: requestPhase });
-            throw new Error(`Options request timed out (${timeoutMs}ms)`);
-          }
-          return null;
-        }
-        recordOptionsFailure({ phase: requestPhase });
-        throw err;
-      } finally {
-        if (timeoutId) window.clearTimeout(timeoutId);
-        if (state.optionsAbort === controller) {
-          state.optionsAbort = null;
-        }
-        if (state.optionsAbortMeta === abortMeta) {
-          state.optionsAbortMeta = null;
-        }
-        if (state.optionsInFlightPromise === requestPromise) {
-          state.optionsInFlightPromise = null;
-          state.optionsInFlightKey = "";
-        }
-      }
-    })();
-    state.optionsInFlightKey = requestKey;
-    state.optionsInFlightPromise = requestPromise;
-    return requestPromise;
-  };
-
-  const bootstrap = async (root) => {
-    const overlay = root.querySelector("#filtersLoadingOverlay") || document.getElementById("filtersLoadingOverlay");
-    clearDeferredHydrationTimer();
-    clearFilterError();
-    overlay?.classList.remove("d-none");
+  const bootstrap = (root) => {
     setLifecycle("bootstrapping");
 
     try {
@@ -2868,42 +2531,9 @@
         });
       }
       if (!bootstrappedFromInline && !bootstrappedFromDom && !bootstrappedFromStorage) {
-        try {
-          await hydrateOptions({
-            dimensions: bootstrapDimensions,
-            timeoutMs: BOOTSTRAP_OPTIONS_TIMEOUT_MS,
-            syncFilters: true,
-            phase: "bootstrap",
-          });
-        } catch (optionsErr) {
-          const persistedPayload = hydratePersistedOptions({
-            dimensions: bootstrapDimensions,
-            syncFilters: false,
-            source: "local-storage-bootstrap-fallback",
-          });
-          const domFallbackPayload = persistedPayload
-            ? null
-            : hydrateDomOptions({
-                dimensions: bootstrapDimensions,
-                syncFilters: true,
-                source: "dom-bootstrap-fallback",
-              });
-          if (persistedPayload || domFallbackPayload) {
-            bootstrappedFromStorage = bootstrappedFromStorage || !!persistedPayload;
-            bootstrappedFromDom = bootstrappedFromDom || !!domFallbackPayload;
-            state.optionsState = "ready";
-            dlog("filters bootstrap fallback", {
-              page: pageKey(),
-              error: optionsErr?.message || optionsErr,
-              source: persistedPayload ? "local-storage" : "dom",
-            });
-          } else {
-            state.optionsState = "failed";
-            setLifecycle("failed_partial", "bootstrap-options");
-            console.error(`filters.options.bootstrap.fail page=${pageKey()} err=${optionsErr?.message || optionsErr}`);
-            showFilterError(optionsErr?.message || "Filters are temporarily unavailable.");
-          }
-        }
+        state.optionsState = "failed";
+        setLifecycle("failed_partial", "inline-options-missing");
+        console.error(`filters.options.inline-missing page=${pageKey()}`);
       }
 
       state.initState = "done";
@@ -2912,37 +2542,17 @@
         setLifecycle("ready");
       }
       if (state.lastOptionsPayload && state.optionsState === "ready") {
-        console.info(`filters.init.ok page=${pageKey()} options_ms=${state.optionsFetchMs ?? "n/a"} options_etag=${state.optionsEtag ?? "none"}`);
+        console.info(`filters.init.ok page=${pageKey()} options_source=inline options_etag=${state.optionsEtag ?? "none"}`);
       } else {
         console.warn(`filters.init.degraded page=${pageKey()} options_state=${state.optionsState}`);
-      }
-
-      const deferredDimensions = bootstrappedFromInline
-        ? resolveInlineDeferredDimensions(inlineOptionsPayload)
-        : bootstrappedFromDom || bootstrappedFromStorage
-          ? normalizeDimensionList(DIMENSIONS.map((config) => config.key))
-          : resolveRemainingDimensions();
-      if (deferredDimensions.length) {
-        state.deferredHydrationTimer = window.setTimeout(() => {
-          state.deferredHydrationTimer = null;
-          refreshOptionsInBackground({
-            dimensions: deferredDimensions,
-            timeoutMs: DEFERRED_OPTIONS_TIMEOUT_MS,
-            phase: "deferred",
-          });
-        }, bootstrappedFromInline || bootstrappedFromDom || bootstrappedFromStorage ? 100 : 250);
       }
       return detail;
     } catch (err) {
       state.initState = "failed";
       setLifecycle("failed_fatal", "bootstrap-fatal");
-      window.__FILTERS_READY = false;
-      readyDeferred.reject(err);
       console.error(`filters.init.fail page=${pageKey()} err=${err?.message || err}`);
-      showFilterError(err?.message || "Filters are temporarily unavailable.");
-      throw err;
+      return publishReady();
     } finally {
-      overlay?.classList.add("d-none");
       updateActionState();
     }
   };
@@ -2970,24 +2580,6 @@
       }
     });
 
-    document.getElementById("filtersRetryBtn")?.addEventListener("click", () => {
-      state.initStartedAt = null;
-      state.optionsFailureCount = 0;
-      state.optionsCooldownUntil = 0;
-      clearApplyAckTimer();
-      clearDeferredHydrationTimer();
-      if (state.optionsAbort) {
-        try {
-          state.optionsAbort.abort();
-        } catch (_err) {
-          /* ignore */
-        }
-      }
-      const shouldResetReady = state.initState !== "done" || !state.readyPublished;
-      state.initState = "idle";
-      if (shouldResetReady) setReadyDeferred();
-      initGlobalFilters("retry-click", true);
-    });
   };
 
   const initGlobalFilters = (source = "manual", force = false) => {
@@ -3024,8 +2616,8 @@
     applyRootConfig(root);
     wireListeners();
     state.initState = "in-progress";
-    dlog("filters init", { source, schema: state.schemaEndpoint, options: state.optionsEndpoint });
-    bootstrap(root).catch(() => {});
+    dlog("filters init", { source, options: "inline" });
+    bootstrap(root);
     return window.filtersReady;
   };
 

@@ -18,8 +18,6 @@
   'protein_groups',
   '_gf','_gf_reset'
 ] %}
-{% set _schema_url = filter_api.schema_url if filter_api is defined else '/api/filters/schema' %}
-{% set _options_url = filter_api.options_url if filter_api is defined else '/api/filters/options' %}
 {% set _apply_url = filter_api.apply_url if filter_api is defined else '/filters/apply' %}
 {% set _reset_url = filter_api.reset_url if filter_api is defined else '/filters/reset' %}
 {% set _api_apply_url = filter_api.api_apply_url if filter_api is defined else '/api/filters/apply' %}
@@ -28,7 +26,7 @@
 {% set _scope_bootstrap = access_scope.as_dict(include_allowed=False) if access_scope is defined and access_scope else {} %}
 {# Embed the option lists rather than letting the bar fetch them. A blueprint
    may pass `filter_options_bootstrap` itself; otherwise every page picks the
-   payload up here, which is what keeps /api/filters/options off the load path
+   payload up here, which keeps the retired options XHR off the load path
    app-wide instead of on the one page that remembered to do it. #}
 {% set _inline_options_bootstrap = filter_options_bootstrap if filter_options_bootstrap is defined and filter_options_bootstrap else inline_filter_options() %}
 {% set _filters_bootstrap = {
@@ -38,12 +36,9 @@
   'meta': {
     'filters_notice': g.effective_filters_meta.notice if g.effective_filters_meta is defined else ''
   },
-  'options_payload': _inline_options_bootstrap,
 } %}
 
 <div class="page-card filters-shell shadow-soft mb-4" id="GlobalFilters"
-     data-schema-endpoint="{{ _schema_url }}"
-     data-options-endpoint="{{ _options_url }}"
      data-api-apply-endpoint="{{ _api_apply_url }}"
      data-api-reset-endpoint="{{ _api_reset_url }}"
      data-dataset-version="{{ _dataset_version }}"
@@ -117,12 +112,6 @@
     </div>
   </div>
 
-  <div class="alert alert-danger d-none rounded-0 mb-0" id="filtersErrorBanner" role="alert"></div>
-  <div class="d-flex justify-content-end bg-white px-4 pt-2 pb-0 d-none" id="filtersRetryWrap">
-    <button class="btn btn-outline-danger btn-sm" type="button" id="filtersRetryBtn">
-      <i class="bi bi-arrow-clockwise me-1"></i>Retry filters
-    </button>
-  </div>
   <div class="alert alert-warning rounded-0 mb-0 {% if not (g.effective_filters_meta.notice if g.effective_filters_meta is defined else None) %}d-none{% endif %}" id="filtersNoticeBanner" role="status" aria-live="polite">
     {{ g.effective_filters_meta.notice if g.effective_filters_meta is defined else '' }}
   </div>
@@ -554,9 +543,9 @@
         </div>
       </form>
 
-      {# Not wrapped in an is_read_only guard: this section also carries
-         #filtersBootstrapData, which the filter bar reads on every page. The
-         write controls inside it are hidden individually instead. #}
+      {# Not wrapped in an is_read_only guard: this section also carries the
+         synchronous filter bootstrap JSON that every page reads. The write
+         controls inside it are hidden individually instead. #}
       <section class="filters-section filters-section--saved{% if is_read_only %} filters-section--readonly{% endif %}" id="savedViewsSection" aria-labelledby="savedViewsHeading">
         <div class="filters-section__header">
           <div>
@@ -640,6 +629,7 @@
         <input type="hidden" id="svNext" value="{{ _next_target }}">
         <input type="hidden" id="svCsrf" value="{{ csrf_token() }}">
         <script type="application/json" id="filtersBootstrapData">{{ _filters_bootstrap | tojson }}</script>
+        <script type="application/json" id="filter-options">{{ _inline_options_bootstrap | tojson }}</script>
         <script type="application/json" id="filtersSavedViewsData">{{ _saved_views_ui | tojson }}</script>
       </section>
 
@@ -657,10 +647,4 @@
     </div>
   </div>
 
-  <div class="filters-loading-overlay d-none" id="filtersLoadingOverlay">
-    <div class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-    <div class="mt-2 fw-semibold">Loading filters...</div>
-  </div>
 </div>

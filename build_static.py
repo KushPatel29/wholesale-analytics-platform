@@ -51,6 +51,12 @@ except Exception:  # pragma: no cover - dotenv is a dev convenience
 
 os.environ.setdefault("RATELIMIT_ENABLED", "false")
 os.environ.setdefault("DEMO_WARMUP", "0")
+# A static build is itself the cache-producing phase.  Force writer mode here
+# so a developer cannot accidentally inherit the runtime read-only setting
+# from .env and emit pages with empty filter options.
+os.environ.setdefault("DEMO_PREBUILT_CACHE_DIR", str(ROOT / "cache" / "demo-prebuilt"))
+os.environ["DEMO_PREBUILT_CACHE_READ"] = "1"
+os.environ["DEMO_PREBUILT_CACHE_WRITE"] = "1"
 # Own log file: sharing the app's rotating handler with a running dev server
 # makes every rotation raise on Windows and buries the build output.
 os.environ.setdefault("LOG_PATH", "logs/build_static.jsonl")
@@ -349,21 +355,6 @@ STATIC_RUNTIME = r"""
 
   function bind() { bindTabs(); bindPreset(); bindTheme(); }
   bind();
-
-  var warm = function () {
-    var cfg = config();
-    (cfg.presets || []).filter(function (p) { return p !== cfg.preset; })
-      .forEach(function (p) { getFragment(p).catch(function () {}); });
-    document.querySelectorAll("template[data-static-src]").forEach(function (template) {
-      fetch(template.dataset.staticSrc, {credentials:"same-origin", cache:"force-cache", priority:"low"})
-        .then(function (response) { return response.ok ? response.text() : ""; })
-        .then(function (html) {
-          if (html) template.innerHTML = html.replaceAll("__STATIC_ROOT__/", String(cfg.siteRoot || ""));
-        }).catch(function () {});
-    });
-  };
-  if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 2500 });
-  else window.addEventListener("load", warm, { once: true });
 })();
 """
 
@@ -381,6 +372,11 @@ STATIC_CRITICAL_CSS = """
 .static-detail-tabs__list button.is-active{background:var(--wa-accent);color:#fff}
 .static-detail-tabs__panel[hidden]{display:none}.static-chart{display:block;width:100%;height:auto;min-height:180px;
   object-fit:contain}
+/* Keep prerendered sections in the document while deferring layout and paint
+   for sections below the viewport. This breaks one large first-paint layout
+   into small scroll-time layouts and keeps the main thread responsive. */
+body[data-static-page] main section{content-visibility:auto;contain-intrinsic-size:auto 320px}
+body[data-static-page] #productsAvailability{content-visibility:auto;contain-intrinsic-size:auto 560px}
 body[data-static-page] *,body[data-static-page] *::before,body[data-static-page] *::after{
   animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media(max-width:640px){.static-scope-note{width:100%;margin-left:0}.static-scope-bar select{width:100%}}
@@ -1318,8 +1314,7 @@ class Builder:
                     "options": preset_options,
                     "filterOptions": page.evaluate(
                         """() => { try {
-                          const raw = JSON.parse(document.getElementById('filtersBootstrapData')?.textContent || '{}');
-                          return raw.options_payload || {};
+                          return JSON.parse(document.getElementById('filter-options')?.textContent || '{}');
                         } catch (_) { return {}; } }"""
                     ),
                     "config": config_payload,
