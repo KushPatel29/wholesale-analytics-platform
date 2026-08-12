@@ -13,7 +13,7 @@
         A portfolio BI platform built on a synthetic retail dataset. No signup, nothing to install.
       </p>
 
-      <a class="auth-demo__cta" href="{{ url_for('auth.demo_login') }}">
+      <a class="auth-demo__cta" href="{{ url_for('auth.demo_login', next=request.args.get('next')) if request.args.get('next') else url_for('auth.demo_login') }}">
         <span class="auth-demo__cta-label">Explore demo</span>
         <span class="auth-demo__cta-sub">read-only &middot; one click &middot; no typing</span>
       </a>

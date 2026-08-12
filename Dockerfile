@@ -140,6 +140,7 @@ ENV DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt \
 # out and leaves within seconds. Warm-up strategy and demo-ness are separate
 # questions and now have separate flags.
 ENV DEMO_MODE=1
+ENV DEMO_STATIC_SITE_URL=https://kushpatel29.github.io/wholesale-analytics-platform
 
 EXPOSE 10000
 

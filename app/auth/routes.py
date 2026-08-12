@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
+import os
 from flask_login import login_user, logout_user, current_user, login_required
 from datetime import datetime, timezone
 import pyotp
@@ -119,10 +120,17 @@ def demo_login():
     """
     from ..core.demo_accounts import DEMO_VIEWER_USERNAME, demo_logins_enabled
 
+    def landing_url() -> str:
+        requested = request.args.get("next")
+        if requested and str(requested).startswith("/"):
+            return str(requested)
+        static_root = str(os.getenv("DEMO_STATIC_SITE_URL", "")).strip().rstrip("/")
+        return f"{static_root}/" if static_root else url_for("dashboard.index")
+
     if not demo_logins_enabled():
         return redirect(url_for("auth.login"))
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return redirect(landing_url())
 
     user = get_user_by_username(DEMO_VIEWER_USERNAME)
     if user is None or not getattr(user, "is_active", False):
@@ -140,11 +148,7 @@ def demo_login():
     except Exception:
         pass
     session["is_demo_session"] = True
-    next_url = request.args.get("next") or url_for("dashboard.index")
-    # Never bounce off-site on the strength of a query parameter.
-    if not str(next_url).startswith("/"):
-        next_url = url_for("dashboard.index")
-    return redirect(next_url)
+    return redirect(landing_url())
 
 
 @bp.route("/logout")

@@ -144,7 +144,7 @@ async def _measure(browser: Browser, base_url: str, item: dict[str, Any], settle
         "drilldown"
         if path.startswith("drilldowns/")
         else "preset"
-        if path.startswith("presets/") or "/presets/" in path
+        if path.startswith(("presets/", "scopes/")) or "/presets/" in path or "/scopes/" in path
         else "workspace"
     )
     return {

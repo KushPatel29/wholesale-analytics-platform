@@ -260,6 +260,40 @@ def init_extensions(app: Flask) -> None:
         app.config.setdefault("CACHE_REDIS_URL", cache_config["CACHE_REDIS_URL"])
     cache.init_app(app)
 
+    @app.before_request
+    def _serve_public_demo_workspaces_from_cdn():
+        """Keep analytics traffic off the memory-constrained live workflow host."""
+        static_root = str(os.getenv("DEMO_STATIC_SITE_URL", "")).strip().rstrip("/")
+        if not static_root or request.method != "GET":
+            return None
+        try:
+            from flask_login import current_user
+
+            if not getattr(current_user, "is_authenticated", False):
+                return None
+        except Exception:
+            return None
+
+        workspaces = {
+            "/": "",
+            "/overview/": "",
+            "/customers/": "customers/",
+            "/products/": "products/",
+            "/inventory/": "inventory/",
+            "/regions/": "regions/",
+            "/suppliers/": "suppliers/",
+            "/labor/": "labor/",
+            "/salesreps/": "salesreps/",
+            "/planning/": "planning/",
+        }
+        suffix = workspaces.get(request.path)
+        if suffix is None:
+            return None
+        target = f"{static_root}/{suffix}"
+        if request.query_string:
+            target = f"{target}?{request.query_string.decode('utf-8', errors='ignore')}"
+        return redirect(target, code=302)
+
     # Jinja filters (formatting)
     app.jinja_env.filters["currency"] = fmt_currency
     app.jinja_env.filters["percent"] = fmt_percent

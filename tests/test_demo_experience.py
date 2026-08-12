@@ -52,6 +52,46 @@ class TestDemoCredentialsPanel:
         for hint in demo_accounts.demo_login_hints():
             assert hint["note"].strip(), f"{hint['username']} has no explanation"
 
+    def test_login_keeps_returns_destination(self, app, monkeypatch):
+        monkeypatch.setenv("DEMO_MODE", "1")
+        body = app.test_client().get("/auth/login?next=/returns/").get_data(as_text=True)
+        assert "next=/returns/" in body or "next=/returns/%2F" in body
+
+
+class TestStaticDemoRouting:
+    def test_authenticated_workspace_uses_cdn(self, app, monkeypatch):
+        from app.auth.models import get_user_by_username
+
+        monkeypatch.setenv(
+            "DEMO_STATIC_SITE_URL",
+            "https://kushpatel29.github.io/wholesale-analytics-platform",
+        )
+        user = get_user_by_username(demo_accounts.DEMO_VIEWER_USERNAME)
+        assert user is not None
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(user.id)
+            sess["_fresh"] = True
+        response = client.get("/suppliers/?date_preset=current_fy")
+        assert response.status_code == 302
+        assert response.location == (
+            "https://kushpatel29.github.io/wholesale-analytics-platform/"
+            "suppliers/?date_preset=current_fy"
+        )
+
+    def test_returns_stays_on_live_host(self, app, monkeypatch):
+        from app.auth.models import get_user_by_username
+
+        monkeypatch.setenv("DEMO_STATIC_SITE_URL", "https://static.example.test")
+        user = get_user_by_username(demo_accounts.DEMO_VIEWER_USERNAME)
+        assert user is not None
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(user.id)
+            sess["_fresh"] = True
+        response = client.get("/returns/")
+        assert response.location != "https://static.example.test/returns/"
+
 
 class TestCatalogueIsShared:
     def test_seeder_reads_the_same_catalogue(self):
