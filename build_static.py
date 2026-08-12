@@ -94,6 +94,20 @@ PAGES: tuple[Page, ...] = (
              "metric": "revenue", "horizon_months": "6", "granularity": "monthly",
              "include_current_month": "1", "v2": "1"}}),
     Page("customers", "Customers", "/customers/", "customers/index.html"),
+    # The four tabs along the top of the customers page. They were never in
+    # this list, so `rewrite_links` fell through to its last case and pointed
+    # them at the live app: a reviewer clicking "Cohorts" left the CDN and woke
+    # a spun-down Render container, which is the exact latency the static site
+    # exists to avoid. They are server-rendered and fetch nothing on load, so
+    # they prerender like any other page.
+    #
+    # (The cohort heatmap's cell drilldown does fetch, but only on click, so it
+    # cannot fail the build; that one interaction stays live-app only.)
+    Page("customers_kpis", "Customer KPIs", "/customers/kpis", "customers/kpis.html",
+         apis=("/api/customers/bundle",)),
+    Page("customers_rfm", "Customer RFM", "/customers/rfm", "customers/rfm.html"),
+    Page("customers_cohorts", "Customer Cohorts", "/customers/cohorts", "customers/cohorts.html"),
+    Page("customers_clv", "Customer CLV", "/customers/clv", "customers/clv.html"),
     # The browser asks for product sections independently as they enter the
     # viewport. Capture the complete bundle once: the browser-freeze pass below
     # scrolls through every section and then removes this payload, so its build-
@@ -409,6 +423,13 @@ SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
     # it froze at 227 nodes and 1,552px against budgets of 1,499 and 3,999.
     "inventory": ("#InventoryApp > section", 5),
     "customers": ("main.app-main > section", 4),
+    # The four customer tabs are long analytical workbenches - RFM froze at
+    # 118.6 KB and 1,630 nodes, and KPIs at 4,179px, all past budget. Same
+    # treatment as every other page: keep the scan, move the depth into
+    # build-rendered tabs. Cohorts is short enough to keep whole.
+    "customers_kpis": ("main.app-main > section", 4),
+    "customers_rfm": ("main.app-main > section", 4),
+    "customers_clv": ("main.app-main > section", 4),
     "labor": ("#LaborPage > section", 3),
     "planning": ("#reportContent > .report-section", 2),
     "regions": ("#RegionsOverviewV2App > section", 4),
