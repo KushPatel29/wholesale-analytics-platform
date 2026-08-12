@@ -140,13 +140,20 @@ async def _measure(browser: Browser, base_url: str, item: dict[str, Any], settle
         error = f"{type(exc).__name__}: {exc}"
     wall_ms = round((asyncio.get_running_loop().time() - started) * 1000, 1)
     await context.close()
-    page_type = "drilldown" if path.startswith("drilldowns/") else "preset" if "/presets/" in path else "workspace"
+    page_type = (
+        "drilldown"
+        if path.startswith("drilldowns/")
+        else "preset"
+        if path.startswith("presets/") or "/presets/" in path
+        else "workspace"
+    )
     return {
         "path": path,
         "url": url,
         "page": item.get("page") or "unknown",
         "preset": item.get("preset") or "",
         "page_type": page_type,
+        "html_file_kb": float(item.get("kb") or 0),
         "status": response.status if response is not None else 0,
         **details,
         "wall_ms": wall_ms,
@@ -235,7 +242,7 @@ def write_reports(rows: list[dict[str, Any]], output: Path, base_url: str, concu
             "ttfb_over_300ms": sum(float(row.get("ttfb_ms", 0)) >= 300 for row in rows),
             "tti_over_1000ms": sum(float(row.get("tti_ms", 0)) >= 1000 for row in rows),
             "task_at_least_50ms": sum(float(row.get("longest_task_ms", 0)) >= 50 for row in rows),
-            "html_over_100kb": sum(float(row.get("nav_encoded_bytes", 0)) > 100 * 1024 for row in rows),
+            "html_over_100kb": sum(float(row.get("html_file_kb", 0)) > 100 for row in rows),
             "dom_over_1500_nodes": sum(int(row.get("node_count", 0)) > 1500 for row in rows),
             "height_over_4000px": sum(int(row.get("height_px", 0)) > 4000 for row in rows),
         },
@@ -246,6 +253,7 @@ def write_reports(rows: list[dict[str, Any]], output: Path, base_url: str, concu
         "maximums": {
             "html_transfer_kb": round(max(float(row.get("nav_transfer_bytes", 0)) for row in rows) / 1024, 1),
             "html_encoded_kb": round(max(float(row.get("nav_encoded_bytes", 0)) for row in rows) / 1024, 1),
+            "html_file_kb": round(max(float(row.get("html_file_kb", 0)) for row in rows), 1),
             "total_transfer_kb": round(max(float(row.get("total_transfer_bytes", 0)) for row in rows) / 1024, 1),
             "node_count": max(int(row.get("node_count", 0)) for row in rows),
             "height_px": max(int(row.get("height_px", 0)) for row in rows),

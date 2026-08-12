@@ -51,12 +51,6 @@ except Exception:  # pragma: no cover - dotenv is a dev convenience
 
 os.environ.setdefault("RATELIMIT_ENABLED", "false")
 os.environ.setdefault("DEMO_WARMUP", "0")
-# A static build is itself the cache-producing phase.  Force writer mode here
-# so a developer cannot accidentally inherit the runtime read-only setting
-# from .env and emit pages with empty filter options.
-os.environ.setdefault("DEMO_PREBUILT_CACHE_DIR", str(ROOT / "cache" / "demo-prebuilt"))
-os.environ["DEMO_PREBUILT_CACHE_READ"] = "1"
-os.environ["DEMO_PREBUILT_CACHE_WRITE"] = "1"
 # Own log file: sharing the app's rotating handler with a running dev server
 # makes every rotation raise on Windows and buries the build output.
 os.environ.setdefault("LOG_PATH", "logs/build_static.jsonl")
@@ -1617,6 +1611,14 @@ def _root_placeholder(value: str) -> str:
 
 
 def main() -> int:
+    # A static build is itself the cache-producing phase. Force writer mode
+    # only when the command runs: test modules import this file to inspect its
+    # contract, and import-time environment mutations contaminated later cache
+    # tests in the same process.
+    os.environ.setdefault("DEMO_PREBUILT_CACHE_DIR", str(ROOT / "cache" / "demo-prebuilt"))
+    os.environ["DEMO_PREBUILT_CACHE_READ"] = "1"
+    os.environ["DEMO_PREBUILT_CACHE_WRITE"] = "1"
+
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="dist", help="output directory (default: dist)")

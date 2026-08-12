@@ -301,19 +301,8 @@ def _warm(app) -> None:
 
     started = time.perf_counter()
 
-    # The documented demo login goes first: every page, then the XHRs those
-    # pages fire, using the same arguments the front end sends.
-    # Order matters more than coverage.
-    #
-    # The filter options used to be warmed last, after eleven pages and six
-    # bundles - about thirty-five seconds of paced requests. Every page blocks
-    # on that endpoint before it renders a number, and the front end gives up
-    # on it after 7s (bootstrap) and 15s (deferred), so a visitor arriving in
-    # the first minute got `filters.init.degraded` and a page with no filters
-    # while the warm-up was busy priming things nobody had asked for yet.
-    #
-    # Warm what the landing page blocks on first: its filter options, then its
-    # bundle, then the page itself. Everything else follows.
+    # The documented demo login goes first. Options are already embedded in
+    # each page, so this walks only real page and analytics-bundle paths.
     _warm_user(app, primary, primary_paths())
 
     # Then the rest, so whichever account a visitor picks is already warm.
