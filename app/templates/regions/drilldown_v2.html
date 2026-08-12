@@ -1,6 +1,19 @@
 {% extends 'base.html' %}
 {% block title %}Region Detail | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ajax' %}
+{# All five charts here are Plotly, but `regions` is not one of the blueprints
+   base.html loads Plotly for, and regions_drilldown_v2.js renders once at
+   defer-time and never re-renders. So `window.Plotly` was permanently
+   undefined, every `renderX` returned early at its `typeof window.Plotly`
+   guard, and the page shipped five blank boxes - the empty-state elements stay
+   hidden too, because those are only shown for genuinely empty data.
+
+   That also cost the static build: with nothing drawn there was nothing to
+   freeze, so all 7 region drilldowns prerendered 5 empty frames each and then
+   had their payloads stripped, making the blanks permanent. Loading the
+   libraries here costs the static pages nothing - build_static.py removes
+   every <script> after it freezes the charts to SVG. #}
+{% set needs_early_charts = true %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/regions_drilldown_v2.css') }}">
 

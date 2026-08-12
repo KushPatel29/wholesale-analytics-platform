@@ -12,9 +12,19 @@
 {% set scorecard = executive_scorecard or summary.get('scorecard') or {} %}
 {% set churn_summary = churn_risk_summary or summary.get('churn_risk_summary') or {} %}
 
+{# `money`/`pct`/`qty` are the house rules in app/services/formatting.py, not the
+   legacy `currency`/`percent` filters. Using `currency` here is what printed the
+   company's revenue as `$8,402,380.27` on this page while Regions and Suppliers
+   printed `$8,402,380` for the same figure under the same filter: `currency`
+   always emits two decimals, the house rules drop cents above $10,000.
+
+   `'%.1f'|format` and `'{:,.0f}'.format` are wrong for the same reason plus one
+   more - Python rounds 1.95 to 1.9 where Intl (and so app/static/js/format.js)
+   gives 2.0, so a server-rendered figure could disagree with the same figure
+   rendered in the browser. #}
 {% macro fmt_currency(value) -%}
   {% if value is not none and value == value %}
-    {{ value|currency }}
+    {{ value|money }}
   {% else %}
     <span class="text-muted">&mdash;</span>
   {% endif %}
@@ -22,7 +32,7 @@
 
 {% macro fmt_percent(value) -%}
   {% if value is not none and value == value %}
-    {{ '%.1f'|format(value|float) }}%
+    {{ value|pct }}
   {% else %}
     <span class="text-muted">&mdash;</span>
   {% endif %}
@@ -30,7 +40,7 @@
 
 {% macro fmt_int(value) -%}
   {% if value is not none and value == value %}
-    {{ '{:,.0f}'.format(value|float) }}
+    {{ value|qty }}
   {% else %}
     <span class="text-muted">&mdash;</span>
   {% endif %}
@@ -53,7 +63,15 @@
     <span class="badge text-bg-info">New</span>
   {% elif status == 'low_base' %}
     <span class="badge text-bg-secondary">Low base</span>
-    <span class="text-muted ms-1">{{ fmt_currency(delta) if metric_type != 'percent' else fmt_percent(delta) }}</span>
+    {# Dispatch on all three types, like the branch below. Testing only for
+       'percent' sent counts down the currency path, so a suppressed Orders
+       delta printed as `Low base $87.00`. #}
+    <span class="text-muted ms-1">
+      {%- if metric_type == 'percent' -%}{{ fmt_percent(delta) }}
+      {%- elif metric_type == 'int' -%}{{ fmt_int(delta) }}
+      {%- else -%}{{ fmt_currency(delta) }}
+      {%- endif -%}
+    </span>
   {% elif delta is none and delta_pct is none %}
     <span class="text-muted">No prior baseline</span>
   {% else %}

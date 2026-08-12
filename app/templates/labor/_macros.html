@@ -12,18 +12,22 @@
   </header>
 {%- endmacro %}
 
+{# House rules (app/services/formatting.py), not the legacy `currency` filter or
+   bare `%` formatting: these cards printed `$390,498.64` where every other
+   workspace prints a six-figure sum as whole dollars, and `integer` emitted the
+   raw value with no separators. #}
 {% macro metric_value(metric) -%}
   {% set fmt = metric.format or 'text' %}
   {% if fmt == 'currency' %}
-    {{ (metric.value|currency) if metric.value is not none else 'n/a' }}
+    {{ (metric.value|money) if metric.value is not none else 'n/a' }}
   {% elif fmt == 'percent' %}
-    {{ ('%0.1f%%'|format(metric.value * 100)) if metric.value is not none else 'n/a' }}
+    {{ ((metric.value * 100)|pct) if metric.value is not none else 'n/a' }}
   {% elif fmt == 'score' %}
     {{ ('%0.0f'|format(metric.value)) if metric.value is not none else 'n/a' }}
   {% elif fmt == 'integer' %}
-    {{ metric.value if metric.value is not none else 0 }}
+    {{ (metric.value|qty) if metric.value is not none else 0 }}
   {% elif fmt == 'number' %}
-    {{ ('%0.1f'|format(metric.value)) if metric.value is not none else 'n/a' }}
+    {{ (metric.value|dec(decimals=1)) if metric.value is not none else 'n/a' }}
   {% else %}
     {{ metric.value if metric.value not in (none, '') else 'n/a' }}
   {% endif %}

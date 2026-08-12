@@ -4,7 +4,7 @@
 {% block title %}Labor Intelligence | Northgate Retail Analytics{% endblock %}
 {% block head_extras %}
   {{ super() }}
-  {% set labor_asset_version = '20260809-final-cleanup-1' %}
+  {% set labor_asset_version = '20260812-house-format-1' %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/labor.css', v=labor_asset_version) }}">
 {% endblock %}
 {% block content %}
@@ -68,7 +68,7 @@
         </aside>
       </div>
       <div class="labor-summary-strip mt-4">
-        {{ mini_stat('Labor Cost', (hero.get('total_labor_cost') or 0)|currency, 'Paid hours ' ~ ('%0.1f'|format(hero.get('total_paid_hours') or 0)), 'primary') }}
+        {{ mini_stat('Labor Cost', (hero.get('total_labor_cost') or 0)|money, 'Paid hours ' ~ ((hero.get('total_paid_hours') or 0)|dec(decimals=1)), 'primary') }}
         {{ mini_stat('Stability Score', '%0.0f'|format(hero.get('stability_score') or 0) if hero.get('stability_score') is not none else 'n/a', 'Higher is more stable', 'info') }}
         {{ mini_stat('Top Department', hero.get('top_department') or 'n/a', 'Top worker ' ~ (hero.get('top_worker') or 'n/a'), 'info') }}
         {{ mini_stat('Top Category', hero.get('top_category') or 'n/a', 'Top driver ' ~ (hero.get('top_driver') or 'Stable'), 'info') }}
@@ -250,8 +250,8 @@
                     <a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a>
                     <div class="small text-muted">{{ row.focus_reason or 'Review department detail.' }}</div>
                   </td>
-                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
-                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
+                  <td class="text-end">{{ (row.paid_hours or 0)|dec(decimals=1) }}</td>
                   <td class="text-end">{{ (row.blended_rate|currency) if row.blended_rate is not none else 'n/a' }}</td>
                   <td class="text-end">{{ ('%0.1f%%'|format((row.premium_share_pct or 0) * 100)) if row.premium_share_pct is not none else 'n/a' }}</td>
                   <td class="text-end">{{ ('%0.1f%%'|format((row.absence_share_pct or 0) * 100)) if row.absence_share_pct is not none else 'n/a' }}</td>
@@ -291,8 +291,8 @@
           {% endif %}
         </div>
         <div class="labor-summary-strip mt-4">
-          {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Share ' ~ ('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100) if focus_summary.get('labor_cost_share_pct') is not none else 0), 'primary') }}
-          {{ mini_stat('Paid Hours', '%0.1f'|format(focus_summary.get('paid_hours') or 0), 'Hours share ' ~ ('%0.1f%%'|format((focus_summary.get('paid_hours_share_pct') or 0) * 100) if focus_summary.get('paid_hours_share_pct') is not none else 0), 'info') }}
+          {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|money, 'Share ' ~ ('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100) if focus_summary.get('labor_cost_share_pct') is not none else 0), 'primary') }}
+          {{ mini_stat('Paid Hours', (focus_summary.get('paid_hours') or 0)|dec(decimals=1), 'Hours share ' ~ ('%0.1f%%'|format((focus_summary.get('paid_hours_share_pct') or 0) * 100) if focus_summary.get('paid_hours_share_pct') is not none else 0), 'info') }}
           {{ mini_stat('Blended Rate', (focus_summary.get('blended_rate')|currency) if focus_summary.get('blended_rate') is not none else 'n/a', 'Driver ' ~ ((focus_summary.get('driver_label') or 'stable')|replace('-', ' ')), 'info') }}
           {{ mini_stat('Premium Share', ('%0.1f%%'|format((focus_summary.get('premium_share_pct') or 0) * 100)) if focus_summary.get('premium_share_pct') is not none else 'n/a', 'Absence ' ~ (('%0.1f%%'|format((focus_summary.get('absence_share_pct') or 0) * 100)) if focus_summary.get('absence_share_pct') is not none else 'n/a'), 'warning') }}
           {{ mini_stat('Priority Score', '%0.0f'|format(focus_summary.get('priority_score') or 0), focus_summary.get('risk_posture') or 'Stable', focus_summary.get('risk_tone') or 'success') }}
@@ -319,8 +319,8 @@
                         {% for row in department_focus.get('worker_rows', []) %}
                           <tr>
                             <td><a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a></td>
-                            <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
-                            <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                            <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
+                            <td class="text-end">{{ (row.paid_hours or 0)|dec(decimals=1) }}</td>
                             <td><span class="labor-tag labor-tag-{{ row.risk_tone or 'success' }}">{{ row.management_focus or 'review workload concentration' }}</span></td>
                           </tr>
                         {% else %}
@@ -341,7 +341,7 @@
                         {% for row in department_focus.get('category_rows', []) %}
                           <tr>
                             <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
-                            <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                            <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
                             <td class="text-end">{{ ('%0.1f%%'|format((row.share_display_pct or 0) * 100)) if row.share_display_pct is not none else 'n/a' }}</td>
                           </tr>
                         {% else %}
@@ -433,8 +433,8 @@
                     <a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a>
                     <div class="small text-muted">{{ row.activity_note or row.focus_reason }}</div>
                   </td>
-                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
-                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
+                  <td class="text-end">{{ (row.paid_hours or 0)|dec(decimals=1) }}</td>
                   <td class="text-end">
                     {{ ('%0.1f%%'|format((row.share_display_pct or 0) * 100)) if row.share_display_pct is not none else 'n/a' }}
                     <div class="small text-muted">{{ row.share_display_label or 'Primary share' }}</div>
@@ -472,7 +472,7 @@
             {% endif %}
           </div>
           <div class="labor-mini-stat-grid mt-4">
-            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Paid hours ' ~ ('%0.1f'|format(focus_summary.get('paid_hours') or 0)), 'primary') }}
+            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|money, 'Paid hours ' ~ ((focus_summary.get('paid_hours') or 0)|dec(decimals=1)), 'primary') }}
             {{ mini_stat('Primary Share', ('%0.1f%%'|format((focus_summary.get('share_display_pct') or 0) * 100)) if focus_summary.get('share_display_pct') is not none else 'n/a', focus_summary.get('share_display_label') or 'Primary share', 'info') }}
             {{ mini_stat('Category Kind', focus_summary.get('category_kind') or 'n/a', focus_summary.get('activity_note') or '', 'info') }}
             {{ mini_stat('Leading Department', focus_summary.get('leading_department') or 'n/a', 'Ownership ' ~ (('%0.1f%%'|format((focus_summary.get('leading_department_share_pct') or 0) * 100)) if focus_summary.get('leading_department_share_pct') is not none else 'n/a'), focus_summary.get('risk_tone') or 'success') }}
@@ -498,7 +498,7 @@
                           {% for row in category_focus.get('department_rows', []) %}
                             <tr>
                               <td><a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a></td>
-                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
                               <td>{{ row.management_focus or 'review labor acceleration' }}</td>
                             </tr>
                           {% else %}
@@ -519,7 +519,7 @@
                           {% for row in category_focus.get('worker_rows', []) %}
                             <tr>
                               <td><a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a></td>
-                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
                               <td>{{ row.management_focus or 'review workload concentration' }}</td>
                             </tr>
                           {% else %}
@@ -585,8 +585,8 @@
                     <a class="labor-table-link" href="{{ row.employee_scope_url }}">{{ row.employee_name }}</a>
                     <div class="small text-muted">{{ row.employee_code }} · {{ row.exposure_profile or 'active' }}</div>
                   </td>
-                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
-                  <td class="text-end">{{ '%0.1f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
+                  <td class="text-end">{{ (row.paid_hours or 0)|dec(decimals=1) }}</td>
                   <td class="text-end">{{ ('%0.1f%%'|format((row.premium_share_pct or 0) * 100)) if row.premium_share_pct is not none else 'n/a' }}</td>
                   <td class="text-end">{{ ('%0.1f%%'|format((row.absence_share_pct or 0) * 100)) if row.absence_share_pct is not none else 'n/a' }}</td>
                   <td class="text-end">{{ row.department_count or 0 }}</td>
@@ -622,8 +622,8 @@
             {% endif %}
           </div>
           <div class="labor-mini-stat-grid mt-4">
-            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|currency, 'Share ' ~ (('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100)) if focus_summary.get('labor_cost_share_pct') is not none else 'n/a'), 'primary') }}
-            {{ mini_stat('Paid Hours', '%0.1f'|format(focus_summary.get('paid_hours') or 0), 'Active days ' ~ (focus_summary.get('active_days') or 0), 'info') }}
+            {{ mini_stat('Labor Cost', (focus_summary.get('labor_cost') or 0)|money, 'Share ' ~ (('%0.1f%%'|format((focus_summary.get('labor_cost_share_pct') or 0) * 100)) if focus_summary.get('labor_cost_share_pct') is not none else 'n/a'), 'primary') }}
+            {{ mini_stat('Paid Hours', (focus_summary.get('paid_hours') or 0)|dec(decimals=1), 'Active days ' ~ (focus_summary.get('active_days') or 0), 'info') }}
             {{ mini_stat('Premium / Absence', (('%0.1f%%'|format((focus_summary.get('premium_share_pct') or 0) * 100)) if focus_summary.get('premium_share_pct') is not none else 'n/a') ~ ' / ' ~ (('%0.1f%%'|format((focus_summary.get('absence_share_pct') or 0) * 100)) if focus_summary.get('absence_share_pct') is not none else 'n/a'), focus_summary.get('focus_reason') or '', focus_summary.get('risk_tone') or 'success') }}
             {{ mini_stat('Coverage', (focus_summary.get('department_count') or 0) ~ ' departments', (focus_summary.get('category_count') or 0) ~ ' categories', 'info') }}
           </div>
@@ -648,7 +648,7 @@
                           {% for row in worker_focus.get('department_rows', []) %}
                             <tr>
                               <td><a class="labor-table-link" href="{{ row.department_scope_url }}">{{ row.department_name }}</a></td>
-                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
                               <td>{{ row.management_focus or 'review labor acceleration' }}</td>
                             </tr>
                           {% else %}
@@ -669,7 +669,7 @@
                           {% for row in worker_focus.get('category_rows', []) %}
                             <tr>
                               <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
-                              <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
+                              <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
                               <td>{{ row.management_focus or 'review category mix' }}</td>
                             </tr>
                           {% else %}
@@ -771,8 +771,8 @@
                     <div class="small text-muted">{{ row.employee_code }}</div>
                   </td>
                   <td><a class="labor-table-link" href="{{ row.category_scope_url }}">{{ row.time_category }}</a></td>
-                  <td class="text-end">{{ (row.labor_cost or 0)|currency }}</td>
-                  <td class="text-end">{{ '%0.2f'|format(row.paid_hours or 0) }}</td>
+                  <td class="text-end">{{ (row.labor_cost or 0)|money }}</td>
+                  <td class="text-end">{{ (row.paid_hours or 0)|dec(decimals=2) }}</td>
                   <td class="text-end">{{ (row.effective_rate|currency) if row.effective_rate is not none else 'n/a' }}</td>
                   <td>{{ row.status or 'n/a' }}</td>
                   <td>{{ row.work_rule or 'n/a' }}</td>

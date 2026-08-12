@@ -103,19 +103,20 @@
     });
   }
 
+  // Defer to the shared house rules in app/static/js/format.js, which mirror
+  // app/services/formatting.py. This function used to switch to whole dollars
+  // at $100 rather than $10,000, and used bare `toFixed`, so it printed sums
+  // with cents and counts without separators - the same figure could be shown
+  // one way here and another way on the page that linked here.
   function formatValue(value, format = "number", multiplier = 1) {
     const adjusted = number(value) * multiplier;
-    if (format === "currency") {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: adjusted >= 100 ? 0 : 2,
-      }).format(adjusted);
-    }
-    if (format === "percent") return `${adjusted.toFixed(1)}%`;
-    if (format === "score") return `${adjusted.toFixed(0)}`;
-    if (format === "integer") return `${adjusted.toFixed(0)}`;
-    return `${adjusted.toFixed(1)}`;
+    const F = window.WAFormat;
+    if (!F) return `${adjusted}`;
+    if (format === "currency") return F.currency(adjusted);
+    if (format === "percent") return F.percent(adjusted);
+    if (format === "score") return F.count(adjusted);
+    if (format === "integer") return F.count(adjusted);
+    return F.decimal(adjusted, { decimals: 1 });
   }
 
   function baseLayout(extra = {}) {

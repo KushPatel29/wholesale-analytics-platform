@@ -888,14 +888,32 @@ def _where_clause(
         params.extend(statuses)
 
     def _add_clause(values: List[str], candidates: Sequence[str]) -> None:
+        """
+        Match a dimension filter against every identifying column it has, not
+        just the first one present.
+
+        This used to take `_choose_column`, which returns the first candidate
+        in `cols` - always the id column, because ids are listed first. So a
+        filter carrying a *name* silently matched nothing: the region drilldown
+        links to `?region_id=Mid-Atlantic`, `parse_filters` collects `region_id`
+        into `filters.regions`, and this built `RegionId IN ('Mid-Atlantic')`
+        against a column holding `RG04`. Zero rows, no error - every chart on
+        all seven region drilldowns rendered blank, and the static build then
+        froze those blanks in.
+
+        Ids and names live in separate columns of the same dimension, so OR-ing
+        them cannot widen a match beyond the dimension the caller asked for.
+        """
         if not values:
             return
-        col = _choose_column(candidates, cols)
-        if not col:
+        matched = [c for c in candidates if c in cols]
+        if not matched:
             return
         placeholders = ", ".join("?" for _ in values)
-        where_parts.append(f"{col} IN ({placeholders})")
-        params.extend(values)
+        clause = " OR ".join(f"{_quote_identifier(c)} IN ({placeholders})" for c in matched)
+        where_parts.append(f"({clause})")
+        for _ in matched:
+            params.extend(values)
 
     _add_clause(_values_list(getattr(filters, "regions", ())), ("RegionId", "RegionName", "Region"))
     _add_clause(_values_list(getattr(filters, "methods", ())), ("ShippingMethodName", "ShippingMethodLabel", "ShippingMethodRequested", "ShipMethod_Name"))
