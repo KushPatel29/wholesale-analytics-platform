@@ -198,7 +198,7 @@ def _user_cache_key() -> Tuple:
         uid, roles, rids = "anon", tuple(), tuple()
     return (uid, roles, rids)
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=max(0, int(os.getenv("REGIONS_FRAME_CACHE_MAXSIZE", "128"))))
 def _cached_region_overview(filters_key: Tuple, user_key: Tuple, version_marker: str) -> Dict[str, object]:
     df = _prepare_df()
     if df.empty:

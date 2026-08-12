@@ -50,10 +50,14 @@ def _request_query_cache_bucket() -> Dict[str, pd.DataFrame] | None:
 _cache_lock = threading.RLock()
 _refresh_lock = threading.RLock()
 _cached_frames: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+_FRAME_CACHE_MAXSIZE = max(0, int(os.getenv("FACT_FRAME_CACHE_MAXSIZE", "32")))
 _bg_thread: Optional[threading.Thread] = None
 _bg_stop = threading.Event()
 _async_refreshing = threading.Event()
-_duck_cache: TTLCache[str, pd.DataFrame] = TTLCache(maxsize=256, ttl=int(os.getenv("FACT_QUERY_CACHE_TTL", "120")))
+_duck_cache: TTLCache[str, pd.DataFrame] = TTLCache(
+    maxsize=max(1, int(os.getenv("FACT_QUERY_CACHE_MAXSIZE", "256"))),
+    ttl=int(os.getenv("FACT_QUERY_CACHE_TTL", "120")),
+)
 _duck_lock = threading.RLock()
 _inflight_queries: Dict[str, Future] = {}
 _duck_conn_lock = threading.RLock()
@@ -1578,14 +1582,19 @@ def get_sales_fact(
     )
     filter_token = hashlib.sha256(json.dumps(filters or {}, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     key = _cache_key(columns) + (filter_token, str(version_marker))
-    with _cache_lock:
-        cached = _cached_frames.get(key)
-        if cached:
-            return cached["df"].copy()
+    if _FRAME_CACHE_MAXSIZE:
+        with _cache_lock:
+            cached = _cached_frames.pop(key, None)
+            if cached:
+                _cached_frames[key] = cached
+                return cached["df"].copy()
 
     df = query_fact(filters=filters, columns=columns, use_cache=True)
-    with _cache_lock:
-        _cached_frames[key] = {"df": df, "version": version_marker}
+    if _FRAME_CACHE_MAXSIZE:
+        with _cache_lock:
+            _cached_frames[key] = {"df": df, "version": version_marker}
+            while len(_cached_frames) > _FRAME_CACHE_MAXSIZE:
+                _cached_frames.pop(next(iter(_cached_frames)))
     return df.copy()
 
 

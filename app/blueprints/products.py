@@ -2894,7 +2894,7 @@ def get_fact_df(filters: Optional[Dict[str, Any]] = None, fallback_months: int =
         return _empty_products_frame()
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=max(0, int(os.getenv("PRODUCTS_FRAME_CACHE_MAXSIZE", "64"))))
 def _cached_df_overview(filters_kv: Tuple[Tuple[str, Any], ...], ttl_bucket: int, version: str) -> pd.DataFrame:
     _ = ttl_bucket
     _ = version
@@ -3284,7 +3284,7 @@ def _build_sales_segments(filters: Dict[str, Any]) -> Dict[str, Any]:
     return {"products": rows, "summary": summary, "top_movers": movers, "recommendations": recs}
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=max(0, int(os.getenv("PRODUCTS_PAYLOAD_CACHE_MAXSIZE", "64"))))
 def _cached_sales_segments(filters_kv: Tuple[Tuple[str, Any], ...], ttl_bucket: int, version: str) -> Dict[str, Any]:
     _ = ttl_bucket
     _ = version
@@ -3545,7 +3545,7 @@ def _log_debug_metrics(df: pd.DataFrame, filters: Dict[str, Any]) -> None:
         logger.debug("products.metrics.debug_failed", exc_info=True)
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=max(0, int(os.getenv("PRODUCTS_PAYLOAD_CACHE_MAXSIZE", "64"))))
 def _cached_overview_payload(filters_kv: Tuple[Tuple[str, Any], ...], ttl_bucket: int, version: str) -> Dict[str, Any]:
     _ = ttl_bucket
     _ = version
@@ -3690,7 +3690,7 @@ def build_overview_payload(
     return _cached_overview_payload(_filters_to_tuple(filters), _ttl_bucket(PAYLOAD_LRU_TTL_SEC), _cache_version())
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=max(0, int(os.getenv("PRODUCTS_PAYLOAD_CACHE_MAXSIZE", "128"))))
 def _cached_table_payload(filters_kv: Tuple[Tuple[str, Any], ...], ttl_bucket: int, page: int, per_page: int, sort_by: str, sort_dir: str) -> Dict[str, Any]:
     _ = ttl_bucket
     filters = _tuple_to_filters(filters_kv)

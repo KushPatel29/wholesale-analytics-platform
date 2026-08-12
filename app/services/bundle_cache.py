@@ -17,7 +17,7 @@ from app.services.filters import bind_filter_cache_key
 # Default TTLs (seconds)
 BUNDLE_TTL_SECONDS = int(os.getenv("BUNDLE_TTL_SECONDS", "1060"))
 
-_CACHE = TTLValueCache(maxsize=128)
+_CACHE = TTLValueCache(maxsize=max(1, int(os.getenv("BUNDLE_CACHE_MAXSIZE", "128"))))
 _LOCK = threading.RLock()
 _INFLIGHT: Dict[str, Future] = {}
 

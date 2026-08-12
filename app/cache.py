@@ -11,6 +11,7 @@ _cache_type = os.getenv("CACHE_TYPE") or ("RedisCache" if _redis_url else "Simpl
 _config = {
     "CACHE_TYPE": _cache_type,
     "CACHE_DEFAULT_TIMEOUT": _default_timeout,
+    "CACHE_THRESHOLD": max(1, int(os.getenv("CACHE_THRESHOLD", "500"))),
 }
 
 if _redis_url:

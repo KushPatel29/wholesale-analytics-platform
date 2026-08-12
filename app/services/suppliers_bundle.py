@@ -33,10 +33,10 @@ KPI_CHART_TTL_SECONDS = int(os.getenv("SUPPLIERS_KPI_CHART_TTL_SECONDS", "900"))
 TABLE_TTL_SECONDS = int(os.getenv("SUPPLIERS_TABLE_TTL_SECONDS", "300"))
 DRILLDOWN_TTL_SECONDS = int(os.getenv("SUPPLIERS_DRILLDOWN_TTL_SECONDS", "600"))
 
-_KPI_CHART_CACHE = TTLValueCache(maxsize=256)
-_TABLE_CACHE = TTLValueCache(maxsize=512)
-_DRILLDOWN_CACHE = TTLValueCache(maxsize=256)
-_ANALYTICS_CACHE = TTLValueCache(maxsize=256)
+_KPI_CHART_CACHE = TTLValueCache(maxsize=max(1, int(os.getenv("SUPPLIERS_KPI_CACHE_MAXSIZE", "256"))))
+_TABLE_CACHE = TTLValueCache(maxsize=max(1, int(os.getenv("SUPPLIERS_TABLE_CACHE_MAXSIZE", "512"))))
+_DRILLDOWN_CACHE = TTLValueCache(maxsize=max(1, int(os.getenv("SUPPLIERS_DRILLDOWN_CACHE_MAXSIZE", "256"))))
+_ANALYTICS_CACHE = TTLValueCache(maxsize=max(1, int(os.getenv("SUPPLIERS_ANALYTICS_CACHE_MAXSIZE", "256"))))
 
 
 class SupplierProductsExportLimitError(ValueError):

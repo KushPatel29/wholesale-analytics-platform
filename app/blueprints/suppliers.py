@@ -446,7 +446,7 @@ def _ensure_supplier_name(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=max(0, int(os.getenv("SUPPLIERS_FRAME_CACHE_MAXSIZE", "128"))))
 def _cached_frame(filters_hash: Tuple, user_key: Tuple, version_marker: str) -> Dict[str, Any]:
     df = _prepare_df()
     if df.empty:

@@ -304,6 +304,17 @@ class TestDuckMemoryBudget:
         )
         assert "DUCKDB_MAX_TEMP_DIRECTORY_SIZE" in env, "an unbounded spill just moves the outage to the disk"
 
+    def test_runtime_dataframe_caches_fit_the_free_container(self):
+        """Large pandas frames must not accumulate across page visits."""
+        env = self._docker_env()
+        assert int(env["FACT_FRAME_CACHE_MAXSIZE"]) == 0
+        assert int(env["FACT_QUERY_CACHE_MAXSIZE"]) <= 4
+        assert int(env["FACT_CACHE_MAX"]) <= 4
+        assert int(env["PRODUCTS_FRAME_CACHE_MAXSIZE"]) == 0
+        assert int(env["REGIONS_FRAME_CACHE_MAXSIZE"]) == 0
+        assert int(env["SUPPLIERS_FRAME_CACHE_MAXSIZE"]) == 0
+        assert int(env["CACHE_THRESHOLD"]) <= 32
+
     def test_spill_directory_is_applied_to_the_connection(self, tmp_path, monkeypatch):
         """The pragma has to reach DuckDB, not just the environment."""
         import duckdb
