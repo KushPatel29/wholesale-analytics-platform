@@ -17,8 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      # `--max-time 45` was shorter than the thing it was waiting for. A cold
+      # free-tier container takes 30-60s to answer at all - measured at 54.2s
+      # on 2026-08-13 - so every ping that actually found the service asleep
+      # timed out, failed the step, and left it asleep. The pings that passed
+      # were the ones that were not needed.
+      #
+      # 150s is comfortably past the observed worst case, and the retries cover
+      # a wake-up that overruns even that.
       - name: Require the live demo to be ready
         run: |
           curl --fail --silent --show-error --location \
-            --retry 3 --retry-delay 5 --max-time 45 \
+            --retry 3 --retry-delay 15 --max-time 150 \
             https://wholesale-analytics-platform.onrender.com/healthz
