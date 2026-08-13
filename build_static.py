@@ -434,7 +434,12 @@ SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
     "planning": ("#reportContent > .report-section", 2),
     "regions": ("#RegionsOverviewV2App > section", 4),
     "suppliers": ("#SuppliersPage > section, #SuppliersV2App > section", 4),
-    "salesreps": ("#SalesRepsApp > section", 3),
+    # Was 3, which left the page at four visible sections and 1,594 characters
+    # - a toolbar, a title, a scorecard, and a tab strip. It read as an empty
+    # page. It froze at 365 nodes and 1,735px against budgets of 1,499 and
+    # 3,999, so the room was there; this brings the trend and the restored
+    # charts into first paint.
+    "salesreps": ("#SalesRepsApp > section", 7),
 }
 
 # Drilldowns use different DOM shells from their overview pages. Keep the
@@ -1187,8 +1192,47 @@ class Builder:
                       const kept = new Set(Array.isArray(keep)
                         ? keep
                         : sections.map((_, index) => index).slice(0, keep));
-                      const secondary = sections.filter((_, index) => !kept.has(index));
+                      let secondary = sections.filter((_, index) => !kept.has(index));
                       if (!secondary.length) return;
+
+                      // Several pages write a section heading as its own
+                      // <section>, immediately before the section it titles:
+                      //
+                      //   <section class="sr-section-heading"><h3>Trend</h3></section>
+                      //   <section class="row">...the charts...</section>
+                      //
+                      // Tabbed naively that produces two tabs - one holding a
+                      // heading and nothing else, and one labelled "Section 7"
+                      // because the content carries no heading of its own.
+                      // Sales Reps published seventeen tabs that way, half of
+                      // them empty and most of the rest unnamed.
+                      //
+                      // Fold a heading-only section into the one it introduces,
+                      // so the pair becomes a single, correctly named tab.
+                      // One tab per heading, not one per <section>. A heading
+                      // starts a group and every following heading-less
+                      // section joins it, because these layouts routinely put
+                      // two or three sibling rows under a single title.
+                      const isHeadingOnly = (el) => {
+                        if (!el.querySelector('h1,h2,h3,h4,h5')) return false;
+                        if (el.querySelector('table,canvas,img,ul,ol,form,input,select')) return false;
+                        return el.textContent.trim().length < 240;
+                      };
+                      const hasHeading = (el) => !!el.querySelector('h1,h2,h3,h4,h5');
+                      const groups = [];
+                      secondary.forEach((section) => {
+                        const previous = groups[groups.length - 1];
+                        const startsGroup = !groups.length || hasHeading(section);
+                        if (startsGroup) groups.push([section]);
+                        else previous.push(section);
+                      });
+                      // Collapse each group into its first element so the tab
+                      // holds the heading and everything it introduces.
+                      secondary = groups.map((group) => {
+                        const host = group[0];
+                        for (let i = 1; i < group.length; i += 1) host.append(...group[i].childNodes), group[i].remove();
+                        return host;
+                      }).filter((el) => el.textContent.trim().length || el.querySelector('img,canvas,table'));
                       const tabs = document.createElement('section');
                       tabs.className = 'static-detail-tabs'; tabs.dataset.staticTabs = '1';
                       tabs.innerHTML = '<h2>Detailed analysis</h2><p>Open a section; every view was rendered at build time.</p>' +
@@ -1199,8 +1243,25 @@ class Builder:
                       secondary.forEach((section, index) => {
                         const template = document.createElement('template');
                         template.id = `static-tab-${index}`;
-                        const heading = section.querySelector('h2,h3,h4,h5');
-                        const label = (heading?.textContent || `Section ${index + 1}`).trim();
+                        // Own heading first; then the heading of the section
+                        // immediately before it, for the layouts that title a
+                        // block from outside it. `Section N` is the last
+                        // resort, and it should now be rare.
+                        // Own heading first; then the heading of the section
+                        // immediately before it, for the layouts that title a
+                        // block from outside it.
+                        //
+                        // The previous sibling must not be the tab strip: it is
+                        // inserted before the first secondary section and
+                        // carries its own <h2>Detailed analysis</h2>, so an
+                        // unguarded lookup names six tabs after the container
+                        // holding them.
+                        const prev = section.previousElementSibling;
+                        const prevHeading = prev && !prev.classList.contains('static-detail-tabs')
+                          ? prev.querySelector('h2,h3,h4,h5') : null;
+                        const heading = section.querySelector('h2,h3,h4,h5') || prevHeading;
+                        const label = (heading?.textContent || `Section ${index + 1}`)
+                          .replace(/\s+/g, ' ').trim().slice(0, 60);
                         template.content.append(section);
                         tabs.append(template);
                         const button = document.createElement('button');
