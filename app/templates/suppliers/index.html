@@ -145,6 +145,43 @@
     </div>
   </div>
 
+  {# The two questions the KPI strip raises and then drops. HHI prints one
+     number and does not say where the weight sits; the table sorts one column
+     at a time, so a supplier that is both large and thin never surfaces. #}
+  <div class="row g-3 mt-1">
+    <div class="col-lg-7">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Spend concentration</h5>
+          {# No bare "HHI" in this copy: `test_no_page_prints_a_bare_hhi`
+             requires the acronym to be followed by its basis wherever it
+             appears, and it cannot tell a caption from a label. #}
+          <div class="text-muted small">Share of spend per supplier, with the cumulative curve — the shape behind the concentration index above.</div>
+        </div>
+        <div class="card-body">
+          <div id="supplierConcentrationChart" class="chart-container skeleton"
+               aria-label="Supplier spend concentration with cumulative share">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Margin against spend</h5>
+          <div class="text-muted small">Bubble size is spend. Anything below the dashed portfolio margin costs more than it returns.</div>
+        </div>
+        <div class="card-body">
+          <div id="supplierMarginChart" class="chart-container skeleton"
+               aria-label="Supplier margin against spend, sized by spend">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Table + controls -->
   <div class="row g-3">
     <div class="col-12">
@@ -309,7 +346,7 @@
 </div>
 
 <!-- ======= Scripts ======= -->
-<script src="{{ url_for('static', filename='js/suppliers.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/suppliers.js', v='20260813-procurement-1') }}" defer></script>
 
 <style>
   :root{

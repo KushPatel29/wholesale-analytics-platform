@@ -42,12 +42,32 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
 
+      # Must match the Dockerfile's seeding, and did not. The Docker image
+      # builds the labor dataset, the products parquet and the returns tracker;
+      # this workflow built only the fact dataset, so every static build since
+      # the migration published a Labor page with no data in it - "Current
+      # window n/a", the template's fallback subtitle, and none of its fourteen
+      # charts, because `labor_bundle` had no parquet to read. The Flask app on
+      # Render was fine, which is what hid it.
       - name: Seed the synthetic dataset and demo logins
+        env:
+          SECRET_KEY: static-build-seed-only-not-a-runtime-secret
         run: |
           cp .env.demo .env
           python -m seed.generate_synthetic_data --fiscal-years 3 --customers 110 --products 320 --suppliers 24
+          python -m seed.generate_synthetic_labor --days 730
           python manage.py init-auth-db
           python manage.py seed-demo-users
+          python manage.py build-products-parquet || echo "products parquet skipped"
+          ENV=development FLASK_ENV=development \
+            python -m seed.generate_synthetic_returns --count 140 --replace
+
+      - name: Fail if the labor dataset is missing
+        # The symptom is a page that renders and says "n/a", so assert the file
+        # rather than trusting the build to notice.
+        run: |
+          test -s cache/labor/fact_dataset/labor_demo.parquet \
+            || (echo "labor parquet was not generated" && exit 1)
 
       - name: Prerender every page and scope
         env:

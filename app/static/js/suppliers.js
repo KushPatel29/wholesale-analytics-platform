@@ -432,6 +432,133 @@
     `;
   };
 
+  /* Two questions the KPI strip raises and then leaves unanswered.
+   *
+   * `HHI (supplier revenue)` prints a single number - 546 - which tells you the
+   * book is not concentrated but not where the weight sits. And the table sorts
+   * by one column at a time, so a vendor that is large *and* thin never stands
+   * out: it is mid-table on revenue and mid-table on margin.
+   *
+   * Both read `table.rows`, which is the full supplier population already in
+   * the payload. No extra query, no extra bytes. */
+  // This file had no number or theme helpers of its own - the two existing
+  // charts take Plotly's defaults - so they are defined here rather than
+  // assumed.
+  const toNum = (value) => (isFiniteNumber(value) ? Number(value) : 0);
+  const toOptionalNum = (value) => (isFiniteNumber(value) ? Number(value) : null);
+  const plotTheme = () => {
+    const css = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
+    return {
+      text: pick("--wa-text-dim", "#94a3b8"),
+      grid: pick("--wa-border", "rgba(148,163,184,.22)"),
+      accent: pick("--wa-accent", "#34d399"),
+      danger: pick("--wa-danger", "#f87171"),
+      warn: pick("--wa-warning", "#fbbf24"),
+    };
+  };
+
+  const supplierRows = (table = {}) =>
+    (Array.isArray(table.rows) ? table.rows : [])
+      .map((row) => ({
+        name: String(row.supplier_name || row.SupplierName || row.label || "Unknown"),
+        revenue: toNum(row.revenue ?? row.Revenue),
+        margin: toOptionalNum(row.margin_pct ?? row.MarginPct),
+        orders: toNum(row.orders ?? row.Orders),
+        products: toNum(row.products ?? row.Products),
+      }))
+      .filter((row) => row.revenue > 0);
+
+  const renderSpendConcentration = (table = {}) => {
+    const rows = supplierRows(table).sort((a, b) => b.revenue - a.revenue);
+    if (!window.Plotly || rows.length < 3) {
+      emptyChart("supplierConcentrationChart", "Not enough suppliers in scope to show concentration.");
+      return;
+    }
+    removeSkeleton("supplierConcentrationChart");
+    const total = rows.reduce((sum, row) => sum + row.revenue, 0) || 1;
+    let running = 0;
+    const cumulative = rows.map((row) => { running += row.revenue; return (running / total) * 100; });
+    const share = rows.map((row) => (row.revenue / total) * 100);
+    const theme = plotTheme();
+
+    window.Plotly.newPlot("supplierConcentrationChart", [
+      {
+        type: "bar", name: "Share of spend",
+        x: rows.map((r) => r.name), y: share,
+        marker: { color: theme.accent, opacity: 0.75 },
+        hovertemplate: "<b>%{x}</b><br>%{y:.1f}% of spend<extra></extra>",
+      },
+      {
+        type: "scatter", mode: "lines+markers", name: "Cumulative", yaxis: "y2",
+        x: rows.map((r) => r.name), y: cumulative,
+        line: { color: theme.warn, width: 2 },
+        hovertemplate: "Top %{x}<br>%{y:.1f}% cumulative<extra></extra>",
+      },
+    ], {
+      margin: { l: 52, r: 52, t: 10, b: 96 },
+      height: 320,
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: { tickangle: -40, automargin: true, gridcolor: "rgba(0,0,0,0)", linecolor: theme.grid },
+      yaxis: { title: "Share of spend", ticksuffix: "%", gridcolor: theme.grid, zeroline: false },
+      yaxis2: { title: "Cumulative", ticksuffix: "%", overlaying: "y", side: "right", range: [0, 100], gridcolor: "rgba(0,0,0,0)" },
+    }, { displayModeBar: false, responsive: true });
+  };
+
+  const renderMarginVsSpend = (table = {}) => {
+    const rows = supplierRows(table).filter((row) => row.margin !== null);
+    if (!window.Plotly || rows.length < 3) {
+      emptyChart("supplierMarginChart", "Not enough margin coverage in scope.");
+      return;
+    }
+    removeSkeleton("supplierMarginChart");
+    const theme = plotTheme();
+    const totalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
+    const totalProfit = rows.reduce((sum, r) => sum + r.revenue * (r.margin / 100), 0);
+    // Revenue-weighted, not the mean of the percentages: averaging a $12k
+    // vendor against a $1.2m one is the bug this repo has fixed twice before.
+    const portfolioMargin = totalRevenue ? (totalProfit / totalRevenue) * 100 : 0;
+    const maxRevenue = Math.max(...rows.map((r) => r.revenue), 1);
+
+    window.Plotly.newPlot("supplierMarginChart", [{
+      type: "scatter", mode: "markers+text",
+      x: rows.map((r) => r.revenue),
+      y: rows.map((r) => r.margin),
+      text: rows.map((r) => (r.revenue > maxRevenue * 0.35 || r.margin < portfolioMargin * 0.6 ? r.name : "")),
+      textposition: "top center",
+      textfont: { size: 9, color: theme.text },
+      marker: {
+        size: rows.map((r) => 10 + 24 * Math.sqrt(r.revenue / maxRevenue)),
+        color: rows.map((r) => (r.margin < portfolioMargin ? theme.danger : theme.accent)),
+        opacity: 0.72, line: { width: 1, color: "rgba(0,0,0,.25)" },
+      },
+      customdata: rows.map((r) => [r.orders, r.products]),
+      hovertemplate:
+        "<b>%{text}</b><br>%{x:$,.0f} spend<br>%{y:.1f}% margin"
+        + "<br>%{customdata[0]:,} orders · %{customdata[1]} SKUs<extra></extra>",
+    }], {
+      margin: { l: 60, r: 24, t: 10, b: 48 },
+      height: 320,
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: { title: "Spend with supplier", tickprefix: "$", gridcolor: theme.grid, linecolor: theme.grid },
+      yaxis: { title: "Margin", ticksuffix: "%", gridcolor: theme.grid, linecolor: theme.grid },
+      shapes: [{
+        type: "line", xref: "paper", x0: 0, x1: 1,
+        y0: portfolioMargin, y1: portfolioMargin,
+        line: { color: theme.grid, width: 1, dash: "dash" },
+      }],
+      annotations: [{
+        xref: "paper", x: 1, xanchor: "right", y: portfolioMargin, yanchor: "bottom",
+        text: `portfolio ${portfolioMargin.toFixed(1)}%`, showarrow: false,
+        font: { size: 9, color: theme.text },
+      }],
+    }, { displayModeBar: false, responsive: true });
+  };
+
   const renderTable = (table = {}, { append = false } = {}) => {
     if (!tbody) return;
     const rows = Array.isArray(table.rows) ? table.rows : [];
@@ -554,6 +681,10 @@
         whenPlotlyReady(() => {
           renderTrend((payload.charts || {}).trend_12m || {});
           renderTopSuppliers((payload.charts || {}).top_suppliers || {});
+          // Both read the table rows the bundle already sends - the whole
+          // supplier population, not a top-N - so neither costs a query.
+          renderSpendConcentration(payload.table || {});
+          renderMarginVsSpend(payload.table || {});
         });
       }
       renderTable(payload.table || {}, { append });

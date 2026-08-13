@@ -17,16 +17,30 @@ from __future__ import annotations
 
 import html as html_stdlib
 import json
+import gzip
 import re
 import sys
 import urllib.parse
 from pathlib import Path
 
-# HTML is measured uncompressed; a CDN will gzip it, but parse cost is here.
-MAX_PAGE_KB = 100
+# These moved when the section tabs came off and every page began shipping
+# whole. The old limits (100 KB raw, 1,499 nodes, 3,999px) were what forced the
+# tabs, and for a public demo that trade was backwards - analysis behind an
+# unlabelled tab is analysis nobody sees.
+#
+# The size limit is now measured **gzipped**, because that is what a visitor
+# actually downloads and the raw number was misleading by roughly 6x. Measured
+# across the full build: 8.8-32.8 KB gzipped per page, against 42-264 KB raw.
+# 60 KB leaves real headroom while still catching a page that runs away.
+#
+# Nodes and height are generous because a full page is legitimately long, but
+# they are not unlimited: they still catch a table that forgets to cap itself.
+# Worst observed at the time of writing: 3,287 nodes (products) and 10,185px
+# (labor).
+MAX_PAGE_GZIP_KB = 60
 MAX_FRAGMENT_KB = 400
-MAX_PAGE_NODES = 1_499
-MAX_PAGE_HEIGHT = 3_999
+MAX_PAGE_NODES = 3_600
+MAX_PAGE_HEIGHT = 11_500
 
 # Text that means the page is waiting. On a prerendered page there is nothing
 # to wait for, so any of these is a bug.
@@ -102,9 +116,19 @@ def check(dist: Path) -> int:
         # not pages, so they carry no page marker - but they must still be inert.
         is_fragment = rel.startswith("data/")
 
-        size_budget = MAX_FRAGMENT_KB if is_fragment else MAX_PAGE_KB
-        if kb > size_budget:
-            failures.append(f"{rel}: {kb:.0f} KB exceeds the {size_budget} KB budget")
+        if is_fragment:
+            if kb > MAX_FRAGMENT_KB:
+                failures.append(f"{rel}: {kb:.0f} KB exceeds the {MAX_FRAGMENT_KB} KB budget")
+        else:
+            # Gzipped, because that is the number a visitor pays. Raw HTML on
+            # this site compresses about 6x, so measuring raw was rejecting
+            # pages that cost 15 KB to download.
+            gzip_kb = len(gzip.compress(html.encode("utf-8"), 9)) / 1024
+            if gzip_kb > MAX_PAGE_GZIP_KB:
+                failures.append(
+                    f"{rel}: {gzip_kb:.0f} KB gzipped ({kb:.0f} KB raw) "
+                    f"exceeds the {MAX_PAGE_GZIP_KB} KB budget"
+                )
 
         if is_fragment:
             for marker in LOADING_MARKERS:

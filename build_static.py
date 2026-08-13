@@ -409,50 +409,22 @@ REMOTE_ASSETS: dict[str, str] = {
         "static/vendor/plotly/plotly-2.35.2.min.js",
 }
 
-# Sections kept in the first-paint DOM. Every remaining section is still in the
-# HTML, inside a template-backed tab, but does not count toward layout or DOM
-# cost until the reviewer explicitly opens it.
-SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
-    # Keep the executive scan and the sixth-section trend workspace. The three
-    # narrative blocks between them remain available as build-time-rendered
-    # tabs, but no longer make the landing page eight screens tall.
-    "overview": ("#overviewPage > section, #overviewPage > div > section", (0, 1, 5)),
-    "products": ("#products-main > section", 2),
-    # Five, not four: the fifth is the concentration/distribution charts, and a
-    # Pareto curve behind a tab is a chart nobody sees. The page has the room -
-    # it froze at 227 nodes and 1,552px against budgets of 1,499 and 3,999.
-    "inventory": ("#InventoryApp > section", 5),
-    "customers": ("main.app-main > section", 4),
-    # The four customer tabs are long analytical workbenches - RFM froze at
-    # 118.6 KB and 1,630 nodes, and KPIs at 4,179px, all past budget. Same
-    # treatment as every other page: keep the scan, move the depth into
-    # build-rendered tabs. Cohorts is short enough to keep whole.
-    "customers_kpis": ("main.app-main > section", 4),
-    "customers_rfm": ("main.app-main > section", 4),
-    "customers_clv": ("main.app-main > section", 4),
-    "labor": ("#LaborPage > section", 3),
-    "planning": ("#reportContent > .report-section", 2),
-    "regions": ("#RegionsOverviewV2App > section", 4),
-    "suppliers": ("#SuppliersPage > section, #SuppliersV2App > section", 4),
-    # Was 3, which left the page at four visible sections and 1,594 characters
-    # - a toolbar, a title, a scorecard, and a tab strip. It read as an empty
-    # page. It froze at 365 nodes and 1,735px against budgets of 1,499 and
-    # 3,999, so the room was there; this brings the trend and the restored
-    # charts into first paint.
-    "salesreps": ("#SalesRepsApp > section", 7),
-}
-
-# Drilldowns use different DOM shells from their overview pages. Keep the
-# identity/scorecard story in first paint and externalize the long analytical
-# workbench into the same build-rendered tabs used by the overview pages.
-DRILLDOWN_SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
-    "customers": (
-        "main.app-main > div:not(#GlobalFilters):not(#savedViewsSection):not(.position-fixed)",
-        4,
-    ),
-    "products": (".product-drilldown-v2 > section", 3),
-    "regions": (".region-drilldown-v2 > section", 3),
-}
+# Sections are no longer split into tabs.
+#
+# The tabs existed to hold three build budgets - 100 KB, 1,499 nodes, 3,999px -
+# by moving everything past the first few sections behind a button. For a public
+# demo that trade is backwards: a reviewer gives the page a minute, and analysis
+# behind a tab is analysis they never see. Sales Reps was publishing four
+# visible sections above seventeen tabs.
+#
+# A full page costs height, not latency. Every chart is already a frozen SVG,
+# every payload is inlined, and nothing fetches - so the extra sections are more
+# HTML in the same single response, not more round trips. The budgets in
+# `scripts/check_static_build.py` move to match, and the one page that was
+# genuinely too heavy was heavy for an unrelated reason: 304.9 KB of dead
+# `data-drilldown-payload` attributes, now scrubbed in the freeze pass.
+SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {}
+DRILLDOWN_SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1295,6 +1267,16 @@ class Builder:
                       el.removeAttribute('data-initial');
                       el.removeAttribute('data-bootstrap');
                       el.removeAttribute('data-payload');
+                      /* Same waste as `data-initial`, and the reason Sales Reps
+                         looked too heavy to show in full: the rep table stamps
+                         a JSON drilldown descriptor onto five cells of every
+                         row, every quote escaped to `&quot;`. One row measured
+                         12.6 KB and the attribute totalled 304.9 KB of a
+                         542.4 KB page. It feeds the live app's click handler,
+                         and every script is stripped a few steps below, so on a
+                         static page these are bytes nothing can read. */
+                      el.removeAttribute('data-drilldown-payload');
+                      el.removeAttribute('data-drilldown-bound');
                       [...el.attributes].forEach(attr => {
                         if (String(attr.value || '').includes('/api/')) el.removeAttribute(attr.name);
                       });
