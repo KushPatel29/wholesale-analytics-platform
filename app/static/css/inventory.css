@@ -60,6 +60,47 @@ body.theme-wa-future .inventory-hero h1 { color: #f4f8fb !important; }
 .inventory-action-grid { grid-template-columns: repeat(2, minmax(0,1fr)); margin-bottom: 1.6rem; }
 .inventory-diagnostics { grid-template-columns: repeat(2, minmax(0,1fr)); }
 
+.inventory-routebar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1rem;
+  padding: 0.68rem 0.78rem;
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-hairline);
+  border-left: 3px solid var(--inventory-green);
+  border-radius: 0.85rem;
+  box-shadow: var(--wa-shadow-sm);
+}
+.inventory-routebar__label {
+  padding-right: 0.9rem;
+  color: var(--wa-text-dim);
+  border-right: 1px solid var(--wa-hairline);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.inventory-routebar__links { display: flex; gap: 0.35rem; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.inventory-routebar a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.38rem 0.62rem;
+  color: var(--wa-text);
+  border-radius: 0.52rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.inventory-routebar a span { color: var(--inventory-green); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
+.inventory-routebar a:hover,
+.inventory-routebar a:focus-visible { color: var(--wa-text-strong); background: var(--wa-good-wash); }
+.inventory-page :is(#inventory-scorecard, #inventory-posture, #inventory-shape, #inventory-actions, #inventory-suppliers, #inventory-detail) { scroll-margin-top: 5.5rem; }
+
 /* Two charts side by side, stacking on narrow viewports. The explicit heights
    matter for the static build: it freezes each chart at its rendered size, so
    a collapsed container would bake in a collapsed picture. */
@@ -163,6 +204,8 @@ body.theme-wa-future .inventory-hero h1 { color: #f4f8fb !important; }
 }
 @media (max-width: 767.98px) {
   .inventory-hero, .inventory-section__head, .inventory-section__head--table { align-items: flex-start; flex-direction: column; }
+  .inventory-routebar { grid-template-columns: 1fr; gap: 0.45rem; }
+  .inventory-routebar__label { padding-right: 0; border-right: 0; }
   .inventory-insights, .inventory-action-grid, .inventory-kpis, .inventory-diagnostics, .stock-posture-rail { grid-template-columns: 1fr; }
   .stock-posture-card + .stock-posture-card { border-left: 0; border-top-width: 4px; }
   .inventory-matrix { grid-template-columns: repeat(2, minmax(0,1fr)); }

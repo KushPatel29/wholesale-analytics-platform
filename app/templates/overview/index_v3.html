@@ -1034,6 +1034,61 @@
     font-size: 0.82rem;
     color: var(--wa-text-dim);
   }
+  #overviewPage .overview-routebar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    margin: 0 0 1rem;
+    padding: 0.68rem 0.78rem;
+    border: 1px solid var(--wa-hairline);
+    border-left: 3px solid var(--overview-accent);
+    border-radius: 0.85rem;
+    background: var(--wa-surface);
+    box-shadow: var(--wa-shadow-sm);
+  }
+  #overviewPage .overview-routebar__label {
+    padding-right: 0.9rem;
+    border-right: 1px solid var(--wa-hairline);
+    color: var(--wa-text-dim);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #overviewPage .overview-routebar__links {
+    display: flex;
+    gap: 0.35rem;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  #overviewPage .overview-routebar a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.38rem;
+    padding: 0.38rem 0.62rem;
+    border-radius: 0.52rem;
+    color: var(--wa-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  #overviewPage .overview-routebar a span {
+    color: var(--overview-accent);
+    font-size: 0.66rem;
+    font-variant-numeric: tabular-nums;
+  }
+  #overviewPage .overview-routebar a:hover,
+  #overviewPage .overview-routebar a:focus-visible {
+    background: var(--wa-info-wash);
+    color: var(--wa-text-strong);
+  }
+  #overviewPage :is(#executiveScorecardCard, #trendDriversSection, #moversRiskSection, #outlookShapeSection, #trustActionSection) {
+    scroll-margin-top: 5.5rem;
+  }
   @media (max-width: 1199.98px) {
     #overviewPage .outlook-shell-grid,
     #overviewPage .trust-shell-grid {
@@ -1048,6 +1103,16 @@
         "health"
         "action"
         "signals";
+    }
+  }
+  @media (max-width: 767.98px) {
+    #overviewPage .overview-routebar {
+      grid-template-columns: 1fr;
+      gap: 0.45rem;
+    }
+    #overviewPage .overview-routebar__label {
+      padding-right: 0;
+      border-right: 0;
     }
   }
 </style>
@@ -1231,6 +1296,17 @@
       </div>
     </div>
   </section>
+
+  <nav class="overview-routebar" aria-label="Business performance decision path">
+    <div class="overview-routebar__label">Decision path</div>
+    <div class="overview-routebar__links">
+      <a href="#executiveScorecardCard"><span>01</span>Outcomes</a>
+      <a href="#trendDriversSection"><span>02</span>Drivers</a>
+      <a href="#moversRiskSection"><span>03</span>Movement &amp; risk</a>
+      <a href="#outlookShapeSection"><span>04</span>Outlook</a>
+      <a href="#trustActionSection"><span>05</span>Trust &amp; action</a>
+    </div>
+  </nav>
 
   <div class="overview-main-flow">
     <section class="overview-panel" id="executiveScorecardCard">
@@ -1539,5 +1615,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js', v='20260809-showcase-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview.js', v='20260813-ready-2') }}" defer></script>
 {% endblock %}

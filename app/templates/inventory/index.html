@@ -8,7 +8,7 @@
 {% block title %}Inventory Analysis | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260813-capital-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260813-ready-2') }}">
 {% endblock %}
 
 {% block content %}
@@ -35,7 +35,19 @@
     <div class="inventory-skeleton-card"></div><div class="inventory-skeleton-card"></div><div class="inventory-skeleton-card"></div>
   </section>
 
-  <section class="inventory-kpis" aria-label="Inventory scorecard">
+  <nav class="inventory-routebar" aria-label="Inventory decision path">
+    <div class="inventory-routebar__label">Decision path</div>
+    <div class="inventory-routebar__links">
+      <a href="#inventory-scorecard"><span>01</span>Scorecard</a>
+      <a href="#inventory-posture"><span>02</span>Posture</a>
+      <a href="#inventory-shape"><span>03</span>Portfolio shape</a>
+      <a href="#inventory-actions"><span>04</span>Action queues</a>
+      <a href="#inventory-suppliers"><span>05</span>Suppliers</a>
+      <a href="#inventory-detail"><span>06</span>SKU detail</a>
+    </div>
+  </nav>
+
+  <section class="inventory-kpis" id="inventory-scorecard" aria-label="Inventory scorecard">
     {% for id, label, hint in [
       ('inventoryValue', 'Inventory value', 'Latest observed value'),
       ('inventoryUnits', 'Units on hand', 'Portfolio stock quantity'),
@@ -52,7 +64,7 @@
     {% endfor %}
   </section>
 
-  <section class="inventory-section">
+  <section class="inventory-section" id="inventory-posture">
     <div class="inventory-section__head">
       <div><span>Stock posture</span><h2>Work the lanes from left to right</h2></div>
       <p>Critical and Reorder protect service. Healthy protects flow. Excess releases cash.</p>
@@ -63,7 +75,7 @@
   {# Three shapes the bar lists above cannot carry: a concentration curve, a
      distribution, and a two-axis relationship. Each states its own reading so
      the picture is not left to interpretation. #}
-  <section class="inventory-section">
+  <section class="inventory-section" id="inventory-shape">
     <div class="inventory-section__head">
       <div><span>Concentration and distribution</span><h2>Where the value sits, and how cover is spread</h2></div>
       <p>The bar lists above total each class. These show the shape behind those totals.</p>
@@ -90,7 +102,7 @@
     </article>
   </section>
 
-  <section class="inventory-action-grid">
+  <section class="inventory-action-grid" id="inventory-actions">
     <article class="inventory-panel">
       <div class="inventory-panel__head">
         <div><span>Buy plan</span><h3>Replenishment priorities</h3></div>
@@ -109,7 +121,7 @@
     </article>
   </section>
 
-  <section class="inventory-section">
+  <section class="inventory-section" id="inventory-diagnostics">
     <div class="inventory-section__head">
       <div><span>Portfolio diagnostics</span><h2>Value, movement, aging, and supplier exposure</h2></div>
       <p>Each diagnostic uses the same active scope and one SKU-level calculation set.</p>
@@ -133,7 +145,7 @@
     </div>
   </section>
 
-  <section class="inventory-section">
+  <section class="inventory-section" id="inventory-matrix-section">
     <div class="inventory-section__head">
       <div><span>Demand versus stock</span><h2>SVSI and cover matrix</h2></div>
       <p>SVSI compares each SKU’s share of inventory value with its share of unit usage. Near 1.0 is balanced.</p>
@@ -141,7 +153,7 @@
     <div class="inventory-matrix" id="inventoryMatrix"></div>
   </section>
 
-  <section class="inventory-section">
+  <section class="inventory-section" id="inventory-suppliers">
     <div class="inventory-section__head">
       <div><span>Supplier lens</span><h2>Inventory exposure by supplier</h2></div>
       <p>Use replenishment count and backorders beside value exposure before escalating a supplier.</p>
@@ -180,5 +192,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-capital-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-ready-2') }}" defer></script>
 {% endblock %}

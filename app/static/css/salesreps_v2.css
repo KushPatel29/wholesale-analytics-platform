@@ -3766,3 +3766,49 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 .sr-territory-spotlight {
   min-width: 0;
 }
+
+/* A compact reading path keeps this deliberately deep workspace navigable
+   without flattening the executive, account, territory, and rep layers. */
+.salesreps-v2 .sr-routebar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 0.68rem 0.78rem;
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-hairline);
+  border-left: 3px solid var(--wa-accent-deep);
+  border-radius: 0.85rem;
+  box-shadow: var(--wa-shadow-sm);
+}
+.salesreps-v2 .sr-routebar__label {
+  padding-right: 0.9rem;
+  color: var(--wa-text-dim);
+  border-right: 1px solid var(--wa-hairline);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.salesreps-v2 .sr-routebar__links { display: flex; gap: 0.35rem; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.salesreps-v2 .sr-routebar a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.38rem 0.62rem;
+  color: var(--wa-text);
+  border-radius: 0.52rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.salesreps-v2 .sr-routebar a span { color: var(--wa-accent-deep); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
+.salesreps-v2 .sr-routebar a:hover,
+.salesreps-v2 .sr-routebar a:focus-visible { color: var(--wa-text-strong); background: var(--wa-info-wash); }
+.salesreps-v2 :is(#srScorecardSection, #srMapSection, #srCoverageSection, #srMomentumSection, #srPrioritySection, #srComparisonSection) { scroll-margin-top: 5.5rem; }
+@media (max-width: 767.98px) {
+  .salesreps-v2 .sr-routebar { grid-template-columns: 1fr; gap: 0.45rem; }
+  .salesreps-v2 .sr-routebar__label { padding-right: 0; border-right: 0; }
+}

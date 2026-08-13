@@ -65,3 +65,39 @@ def test_planner_print_and_view_controls_survive_the_static_freeze():
     assert "function bindPrint()" in builder
     assert "function bindReportViews()" in builder
     assert "body[data-static-page] .report-section{opacity:1!important" in builder
+
+
+def test_static_shell_menu_and_pointer_aligned_details_survive_the_freeze():
+    builder = _read("build_static.py")
+
+    assert "function bindShellMenus()" in builder
+    assert "function bindHoverDetails()" in builder
+    assert "bindShellMenus(); bindHoverDetails();" in builder
+    assert '[data-bs-toggle="dropdown"]' in builder
+    assert '[data-bs-toggle="collapse"]' in builder
+    assert "event.clientX, event.clientY" in builder
+    assert ".wa-tip-runtime [data-wa-tip]::after" in builder
+
+
+def test_static_chart_gate_requires_data_and_drawn_pixels():
+    builder = _read("build_static.py")
+
+    assert "const canvasPainted = (canvas)" in builder
+    assert "Chart.getChart(canvas)" in builder
+    assert "plot._fullData" in builder
+    assert "visible charts never rendered" in builder
+    assert "canvas export contains no visible chart pixels" in builder
+    assert "sharpenCanvas" not in builder
+
+
+def test_long_decision_pages_publish_a_consistent_reading_path():
+    overview = _read("app/templates/overview/index_v3.html")
+    inventory = _read("app/templates/inventory/index.html")
+    salesreps = _read("app/templates/salesreps/index.html")
+
+    assert 'class="overview-routebar"' in overview
+    assert 'href="#trendDriversSection"' in overview
+    assert 'class="inventory-routebar"' in inventory
+    assert 'href="#inventory-actions"' in inventory
+    assert 'class="sr-routebar mb-3"' in salesreps
+    assert 'href="#srMomentumSection"' in salesreps

@@ -361,6 +361,126 @@ STATIC_RUNTIME = r"""
     });
   }
 
+  /* Bootstrap is deliberately removed from the frozen page, but the shell
+     still contains two controls whose meaning depends on it: the responsive
+     navigation toggle and dropdown menus (including the account / logout
+     menu). Keep those controls honest with a small, dependency-free binding. */
+  function bindShellMenus() {
+    if (document.documentElement.dataset.staticShellBound === "1") return;
+    document.documentElement.dataset.staticShellBound = "1";
+
+    function closeDropdowns(except) {
+      document.querySelectorAll('[data-bs-toggle="dropdown"][aria-expanded="true"]').forEach(function (toggle) {
+        if (toggle === except) return;
+        toggle.setAttribute("aria-expanded", "false");
+        var menu = toggle.parentElement && toggle.parentElement.querySelector(":scope > .dropdown-menu");
+        if (menu) menu.classList.remove("show");
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      var dropdown = event.target.closest('[data-bs-toggle="dropdown"]');
+      if (dropdown) {
+        event.preventDefault();
+        var menu = dropdown.parentElement && dropdown.parentElement.querySelector(":scope > .dropdown-menu");
+        if (!menu) return;
+        var opening = !menu.classList.contains("show");
+        closeDropdowns(dropdown);
+        menu.classList.toggle("show", opening);
+        dropdown.setAttribute("aria-expanded", opening ? "true" : "false");
+        return;
+      }
+
+      var collapse = event.target.closest('[data-bs-toggle="collapse"]');
+      if (collapse) {
+        var selector = collapse.getAttribute("data-bs-target") || collapse.getAttribute("href") || "";
+        if (selector.charAt(0) !== "#") return;
+        var panel = document.querySelector(selector);
+        if (!panel) return;
+        event.preventDefault();
+        var expanded = !panel.classList.contains("show");
+        panel.classList.toggle("show", expanded);
+        collapse.setAttribute("aria-expanded", expanded ? "true" : "false");
+        return;
+      }
+
+      if (!event.target.closest(".dropdown-menu")) closeDropdowns();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      var open = document.querySelector('[data-bs-toggle="dropdown"][aria-expanded="true"]');
+      closeDropdowns();
+      if (open) open.focus();
+    });
+  }
+
+  /* A CSS pseudo-element is anchored to the centre of its owner. That is fine
+     for an info icon, but wrong for a horizontal bar whose hit area spans most
+     of a chart: the label can appear hundreds of pixels away from the cursor.
+     One fixed tooltip follows the pointer, clamps to the viewport, and also
+     honours keyboard focus for the non-chart help controls. */
+  function bindHoverDetails() {
+    if (document.documentElement.dataset.staticHoverBound === "1") return;
+    document.documentElement.dataset.staticHoverBound = "1";
+    document.documentElement.classList.add("wa-tip-runtime");
+
+    var tip = document.createElement("div");
+    tip.className = "wa-hover-detail";
+    tip.setAttribute("role", "tooltip");
+    tip.hidden = true;
+    document.body.append(tip);
+    var active = null;
+
+    function place(x, y) {
+      if (tip.hidden) return;
+      var gap = 14;
+      var box = tip.getBoundingClientRect();
+      var left = Math.min(Math.max(gap, x + gap), Math.max(gap, innerWidth - box.width - gap));
+      var top = y + gap;
+      if (top + box.height + gap > innerHeight) top = Math.max(gap, y - box.height - gap);
+      tip.style.left = left + "px";
+      tip.style.top = top + "px";
+    }
+
+    function show(owner, x, y) {
+      var value = owner && owner.getAttribute("data-wa-tip");
+      if (!value) return;
+      active = owner;
+      tip.textContent = value;
+      tip.hidden = false;
+      place(x, y);
+    }
+
+    function hide(owner) {
+      if (owner && active !== owner) return;
+      active = null;
+      tip.hidden = true;
+    }
+
+    document.addEventListener("pointerover", function (event) {
+      var owner = event.target.closest("[data-wa-tip]");
+      if (owner) show(owner, event.clientX, event.clientY);
+    });
+    document.addEventListener("pointermove", function (event) {
+      if (active) place(event.clientX, event.clientY);
+    });
+    document.addEventListener("pointerout", function (event) {
+      var owner = event.target.closest("[data-wa-tip]");
+      if (owner && (!event.relatedTarget || !owner.contains(event.relatedTarget))) hide(owner);
+    });
+    document.addEventListener("focusin", function (event) {
+      var owner = event.target.closest("[data-wa-tip]");
+      if (!owner) return;
+      var box = owner.getBoundingClientRect();
+      show(owner, box.left + box.width / 2, box.bottom);
+    });
+    document.addEventListener("focusout", function (event) {
+      var owner = event.target.closest("[data-wa-tip]");
+      if (owner) hide(owner);
+    });
+  }
+
   function bindPrint() {
     document.querySelectorAll("[data-print-report]").forEach(function (button) {
       if (button.dataset.staticBound === "1") return;
@@ -441,7 +561,10 @@ STATIC_RUNTIME = r"""
     });
   }
 
-  function bind() { bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews(); }
+  function bind() {
+    bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews();
+    bindShellMenus(); bindHoverDetails();
+  }
   bind();
 })();
 """
@@ -630,25 +753,6 @@ HOTSPOT_HELPERS = r"""
     return out;
   }
 
-  /* Chart.js sizes its backing store once, from whatever the container
-     measured at the moment it first drew. On this build that was routinely
-     smaller than the box the canvas ends up occupying - the outlook chart was
-     drawing 300 pixels wide and displaying 1,138 - and `toDataURL` captures
-     the backing store, so the frozen page published a 4x upscale of a
-     thumbnail. Re-measure, and capture at 2x so the result survives a retina
-     screen. */
-  function sharpenCanvas(el) {
-    const Chart = window.Chart;
-    if (!Chart || !Chart.getChart) return;
-    const chart = Chart.getChart(el);
-    if (!chart) return;
-    try {
-      chart.options = chart.options || {};
-      chart.options.devicePixelRatio = 2;
-      chart.resize();
-      chart.update('none');
-    } catch (_) {}
-  }
 """ % HOTSPOT_MAX_PER_CHART
 
 PLOTLY_FREEZE_JS = (
@@ -671,10 +775,24 @@ CANVAS_FREEZE_JS = (
     "(el) => {"
     + HOTSPOT_HELPERS
     + """
-      try { sharpenCanvas(el); } catch (_) {}
       const rect = el.getBoundingClientRect();
       let hotspots = [];
       try { hotspots = chartjsHotspots(el); } catch (_) { hotspots = []; }
+      const painted = (() => {
+        try {
+          const sample = document.createElement('canvas');
+          sample.width = 48; sample.height = 32;
+          const ctx = sample.getContext('2d', {willReadFrequently: true});
+          ctx.drawImage(el, 0, 0, sample.width, sample.height);
+          const px = ctx.getImageData(0, 0, sample.width, sample.height).data;
+          let opaque = 0; const colours = new Set();
+          for (let i = 0; i < px.length; i += 4) {
+            if (px[i + 3] > 8) opaque += 1;
+            colours.add(`${px[i] >> 4}:${px[i + 1] >> 4}:${px[i + 2] >> 4}:${px[i + 3] >> 4}`);
+          }
+          return opaque > 8 && colours.size > 2;
+        } catch (_) { return false; }
+      })();
       const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
       const width = Math.max(1, Math.round(rect.width || el.width || 800));
       let height = Math.max(1, Math.round(rect.height || el.height || 320));
@@ -691,7 +809,7 @@ CANVAS_FREEZE_JS = (
       }
       return {
         png: el.toDataURL('image/png'),
-        width, height, hotspots,
+        width, height, hotspots, painted,
         alt: el.getAttribute('aria-label') || heading?.textContent?.trim() || 'Analytics chart'
       };
     }"""
@@ -766,6 +884,14 @@ STATIC_CRITICAL_CSS = """
 [data-wa-tip-place="below"]::after{bottom:auto;top:calc(100% + .5rem)}
 [data-wa-tip-align="start"]::after{left:0;transform:none}
 [data-wa-tip-align="end"]::after{left:auto;right:0;transform:none}
+.wa-tip-runtime [data-wa-tip]::after{display:none!important}
+.wa-hover-detail{position:fixed;z-index:1090;width:max-content;max-width:min(22rem,calc(100vw - 24px));
+  padding:.58rem .72rem;border-radius:.6rem;border:1px solid var(--wa-hairline,rgba(148,163,184,.35));
+  background:var(--wa-surface-2,var(--wa-surface,#0f141d));color:var(--wa-text,#e8edf7);
+  font-size:.78rem;font-weight:650;line-height:1.42;letter-spacing:.005em;text-align:left;
+  white-space:pre-line;text-transform:none;box-shadow:0 14px 32px rgba(2,6,23,.34);pointer-events:none}
+.wa-hover-detail[hidden]{display:none}
+body[data-static-page] .navbar .dropdown-menu.show{display:block;z-index:1080}
 /* A card that clips its overflow clips the label with it. Only the cards that
    scroll a wide table need to clip, and `:has()` is how we tell them apart -
    the planner puts a 640px scorecard and a chart inside the same class. Where
@@ -1420,15 +1546,21 @@ class Builder:
                 frozen += 1
             except Exception as exc:
                 self.log(f"    ! plotly chart {index}: {type(exc).__name__}: {exc}")
+                raise
 
         # Chart.js is canvas-only. Preserve its exact pixels inside a standalone
         # SVG wrapper so the final document still paints a chart without running
         # Chart.js (and without placing a large data URL in the HTML itself).
-        canvases = page.locator("canvas")
+        # Hidden responsive/alternate-view canvases are intentionally blank and
+        # are not part of the published view. Freeze only drawing surfaces a
+        # visitor can actually see; the readiness gate uses the same contract.
+        canvases = page.locator("canvas:visible")
         for index in reversed(range(canvases.count())):
             canvas = canvases.nth(index)
             try:
                 result = canvas.evaluate(CANVAS_FREEZE_JS)
+                if not result.get("painted"):
+                    raise RuntimeError("canvas export contains no visible chart pixels")
                 svg = (
                     '<svg xmlns="http://www.w3.org/2000/svg" role="img" '
                     f'aria-label="{_xml_escape(result["alt"])}" viewBox="0 0 {result["width"]} {result["height"]}">'
@@ -1444,6 +1576,7 @@ class Builder:
                 frozen += 1
             except Exception as exc:
                 self.log(f"    ! canvas chart {index}: {type(exc).__name__}: {exc}")
+                raise
         return frozen
 
     def _settle_map(self, page: Any) -> None:
@@ -1543,36 +1676,98 @@ class Builder:
                   scrollTo(0, 0);
                 }"""
             )
-            # Wait for the charts to actually exist before freezing them.
-            #
-            # The renderer is fetched in a `requestIdleCallback` after `load`,
-            # deliberately, so a megabyte of Plotly cannot hold up the KPIs. That
-            # means it arrives well after `networkidle`, and a fixed 350ms settle
-            # froze several pages - suppliers, regions, planning - with zero
-            # charts in them. Wait for the count of drawn plots to stop moving.
-            page.wait_for_timeout(350)
+            # Wait for charts to contain pixels and real trace data, not merely
+            # for their host elements to exist. Chart.js canvases are present in
+            # the template before the bundle arrives; Plotly adds
+            # `.js-plotly-plot` before its async drawing is complete. Counting
+            # either one as "drawn" published transparent Overview and Sales
+            # Reps images that still looked like successful chart assets.
+            page.wait_for_timeout(150)
             try:
                 page.wait_for_function(
                     """() => {
-                      const hosts = document.querySelectorAll(
-                        '[id$="Chart"],[id*="chart"],.js-plotly-plot,canvas'
-                      ).length;
-                      if (!hosts) return true;              // nothing to draw
-                      const drawn = document.querySelectorAll('.js-plotly-plot,canvas').length;
-                      if (!drawn) return false;
-                      const prev = window.__waDrawn;
-                      window.__waDrawn = drawn;
-                      return prev === drawn;                // stable across two checks
+                      const visible = (el) => {
+                        const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+                        return style.display !== 'none' && style.visibility !== 'hidden'
+                          && rect.width > 30 && rect.height > 30;
+                      };
+                      const canvasPainted = (canvas) => {
+                        try {
+                          const sample = document.createElement('canvas');
+                          sample.width = 48; sample.height = 32;
+                          const ctx = sample.getContext('2d', {willReadFrequently: true});
+                          ctx.drawImage(canvas, 0, 0, sample.width, sample.height);
+                          const px = ctx.getImageData(0, 0, sample.width, sample.height).data;
+                          let opaque = 0; const colours = new Set();
+                          for (let i = 0; i < px.length; i += 4) {
+                            if (px[i + 3] > 8) opaque += 1;
+                            colours.add(`${px[i] >> 4}:${px[i + 1] >> 4}:${px[i + 2] >> 4}:${px[i + 3] >> 4}`);
+                          }
+                          return opaque > 8 && colours.size > 2;
+                        } catch (_) { return false; }
+                      };
+                      const plotReady = (plot) => {
+                        const traces = Array.isArray(plot._fullData) ? plot._fullData : [];
+                        const hasData = traces.some((trace) => {
+                          if (trace.visible === false || trace.visible === 'legendonly') return false;
+                          return ['x','y','z','labels','values','r','theta'].some((key) => {
+                            const value = trace[key];
+                            return Array.isArray(value) && value.length > 0;
+                          });
+                        });
+                        const marks = plot.querySelectorAll(
+                          '.main-svg g.trace path,.main-svg g.trace rect,.main-svg g.trace circle,' +
+                          '.main-svg g.trace text,.main-svg g.trace image,.main-svg .point,.main-svg .slice,' +
+                          '.main-svg image,.main-svg .hm'
+                        ).length;
+                        return hasData && marks > 0;
+                      };
+
+                      const canvases = [...document.querySelectorAll('canvas')]
+                        .filter(visible).filter((canvas) => !canvas.closest('#srLiveMap'));
+                      const plots = [...document.querySelectorAll('.js-plotly-plot')].filter(visible);
+                      const hosts = [...document.querySelectorAll('[id$="Chart"],[id$="chart"]')]
+                        .filter(visible).filter((host) => host.tagName !== 'CANVAS');
+                      const pending = [];
+
+                      canvases.forEach((canvas) => {
+                        const chart = window.Chart && window.Chart.getChart ? window.Chart.getChart(canvas) : null;
+                        const hasChartData = !chart || (chart.data.datasets || []).some((set) =>
+                          Array.isArray(set.data) && set.data.length > 0
+                        );
+                        if (!hasChartData || !canvasPainted(canvas)) pending.push(`#${canvas.id || 'canvas'}`);
+                      });
+                      plots.forEach((plot) => {
+                        if (!plotReady(plot)) pending.push(`#${plot.id || 'plot'}`);
+                      });
+                      hosts.forEach((host) => {
+                        if (host.matches('.js-plotly-plot') || host.querySelector('canvas,.js-plotly-plot')) return;
+                        const loading = host.querySelector('.spinner-border,.skeleton,[class*="loading"]');
+                        if (!loading && host.children.length) return; // intentional HTML chart
+                        pending.push(`#${host.id}`);
+                      });
+
+                      window.__waChartPending = [...new Set(pending)];
+                      if (window.__waChartPending.length) {
+                        window.__waChartReadySignature = ''; window.__waChartReadyHits = 0;
+                        return false;
+                      }
+                      const signature = `${canvases.length}:${plots.length}:${hosts.length}`;
+                      if (window.__waChartReadySignature !== signature) {
+                        window.__waChartReadySignature = signature; window.__waChartReadyHits = 1;
+                        return false;
+                      }
+                      window.__waChartReadyHits = (window.__waChartReadyHits || 0) + 1;
+                      return window.__waChartReadyHits >= 3;
                     }""",
-                    timeout=20_000,
+                    timeout=45_000,
                     polling=400,
                 )
-            except Exception:
-                # A page with no charts, or one whose renderer never settles,
-                # still gets frozen - just without them - rather than failing
-                # the whole build.
-                pass
-            page.wait_for_timeout(400)
+            except Exception as exc:
+                pending = page.evaluate("window.__waChartPending || []")
+                if pending:
+                    raise RuntimeError(f"visible charts never rendered: {pending}") from exc
+            page.wait_for_timeout(150)
             misses = page.evaluate("window.__staticMisses || []")
             if misses:
                 raise RuntimeError(f"uncaptured same-origin requests: {sorted(set(misses))}")

@@ -3,7 +3,7 @@
 {% block title %}Sales Reps | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260813-live-map-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260813-ready-2') }}">
 <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
 {% endblock %}
@@ -88,7 +88,19 @@
   {% include "_availability_strip.html" %}
   <div id="salesrepsAvailability"></div>
 
-  <section class="sr-section-heading mb-3">
+  <nav class="sr-routebar mb-3" aria-label="Sales representatives decision path">
+    <div class="sr-routebar__label">Decision path</div>
+    <div class="sr-routebar__links">
+      <a href="#srScorecardSection"><span>01</span>Scorecard</a>
+      <a href="#srMapSection"><span>02</span>Accounts</a>
+      <a href="#srCoverageSection"><span>03</span>Coverage</a>
+      <a href="#srMomentumSection"><span>04</span>Momentum</a>
+      <a href="#srPrioritySection"><span>05</span>Priorities</a>
+      <a href="#srComparisonSection"><span>06</span>Comparison</a>
+    </div>
+  </nav>
+
+  <section class="sr-section-heading mb-3" id="srScorecardSection">
     <div>
       <p class="sr-section-kicker mb-1">Leadership Summary</p>
       <h3 class="mb-1">Executive Scorecard And Signal Strip</h3>
@@ -286,7 +298,7 @@
     </div>
   </section>
 
-  <section class="sr-section-heading mb-3">
+  <section class="sr-section-heading mb-3" id="srCoverageSection">
     <div>
       <p class="sr-section-kicker mb-1">Ownership / Portfolio Intelligence</p>
       <h3 class="mb-1">Current Owner Coverage, Territory Mix, And Transfer Context</h3>
@@ -390,7 +402,7 @@
     </div>
   </section>
 
-  <section class="sr-section-heading mb-3">
+  <section class="sr-section-heading mb-3" id="srMomentumSection">
     <div>
       <p class="sr-section-kicker mb-1">Trend Intelligence</p>
       <h3 class="mb-1">Current Versus Prior Performance And Rep Momentum</h3>
@@ -551,7 +563,7 @@
   </section>
 
   <!-- Phase 3F: upgraded section header -->
-  <section class="sr-section-heading mb-3">
+  <section class="sr-section-heading mb-3" id="srPrioritySection">
     <div>
       <p class="sr-section-kicker mb-1">Customer Intelligence</p>
       <h3 class="mb-1">All Accounts, Movers, And Owner Context</h3>
@@ -690,7 +702,7 @@
     </div>
   </section>
 
-  <section class="sr-section-heading mb-3">
+  <section class="sr-section-heading mb-3" id="srDepartmentSection">
     <div>
       <p class="sr-section-kicker mb-1">Department / Product Intelligence</p>
       <h3 class="mb-1">Department Mix, Margin Performance, And Contribution Detail</h3>
@@ -737,7 +749,7 @@
     </div>
   </section>
 
-  <section class="sr-section-heading mb-3">
+  <section class="sr-section-heading mb-3" id="srComparisonSection">
     <div>
       <p class="sr-section-kicker mb-1">Rep Ranking / Comparison</p>
       <h3 class="mb-1">Share, Pricing Leadership, And Full Rep Comparison</h3>
@@ -946,5 +958,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/salesreps.js', v='20260813-live-map-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/salesreps.js', v='20260813-ready-2') }}" defer></script>
 {% endblock %}
