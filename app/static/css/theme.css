@@ -261,6 +261,31 @@ a:focus {
   box-shadow: 0 14px 35px rgba(17, 17, 17, 0.28);
 }
 
+/* The nav is `navbar-expand-xxl`, so it lays out horizontally from 1400px up -
+   but nine workspace links plus the theme toggle, notifications, admin and
+   logout need about 1,560px. Between those two numbers the bar ran off the
+   right edge and gave the whole document a horizontal scrollbar: measured
+   1,556px of content in a 1,440px viewport, with the theme toggle and the
+   notification bell sitting past the fold. 1440 and 1512 are two of the most
+   common laptop widths, so this was the default first impression.
+
+   Bootstrap sets `flex-wrap: nowrap` on an expanded navbar. Letting it wrap
+   costs a second row at those widths and nothing at all above ~1,560px, which
+   is a better trade than a page that scrolls sideways. */
+@media (min-width: 1400px) {
+  .navbar-wholesale > .container-fluid,
+  .navbar-wholesale .navbar-collapse,
+  .navbar-wholesale .navbar-nav {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+  }
+  /* Drop the inter-item gap; the link padding is tightened at the end of this
+     file, where it can actually win - see the note there. */
+  .navbar-wholesale .navbar-nav.gap-lg-2 {
+    gap: 0 !important;
+  }
+}
+
 .navbar-wholesale .navbar-brand {
   color: var(--wa-text-inverse);
   text-transform: uppercase;
@@ -6422,5 +6447,28 @@ body.theme-wa-future .products-hero .btn-outline-light:focus {
   .page-guide__step + .page-guide__step {
     border-top: 1px solid var(--wa-hairline-soft);
     border-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Navbar fit at laptop widths.
+
+   `.theme-wa-future .navbar-wholesale .navbar-nav .nav-link` sets
+   `padding-inline: 0.85rem` further up this file. It carries an extra class and
+   sits later than the layout rules near the top, so a tidier override up there
+   silently lost - the same stacked-generation problem this stylesheet has had
+   before. Matching its specificity and placing it last is what makes it apply.
+
+   Why it matters: the nav is `navbar-expand-xxl`, so from 1400px it lays out
+   horizontally, but brand (269px) + nine links (1,075px) + the right-hand
+   controls (142px) needed ~1,485px plus container padding. At 1440 and 1512 -
+   two of the most common laptop widths - the bar ran past the right edge and
+   gave the whole document a horizontal scrollbar on the first page a visitor
+   sees.
+   --------------------------------------------------------------------------- */
+@media (min-width: 1400px) {
+  .theme-wa-future .navbar-wholesale .navbar-nav .nav-link,
+  .navbar-wholesale .navbar-nav .nav-link {
+    padding-inline: 0.45rem;
   }
 }
