@@ -36,6 +36,7 @@ def app():
 class TestDemoCredentialsPanel:
     def test_hidden_by_default(self, app, monkeypatch):
         monkeypatch.delenv("DEMO_WARMUP", raising=False)
+        monkeypatch.delenv("DEMO_MODE", raising=False)
         body = app.test_client().get("/auth/login").get_data(as_text=True)
         assert "auth-demo" not in body
         assert demo_accounts.DEMO_PASSWORD not in body, "never print credentials off the demo"
@@ -451,6 +452,9 @@ class TestWarmupYieldsToTraffic:
         """
         warmup = self._reset()
         monkeypatch.setenv("DEMO_WARMUP", "1")
+        # This test needs the request hooks registered, not a daemon that keeps
+        # walking the shared session-scoped app after the test has finished.
+        monkeypatch.setattr(warmup, "_warm", lambda _app: None)
         app = create_app()
 
         warmup._thread_state.is_warmup = True
@@ -465,6 +469,7 @@ class TestWarmupYieldsToTraffic:
     def test_real_requests_are_counted_and_released(self, monkeypatch):
         warmup = self._reset()
         monkeypatch.setenv("DEMO_WARMUP", "1")
+        monkeypatch.setattr(warmup, "_warm", lambda _app: None)
         app = create_app()
         try:
             app.test_client().get("/healthz")

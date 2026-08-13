@@ -1722,6 +1722,13 @@ class Builder:
                         ).length;
                         return hasData && marks > 0;
                       };
+                      const hasExplicitEmptyState = (host) => {
+                        const parent = host.parentElement;
+                        if (!parent) return false;
+                        return [...parent.querySelectorAll(
+                          '[data-chart-empty],.chart-empty-state,[id$="_empty"],[id$="EmptyState"]'
+                        )].some((empty) => visible(empty) && (empty.textContent || '').trim().length > 0);
+                      };
 
                       const canvases = [...document.querySelectorAll('canvas')]
                         .filter(visible).filter((canvas) => !canvas.closest('#srLiveMap'));
@@ -1731,6 +1738,7 @@ class Builder:
                       const pending = [];
 
                       canvases.forEach((canvas) => {
+                        if (hasExplicitEmptyState(canvas)) return;
                         const chart = window.Chart && window.Chart.getChart ? window.Chart.getChart(canvas) : null;
                         const hasChartData = !chart || (chart.data.datasets || []).some((set) =>
                           Array.isArray(set.data) && set.data.length > 0
@@ -1738,9 +1746,11 @@ class Builder:
                         if (!hasChartData || !canvasPainted(canvas)) pending.push(`#${canvas.id || 'canvas'}`);
                       });
                       plots.forEach((plot) => {
+                        if (hasExplicitEmptyState(plot)) return;
                         if (!plotReady(plot)) pending.push(`#${plot.id || 'plot'}`);
                       });
                       hosts.forEach((host) => {
+                        if (hasExplicitEmptyState(host)) return;
                         if (host.matches('.js-plotly-plot') || host.querySelector('canvas,.js-plotly-plot')) return;
                         const loading = host.querySelector('.spinner-border,.skeleton,[class*="loading"]');
                         if (!loading && host.children.length) return; // intentional HTML chart
@@ -1853,7 +1863,7 @@ class Builder:
                           ? prev.querySelector('h2,h3,h4,h5') : null;
                         const heading = section.querySelector('h2,h3,h4,h5') || prevHeading;
                         const label = (heading?.textContent || `Section ${index + 1}`)
-                          .replace(/\s+/g, ' ').trim().slice(0, 60);
+                          .replace(/\\s+/g, ' ').trim().slice(0, 60);
                         template.content.append(section);
                         tabs.append(template);
                         const button = document.createElement('button');
@@ -2149,11 +2159,23 @@ class Builder:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
                 try:
+                    failures: list[str] = []
                     for target in self.targets:
-                        result = self._freeze_one(browser, origin, target)
+                        try:
+                            result = self._freeze_one(browser, origin, target)
+                        except Exception as exc:
+                            failure = f"{target['rel']}: {exc}"
+                            failures.append(failure)
+                            self.log(f"  ! freeze {failure}")
+                            continue
                         self.log(
                             f"  freeze {target['rel']:<33} {result['kb']:>7.1f} KB  "
                             f"{result['nodes']:>4} nodes  {result['height']:>5}px  {result['charts']} charts"
+                        )
+                    if failures:
+                        details = "\n".join(f"  - {failure}" for failure in failures)
+                        raise RuntimeError(
+                            f"static freeze failed for {len(failures)} page(s):\n{details}"
                         )
                 finally:
                     browser.close()

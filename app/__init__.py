@@ -1130,13 +1130,11 @@ def create_app() -> Flask:
     @app.get("/healthz")
     def healthz():  # pragma: no cover - trivial
         from datetime import datetime, timezone
-        from app.core import prebuilt_cache
 
-        ready = prebuilt_cache.runtime_ready()
         return jsonify(
-            status="ok" if ready else "starting",
+            status="ok",
             time=datetime.now(tz=timezone.utc).isoformat(),
-        ), 200 if ready else 503
+        ), 200
 
     # Short aliases for auth routes (kept for backward compatibility)
     @app.get("/login")

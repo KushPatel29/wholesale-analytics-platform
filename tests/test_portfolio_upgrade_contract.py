@@ -88,6 +88,8 @@ def test_static_chart_gate_requires_data_and_drawn_pixels():
     assert "visible charts never rendered" in builder
     assert "canvas export contains no visible chart pixels" in builder
     assert "sharpenCanvas" not in builder
+    assert "hasExplicitEmptyState" in builder
+    assert "static freeze failed for" in builder
 
 
 def test_products_empty_trajectory_resolves_to_an_intentional_state():
@@ -98,6 +100,23 @@ def test_products_empty_trajectory_resolves_to_an_intentional_state():
     assert 'emptyState.id = "trendChartEmptyState"' in script
     assert "No revenue or demand activity is available for this filter window." in script
     assert 'ctx.classList.remove("d-none")' in script
+
+
+def test_customer_drilldown_hides_every_empty_chart_host():
+    template = _read("app/templates/customers/drilldown.html")
+
+    assert "function showChartEmpty(chartId, emptyId)" in template
+    for chart_id, empty_id in (
+        ("cust_rev_chart", "cust_rev_empty"),
+        ("profit_margin_chart", "profit_margin_empty"),
+        ("profit_mix_chart", "profit_mix_empty"),
+        ("top_spend_chart", "spend_empty"),
+        ("top_weight_chart", "weight_empty"),
+        ("weekday_chart", "weekday_empty"),
+        ("cadence_chart", "cadence_empty"),
+        ("yoy_heatmap", "yoy_empty"),
+    ):
+        assert f"showChartEmpty('{chart_id}', '{empty_id}')" in template
 
 
 def test_long_decision_pages_publish_a_consistent_reading_path():

@@ -392,6 +392,7 @@
       </div>
       <div class="card-body">
         <div id="cust_rev_chart" style="height:380px;"></div>
+        <div id="cust_rev_empty" class="text-muted small text-center py-5" style="display:none;">No monthly activity is available for this customer.</div>
       </div>
     </div>
   </div>
@@ -722,6 +723,19 @@ if (typeof XLSX === 'undefined') {
   }
 
   // ---------- Build Charts ----------
+  function showChartEmpty(chartId, emptyId) {
+    const chart = document.getElementById(chartId);
+    const empty = document.getElementById(emptyId);
+    if (chart) {
+      chart.style.display = 'none';
+      chart.setAttribute('aria-hidden', 'true');
+    }
+    if (empty) {
+      empty.style.display = 'block';
+      empty.setAttribute('role', 'status');
+    }
+  }
+
   // Monthly Revenue + Orders + YoY
   if (_hasData(months)) {
     const traces = [
@@ -750,6 +764,8 @@ if (typeof XLSX === 'undefined') {
       legend: {orientation: 'h', y: 1.1},
       showlegend:true
     }, {displayModeBar:false, responsive:true});
+  } else {
+    showChartEmpty('cust_rev_chart', 'cust_rev_empty');
   }
 
   // Churn Risk Gauge
@@ -822,8 +838,7 @@ if (typeof XLSX === 'undefined') {
       showlegend: true
     }, {displayModeBar:false, responsive:true});
   } else {
-    const emptyProfit = document.getElementById('profit_margin_empty');
-    if (emptyProfit) emptyProfit.style.display = 'block';
+    showChartEmpty('profit_margin_chart', 'profit_margin_empty');
   }
 
   if (showCosts && productProfitChart && Array.isArray(productProfitChart.labels) && productProfitChart.labels.length) {
@@ -852,14 +867,13 @@ if (typeof XLSX === 'undefined') {
       showlegend: true
     }, {displayModeBar:false, responsive:true});
   } else {
-    const emptyMix = document.getElementById('profit_mix_empty');
-    if (emptyMix) emptyMix.style.display = 'block';
+    showChartEmpty('profit_mix_chart', 'profit_mix_empty');
   }
 
   // Top Products by Spend
   (function(){
     const clean = (topSpend || []).filter(d => d && d.label && _isFiniteNum(d.revenue));
-    if (!clean.length) { document.getElementById('spend_empty').style.display = 'block'; return; }
+    if (!clean.length) { showChartEmpty('top_spend_chart', 'spend_empty'); return; }
     
     // Reverse to show top item at the top of the chart
     clean.reverse();
@@ -905,7 +919,7 @@ if (typeof XLSX === 'undefined') {
   // Top Products by Weight
   (function(){
     const clean = (topWeight || []).filter(d => d && d.label && _isFiniteNum(d.weight_lb));
-    if (!clean.length) { document.getElementById('weight_empty').style.display = 'block'; return; }
+    if (!clean.length) { showChartEmpty('top_weight_chart', 'weight_empty'); return; }
     
     // Reverse to show top item at the top of the chart
     clean.reverse();
@@ -952,7 +966,7 @@ if (typeof XLSX === 'undefined') {
   (function(){
     const clean = (weekdayLabels || []).map((d, i) => ({label:d, val: (weekdayRevenue ? weekdayRevenue[i] : undefined)}))
       .filter(d => d.label && _isFiniteNum(d.val));
-    if (!clean.length) { document.getElementById('weekday_empty').style.display = 'block'; return; }
+    if (!clean.length) { showChartEmpty('weekday_chart', 'weekday_empty'); return; }
     Plotly.newPlot('weekday_chart', [{
       x: clean.map(d => d.label), y: clean.map(d => d.val), type:'bar',
       hovertemplate:'%{x}: %{y:$,.0f}<extra></extra>'
@@ -966,7 +980,7 @@ if (typeof XLSX === 'undefined') {
   // Cadence histogram
   (function(){
     const vals = (cadenceDays || []).filter(_isFiniteNum);
-    if (!vals.length) { document.getElementById('cadence_empty').style.display = 'block'; return; }
+    if (!vals.length) { showChartEmpty('cadence_chart', 'cadence_empty'); return; }
     Plotly.newPlot('cadence_chart', [{ x: vals, type:'histogram', nbinsx: 20 }], {
       margin:{t:10, l:60},
       xaxis:{title:'Days between orders'},
@@ -977,7 +991,7 @@ if (typeof XLSX === 'undefined') {
   // YoY heatmap
   (function(){
     const matrix = yoyMatrix || [];
-    if (!matrix.length) { document.getElementById('yoy_empty').style.display = 'block'; return; }
+    if (!matrix.length) { showChartEmpty('yoy_heatmap', 'yoy_empty'); return; }
     let yearLabels = [];
     if (months && months.length) {
       const firstYear = new Date(months[0] + '-01').getFullYear();
