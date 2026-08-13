@@ -1647,7 +1647,23 @@
             },
           },
         },
-        plugins: { legend: { display: true, position: "bottom" } },
+        plugins: {
+          legend: { display: true, position: "bottom" },
+          // Axis ticks were formatted and the hover label was not, so the
+          // same figure read "$1.1M" on the axis and "1,073,546.357" under
+          // the pointer. Format both from the same helpers.
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const value = context.parsed?.y;
+                if (value === null || value === undefined) return `${context.dataset.label}: n/a`;
+                if (context.dataset.yAxisID === "y") return `${context.dataset.label}: ${fmtCurrency0.format(value)}`;
+                if (overlayKey === "margin_pct") return `${context.dataset.label}: ${fmtPercent1(value)}`;
+                return `${context.dataset.label}: ${fmtNumber0.format(value)}`;
+              },
+            },
+          },
+        },
       },
     });
   };
@@ -1683,7 +1699,14 @@
           const href = buildDrillLink(dim, entityIds[idx]);
           if (href) window.location.assign(href);
         },
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.dataset.label}: ${fmtCurrency0.format(context.parsed?.x)}`,
+            },
+          },
+        },
         scales: { x: { ticks: { callback: (v) => fmtCurrency0.format(Number(v) || 0) } } },
       },
     });
@@ -1730,7 +1753,20 @@
           y: { beginAtZero: true, ticks: { callback: (v) => fmtCurrency0.format(Number(v) || 0) } },
           y1: { beginAtZero: true, position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => `${v}%` } },
         },
-        plugins: { legend: { display: true, position: "bottom" } },
+        plugins: {
+          legend: { display: true, position: "bottom" },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const value = context.parsed?.y;
+                if (value === null || value === undefined) return `${context.dataset.label}: n/a`;
+                return context.dataset.yAxisID === "y1"
+                  ? `${context.dataset.label}: ${fmtPercent1(value)}`
+                  : `${context.dataset.label}: ${fmtCurrency0.format(value)}`;
+              },
+            },
+          },
+        },
       },
     });
   };
@@ -2472,7 +2508,14 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.dataset.label}: ${fmtCurrency0.format(context.parsed?.y)}`,
+            },
+          },
+        },
         scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtCurrency0.format(Number(v) || 0) } } },
       },
     });

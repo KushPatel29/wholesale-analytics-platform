@@ -361,10 +361,365 @@ STATIC_RUNTIME = r"""
     });
   }
 
-  function bind() { bindTabs(); bindPreset(); bindTheme(); }
+  /* The planner ships a View control - Everything, Demand only, Supply only,
+     Just what to do, Choose sections - and on a frozen page it did nothing at
+     all. A reviewer picks "Demand only", the page does not move, and the
+     honest conclusion is that the demo is broken.
+
+     It does not need the app back. Every section is already in the document;
+     a view is a set of section ids to show. The page publishes its own map on
+     the control (`data-static-sections`) so the two cannot drift apart. */
+  function bindReportViews() {
+    document.querySelectorAll("select[data-static-sections]").forEach(function (select) {
+      if (select.dataset.staticBound === "1") return;
+      select.dataset.staticBound = "1";
+      var presets;
+      try { presets = JSON.parse(select.dataset.staticSections || "{}"); } catch (_) { return; }
+      var panel = document.getElementById("sectionToggles");
+      var list = document.getElementById("visibilityList");
+      var saveButton = document.getElementById("savePresetBtn");
+      var STORE = "wa-planner-view";
+      var buttons = function () {
+        return list ? [].slice.call(list.querySelectorAll("[data-id]")) : [];
+      };
+
+      function apply(ids) {
+        [].slice.call(document.querySelectorAll("[data-report-section]")).forEach(function (el) {
+          el.hidden = ids.indexOf(el.getAttribute("data-report-section")) === -1;
+        });
+        buttons().forEach(function (button) {
+          var on = ids.indexOf(button.getAttribute("data-id")) !== -1;
+          button.classList.toggle("active", on);
+          button.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+      function chosen() {
+        return buttons().filter(function (button) {
+          return button.classList.contains("active");
+        }).map(function (button) { return button.getAttribute("data-id"); });
+      }
+      function sync() {
+        var custom = select.value === "custom";
+        if (panel) panel.style.display = custom ? "block" : "none";
+        if (!custom) apply(presets[select.value] || presets.full || []);
+      }
+
+      select.addEventListener("change", sync);
+      if (list) list.addEventListener("click", function (event) {
+        var button = event.target.closest("[data-id]");
+        if (!button || select.value !== "custom") return;
+        button.classList.toggle("active");
+        apply(chosen());
+      });
+      if (saveButton) saveButton.addEventListener("click", function () {
+        try {
+          localStorage.setItem(STORE, JSON.stringify({type: select.value, sections: chosen()}));
+        } catch (_) {}
+        var label = saveButton.innerHTML;
+        saveButton.innerHTML = '<i class="bi bi-check-lg me-1"></i> VIEW SAVED';
+        setTimeout(function () { saveButton.innerHTML = label; }, 1800);
+      });
+
+      try {
+        var saved = JSON.parse(localStorage.getItem(STORE) || "null");
+        if (saved && saved.type && presets[saved.type]) {
+          select.value = saved.type; sync();
+        } else if (saved && saved.type === "custom" && (saved.sections || []).length) {
+          select.value = "custom";
+          if (panel) panel.style.display = "block";
+          apply(saved.sections);
+        }
+      } catch (_) {}
+    });
+  }
+
+  function bind() { bindTabs(); bindPreset(); bindTheme(); bindReportViews(); }
   bind();
 })();
 """
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hover, on a page that cannot run a chart library
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# A frozen chart is a picture, and a picture does not tell you which bar you are
+# pointing at. That is the single interaction a reader of a dashboard reaches
+# for first, and losing it is what makes a prerendered page feel like a
+# screenshot of an app rather than the app.
+#
+# So each point is asked, at build time, for the label the live chart would have
+# drawn - by calling the chart library's own hover code and reading what it puts
+# on screen, rather than by reimplementing `hovertemplate` and guessing at the
+# format strings. The label and the point's box are kept; everything else about
+# the interaction is discarded.
+#
+# Boxes are stored as percentages of the plot, not pixels. The frozen image is
+# responsive and this build runs at one viewport width; pixel hotspots would sit
+# beside their bars on every other screen.
+#
+# Charts denser than this are skipped rather than half-covered: a scatter of 400
+# customers would add 400 nodes to the page for hit targets three pixels wide.
+HOTSPOT_MAX_PER_CHART = 80
+
+HOTSPOT_HELPERS = r"""
+  const HOTSPOT_MAX = %d;
+
+  /* Plotly draws its hover label into `.hoverlayer` as one <text> per line,
+     with the trace name repeated as a separate node. Read it back the way it
+     reads on screen, minus that repeat. */
+  function readPlotlyHover(el) {
+    const layer = el.querySelector('.hoverlayer');
+    if (!layer) return '';
+    const lines = [];
+    layer.querySelectorAll('text').forEach(text => {
+      const spans = text.querySelectorAll('tspan');
+      (spans.length ? [...spans] : [text]).forEach(node => {
+        const value = (node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (value && lines[lines.length - 1] !== value) lines.push(value);
+      });
+    });
+    return lines.slice(0, 6).join('\n');
+  }
+
+  function boxOf(node, frame) {
+    const rect = node.getBoundingClientRect();
+    if (!rect.width && !rect.height) return null;
+    /* A marker three pixels across is not a hover target. Grow the smallest
+       boxes about their own centre so a pointer can actually land on them. */
+    const minW = Math.min(frame.width * 0.05, 22);
+    const minH = Math.min(frame.height * 0.07, 22);
+    const w = Math.max(rect.width, minW), h = Math.max(rect.height, minH);
+    const left = rect.left - (w - rect.width) / 2 - frame.left;
+    const top = rect.top - (h - rect.height) / 2 - frame.top;
+    return {
+      l: +Math.max(0, (left / frame.width) * 100).toFixed(2),
+      t: +Math.max(0, (top / frame.height) * 100).toFixed(2),
+      w: +Math.min(100, (w / frame.width) * 100).toFixed(2),
+      h: +Math.min(100, (h / frame.height) * 100).toFixed(2)
+    };
+  }
+
+  function plotlyHotspots(el) {
+    const frame = el.getBoundingClientRect();
+    if (!frame.width || !frame.height || !window.Plotly || !window.Plotly.Fx) return [];
+    const nodes = [];
+    el.querySelectorAll('g.trace').forEach(group => {
+      const calc = group.__data__;
+      const trace = Array.isArray(calc) && calc[0] ? calc[0].trace : null;
+      if (!trace) return;
+      const curve = trace.index != null ? trace.index : trace._expandedIndex;
+      if (curve == null) return;
+      group.querySelectorAll('g.point, path.point, path.slice, g.slice').forEach(node => {
+        if (node.__data__ && node.__data__.i != null) nodes.push({node, curve, point: node.__data__.i});
+      });
+    });
+    if (!nodes.length || nodes.length > HOTSPOT_MAX) return [];
+    const out = [];
+    nodes.forEach(entry => {
+      const box = boxOf(entry.node, frame);
+      if (!box) return;
+      let tip = '';
+      try {
+        /* Plotly ignores a hover request that looks like the one already
+           showing, so the previous label has to come down first. Without this
+           every point on the chart reports the first point's numbers. */
+        window.Plotly.Fx.unhover(el);
+        window.Plotly.Fx.hover(el, [{curveNumber: entry.curve, pointNumber: entry.point}]);
+        tip = readPlotlyHover(el);
+      } catch (_) { tip = ''; }
+      if (tip) out.push({...box, tip});
+    });
+    try { window.Plotly.Fx.unhover(el); } catch (_) {}
+    return out;
+  }
+
+  /* A canvas is one element, so a bar has no bounding rect of its own. Rebuild
+     it from the geometry Chart.js exposes: a bar carries the coordinates of
+     both of its ends, a point carries a centre and a radius. */
+  function chartjsBox(chart, element, frame) {
+    const p = element.getProps
+      ? element.getProps(['x', 'y', 'base', 'width', 'height', 'outerRadius'], true)
+      : element;
+    let left, top, w, h;
+    if (p.base != null && p.width != null && p.height != null) {
+      if (chart.options && chart.options.indexAxis === 'y') {
+        left = Math.min(p.x, p.base); w = Math.abs(p.x - p.base) || p.width;
+        top = p.y - p.height / 2;      h = p.height;
+      } else {
+        top = Math.min(p.y, p.base);   h = Math.abs(p.base - p.y) || p.height;
+        left = p.x - p.width / 2;      w = p.width;
+      }
+    } else {
+      const centre = element.getCenterPoint ? element.getCenterPoint() : {x: p.x, y: p.y};
+      const radius = Math.max(p.outerRadius || 0,
+                              (element.options && element.options.radius) || 0, 8);
+      left = centre.x - radius; top = centre.y - radius; w = radius * 2; h = radius * 2;
+    }
+    if (!isFinite(left) || !isFinite(top) || !isFinite(w) || !isFinite(h)) return null;
+    const minW = Math.min(frame.width * 0.05, 22), minH = Math.min(frame.height * 0.07, 22);
+    if (w < minW) { left -= (minW - w) / 2; w = minW; }
+    if (h < minH) { top -= (minH - h) / 2; h = minH; }
+    return {
+      l: +Math.max(0, (left / frame.width) * 100).toFixed(2),
+      t: +Math.max(0, (top / frame.height) * 100).toFixed(2),
+      w: +Math.min(100, (w / frame.width) * 100).toFixed(2),
+      h: +Math.min(100, (h / frame.height) * 100).toFixed(2)
+    };
+  }
+
+  /* Chart.js keeps its tooltip model separate from the canvas, so the real
+     callbacks - currency formatting, share-of-total suffixes - can be read
+     without drawing anything. The canvas is repainted clean afterwards so no
+     tooltip is baked into the captured pixels. */
+  function chartjsHotspots(el) {
+    const Chart = window.Chart;
+    if (!Chart || !Chart.getChart) return [];
+    const chart = Chart.getChart(el);
+    if (!chart || !chart.tooltip) return [];
+    /* Chart.js reports element coordinates against its own drawing surface,
+       which is not always the CSS box - so measure against the surface. The
+       frozen image carries that same aspect, which is what makes a percentage
+       hotspot land on its bar. */
+    const box = el.getBoundingClientRect();
+    const frame = {
+      width: chart.width || box.width,
+      height: chart.height || box.height
+    };
+    if (!frame.width || !frame.height) return [];
+    const targets = [];
+    (chart.data.datasets || []).forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (!meta || meta.hidden) return;
+      (meta.data || []).forEach((point, ix) => targets.push({di, ix, point}));
+    });
+    if (!targets.length || targets.length > HOTSPOT_MAX) return [];
+    const out = [];
+    const seen = new Set();
+    try {
+      targets.forEach(entry => {
+        const box = chartjsBox(chart, entry.point, frame);
+        if (!box) return;
+        chart.tooltip.setActiveElements([{datasetIndex: entry.di, index: entry.ix}],
+                                        {x: entry.point.x || 0, y: entry.point.y || 0});
+        chart.tooltip.update(true);
+        const body = (chart.tooltip.body || []).reduce((acc, part) => acc.concat(part.lines || []), []);
+        const lines = [].concat(chart.tooltip.title || [], body)
+          .map(line => String(line).replace(/\s+/g, ' ').trim()).filter(Boolean);
+        if (!lines.length) return;
+        /* `interaction.mode: 'index'` gives every dataset at that index the
+           same label. One hotspot per box is enough. */
+        const key = box.l + ':' + box.t + ':' + box.w + ':' + box.h;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({...box, tip: lines.slice(0, 6).join('\n')});
+      });
+    } catch (_) { /* leave whatever was collected */ }
+    try {
+      chart.tooltip.setActiveElements([], {x: 0, y: 0});
+      chart.tooltip.update(true);
+      chart.update('none');
+    } catch (_) {}
+    return out;
+  }
+
+  /* Chart.js sizes its backing store once, from whatever the container
+     measured at the moment it first drew. On this build that was routinely
+     smaller than the box the canvas ends up occupying - the outlook chart was
+     drawing 300 pixels wide and displaying 1,138 - and `toDataURL` captures
+     the backing store, so the frozen page published a 4x upscale of a
+     thumbnail. Re-measure, and capture at 2x so the result survives a retina
+     screen. */
+  function sharpenCanvas(el) {
+    const Chart = window.Chart;
+    if (!Chart || !Chart.getChart) return;
+    const chart = Chart.getChart(el);
+    if (!chart) return;
+    try {
+      chart.options = chart.options || {};
+      chart.options.devicePixelRatio = 2;
+      chart.resize();
+      chart.update('none');
+    } catch (_) {}
+  }
+""" % HOTSPOT_MAX_PER_CHART
+
+PLOTLY_FREEZE_JS = (
+    "async (el) => {"
+    + HOTSPOT_HELPERS
+    + """
+      const rect = el.getBoundingClientRect();
+      const width = Math.max(320, Math.round(rect.width || el.clientWidth || 800));
+      const height = Math.max(180, Math.round(rect.height || el.clientHeight || 360));
+      let hotspots = [];
+      try { hotspots = plotlyHotspots(el); } catch (_) { hotspots = []; }
+      const url = await window.Plotly.toImage(el, {format:'svg', width, height});
+      const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
+      return {url, width, height, hotspots,
+              alt: el.getAttribute('aria-label') || heading?.textContent?.trim() || 'Analytics chart'};
+    }"""
+)
+
+CANVAS_FREEZE_JS = (
+    "(el) => {"
+    + HOTSPOT_HELPERS
+    + """
+      try { sharpenCanvas(el); } catch (_) {}
+      const rect = el.getBoundingClientRect();
+      let hotspots = [];
+      try { hotspots = chartjsHotspots(el); } catch (_) { hotspots = []; }
+      const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
+      const width = Math.max(1, Math.round(rect.width || el.width || 800));
+      let height = Math.max(1, Math.round(rect.height || el.height || 320));
+      /* The capture must carry the backing store's aspect, not the CSS box's.
+         Where the two disagree - the weekday chart drew 340 rows of pixels into
+         a 240px box - taking the box squashes the picture. Take the width from
+         layout, so the page reflows exactly as before, and the height from the
+         pixels, so nothing is stretched. */
+      const chart = window.Chart && window.Chart.getChart ? window.Chart.getChart(el) : null;
+      const surfaceW = (chart && chart.width) || el.width;
+      const surfaceH = (chart && chart.height) || el.height;
+      if (surfaceW > 1 && surfaceH > 1) {
+        height = Math.max(1, Math.round(width * (surfaceH / surfaceW)));
+      }
+      return {
+        png: el.toDataURL('image/png'),
+        width, height, hotspots,
+        alt: el.getAttribute('aria-label') || heading?.textContent?.trim() || 'Analytics chart'
+      };
+    }"""
+)
+
+# The image is the chart; the overlay is the hover. Hotspots are empty <b>
+# elements - no text, no tab stop, nothing for a screen reader to read twice -
+# whose only job is to own a `:hover` and carry the label in an attribute that
+# CSS `content` can print.
+CHART_MOUNT_JS = """(el, cfg) => {
+  const img = document.createElement('img');
+  img.className = 'static-chart'; img.src = cfg.src; img.alt = cfg.alt;
+  img.width = cfg.width; img.height = cfg.height; img.loading = 'eager';
+  img.decoding = 'sync';
+  if (cfg.alt && cfg.alt !== 'Analytics chart') img.title = cfg.alt;
+  const hotspots = cfg.hotspots || [];
+  if (!hotspots.length) { el.replaceWith(img); return; }
+  const wrap = document.createElement('span');
+  wrap.className = 'static-chart-wrap';
+  wrap.append(img);
+  hotspots.forEach(spot => {
+    const hot = document.createElement('b');
+    hot.className = 'wa-hot';
+    hot.setAttribute('data-wa-tip', spot.tip);
+    hot.setAttribute('aria-hidden', 'true');
+    hot.style.cssText = 'left:' + spot.l + '%;top:' + spot.t + '%;width:' + spot.w + '%;height:' + spot.h + '%';
+    /* Flip the label back inside the plot when the point is near an edge:
+       above it would leave the top of the chart, and beyond either side it
+       would be clipped by the card the chart sits in. */
+    if (spot.t < 34) hot.dataset.waTipPlace = 'below';
+    if (spot.l < 22) hot.dataset.waTipAlign = 'start';
+    else if (spot.l + spot.w > 78) hot.dataset.waTipAlign = 'end';
+    wrap.append(hot);
+  });
+  el.replaceWith(wrap);
+}"""
 
 STATIC_CRITICAL_CSS = """
 .static-scope-bar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.8rem 1rem;
@@ -380,6 +735,42 @@ STATIC_CRITICAL_CSS = """
 .static-detail-tabs__list button.is-active{background:var(--wa-accent);color:#fff}
 .static-detail-tabs__panel[hidden]{display:none}.static-chart{display:block;width:100%;height:auto;min-height:180px;
   object-fit:contain}
+/* ---- hover -------------------------------------------------------------- */
+/* One tooltip for the whole site, drawn by CSS so it survives having every
+   script stripped. `data-wa-tip` is set in the freeze pass: on chart hotspots,
+   and on every element that was carrying a Bootstrap tooltip - which stops
+   working the moment its JavaScript is removed, and takes the element's own
+   `title` with it, so those elements ended up with no hover at all. */
+.static-chart-wrap{position:relative;display:block;overflow:visible}
+.static-chart-wrap .wa-hot{position:absolute;display:block;margin:0;border-radius:4px;
+  background:transparent;pointer-events:auto}
+.static-chart-wrap .wa-hot:hover{background:color-mix(in srgb,var(--wa-accent,#38bdf8) 16%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--wa-accent,#38bdf8) 55%,transparent)}
+[data-wa-tip]{position:relative}
+[data-wa-tip]::after{content:attr(data-wa-tip);position:absolute;left:50%;bottom:calc(100% + .5rem);
+  transform:translateX(-50%);z-index:70;width:max-content;max-width:17rem;padding:.5rem .65rem;
+  border-radius:.55rem;border:1px solid var(--wa-hairline,rgba(148,163,184,.35));
+  background:var(--wa-surface-2,var(--wa-surface,#0f141d));color:var(--wa-text,#e8edf7);
+  font-size:.76rem;font-weight:600;line-height:1.4;letter-spacing:.005em;text-align:left;
+  white-space:pre-line;text-transform:none;box-shadow:0 12px 28px rgba(2,6,23,.42);
+  opacity:0;visibility:hidden;pointer-events:none}
+[data-wa-tip]:hover::after,[data-wa-tip]:focus-visible::after{opacity:1;visibility:visible}
+[data-wa-tip-place="below"]::after{bottom:auto;top:calc(100% + .5rem)}
+[data-wa-tip-align="start"]::after{left:0;transform:none}
+[data-wa-tip-align="end"]::after{left:auto;right:0;transform:none}
+/* A card that clips its overflow clips the label with it. Only the cards that
+   scroll a wide table need to clip, and `:has()` is how we tell them apart -
+   the planner puts a 640px scorecard and a chart inside the same class. Where
+   `:has()` is unsupported the rule is simply dropped and the label is clipped,
+   which is the behaviour we started from. */
+body[data-static-page] .static-chart-wrap{overflow:visible}
+/* The shell that holds a chart holds nothing else, so letting it overflow
+   cannot spill anything but the label. Ten of the eleven Sales Reps charts sit
+   in a shell with `overflow:hidden` and had their labels cut at the plot edge. */
+body[data-static-page] :has(> .static-chart-wrap){overflow:visible}
+body[data-static-page] .report-card:not(:has(table)),
+body[data-static-page] .chart-card:not(:has(table)){overflow:visible}
+@media(hover:none){.static-chart-wrap .wa-hot{display:none}}
 /* Keep prerendered sections in the document while deferring layout and paint
    for sections below the viewport. This breaks one large first-paint layout
    into small scroll-time layouts and keeps the main thread responsive. */
@@ -452,6 +843,7 @@ class Builder:
             "cube_bytes": 0,
             "prerendered": 0,
             "chart_assets": 0,
+            "hotspots": 0,
         }
 
     def log(self, msg: str) -> None:
@@ -987,31 +1379,26 @@ class Builder:
         # Plotly carries thousands of interaction nodes per chart. `toImage`
         # gives us its authoritative SVG, after which one eager image replaces
         # the entire interactive graph in the first-paint DOM.
+        #
+        # Replacing the graph with a picture also throws away the single most
+        # useful thing a chart does: naming the bar under the pointer. So before
+        # the swap, walk every drawn point, ask Plotly's own hover machinery for
+        # the label it *would* have shown, and keep it - text and box both - as
+        # a percentage-positioned overlay. Percentages, because the image is
+        # responsive and pixel hotspots would drift off their bars the moment
+        # the viewport is not the one this build ran at.
         plots = page.locator(".js-plotly-plot")
         for index in reversed(range(plots.count())):
             plot = plots.nth(index)
             try:
-                result = plot.evaluate(
-                    """async (el) => {
-                      const rect = el.getBoundingClientRect();
-                      const width = Math.max(320, Math.round(rect.width || el.clientWidth || 800));
-                      const height = Math.max(180, Math.round(rect.height || el.clientHeight || 360));
-                      const url = await window.Plotly.toImage(el, {format:'svg', width, height});
-                      const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
-                      return {url, width, height, alt:el.getAttribute('aria-label') || heading?.textContent?.trim() || 'Analytics chart'};
-                    }"""
-                )
+                result = plot.evaluate(PLOTLY_FREEZE_JS)
                 svg = self._decode_svg_data_url(result["url"])
                 rel = self._write_chart_asset(svg)
                 plot.evaluate(
-                    """(el, cfg) => {
-                      const img = document.createElement('img');
-                      img.className = 'static-chart'; img.src = cfg.src; img.alt = cfg.alt;
-                      img.width = cfg.width; img.height = cfg.height; img.loading = 'eager';
-                      img.decoding = 'sync'; el.replaceWith(img);
-                    }""",
+                    CHART_MOUNT_JS,
                     {**result, "src": f"{base}{rel}"},
                 )
+                self.stats["hotspots"] += len(result.get("hotspots") or ())
                 frozen += 1
             except Exception as exc:
                 self.log(f"    ! plotly chart {index}: {type(exc).__name__}: {exc}")
@@ -1023,17 +1410,7 @@ class Builder:
         for index in reversed(range(canvases.count())):
             canvas = canvases.nth(index)
             try:
-                result = canvas.evaluate(
-                    """(el) => {
-                      const rect = el.getBoundingClientRect();
-                      return {
-                        png: el.toDataURL('image/png'),
-                        width: Math.max(1, Math.round(rect.width || el.width || 800)),
-                        height: Math.max(1, Math.round(rect.height || el.height || 320)),
-                        alt: el.getAttribute('aria-label') || 'Analytics chart'
-                      };
-                    }"""
-                )
+                result = canvas.evaluate(CANVAS_FREEZE_JS)
                 svg = (
                     '<svg xmlns="http://www.w3.org/2000/svg" role="img" '
                     f'aria-label="{_xml_escape(result["alt"])}" viewBox="0 0 {result["width"]} {result["height"]}">'
@@ -1042,14 +1419,10 @@ class Builder:
                 )
                 rel = self._write_chart_asset(svg)
                 canvas.evaluate(
-                    """(el, cfg) => {
-                      const img = document.createElement('img');
-                      img.className = 'static-chart'; img.src = cfg.src; img.alt = cfg.alt;
-                      img.width = cfg.width; img.height = cfg.height; img.loading = 'eager';
-                      img.decoding = 'sync'; el.replaceWith(img);
-                    }""",
+                    CHART_MOUNT_JS,
                     {**result, "src": f"{base}{rel}"},
                 )
+                self.stats["hotspots"] += len(result.get("hotspots") or ())
                 frozen += 1
             except Exception as exc:
                 self.log(f"    ! canvas chart {index}: {type(exc).__name__}: {exc}")
@@ -1277,6 +1650,25 @@ class Builder:
                          static page these are bytes nothing can read. */
                       el.removeAttribute('data-drilldown-payload');
                       el.removeAttribute('data-drilldown-bound');
+                      /* The payload is gone, so the affordances it installed
+                         are now promises the page cannot keep. `universal_
+                         drilldown.js` marks each drillable element with a
+                         hover style, a button role, a tab stop and the title
+                         "Click to drill into this detail" - and Sales Reps
+                         alone published 193 of them. A reviewer hovers a card
+                         that says it drills, clicks, nothing happens, and
+                         reasonably concludes the page is broken. Take the
+                         invitation off along with the payload. */
+                      if (el.classList.contains('is-drillable')) {
+                        el.classList.remove('is-drillable');
+                        if (el.getAttribute('role') === 'button' && !/^(A|BUTTON)$/.test(el.tagName)) {
+                          el.removeAttribute('role');
+                          if (el.getAttribute('tabindex') === '0') el.removeAttribute('tabindex');
+                        }
+                        if (el.getAttribute('title') === 'Click to drill into this detail') {
+                          el.removeAttribute('title');
+                        }
+                      }
                       [...el.attributes].forEach(attr => {
                         if (String(attr.value || '').includes('/api/')) el.removeAttribute(attr.name);
                       });
@@ -1318,6 +1710,34 @@ class Builder:
                      but cannot become a mobile LCP gate before the hero. */
                   const guide = document.querySelector('main.app-main > .page-guide');
                   if (guide) guide.parentElement.append(guide);
+                  /* Bootstrap tooltips are the page's own "hover for the
+                     definition" affordance, and they were silently dead here.
+                     Initialising one *moves* the element's `title` into
+                     `data-bs-original-title` so the browser stops drawing its
+                     own tooltip - then the freeze pass removes the JavaScript
+                     that was going to draw the replacement, and the element is
+                     left with nothing to show. Hand the text to CSS instead.
+
+                     Replaced elements are left with a real `title`: an <img> or
+                     an <input> has no box to hang ::after on. */
+                  const REPLACED = /^(IMG|INPUT|SELECT|TEXTAREA|AREA|CANVAS|OBJECT|IFRAME|EMBED|VIDEO|AUDIO|BR|HR)$/;
+                  document.querySelectorAll(
+                    '[data-bs-original-title],[data-bs-title],[data-bs-toggle="tooltip"],[title]'
+                  ).forEach(el => {
+                    const tip = (el.getAttribute('data-bs-original-title')
+                      || el.getAttribute('data-bs-title')
+                      || el.getAttribute('title') || '').trim();
+                    if (el.getAttribute('data-bs-toggle') === 'tooltip') el.removeAttribute('data-bs-toggle');
+                    ['data-bs-original-title', 'data-bs-title', 'data-bs-placement',
+                     'data-bs-custom-class', 'data-bs-trigger'].forEach(attr => el.removeAttribute(attr));
+                    if (!tip) { el.removeAttribute('title'); return; }
+                    if (REPLACED.test(el.tagName)) { el.setAttribute('title', tip); return; }
+                    el.removeAttribute('title');
+                    el.setAttribute('data-wa-tip', tip);
+                    if (!el.getAttribute('aria-label') && !(el.textContent || '').trim()) {
+                      el.setAttribute('aria-label', tip);
+                    }
+                  });
                   document.querySelectorAll('script').forEach(el => el.remove());
                   document.querySelectorAll('link[rel="modulepreload"],link[rel="preload"][as="script"]').forEach(el => el.remove());
                   document.querySelectorAll('.filters-loading-overlay,#filtersRetryWrap,#filtersErrorBanner,#filtersPendingState,.spinner-border,.skeleton,[class*="-skeleton"],[class*="_skeleton"]').forEach(el => el.remove());
@@ -1631,6 +2051,7 @@ class Builder:
         self.log(
             f"\ndone: {s['pages']} pages, {s['drilldowns']} drilldowns, "
             f"{s['api_hits']} payloads inlined ({s['api_misses']} endpoints not used), "
+            f"{s['chart_assets']} chart assets, {s['hotspots']} hover labels, "
             f"{s['bytes']/1024/1024:.1f} MB of HTML"
         )
 

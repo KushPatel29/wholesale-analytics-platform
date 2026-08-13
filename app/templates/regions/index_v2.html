@@ -1,6 +1,10 @@
 {% extends 'base.html' %}
 {% block title %}Regions | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ajax' %}
+{# base.html only loads Plotly for a hardcoded list of blueprints. Without this
+   the opportunity matrix silently falls back to its list form - the same way
+   every region drilldown did before it was noticed. #}
+{% set needs_plotly = true %}
 {% block content %}
 <div
   id="RegionsOverviewV2App"
@@ -382,6 +386,10 @@
             <div class="small text-muted">X-axis = revenue. Y-axis = margin %. Quadrants use selected-region medians.</div>
           </div>
           <div class="card-body">
+            {# The quadrant lists tell you which box a region is in. The plot
+               tells you how far into it, and which regions sit on a boundary -
+               the only question a four-box list cannot answer. #}
+            <div id="regionsV2OpportunityPlot" class="regions-v2-plot" style="min-height:340px"></div>
             <div id="regionsV2OpportunityChart" class="regions-v2-chart"></div>
             <p id="regionsV2OpportunityEmpty" class="text-muted small mb-0 d-none">Not enough regions with revenue and margin data to render the matrix.</p>
           </div>
@@ -808,5 +816,5 @@
 
 {% block scripts %}
   {{ super() }}
-  <script src="{{ url_for('static', filename='js/regions_v2.js', v='20260809-final-cleanup-1') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/regions_v2.js', v='20260813-opportunity-plot-1') }}" defer></script>
 {% endblock %}

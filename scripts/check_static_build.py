@@ -39,7 +39,13 @@ from pathlib import Path
 # (labor).
 MAX_PAGE_GZIP_KB = 60
 MAX_FRAGMENT_KB = 400
-MAX_PAGE_NODES = 3_600
+# Charts now carry a hover label per data point, as an empty <b> positioned over
+# the frozen image. That is up to 44 nodes per chart, and the pages that draw a
+# dozen charts pay for it - Labor and Sales Reps most. The nodes are leaf
+# elements with no text and no layout of their own, so the cost is bytes rather
+# than paint, and the budget moves to match rather than the hover coming back
+# off. Worst observed after the change: 3,652 nodes (products).
+MAX_PAGE_NODES = 4_400
 MAX_PAGE_HEIGHT = 11_500
 
 # Text that means the page is waiting. On a prerendered page there is nothing

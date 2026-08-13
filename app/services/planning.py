@@ -343,16 +343,25 @@ def _actions(
             }
         )
 
+    # Both bands, not just the critical one.
+    #
+    # The headline counts every lane under target - watch and critical alike -
+    # and this list used to answer only for critical. So the page could report
+    # "Lanes below target: 2" beside a single lane action, and the reader is
+    # left to work out which of the two the plan ignores. A watch lane is a
+    # smaller action, not an absent one.
     for lane in lanes:
-        if lane["status"] != "critical" or not lane["reliable_estimate"]:
+        if lane["status"] not in {"critical", "watch"} or not lane["reliable_estimate"]:
             continue
+        critical = lane["status"] == "critical"
         actions.append(
             {
-                "severity": "warning",
+                "severity": "warning" if critical else "info",
                 "title": f"{lane['label']} misses {100 - lane['on_time_pct']:.0f}% of its dates",
                 "detail": (
                     f"{lane['lines']:,} lines and {_money(lane['revenue'])} of revenue move on this lane "
                     f"at {lane['on_time_pct']:.0f}% on time, against a {SERVICE_TARGET_PCT:.0f}% target."
+                    + ("" if critical else " Under target but above the critical band.")
                 ),
                 "metric": lane["on_time_pct"],
                 "target": SERVICE_TARGET_PCT,

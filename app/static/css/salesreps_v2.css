@@ -3739,3 +3739,30 @@ body:has(.salesreps-v2) .app-main {
   border-color: rgba(255, 255, 255, 0.18) !important;
   color: var(--wa-on-dark-muted) !important;
 }
+
+/* ── Top Territories: give the chart a column it can actually draw in ──
+ *
+ * The workbench split its panel into chart + spotlight with `minmax(260px,
+ * .9fr)` on the spotlight, and stacked only below a 992px *viewport*. But the
+ * panel is a `col-lg-6` inside the workspace, so it measures ~343px at a
+ * 1280px viewport - wide enough to clear the breakpoint, nowhere near wide
+ * enough for two columns. The spotlight took its 260px floor and the chart got
+ * whatever was left: 67px. Frozen, that published one 92x297 sliver among ten
+ * landscape charts, which is what read as the page being misaligned.
+ *
+ * Stack them. The panel is never wide enough for the split, and a chart with a
+ * declared aspect ratio matches the `.ratio-4x3` shells the rest of the page
+ * uses instead of being sized by whatever is left over.
+ */
+.salesreps-v2 .sr-territory-workbench {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.salesreps-v2 .sr-territory-stage {
+  aspect-ratio: 4 / 3;
+  min-height: 260px;
+}
+
+.salesreps-v2 .sr-territory-spotlight {
+  min-width: 0;
+}

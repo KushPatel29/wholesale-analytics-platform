@@ -613,12 +613,93 @@
       .join("");
   };
 
+  /* Revenue against margin, one marker per region, coloured by the quadrant
+   * the payload already assigned. Everything else on this page is a ranked
+   * list, and a ranked list can only ever show one measure at a time - which
+   * is why "big but thin" and "small but rich" read identically on it. */
+  const QUADRANT_TONE = {
+    Scale: "--wa-good",
+    Protect: "--wa-info",
+    Fix: "--wa-danger",
+    Watch: "--wa-warning",
+  };
+
+  const renderOpportunityPlot = (points) => {
+    const host = document.getElementById("regionsV2OpportunityPlot");
+    if (!host) return;
+    if (!window.Plotly || points.length < 3) {
+      host.innerHTML = "";
+      return;
+    }
+    const css = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
+    const text = pick("--wa-text-dim", "#94a3b8");
+    const grid = pick("--wa-border", "rgba(148,163,184,.22)");
+    const revenues = points.map((point) => asNumber(point.revenue));
+    const margins = points.map((point) => asNumber(point.margin_pct));
+    const medianOf = (values) => {
+      const sorted = values.filter((value) => Number.isFinite(value)).slice().sort((a, b) => a - b);
+      if (!sorted.length) return 0;
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+    const midRevenue = medianOf(revenues);
+    const midMargin = medianOf(margins);
+    const biggest = Math.max(...revenues, 1);
+
+    const traces = Object.keys(QUADRANT_TONE).map((quadrant) => {
+      const group = points.filter((point) => (point.quadrant || "Watch") === quadrant);
+      return {
+        type: "scatter",
+        mode: "markers+text",
+        name: quadrant,
+        x: group.map((point) => asNumber(point.revenue)),
+        y: group.map((point) => asNumber(point.margin_pct)),
+        text: group.map((point) => point.region || "Unknown"),
+        textposition: "top center",
+        textfont: { size: 10, color: text },
+        customdata: group.map((point) => [point.quadrant || "Watch"]),
+        marker: {
+          size: group.map((point) => 12 + (asNumber(point.revenue) / biggest) * 26),
+          color: pick(QUADRANT_TONE[quadrant], "#38bdf8"),
+          opacity: 0.82,
+          line: { width: 1, color: "rgba(15,23,42,.55)" },
+        },
+        hovertemplate:
+          "<b>%{text}</b><br>%{customdata[0]}<br>Revenue %{x:$,.0f}<br>Margin %{y:.1f}%<extra></extra>",
+      };
+    }).filter((trace) => trace.x.length);
+
+    window.Plotly.react(host, traces, {
+      margin: { l: 56, r: 16, t: 12, b: 44 },
+      height: 340,
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: text, size: 11 },
+      showlegend: true,
+      legend: { orientation: "h", y: -0.22, font: { size: 10 } },
+      xaxis: { title: { text: "Revenue", font: { size: 11 } }, gridcolor: grid, zeroline: false, tickformat: "$,.2s" },
+      yaxis: { title: { text: "Margin %", font: { size: 11 } }, gridcolor: grid, zeroline: false, ticksuffix: "%" },
+      shapes: [
+        { type: "line", x0: midRevenue, x1: midRevenue, yref: "paper", y0: 0, y1: 1,
+          line: { color: grid, width: 1, dash: "dot" } },
+        { type: "line", y0: midMargin, y1: midMargin, xref: "paper", x0: 0, x1: 1,
+          line: { color: grid, width: 1, dash: "dot" } },
+      ],
+    }, { displayModeBar: false, responsive: true });
+  };
+
   const renderOpportunityMatrix = (payload = {}) => {
     const chartEl = document.getElementById("regionsV2OpportunityChart");
     const emptyEl = document.getElementById("regionsV2OpportunityEmpty");
     if (!chartEl) return;
     const points = Array.isArray(payload.points) ? payload.points : [];
     if (emptyEl) emptyEl.classList.toggle("d-none", points.length >= 3);
+    if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
+      window.ChartUtils.whenPlotlyReady(() => renderOpportunityPlot(points));
+    } else {
+      renderOpportunityPlot(points);
+    }
     if (points.length < 3) {
       chartEl.innerHTML = "";
       return;

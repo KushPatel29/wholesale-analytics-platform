@@ -2,6 +2,22 @@
  * Northgate Retail Analytics Executive Reporting Workspace
  * Enterprise-grade, live, interactive reporting layer.
  */
+
+// Views, not "audiences". Each one is a real subset of the planner: what you
+// look at depends on whether you are deciding what to buy, where the network is
+// failing, or just what to do this week.
+//
+// Declared once and published onto the View control as a data attribute, so the
+// prerendered build can honour the same four views without this file. A static
+// page cannot re-render sections, but it can hide the ones a view excludes -
+// and a select that does nothing is worse than no select at all.
+const REPORT_VIEW_PRESETS = {
+  full: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
+  demand: ['plan', 'demand', 'matrix', 'actions'],
+  supply: ['plan', 'inventory', 'service', 'exposure', 'actions'],
+  actions: ['plan', 'actions']
+};
+
 class ReportWorkspace {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
@@ -39,6 +55,7 @@ class ReportWorkspace {
 
   setupEventListeners() {
     const typeSelect = document.getElementById('reportTypeSelect');
+    if (typeSelect) typeSelect.dataset.staticSections = JSON.stringify(REPORT_VIEW_PRESETS);
 
     typeSelect?.addEventListener('change', (e) => {
       this.state.type = e.target.value;
@@ -51,29 +68,25 @@ class ReportWorkspace {
 
   handleTypeChange() {
     const toggles = document.getElementById('sectionToggles');
+    // The toggle list is always built, and only revealed for "Choose sections".
+    // Building it unconditionally is what lets the frozen page ship a working
+    // checklist: the static runtime can bind buttons that are already there,
+    // and cannot render ones that were never drawn.
+    this.renderVisibilityToggles();
     if (this.state.type === 'custom') {
       toggles.style.display = 'block';
-      this.renderVisibilityToggles();
     } else {
       toggles.style.display = 'none';
-      // Preset sections based on type
-      // Views, not "audiences". Each one is a real subset of the planner:
-      // what you look at depends on whether you are deciding what to buy,
-      // where the network is failing, or just what to do this week.
-      const presets = {
-        full: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
-        demand: ['plan', 'demand', 'matrix', 'actions'],
-        supply: ['plan', 'inventory', 'service', 'exposure', 'actions'],
-        actions: ['plan', 'actions']
-      };
-      this.state.sections = presets[this.state.type] || Object.keys(this.sectionRegistry);
+      this.state.sections = REPORT_VIEW_PRESETS[this.state.type] || Object.keys(this.sectionRegistry);
     }
   }
 
   renderVisibilityToggles() {
     const container = document.getElementById('visibilityList');
+    if (!container) return;
     container.innerHTML = Object.entries(this.sectionRegistry).map(([id, cfg]) => `
-      <button class="section-toggle ${this.state.sections.includes(id) ? 'active' : ''}" data-id="${id}">
+      <button type="button" class="section-toggle ${this.state.sections.includes(id) ? 'active' : ''}"
+              data-id="${id}" aria-pressed="${this.state.sections.includes(id)}">
         ${cfg.label}
       </button>
     `).join('');
@@ -129,37 +142,36 @@ class ReportWorkspace {
   render() {
     this.renderNavigation();
     this.renderContent();
+    this.renderVisibilityToggles();
     this.setupScrollSpy();
   }
 
   renderNavigation() {
     const navContainer = document.getElementById('dynamicNavItems');
-    navContainer.innerHTML = this.state.sections.map(id => {
-      const cfg = this.sectionRegistry[id];
-      if (!cfg) return '';
-      return `
-        <a href="#section-${id}" class="report-nav-item">
+    // Every section gets a nav item, whether or not the current view includes
+    // it, with the excluded ones hidden. The prerendered page keeps whatever is
+    // in the DOM, and a view that has to *add* a link is a view a page with no
+    // JavaScript cannot switch to.
+    navContainer.innerHTML = Object.entries(this.sectionRegistry).map(([id, cfg]) => `
+        <a href="#section-${id}" class="report-nav-item" data-report-section="${id}"
+           ${this.state.sections.includes(id) ? '' : 'hidden'}>
           <i class="bi ${cfg.icon}"></i>
           ${cfg.label}
         </a>
-      `;
-    }).join('');
+      `).join('');
   }
 
   renderContent() {
     const content = document.getElementById('reportContent');
-    content.innerHTML = this.state.sections.map(id => {
-      const cfg = this.sectionRegistry[id];
-      if (!cfg) return '';
-      return `
-        <section id="section-${id}" class="report-section">
+    content.innerHTML = Object.entries(this.sectionRegistry).map(([id, cfg]) => `
+        <section id="section-${id}" class="report-section" data-report-section="${id}"
+                 ${this.state.sections.includes(id) ? '' : 'hidden'}>
           ${this.createSectionHeader(id, cfg.label)}
           <div id="content-${id}" class="section-body">
             ${cfg.render(this.state.data)}
           </div>
         </section>
-      `;
-    }).join('');
+      `).join('');
     // Sections are built as HTML strings, so anything that needs a live element
     // has to be drawn after they are in the document.
     this.drawCharts();
@@ -961,11 +973,17 @@ class ReportWorkspace {
   }
 
   saveStateToStorage() {
-    localStorage.setItem('wholesale_report_prefs', JSON.stringify(this.state));
+    // Only the choice, not the payload. `this.state` carries the whole planner
+    // bundle, and writing it here put a megabyte of numbers into localStorage
+    // on every click - which is also why a stale copy could outlive a rebuild.
+    localStorage.setItem('wholesale_report_prefs', JSON.stringify({
+      type: this.state.type,
+      sections: this.state.sections
+    }));
     const btn = document.getElementById('savePresetBtn');
-    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> PRESET SAVED';
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> VIEW SAVED';
     setTimeout(() => {
-      btn.innerHTML = '<i class="bi bi-bookmark-plus me-1"></i> SAVE PRESET';
+      btn.innerHTML = '<i class="bi bi-bookmark-plus me-1"></i> SAVE VIEW';
     }, 2000);
   }
 

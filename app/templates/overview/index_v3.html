@@ -381,6 +381,18 @@
       grid-template-columns: 1fr;
     }
   }
+  /* Bootstrap's `col-xl-*` answer the viewport; these two panels are 579px
+     columns inside the outlook grid. At a 1440px viewport the viewport says
+     "extra large", so the Pareto was drawn 233px wide and the weekday chart
+     140px - narrower than its own legend. Below 1200px the xl classes stop
+     applying and this rule is a no-op, which is exactly when the panels are
+     full width and the split is real. */
+  #overviewPage .outlook-shape .panel-body > .row > [class*="col-xl-"],
+  #overviewPage .outlook-pulse .panel-body > .row > [class*="col-xl-"] {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+  }
   #overviewPage .control-tower-rail {
     position: sticky;
     top: 1rem;

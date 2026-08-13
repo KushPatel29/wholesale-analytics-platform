@@ -28,7 +28,17 @@ _TRUE_VALUES = {"1", "true", "yes", "on"}
 # which means editing a bundle builder leaves every stale entry looking valid.
 # That is not hypothetical: a fix to the suppliers revenue trend was invisible
 # in the browser while this cache kept serving the pre-fix series.
-_BUILDER_GLOBS = ("services/*_bundle.py", "services/bundle_*.py")
+#
+# It is the whole services package, not just the files named `*_bundle.py`. A
+# bundle is assembled from its neighbours - `planning.py` computes the planner
+# payload, `formatting.py` renders the figures in it - and naming only the
+# assemblers meant a change to the analysis itself was invisible. A widened fix
+# to the planner's action list read as no change at all locally, because this
+# fingerprint had not moved and the pre-fix payload was served straight back.
+#
+# The cost of the wider glob is cache misses after edits to service modules
+# that no bundle reads. That is the safe direction to be wrong in.
+_BUILDER_GLOBS = ("services/*.py",)
 _build_id_cache: str | None = None
 _runtime_ready_cache: bool | None = None
 _runtime_ready_lock = threading.Lock()
