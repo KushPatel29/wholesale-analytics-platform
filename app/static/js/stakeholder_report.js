@@ -64,6 +64,7 @@ class ReportWorkspace {
     });
 
     document.getElementById('savePresetBtn')?.addEventListener('click', () => this.saveStateToStorage());
+    document.querySelector('[data-print-report]')?.addEventListener('click', () => window.print());
   }
 
   handleTypeChange() {

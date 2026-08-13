@@ -115,11 +115,11 @@
   // ---------------------------------------------------------------------
   // Charts
   //
-  // Three shapes the bar lists cannot carry: ABC is a concentration claim and
-  // wants a cumulative curve; cover is a distribution whose mean hides both
-  // ends; movement is a relationship between two axes. Plotly is fetched on
-  // idle after first paint, so every draw waits for it and the page is
-  // complete without it - the static build freezes these to SVG anyway.
+  // Five shapes the bar lists cannot carry: ABC is a concentration claim;
+  // cover and aging are distributions whose means hide both ends; movement is
+  // a relationship between two axes; carrying cost is a composition. Plotly
+  // is fetched on idle after first paint, so every draw waits for it and the
+  // page is complete without it - the static build freezes these to SVG.
   // ---------------------------------------------------------------------
   const plotTheme = () => {
     const css = getComputedStyle(document.documentElement);
@@ -275,6 +275,75 @@
     }), { displayModeBar: false, responsive: true });
   };
 
+  const drawAging = (rows, theme) => {
+    const host = document.getElementById("inventoryAging");
+    const data = Array.isArray(rows) ? rows : [];
+    if (!host || !data.length) return;
+    const labels = data.map((row) => String(row.label || "Unknown"));
+    const values = data.map((row) => num(row.inventory_value));
+    const counts = data.map((row) => num(row.count));
+    const totalValue = values.reduce((sum, value) => sum + value, 0);
+    const aged = (label) => /^(91-180|181-365|365\+)$/.test(label);
+    const agedValue = data.reduce((sum, row, index) => sum + (aged(labels[index]) ? num(row.inventory_value) : 0), 0);
+    const agedCount = data.reduce((sum, row, index) => sum + (aged(labels[index]) ? num(row.count) : 0), 0);
+    text("inventoryAgingRead", totalValue > 0
+      ? `${fmt(agedCount)} SKUs older than 90 days hold ${money(agedValue)} (${(agedValue / totalValue * 100).toFixed(1)}% of inventory value).`
+      : `${fmt(agedCount)} SKUs are older than 90 days in the active scope.`);
+
+    window.Plotly.newPlot(host, [
+      {
+        type: "bar", name: "Inventory value", x: labels, y: values,
+        marker: { color: labels.map((label) => aged(label) ? theme.warn : theme.accent), opacity: 0.82 },
+        hovertemplate: "%{x} days<br>%{y:$,.0f} of inventory<extra></extra>",
+      },
+      {
+        type: "scatter", mode: "lines+markers", name: "SKUs", x: labels, y: counts, yaxis: "y2",
+        line: { color: theme.info, width: 2 }, marker: { color: theme.info, size: 7 },
+        hovertemplate: "%{x} days<br>%{y:,.0f} SKUs<extra></extra>",
+      },
+    ], baseLayout(theme, {
+      height: 250,
+      showlegend: true,
+      legend: { orientation: "h", y: 1.16, x: 0, font: { size: 10 } },
+      margin: { l: 64, r: 52, t: 32, b: 46 },
+      xaxis: { title: "Age of stock position (days)", gridcolor: "rgba(0,0,0,0)", linecolor: theme.grid },
+      yaxis: { title: "Inventory value", tickprefix: "$", gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
+      yaxis2: { title: "SKUs", overlaying: "y", side: "right", rangemode: "tozero", gridcolor: "rgba(0,0,0,0)", zeroline: false },
+    }), { displayModeBar: false, responsive: true });
+  };
+
+  const drawHolding = (holding, theme) => {
+    const host = document.getElementById("inventoryHoldingSplit");
+    if (!host) return;
+    const rows = [
+      { label: "Capital", rate: 5, value: holding?.capital },
+      { label: "Service", rate: 1, value: holding?.service },
+      { label: "Storage", rate: 2, value: holding?.storage },
+      { label: "Risk", rate: 3, value: holding?.risk },
+    ].filter((row) => row.value != null && Number.isFinite(Number(row.value)));
+    if (!rows.length) return;
+    const total = rows.reduce((sum, row) => sum + num(row.value), 0);
+    text("inventoryHoldingRead", `${money(total)} a year under the explicit 11% planning assumption; capital and risk explain ${money(num(holding.capital) + num(holding.risk))}.`);
+
+    window.Plotly.newPlot(host, [{
+      type: "pie", hole: 0.58,
+      labels: rows.map((row) => row.label),
+      values: rows.map((row) => num(row.value)),
+      customdata: rows.map((row) => row.rate),
+      marker: { colors: [theme.info, theme.accent, theme.warn, theme.danger] },
+      textinfo: "label+percent", textposition: "outside",
+      hovertemplate: "<b>%{label}</b><br>%{value:$,.0f} a year<br>%{customdata}% of inventory value<extra></extra>",
+      sort: false,
+    }], baseLayout(theme, {
+      height: 250,
+      margin: { l: 42, r: 42, t: 18, b: 18 },
+      annotations: [{
+        text: `${money(total)}<br><span style='font-size:10px'>annual</span>`,
+        showarrow: false, font: { size: 13, color: theme.text },
+      }],
+    }), { displayModeBar: false, responsive: true });
+  };
+
   const drawCharts = (payload) => {
     const charts = payload?.charts;
     if (!charts) return;
@@ -283,6 +352,8 @@
       try { drawPareto(charts, theme); } catch (error) { console.warn("pareto chart failed", error); }
       try { drawCover(charts, theme); } catch (error) { console.warn("cover chart failed", error); }
       try { drawMovement(charts, theme); } catch (error) { console.warn("movement chart failed", error); }
+      try { drawAging(payload?.aging, theme); } catch (error) { console.warn("aging chart failed", error); }
+      try { drawHolding(payload?.holding_cost || {}, theme); } catch (error) { console.warn("holding-cost chart failed", error); }
     };
     if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) window.ChartUtils.whenPlotlyReady(draw);
     else if (window.Plotly) draw();

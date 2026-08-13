@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% set filters_handler = 'ajax' %}
 {# `inventory` is not one of the blueprints base.html loads Plotly for, and this
-   page draws three real charts, so it asks for the libraries explicitly. The
+   page draws five real charts, so it asks for the libraries explicitly. The
    static build strips every <script> once it has frozen the charts to SVG, so
    this costs the published pages nothing. #}
 {% set needs_plotly = true %}
 {% block title %}Inventory Analysis | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260813-charts-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inventory.css', v='20260813-capital-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -117,11 +117,18 @@
     <div class="inventory-diagnostics">
       <article class="inventory-panel"><h3>ABC by inventory value</h3><div id="inventoryAbc" class="inventory-bars"></div></article>
       <article class="inventory-panel"><h3>Movement quadrant</h3><div id="inventoryQuadrants" class="inventory-bars"></div></article>
-      <article class="inventory-panel"><h3>Inventory aging</h3><div id="inventoryAging" class="inventory-bars"></div></article>
+      <article class="inventory-panel">
+        <h3>Inventory aging</h3>
+        <p class="inventory-panel__copy" id="inventoryAgingRead">Inventory value and SKU count by age of the latest observed stock position.</p>
+        <div id="inventoryAging" class="inventory-chart inventory-chart--compact" role="img"
+             aria-label="Inventory value and SKU count by aging bucket"></div>
+      </article>
       <article class="inventory-panel">
         <h3>Annual holding-cost model</h3>
-        <div id="inventoryHoldingSplit" class="inventory-bars"></div>
-        <small class="inventory-footnote">Capital 5% · service 1% · storage 2% · risk 3%</small>
+        <p class="inventory-panel__copy" id="inventoryHoldingRead">Planning estimate split into capital, service, storage, and obsolescence risk.</p>
+        <div id="inventoryHoldingSplit" class="inventory-chart inventory-chart--compact" role="img"
+             aria-label="Annual holding cost split by cost component"></div>
+        <small class="inventory-footnote">Planning assumption: capital 5% · service 1% · storage 2% · risk 3%.</small>
       </article>
     </div>
   </section>
@@ -173,5 +180,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-charts-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-capital-1') }}" defer></script>
 {% endblock %}

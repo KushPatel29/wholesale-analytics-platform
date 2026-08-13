@@ -58,13 +58,14 @@ body.theme-wa-future .inventory-hero h1 { color: #f4f8fb !important; }
 .inventory-insights { grid-template-columns: repeat(3, minmax(0,1fr)); margin-bottom: 0.9rem; }
 .inventory-kpis { grid-template-columns: repeat(4, minmax(0,1fr)); margin-bottom: 1.6rem; }
 .inventory-action-grid { grid-template-columns: repeat(2, minmax(0,1fr)); margin-bottom: 1.6rem; }
-.inventory-diagnostics { grid-template-columns: repeat(4, minmax(0,1fr)); }
+.inventory-diagnostics { grid-template-columns: repeat(2, minmax(0,1fr)); }
 
 /* Two charts side by side, stacking on narrow viewports. The explicit heights
    matter for the static build: it freezes each chart at its rendered size, so
    a collapsed container would bake in a collapsed picture. */
 .inventory-charts { display: grid; gap: 0.85rem; grid-template-columns: repeat(2, minmax(0,1fr)); }
 .inventory-chart { width: 100%; min-height: 260px; }
+.inventory-chart--compact { min-height: 250px; }
 .inventory-chart--tall { min-height: 380px; }
 @media (max-width: 991.98px) {
   .inventory-charts { grid-template-columns: 1fr; }

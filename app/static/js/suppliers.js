@@ -69,6 +69,10 @@
     el.textContent = value;
   };
 
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  })[char]);
+
   const money0 = (val) => (val == null ? "-" : fmtMoney0.format(Number(val) || 0));
   const money2 = (val) => (val == null ? "—" : fmtMoney2.format(Number(val) || 0));
   const num0 = (val) => (val == null ? "—" : fmtNum0.format(Number(val) || 0));
@@ -455,6 +459,7 @@
       accent: pick("--wa-accent", "#34d399"),
       danger: pick("--wa-danger", "#f87171"),
       warn: pick("--wa-warning", "#fbbf24"),
+      info: pick("--wa-info", "#60a5fa"),
     };
   };
 
@@ -464,8 +469,11 @@
         name: String(row.supplier_name || row.SupplierName || row.label || "Unknown"),
         revenue: toNum(row.revenue ?? row.Revenue),
         margin: toOptionalNum(row.margin_pct ?? row.MarginPct),
+        roi: toOptionalNum(row.roi_pct ?? row.ROIPct),
         orders: toNum(row.orders ?? row.Orders),
         products: toNum(row.products ?? row.Products),
+        customers: toNum(row.customers ?? row.Customers),
+        lastSold: String(row.last_sold ?? row.LastSold ?? ""),
       }))
       .filter((row) => row.revenue > 0);
 
@@ -556,6 +564,116 @@
         text: `portfolio ${portfolioMargin.toFixed(1)}%`, showarrow: false,
         font: { size: 9, color: theme.text },
       }],
+    }, { displayModeBar: false, responsive: true });
+  };
+
+  const renderSupplierPriorities = (table = {}) => {
+    const host = document.getElementById("supplierPriorities");
+    if (!host) return;
+    const rows = supplierRows(table).sort((a, b) => b.revenue - a.revenue);
+    if (!rows.length) {
+      host.innerHTML = '<div class="col-12"><p class="text-muted mb-0">No supplier priorities in the active scope.</p></div>';
+      return;
+    }
+    const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0) || 1;
+    const marginRows = rows.filter((row) => row.margin !== null);
+    const portfolioProfit = marginRows.reduce((sum, row) => sum + row.revenue * (row.margin / 100), 0);
+    const marginRevenue = marginRows.reduce((sum, row) => sum + row.revenue, 0);
+    const portfolioMargin = marginRevenue ? (portfolioProfit / marginRevenue) * 100 : null;
+    const largest = rows[0];
+    const scale = portfolioMargin === null ? largest : rows
+      .filter((row) => row.margin !== null && row.margin >= portfolioMargin)
+      .sort((a, b) => b.revenue - a.revenue)[0] || largest;
+    const marginWatch = portfolioMargin === null ? null : rows
+      .filter((row) => row.margin !== null && row.margin < portfolioMargin)
+      .sort((a, b) => b.revenue - a.revenue)[0];
+    const velocity = [...rows]
+      .filter((row) => row.products > 0 && row.orders > 0)
+      .sort((a, b) => (b.orders / b.products) - (a.orders / a.products))[0] || largest;
+
+    const cards = [
+      {
+        tone: "good", eyebrow: "Protect scale", title: scale.name,
+        detail: `${money0(scale.revenue)} is ${(scale.revenue / totalRevenue * 100).toFixed(1)}% of supplier revenue${scale.margin === null ? "." : ` at ${scale.margin.toFixed(1)}% margin.`}`,
+      },
+      marginWatch ? {
+        tone: "risk", eyebrow: "Recover margin", title: marginWatch.name,
+        detail: `${money0(marginWatch.revenue)} runs ${(portfolioMargin - marginWatch.margin).toFixed(1)} points below the ${portfolioMargin.toFixed(1)}% portfolio margin.`,
+      } : {
+        tone: "watch", eyebrow: "Margin coverage", title: "Cost view restricted",
+        detail: "Revenue and operating breadth remain available; margin action needs cost access.",
+      },
+      {
+        tone: "watch", eyebrow: "Watch velocity", title: velocity.name,
+        detail: `${fmtNum0.format(velocity.orders / Math.max(velocity.products, 1))} orders per active SKU across ${fmtNum0.format(velocity.products)} products${velocity.customers ? ` and ${fmtNum0.format(velocity.customers)} customers.` : "."}`,
+      },
+    ];
+    host.innerHTML = cards.map((card) => `
+      <div class="col-md-4">
+        <article class="supplier-priority" data-tone="${card.tone}">
+          <span class="supplier-priority__eyebrow">${escapeHtml(card.eyebrow)}</span>
+          <strong>${escapeHtml(card.title)}</strong>
+          <p>${escapeHtml(card.detail)}</p>
+        </article>
+      </div>`).join("");
+  };
+
+  const renderSupplierBreadth = (table = {}) => {
+    const rows = supplierRows(table).filter((row) => row.products > 0 && row.orders > 0);
+    if (!window.Plotly || rows.length < 3) {
+      emptyChart("supplierBreadthChart", "Not enough supplier breadth in scope.");
+      return;
+    }
+    removeSkeleton("supplierBreadthChart");
+    const theme = plotTheme();
+    const maxRevenue = Math.max(...rows.map((row) => row.revenue), 1);
+    const ranked = [...rows].sort((a, b) => b.revenue - a.revenue);
+    const labelled = new Set(ranked.slice(0, 4).map((row) => row.name));
+    const margins = rows.map((row) => row.margin).filter((value) => value !== null);
+    const colourMin = margins.length ? Math.min(...margins) : 0;
+    const colourMax = margins.length ? Math.max(...margins) : 1;
+    const topVelocity = [...rows].sort((a, b) => (b.orders / b.products) - (a.orders / a.products))[0];
+    setText("supplierBreadthRead",
+      `${topVelocity.name} has the highest order velocity at ${fmtNum0.format(topVelocity.orders / topVelocity.products)} orders per active SKU. Bubble size shows revenue; colour shows margin.`);
+
+    const marker = {
+      size: rows.map((row) => 12 + 34 * Math.sqrt(row.revenue / maxRevenue)),
+      opacity: 0.72,
+      line: { width: 1, color: "rgba(0,0,0,.28)" },
+    };
+    if (margins.length === rows.length) {
+      Object.assign(marker, {
+        color: rows.map((row) => row.margin),
+        cmin: colourMin,
+        cmax: colourMax === colourMin ? colourMin + 1 : colourMax,
+        colorscale: [[0, theme.danger], [0.5, theme.warn], [1, theme.accent]],
+        colorbar: { title: { text: "Margin" }, ticksuffix: "%", thickness: 12, len: 0.72 },
+      });
+    } else {
+      marker.color = theme.info;
+    }
+
+    window.Plotly.newPlot("supplierBreadthChart", [{
+      type: "scatter", mode: "markers+text",
+      x: rows.map((row) => row.products),
+      y: rows.map((row) => row.orders / row.products),
+      text: rows.map((row) => labelled.has(row.name) ? row.name : ""),
+      textposition: "top center",
+      textfont: { size: 9, color: theme.text },
+      marker,
+      customdata: rows.map((row) => [row.name, row.revenue, row.customers, row.margin, row.lastSold]),
+      hovertemplate:
+        "<b>%{customdata[0]}</b><br>%{x:,.0f} active SKUs<br>%{y:,.1f} orders per SKU"
+        + "<br>%{customdata[1]:$,.0f} revenue<br>%{customdata[2]:,.0f} customers"
+        + "<br>%{customdata[3]:.1f}% margin<br>Last sold %{customdata[4]}<extra></extra>",
+    }], {
+      margin: { l: 66, r: margins.length === rows.length ? 72 : 24, t: 16, b: 52 },
+      height: 340,
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: { title: "Active products", dtick: 2, gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
+      yaxis: { title: "Orders per active product", gridcolor: theme.grid, linecolor: theme.grid, zeroline: false },
     }, { displayModeBar: false, responsive: true });
   };
 
@@ -673,6 +791,7 @@
       payload = window.normalizeBundlePayload ? window.normalizeBundlePayload(json) : json;
       renderKpis(payload.kpis || {});
       if (!append) {
+        renderSupplierPriorities(payload.table || {});
         // Plotly is fetched in an idle callback so it cannot hold up the KPIs,
         // which means it routinely arrives *after* this payload does. Drawing
         // immediately raced it and lost - the charts were replaced with
@@ -685,6 +804,7 @@
           // supplier population, not a top-N - so neither costs a query.
           renderSpendConcentration(payload.table || {});
           renderMarginVsSpend(payload.table || {});
+          renderSupplierBreadth(payload.table || {});
         });
       }
       renderTable(payload.table || {}, { append });

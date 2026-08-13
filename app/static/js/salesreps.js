@@ -5331,6 +5331,15 @@
     }
 
     try {
+      // Nothing called this. The panel markup and this one line went together
+      // in the performance pass, leaving a complete map renderer, its CSS and
+      // its `map_customers` payload in the build with no way to reach any of it.
+      initLiveMap(payload);
+    } catch (err) {
+      logError("Live map rendering failed", err);
+    }
+
+    try {
       renderProteinTable(analysis.proteins || []);
       // 6D: Protein section subtitle
       const proteins = analysis.proteins || [];
@@ -5872,6 +5881,7 @@
   let _mapStyleFallbackTimer = null;
   let _lastMapFeatures = [];
   const MAP_DEFAULT_VIEW = { center: [-96.5, 38.5], zoom: 3.6 };
+  const MAP_SILENT_RISK_DAYS = 30;
 
   // ── Rep colour palette (hex-matched to brand tokens) ──
   const REP_COLOR_MAP = [
@@ -6101,18 +6111,53 @@
     return [-123.11, 49.27]; // fallback: Vancouver (all customers are BC)
   };
 
-  const _fallbackLightRasterStyle = () => ({
-    version: 8,
-    sources: {
-      carto_light: {
-        type: "raster",
-        tiles: ["https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> © CARTO',
+  // ── Basemap ──
+  //
+  // State outlines from a vendored GeoJSON, not raster tiles from a CDN.
+  //
+  // The tiles were the last third-party dependency left in the build, and the
+  // failure mode was not "a plainer map": MapLibre holds `style.load` until its
+  // sources settle, the account layers are added *in* `style.load`, so a blocked
+  // tile server produced an empty grey panel with no bubbles at all. Verified -
+  // that is what this page did in a sandboxed browser.
+  //
+  // Outlines also read better here than streets and terrain do. The question
+  // this panel answers is which accounts sit where, and a photographic basemap
+  // competes with the bubbles for attention while adding nothing to it.
+  const _baseMapStyle = () => {
+    const css = getComputedStyle(document.documentElement);
+    const pick = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
+    const host = document.getElementById("srLiveMap");
+    const url = (host && host.dataset.basemapUrl) || "";
+    const style = {
+      version: 8,
+      sources: {},
+      layers: [
+        { id: "ground", type: "background", paint: { "background-color": pick("--wa-surface-2", "#f4f7fa") } },
+      ],
+    };
+    if (!url) return style;
+    style.sources.states = { type: "geojson", data: url };
+    style.layers.push(
+      {
+        id: "states-fill",
+        type: "fill",
+        source: "states",
+        paint: { "fill-color": pick("--wa-surface", "#ffffff"), "fill-opacity": 0.92 },
       },
-    },
-    layers: [{ id: "carto-light", type: "raster", source: "carto_light" }],
-  });
+      {
+        id: "states-line",
+        type: "line",
+        source: "states",
+        paint: { "line-color": pick("--wa-hairline", "#d6dde5"), "line-width": 1 },
+      },
+    );
+    return style;
+  };
+
+  // Kept under the old name so the style-fallback path below, which predates
+  // this change, still resolves to the basemap the map actually uses.
+  const _fallbackLightRasterStyle = _baseMapStyle;
 
   const _stableHash = (value) => {
     const raw = String(value || "").trim().toLowerCase();
@@ -6132,16 +6177,19 @@
     return [lng, lat];
   };
 
-  const _isSurreyCustomer = (row = {}) =>
-    /surrey/.test(
-      [
-        row.territory_name,
-        row.delivery_city,
-        row.delivery_province,
-      ]
-        .map((value) => cleanText(value).toLowerCase())
-        .join(" ")
-    );
+  /* The accounts the map plots.
+   *
+   * `map_customers` is a section the bundle declares and never fills - no SELECT
+   * emits the `map_customer` dataset - so it is always `[]`. And `[]` is truthy,
+   * which is why `map_customers || top_customers` never reached the fallback and
+   * the map drew nothing at all: a style with twelve layers, a source with zero
+   * features. Ask for length, not truthiness. */
+  const _mapRows = (payload = {}) => {
+    const analysis = payload.analysis || {};
+    const mapped = Array.isArray(analysis.map_customers) ? analysis.map_customers : [];
+    if (mapped.length) return mapped;
+    return Array.isArray(analysis.top_customers) ? analysis.top_customers : [];
+  };
 
   const _resolvedCoordinate = (row = {}) => {
     const actual = _validCoordinatePair(
@@ -6150,23 +6198,23 @@
     );
     if (actual) return { coordinates: actual, approx: false, approx_reason: "" };
 
-    // Enterprise-grade fallback: Try city first, then territory, then province
+    // The synthetic dataset carries no delivery coordinates, so in practice
+    // every account lands here. City first, then region: an account placed on
+    // its region's centroid is honest about the precision it has, and the
+    // legend says so.
     const city = cleanText(row.delivery_city || row.city || "").toLowerCase();
     const territory = cleanText(row.territory_name || row.text_1 || "").toLowerCase();
     const province = cleanText(row.delivery_province || row.province || "").toLowerCase();
-    
+
     let centroid = null;
-    let reason = "vancouver_centroid";
-    
+    let reason = "network_centroid";
+
     if (city && _TERRITORY_CENTROIDS_RAW[city]) {
       centroid = _TERRITORY_CENTROIDS_RAW[city];
       reason = "city_centroid";
     } else if (territory && _TERRITORY_CENTROIDS_RAW[territory]) {
       centroid = _TERRITORY_CENTROIDS_RAW[territory];
       reason = "territory_centroid";
-    } else if (_isSurreyCustomer(row)) {
-      centroid = _TERRITORY_CENTROIDS_RAW.surrey || [-122.84, 49.19];
-      reason = "surrey_centroid";
     } else if (province && _TERRITORY_CENTROIDS_RAW[province]) {
       centroid = _TERRITORY_CENTROIDS_RAW[province];
       reason = "province_centroid";
@@ -6174,10 +6222,13 @@
 
     if (!centroid) centroid = MAP_DEFAULT_VIEW.center;
 
+    // Accounts that resolve to the same centroid would stack into one bubble.
+    // Scatter them deterministically around it - wide enough to read as a
+    // cluster of separate accounts, tight enough to stay inside the region.
     const hash = _stableHash(row.customer_id || row.key || row.customer_name || JSON.stringify(row));
     const angle = ((hash % 360) * Math.PI) / 180;
-    const ring = 1 + ((hash >> 9) % 3);
-    const radius = 0.0105 * ring;
+    const ring = 1 + ((hash >> 9) % 4);
+    const radius = 0.34 * ring;
     const lngOffset = Math.cos(angle) * radius;
     const latOffset = Math.sin(angle) * radius * 0.68;
     
@@ -6237,6 +6288,9 @@
     const totalRev = Math.max((customers || []).reduce((sum, row) => sum + num(row.revenue), 0), 1);
     const features = (customers || []).map((row) => {
       const silentDays = customerSilentDays(row) ?? (Number(row.silent_days) || 0);
+      const revenue = num(row.revenue);
+      const yoyDelta = opt(row.yoy_delta_revenue);
+      const yoyRevenue = opt(row.yoy_revenue) ?? (yoyDelta === null ? null : Math.max(revenue - yoyDelta, 0));
       
       // Use precise coordinates from backend if available (metric_12/13)
       let location = _resolvedCoordinate(row);
@@ -6244,7 +6298,7 @@
         location = { coordinates: [num(row.metric_13), num(row.metric_12)], approx: false, approx_reason: "" };
       }
 
-      const revShare = num(row.revenue) / totalRev;
+      const revShare = revenue / totalRev;
       const radius = Math.max(6, Math.min(38, Math.sqrt(revShare) * 140));
       return {
         type: "Feature",
@@ -6257,11 +6311,14 @@
           city: row.delivery_city || "",
           province: row.delivery_province || "",
           shipping_method: row.shipping_method || "",
-          revenue: num(row.revenue),
+          revenue,
+          profit: opt(row.profit),
+          yoy_revenue: yoyRevenue,
           fresh_revenue: num(row.fresh_revenue || row.metric_7),
           consumables_revenue: num(row.consumables_revenue || row.metric_8),
           gm_revenue: num(row.gm_revenue || row.metric_9),
           is_overdue: Number(row.is_overdue || row.metric_10 || 0),
+          silent_days: silentDays,
           avg_days: num(row.avg_days_between_orders || row.metric_11),
           opportunity_score: num(row.opportunity_score || row.metric_14 || 0),
           opportunity_reasons: row.opportunity_reasons || "",
@@ -6269,7 +6326,11 @@
           is_lost: Number(row.is_lost ?? 0),
           approx: location.approx ? 1 : 0,
           approx_reason: location.approx_reason || "",
-          is_risk: (silentDays > 45 || Number(row.is_overdue || row.metric_10)) ? 1 : 0,
+          // The ring promises one thing in the UI: no order in 30 days. The
+          // bundle's legacy `is_overdue` flag is evaluated against the server
+          // wall clock, which ages a fixed demo snapshot forever and once put
+          // a red halo around nearly every account. Use the cutoff-aware age.
+          is_risk: silentDays > MAP_SILENT_RISK_DAYS ? 1 : 0,
           radius,
           color: _repColor(row.account_owner_name),
           mom_pct: opt(row.mom_revenue_pct ?? row.vs_prior_pct),
@@ -6467,6 +6528,12 @@
     // Maintain current mode
     const activeMode = document.querySelector('input[name="srMapMode"]:checked')?.value || "bubbles";
     _updateMapMode(activeMode);
+    // A pulsing halo keeps repainting, so MapLibre's global `idle` event is not
+    // a dependable freeze signal. Mark the host after the first complete frame
+    // with the account layers; the static build can then capture real pixels.
+    const mapHost = document.getElementById("srLiveMap");
+    _liveMap.once("render", () => { if (mapHost) mapHost.dataset.waMapIdle = "1"; });
+    _liveMap.triggerRepaint();
   };
 
   const _animateHalo = () => {
@@ -6545,7 +6612,7 @@
 
     const reps = [...new Set((customers || []).map((row) => row.account_owner_name || row.owner_name).filter(Boolean))].slice(0, 8);
     const approxCount = (customers || []).filter((row) => row.approx === 1).length;
-    const riskCount = (customers || []).filter((row) => (row.silent_days ?? 0) > 45).length;
+    const riskCount = (customers || []).filter((row) => (row.silent_days ?? 0) > MAP_SILENT_RISK_DAYS).length;
     legendEl.innerHTML = [
       ...reps.map((rep) => `
         <span class="sr-map-legend-item sr-map-legend-rep" data-rep-name="${escapeHtml(rep)}" role="button" tabindex="0" aria-label="Highlight ${escapeHtml(rep)} on map">
@@ -6556,7 +6623,7 @@
       riskCount > 0
         ? `<span class="sr-map-legend-item sr-map-legend-risk">
             <span class="sr-map-legend-dot" style="border:2px solid ${SR_THEME.blood};background:transparent"></span>
-            ${fmtInt.format(riskCount)} silent&nbsp;&gt;45d
+            ${fmtInt.format(riskCount)} silent&nbsp;&gt;${MAP_SILENT_RISK_DAYS}d
           </span>`
         : "",
       approxCount > 0
@@ -6677,8 +6744,24 @@
       style: _fallbackLightRasterStyle(),
       center: MAP_DEFAULT_VIEW.center,
       zoom: MAP_DEFAULT_VIEW.zoom,
-      maxBounds: [[-145, 40], [-50, 75]],
+      // Latitudes 40-75 is Canada, left over from before the retail pivot. The
+      // store network runs from Houston at 29.8°N to Spokane at 47.7°N, so the
+      // old box excluded most of it *and* sat north of the default centre at
+      // 38.5°N - which MapLibre resolves by clamping the view away from the
+      // data. Bound the continental US with a margin instead.
+      maxBounds: [[-130, 21], [-63, 53]],
+      // The static build replaces this canvas with a picture of itself, and a
+      // WebGL canvas reads back blank unless the drawing buffer is kept. Every
+      // frozen page would otherwise publish an empty grey panel.
+      preserveDrawingBuffer: true,
     });
+
+    // Keep `idle` as a second completion signal for non-animated states. The
+    // account-layer render callback in `_pushMapData` is the deterministic
+    // signal used for the initial static capture.
+    mapEl._waMap = _liveMap;
+    _liveMap.on("idle", () => { mapEl.dataset.waMapIdle = "1"; });
+    _liveMap.on("movestart", () => { delete mapEl.dataset.waMapIdle; });
 
     _liveMap.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
     _liveMap.addControl(new window.maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }), "bottom-left");
@@ -6701,7 +6784,7 @@
       _liveMap.resize();
       if (_pendingMapPayload) {
         const payload = _pendingMapPayload;
-        const customers = payload.analysis?.map_customers || payload.analysis?.top_customers || [];
+        const customers = _mapRows(payload);
         const features = _buildCustomerFeatures(customers);
         _pushMapData(features);
         _buildMapLegend(customers, document.querySelector('input[name="srMapMode"]:checked')?.value || "bubbles");
@@ -6719,7 +6802,7 @@
       _liveMap.getCanvas().style.cursor = "pointer";
       const props = evt.features?.[0]?.properties || {};
       const silentDays = Number(props.silent_days || 0);
-      const silentColor = silentDays > 60 ? SR_THEME.blood : silentDays > 45 ? SR_THEME.bronze : SR_THEME.forest;
+      const silentColor = silentDays > 60 ? SR_THEME.blood : silentDays > MAP_SILENT_RISK_DAYS ? SR_THEME.bronze : SR_THEME.forest;
       
       const revenue = num(props.revenue);
       const profit = num(props.profit);
@@ -6738,11 +6821,11 @@
 
       const lastOrder = props.last_order_date ? formatDateCA(props.last_order_date) : "Never";
       
-      const riskBadge = (Number(props.is_risk) === 1 || Number(props.is_overdue) === 1)
-        ? `<span class="sr-map-popup-risk-badge">${Number(props.is_overdue) === 1 ? '&#9201; OVERDUE' : '&#9888; SILENT RISK'}</span>`
+      const riskBadge = Number(props.is_risk) === 1
+        ? '<span class="sr-map-popup-risk-badge">&#9888; SILENT RISK</span>'
         : "";
       
-      const overdueDetail = Number(props.is_overdue) === 1 
+      const overdueDetail = Number(props.is_risk) === 1 && Number(props.is_overdue) === 1
         ? `<div class="sr-map-popup-row text-danger small fw-bold">Pulse Missed: ${fmtInt.format(num(props.avg_days))}d expected cycle</div>`
         : "";
 
@@ -6789,7 +6872,7 @@
             </div>
             ${Number(props.approx) === 1 ? `<div class="sr-map-popup-approx mt-1" style="font-size:0.65rem;color:${SR_THEME.bronze}">&#9432; Location fallback active</div>` : ""}
             <div class="sr-map-popup-footer mt-2" style="font-size:0.68rem;color:${SR_THEME.brand};border-top:1px solid rgba(0,0,0,0.05);padding-top:4px">
-              Click bubble for full account drilldown
+              Click bubble to focus this account
             </div>
           </div>`)
         .addTo(_liveMap);
@@ -6875,7 +6958,7 @@
     mapEl.style.display = "block";
     mapEl.style.minHeight = "420px";
 
-    const customers = payload.analysis?.map_customers || payload.analysis?.top_customers || [];
+    const customers = _mapRows(payload);
     const features = _buildCustomerFeatures(customers);
 
     if (!_liveMap) {

@@ -103,6 +103,20 @@
     </div>
   </div>
 
+  <section class="supplier-priorities mb-3" aria-labelledby="supplierPrioritiesTitle">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h5 class="mb-0" id="supplierPrioritiesTitle">Procurement priorities</h5>
+        <div class="text-muted small">The three decisions implied by the active supplier book, ranked from the same rows as the table.</div>
+      </div>
+    </div>
+    <div class="row g-3" id="supplierPriorities" aria-live="polite">
+      <div class="col-md-4"><article class="supplier-priority skeleton"><div class="loading shimmer"></div></article></div>
+      <div class="col-md-4"><article class="supplier-priority skeleton"><div class="loading shimmer"></div></article></div>
+      <div class="col-md-4"><article class="supplier-priority skeleton"><div class="loading shimmer"></div></article></div>
+    </div>
+  </section>
+
   <!-- Charts: Trend + Top Suppliers -->
   <div class="row g-3 mb-3">
     <div class="col-lg-7">
@@ -175,6 +189,23 @@
         <div class="card-body">
           <div id="supplierMarginChart" class="chart-container skeleton"
                aria-label="Supplier margin against spend, sized by spend">
+            <div class="loading shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-transparent">
+          <h5 class="card-title mb-0">Assortment breadth and order velocity</h5>
+          <div class="text-muted small" id="supplierBreadthRead">Each bubble is a supplier: active SKUs against orders per SKU, sized by revenue and coloured by margin.</div>
+        </div>
+        <div class="card-body">
+          <div id="supplierBreadthChart" class="chart-container skeleton"
+               aria-label="Supplier assortment breadth against orders per SKU, sized by revenue and coloured by margin">
             <div class="loading shimmer"></div>
           </div>
         </div>
@@ -346,7 +377,7 @@
 </div>
 
 <!-- ======= Scripts ======= -->
-<script src="{{ url_for('static', filename='js/suppliers.js', v='20260813-procurement-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/suppliers.js', v='20260813-procurement-2') }}" defer></script>
 
 <style>
   :root{
@@ -358,6 +389,23 @@
     .card:hover { transform: translateY(-2px); box-shadow: var(--soft-shadow); }
   }
   .chart-container { width: 100%; min-height: 380px; position: relative; }
+  .supplier-priority {
+    min-height: 142px;
+    height: 100%;
+    padding: 1rem;
+    border: 1px solid var(--wa-hairline);
+    border-left: 4px solid var(--wa-accent);
+    border-radius: .65rem;
+    background: var(--wa-surface);
+    box-shadow: var(--wa-shadow-sm);
+    position: relative;
+    overflow: hidden;
+  }
+  .supplier-priority[data-tone="risk"] { border-left-color: var(--wa-danger); }
+  .supplier-priority[data-tone="watch"] { border-left-color: var(--wa-warning); }
+  .supplier-priority__eyebrow { color: var(--wa-text-muted); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .supplier-priority strong { display: block; margin-top: .35rem; color: var(--wa-text-strong); }
+  .supplier-priority p { margin: .4rem 0 0; color: var(--wa-text-muted); font-size: .82rem; line-height: 1.45; }
   .table-suppliers th { position: sticky; top: 0; background: var(--bs-body-bg,var(--wa-surface)); z-index: 1; cursor: pointer; }
   .table-suppliers th.asc::after { content: ' ↑'; }
   .table-suppliers th.desc::after { content: ' ↓'; }

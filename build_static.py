@@ -361,6 +361,14 @@ STATIC_RUNTIME = r"""
     });
   }
 
+  function bindPrint() {
+    document.querySelectorAll("[data-print-report]").forEach(function (button) {
+      if (button.dataset.staticBound === "1") return;
+      button.dataset.staticBound = "1";
+      button.addEventListener("click", function () { window.print(); });
+    });
+  }
+
   /* The planner ships a View control - Everything, Demand only, Supply only,
      Just what to do, Choose sections - and on a frozen page it did nothing at
      all. A reviewer picks "Demand only", the page does not move, and the
@@ -433,7 +441,7 @@ STATIC_RUNTIME = r"""
     });
   }
 
-  function bind() { bindTabs(); bindPreset(); bindTheme(); bindReportViews(); }
+  function bind() { bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews(); }
   bind();
 })();
 """
@@ -776,6 +784,10 @@ body[data-static-page] .chart-card:not(:has(table)){overflow:visible}
    into small scroll-time layouts and keeps the main thread responsive. */
 body[data-static-page] main section{content-visibility:auto;contain-intrinsic-size:auto 320px}
 body[data-static-page] #productsAvailability{content-visibility:auto;contain-intrinsic-size:auto 560px}
+/* The live planner fades report sections in from opacity:0. The freeze pass
+   intentionally disables animations, so give those sections their completed
+   visual state instead of leaving newly selected views transparent. */
+body[data-static-page] .report-section{opacity:1!important;transform:none!important;filter:none!important}
 body[data-static-page] *,body[data-static-page] *::before,body[data-static-page] *::after{
   animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media(max-width:640px){.static-scope-note{width:100%;margin-left:0}.static-scope-bar select{width:100%}}
@@ -798,6 +810,12 @@ REMOTE_ASSETS: dict[str, str] = {
         "static/vendor/plotly/plotly-basic-2.35.2.min.js",
     "https://cdn.plot.ly/plotly-2.35.2.min.js":
         "static/vendor/plotly/plotly-2.35.2.min.js",
+    # The Live Account Map. Both the renderer and its state-outline basemap are
+    # local during the build, so rendering does not reach a third-party CDN.
+    "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js":
+        "static/vendor/maplibre/maplibre-gl.js",
+    "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css":
+        "static/vendor/maplibre/maplibre-gl.css",
 }
 
 # Sections are no longer split into tabs.
@@ -1428,6 +1446,39 @@ class Builder:
                 self.log(f"    ! canvas chart {index}: {type(exc).__name__}: {exc}")
         return frozen
 
+    def _settle_map(self, page: Any) -> None:
+        """Wait for the Live Account Map to stop drawing before it is captured.
+
+        MapLibre paints asynchronously - style, then state outlines, then account
+        layers - and `toDataURL` on a WebGL canvas returns whatever the drawing
+        buffer holds at that instant. Freezing on the chart timings alone
+        captured a grey rectangle.
+
+        The page marks the host after the first complete frame containing its
+        account layers. It cannot rely on MapLibre's global `idle` event because
+        the pulsing risk halo intentionally keeps requesting repaints.
+        """
+        try:
+            if not page.locator("#srLiveMap canvas").count():
+                return
+        except Exception:
+            return
+        try:
+            page.wait_for_function(
+                """() => {
+                  const el = document.getElementById('srLiveMap');
+                  if (!el) return true;
+                  // The page raises this after a rendered account-layer frame.
+                  return el.dataset.waMapIdle === '1';
+                }""",
+                timeout=25_000,
+                polling=400,
+            )
+        except Exception:
+            self.log("    ! live map did not settle; capturing as drawn")
+        # Let the initial fit-to-data animation finish before reading pixels.
+        page.wait_for_timeout(900)
+
     def _externalize_closed_tabs(self, page: Any, base: str) -> None:
         templates = page.locator("template[id^='static-tab-']")
         for index in range(templates.count()):
@@ -1526,6 +1577,7 @@ class Builder:
             if misses:
                 raise RuntimeError(f"uncaptured same-origin requests: {sorted(set(misses))}")
 
+            self._settle_map(page)
             charts = self._freeze_charts(page, base)
 
             section_rules = DRILLDOWN_SECTION_RULES if rel.startswith("drilldowns/") else SECTION_RULES
@@ -1705,6 +1757,23 @@ class Builder:
                   ).forEach(el => el.remove());
                   document.getElementById('savedViewsSection')?.remove();
                   document.querySelectorAll('#js-plotly-tester,.plotly-notifier').forEach(el => el.remove());
+                  /* The live map has seven WebGL modes, zoom buttons and a
+                     click-to-filter reset. The public build keeps an exact
+                     account-map snapshot, but after the canvas is frozen none
+                     of those controls can change it. Remove the dead controls
+                     and describe the snapshot it actually publishes. */
+                  const accountMap = document.getElementById('srMapSection');
+                  if (accountMap) {
+                    accountMap.querySelectorAll('[data-live-map-controls],.maplibregl-control-container').forEach(el => el.remove());
+                    const copy = accountMap.querySelector('[data-live-map-copy]');
+                    if (copy) copy.textContent = 'Accounts in the active scope, sized by revenue and placed by delivery address when available or by territory centroid. Open the live app for map modes and click-to-filter.';
+                    accountMap.querySelectorAll('.sr-map-legend-rep').forEach(el => {
+                      el.classList.remove('sr-map-legend-rep');
+                      el.removeAttribute('role');
+                      el.removeAttribute('tabindex');
+                      el.removeAttribute('aria-label');
+                    });
+                  }
                   /* Put the actual business story above the instructional
                      guide. The guide remains available at the end of main,
                      but cannot become a mobile LCP gate before the hero. */

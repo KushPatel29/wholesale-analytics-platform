@@ -3,7 +3,9 @@
 {% block title %}Sales Reps | Northgate Retail Analytics{% endblock %}
 
 {% block head_extras %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260813-territory-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/salesreps_v2.css', v='20260813-live-map-1') }}">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -154,6 +156,65 @@
         </div>
       </div>
     </div>
+  </section>
+
+  {# Live Account Map.
+     The renderer, the CSS and the `map_customers` payload all survived the
+     performance pass that removed this panel; only the markup and the call
+     that starts it went. The mode names below are the ones the renderer
+     actually implements - fresh / consumables / general merchandise, from the
+     retail department split - not the meat families the pre-pivot markup
+     listed. #}
+  <section class="mb-4" id="srMapSection">
+    <article class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+          <div>
+            <div class="fw-semibold">Live Account Map</div>
+            <div class="text-muted small" data-live-map-copy>
+              Every account in scope, placed by delivery address when available and otherwise by territory centroid, sized by revenue.
+              A pulsing red ring marks an account that has not ordered in 30 days.
+              Click a bubble to filter the dashboard to its territory.
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center" data-live-map-controls>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Map mode">
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeBubbles" value="bubbles" checked autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeBubbles" title="One bubble per account, sized by revenue">Accounts</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeOpportunity" value="opportunity" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeOpportunity" title="Where revenue is concentrated">Opportunity</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeRisk" value="risk" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeRisk" title="Where accounts have gone quiet">Risk</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeFresh" value="fresh" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeFresh" title="Fresh &amp; Produce, Meat &amp; Seafood, Dairy &amp; Frozen">Fresh</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeConsumables" value="consumables" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeConsumables" title="Grocery, Household Essentials, Health &amp; Wellness">Consumables</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeGm" value="gm" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeGm" title="Home &amp; Kitchen, Electronics, Apparel, Toys &amp; Seasonal">Gen. Merch</label>
+
+              <input type="radio" class="btn-check" name="srMapMode" id="srMapModeHybrid" value="hybrid" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="srMapModeHybrid" title="Opportunity density with the accounts on top">Hybrid</label>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" id="srMapResetBtn" type="button" title="Clear the territory filter">Reset filter</button>
+          </div>
+        </div>
+        <div class="sr-map-legend mt-2" id="srMapLegend"></div>
+      </div>
+      <div class="card-body p-0">
+        <div id="srLiveMap" class="sr-live-map" aria-label="Account locations, sized by revenue"
+             data-basemap-url="{{ url_for('static', filename='vendor/geo/us-states.geojson') }}"></div>
+        <div id="srMapPlaceholder" class="sr-map-placeholder">
+          <div class="sr-map-placeholder-icon" aria-hidden="true">🗺️</div>
+          <div class="fw-semibold">Account locations are not available for this slice.</div>
+          <div class="text-muted small mt-1">The map needs delivery coordinates; the tables below are unaffected.</div>
+        </div>
+      </div>
+    </article>
   </section>
 
   <section class="row g-3 mb-4">
@@ -885,5 +946,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/salesreps.js', v='20260813-restore-2') }}" defer></script>
+<script src="{{ url_for('static', filename='js/salesreps.js', v='20260813-live-map-1') }}" defer></script>
 {% endblock %}

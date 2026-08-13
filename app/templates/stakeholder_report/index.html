@@ -731,7 +731,7 @@
          without changing a number, so they are gone. #}
       <div class="control-group">
         <div class="control-item">
-          <span class="control-label">View</span>
+          <label class="control-label" for="reportTypeSelect">View</label>
           <select id="reportTypeSelect" class="control-select">
             <option value="full" selected>Everything</option>
             <option value="demand">Demand only</option>
@@ -744,11 +744,11 @@
       
       <div class="d-flex gap-2 align-items-center">
         <span class="small text-muted me-3" id="lastSyncTime"><i class="bi bi-arrow-repeat spin"></i> Loading…</span>
-        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" id="savePresetBtn">
+        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" id="savePresetBtn" type="button">
           <i class="bi bi-bookmark-plus me-1"></i> SAVE VIEW
         </button>
-        <button class="btn btn-primary btn-sm fw-bold px-3" onclick="window.print()">
-          <i class="bi bi-file-earmark-pdf me-1"></i> GENERATE PDF
+        <button class="btn btn-primary btn-sm fw-bold px-3" type="button" data-print-report>
+          <i class="bi bi-file-earmark-pdf me-1"></i> PRINT / SAVE PDF
         </button>
       </div>
     </div>
@@ -791,5 +791,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260813-planning-2"></script>
+<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260813-planning-3"></script>
 {% endblock %}
