@@ -90,6 +90,16 @@ def test_static_chart_gate_requires_data_and_drawn_pixels():
     assert "sharpenCanvas" not in builder
 
 
+def test_products_empty_trajectory_resolves_to_an_intentional_state():
+    script = _read("app/static/js/products.js")
+
+    assert 'removeSkeleton("trendChart")' in script
+    assert 'ctx.classList.add("d-none")' in script
+    assert 'emptyState.id = "trendChartEmptyState"' in script
+    assert "No revenue or demand activity is available for this filter window." in script
+    assert 'ctx.classList.remove("d-none")' in script
+
+
 def test_long_decision_pages_publish_a_consistent_reading_path():
     overview = _read("app/templates/overview/index_v3.html")
     inventory = _read("app/templates/inventory/index.html")

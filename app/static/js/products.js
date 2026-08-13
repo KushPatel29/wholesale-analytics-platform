@@ -2683,10 +2683,27 @@
     const ctx = document.getElementById("trendChart");
     if (!ctx) return;
     destroyChart("trajectory");
+    const clearEmptyState = () => {
+      document.getElementById("trendChartEmptyState")?.remove();
+      ctx.classList.remove("d-none");
+      ctx.removeAttribute("aria-hidden");
+    };
     if (!labels.length) {
-      ctx.replaceWith(ctx.cloneNode(true));
+      removeSkeleton("trendChart");
+      ctx.classList.add("d-none");
+      ctx.setAttribute("aria-hidden", "true");
+      let emptyState = document.getElementById("trendChartEmptyState");
+      if (!emptyState) {
+        emptyState = document.createElement("div");
+        emptyState.id = "trendChartEmptyState";
+        emptyState.className = "chart-empty-state border rounded-3 bg-light-subtle text-muted text-center p-4";
+        emptyState.setAttribute("role", "status");
+        ctx.insertAdjacentElement("afterend", emptyState);
+      }
+      emptyState.textContent = "No revenue or demand activity is available for this filter window.";
       return;
     }
+    clearEmptyState();
     const grain = String(trajectory.grain || "monthly").toLowerCase();
     const subnote = document.getElementById("trajectorySubnote");
     if (subnote) {
