@@ -177,6 +177,8 @@ class ReportWorkspace {
       this.drawQuadrantChart();
       this.drawDemandChart();
       this.drawExposureChart();
+      this.drawServiceChart();
+      this.drawCoverChart();
     };
     if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
       window.ChartUtils.whenPlotlyReady(draw);
@@ -193,6 +195,9 @@ class ReportWorkspace {
       grid: pick('--wa-border', 'rgba(148,163,184,.22)'),
       accent: pick('--wa-accent', '#34d399'),
       danger: pick('--wa-danger', '#f87171'),
+      // Below target but not critical, and over-cover, are both "look at this"
+      // rather than "act now" - they need their own colour, not danger's.
+      warn: pick('--wa-warning', '#fbbf24'),
       muted: pick('--wa-text-dim', '#64748b'),
     };
   }
@@ -336,6 +341,126 @@ class ReportWorkspace {
           text: 'single-sourced and missing dates', showarrow: false,
           font: { size: 9, color: theme.danger } },
       ],
+    }, { displayModeBar: false, responsive: true });
+  }
+
+  /* The service table already prints an on-time rate per lane and a status
+   * chip. What it cannot show is the two things that decide whether a number
+   * is worth acting on: how far it sits from target, and whether it rests on
+   * enough deliveries to mean anything. `_service_by` only ranks groups with
+   * 25+ lines for exactly that reason, and the table expresses it as a footnote.
+   * Here the thin-sample lanes are drawn hollow, so "below target" and "too
+   * few deliveries to say" cannot be mistaken for each other. */
+  drawServiceChart() {
+    const host = document.getElementById('planServiceChart');
+    const plan = this._plan();
+    const rows = (plan.service_by_lane || []).filter(
+      r => Number.isFinite(Number(r.on_time_pct))
+    );
+    if (!host || !rows.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const target = plan.thresholds?.service_target_pct ?? 92;
+    const critical = plan.thresholds?.service_critical_pct ?? 85;
+    const ordered = [...rows].sort((a, b) => Number(a.on_time_pct) - Number(b.on_time_pct));
+    const colourFor = (row) => {
+      const value = Number(row.on_time_pct);
+      if (value < critical) return theme.danger;
+      if (value < target) return theme.warn || theme.danger;
+      return theme.accent;
+    };
+
+    Plotly.newPlot(host, [{
+      type: 'bar',
+      orientation: 'h',
+      x: ordered.map(r => Number(r.on_time_pct)),
+      y: ordered.map(r => r.label),
+      marker: {
+        color: ordered.map(r => (r.reliable_estimate ? colourFor(r) : 'rgba(0,0,0,0)')),
+        line: {
+          width: ordered.map(r => (r.reliable_estimate ? 0 : 1.5)),
+          color: ordered.map(r => colourFor(r)),
+        },
+        opacity: 0.85,
+      },
+      customdata: ordered.map(r => [r.lines, r.reliable_estimate ? '' : ' · too few lines to rank']),
+      hovertemplate: '<b>%{y}</b><br>%{x:.1f}% on time<br>%{customdata[0]:,} lines%{customdata[1]}<extra></extra>',
+    }], {
+      margin: { l: 130, r: 24, t: 10, b: 40 },
+      height: Math.max(200, 28 * ordered.length + 60),
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: {
+        title: `On-time rate (target ${target}%)`, ticksuffix: '%',
+        range: [Math.min(60, ...ordered.map(r => Number(r.on_time_pct))) - 5, 100],
+        gridcolor: theme.grid, linecolor: theme.grid, zeroline: false,
+      },
+      yaxis: { automargin: true, gridcolor: 'rgba(0,0,0,0)' },
+      shapes: [
+        { type: 'line', x0: target, x1: target, yref: 'paper', y0: 0, y1: 1,
+          line: { color: theme.grid, width: 1, dash: 'dash' } },
+      ],
+      annotations: [
+        { x: target, xanchor: 'left', yref: 'paper', y: 1, yanchor: 'top',
+          text: ` target ${target}%`, showarrow: false, font: { size: 9, color: theme.text } },
+        { xref: 'paper', x: 0, xanchor: 'left', yref: 'paper', y: -0.16, yanchor: 'top',
+          text: 'hollow bars: fewer lines than the reporting floor', showarrow: false,
+          font: { size: 9, color: theme.muted || theme.text } },
+      ],
+    }, { displayModeBar: false, responsive: true });
+  }
+
+  /* Cover is the other half of the same decision and the table buries it in a
+   * "34d / 45d" cell. Perishable departments run short cover deliberately, so a
+   * single bar of days says nothing - what matters is the distance from each
+   * department's own target, which is what this draws. */
+  drawCoverChart() {
+    const host = document.getElementById('planCoverChart');
+    const rows = ((this._plan().inventory || {}).by_department || []).filter(
+      r => Number.isFinite(Number(r.cover_days)) && Number(r.cover_target_days) > 0
+    );
+    if (!host || !rows.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const ordered = [...rows]
+      .map(r => ({
+        label: r.label,
+        cover: Number(r.cover_days),
+        target: Number(r.cover_target_days),
+        value: Number(r.on_hand_value) || 0,
+        gap: Number(r.cover_days) - Number(r.cover_target_days),
+      }))
+      .sort((a, b) => a.gap - b.gap);
+
+    Plotly.newPlot(host, [{
+      type: 'bar',
+      orientation: 'h',
+      x: ordered.map(r => r.gap),
+      y: ordered.map(r => r.label),
+      marker: {
+        // Short of target is a service risk; long is cash sitting still.
+        color: ordered.map(r => (r.gap < 0 ? theme.danger : theme.warn || theme.accent)),
+        opacity: 0.85,
+      },
+      customdata: ordered.map(r => [r.cover, r.target, r.value]),
+      hovertemplate:
+        '<b>%{y}</b><br>%{customdata[0]:.0f} days cover vs %{customdata[1]:.0f} day target'
+        + '<br>%{customdata[2]:$,.0f} on hand<extra></extra>',
+    }], {
+      margin: { l: 130, r: 24, t: 10, b: 44 },
+      height: Math.max(200, 28 * ordered.length + 70),
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      showlegend: false,
+      xaxis: {
+        title: 'Days above (right) or below (left) the department target',
+        gridcolor: theme.grid, linecolor: theme.grid,
+        zeroline: true, zerolinecolor: theme.text, zerolinewidth: 1,
+      },
+      yaxis: { automargin: true, gridcolor: 'rgba(0,0,0,0)' },
     }, { displayModeBar: false, responsive: true });
   }
 
@@ -608,6 +733,8 @@ class ReportWorkspace {
           why <strong>OTIF</strong> — on time <em>and</em> in full, measured on the line rather
           than multiplied out of the other two — is the one a store actually feels.
         </p>
+        <div id="planCoverChart" class="plan-chart" role="img"
+             aria-label="Days of cover against the category target, by department"></div>
 
         <div class="plan-kpis">
           <div class="plan-kpi ${(head.otif_pct ?? 100) < otifTarget ? 'plan-kpi--danger' : ''}">
@@ -682,6 +809,8 @@ class ReportWorkspace {
           are shown but not ranked — a lane with four deliveries that missed one is not
           &ldquo;25% late&rdquo; in any useful sense.
         </p>
+        <div id="planServiceChart" class="plan-chart" role="img"
+             aria-label="On-time rate by fulfilment lane against the service target"></div>
         ${this._serviceTable(plan.service_by_lane || [], 'By fulfilment lane')}
         <div class="plan-spacer"></div>
         ${this._serviceTable(plan.service_by_vendor || [], 'By vendor — worst service first')}
