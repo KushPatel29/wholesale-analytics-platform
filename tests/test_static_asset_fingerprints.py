@@ -1,8 +1,15 @@
 import json
+import random
+import string
 from pathlib import Path
 
 from build_static import Builder
-from scripts.check_static_build import check
+from scripts.check_static_build import (
+    MAX_PAGE_GZIP_KB,
+    MAX_PAGE_HEIGHT,
+    MAX_PAGE_NODES,
+    check,
+)
 
 
 def test_fingerprints_css_dependencies_without_prefix_collisions(tmp_path: Path):
@@ -99,6 +106,17 @@ def test_static_checker_requires_an_index_for_directory_links(tmp_path: Path, ca
 
 
 def test_static_checker_enforces_first_paint_budgets(tmp_path: Path, capsys):
+    """
+    Anchored to the constants rather than to numbers typed in here.
+
+    This fixture used to say 1,500 nodes and 4,000px, which was one past the
+    budgets at the time. When the section tabs were removed the budgets moved,
+    those figures became legal, the checker returned 0, and the test failed -
+    not because anything regressed but because the fixture no longer described
+    an over-budget page. Deriving the values keeps that from happening again.
+    """
+    over_nodes = MAX_PAGE_NODES + 1
+    over_height = MAX_PAGE_HEIGHT + 1
     (tmp_path / "index.html").write_text(
         '<html data-static-page><body>'
         '<script id="filter-options" type="application/json">{}</script></body></html>',
@@ -106,19 +124,50 @@ def test_static_checker_enforces_first_paint_budgets(tmp_path: Path, capsys):
     )
     (tmp_path / "manifest.json").write_text(
         json.dumps(
-            {
-                "pages": [
-                    {"path": "index.html", "nodes": 1_500, "height": 4_000},
-                ]
-            }
+            {"pages": [{"path": "index.html", "nodes": over_nodes, "height": over_height}]}
         ),
         encoding="utf-8",
     )
 
     assert check(tmp_path) == 1
     output = capsys.readouterr().out
-    assert "1500 first-paint nodes" in output
-    assert "4000px first-paint height" in output
+    assert f"{over_nodes} first-paint nodes" in output
+    assert f"{over_height}px first-paint height" in output
+
+
+def test_static_checker_measures_page_size_gzipped(tmp_path: Path, capsys):
+    """
+    The size budget is gzipped, because that is what a visitor downloads.
+
+    Raw HTML on this site compresses about 6x, so a raw-byte limit rejected
+    pages that cost ~15 KB to fetch. This pins the unit: a page far past the
+    limit in raw bytes but compressible well under it must pass, and one past
+    the limit *after* compression must not.
+    """
+    # Highly repetitive - compresses to almost nothing despite being large.
+    compressible = "<div>the same row over and over</div>" * 60_000
+    (tmp_path / "index.html").write_text(
+        f'<html data-static-page><body>{compressible}'
+        '<script id="filter-options" type="application/json">{}</script></body></html>',
+        encoding="utf-8",
+    )
+    (tmp_path / "manifest.json").write_text(json.dumps({"pages": []}), encoding="utf-8")
+
+    raw_kb = (tmp_path / "index.html").stat().st_size / 1024
+    assert raw_kb > MAX_PAGE_GZIP_KB * 5, "fixture is not large enough in raw bytes to be meaningful"
+    assert check(tmp_path) == 0, "a page that compresses below the budget must pass"
+
+    # Random bytes do not compress, so this one is over the budget both ways.
+    incompressible = "".join(
+        random.choice(string.ascii_letters + string.digits) for _ in range(MAX_PAGE_GZIP_KB * 1024 + 40_000)
+    )
+    (tmp_path / "index.html").write_text(
+        f'<html data-static-page><body>{incompressible}'
+        '<script id="filter-options" type="application/json">{}</script></body></html>',
+        encoding="utf-8",
+    )
+    assert check(tmp_path) == 1
+    assert "gzipped" in capsys.readouterr().out
 
 
 def test_static_checker_crawls_drilldown_links_inside_fragments(tmp_path: Path, capsys):
