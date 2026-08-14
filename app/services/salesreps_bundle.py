@@ -2169,6 +2169,11 @@ def _rollup_sql(cte_sql: str) -> str:
                 SUM(CASE WHEN is_yoy_window = 1 THEN revenue ELSE 0 END) AS yoy_revenue,
                 SUM(CASE WHEN is_yoy_window = 1 THEN profit END) AS yoy_profit,
                 COUNT(DISTINCT CASE WHEN is_current_window = 1 THEN order_id END) AS orders,
+                -- Per-order KPIs need a prior order count to compare against. Without
+                -- it, "AOV vs prior fiscal YTD" and "Profit / Order vs prior fiscal
+                -- YTD" had nothing to divide and both rendered an em dash on a card
+                -- whose other figures were all populated.
+                COUNT(DISTINCT CASE WHEN is_prior_window = 1 THEN order_id END) AS prior_orders,
                 COUNT(DISTINCT CASE WHEN is_current_window = 1 THEN customer_id END) AS customers,
                 SUM(CASE WHEN is_current_window = 1 THEN units ELSE 0 END) AS units,
                 SUM(CASE WHEN is_current_window = 1 THEN weight_lb ELSE 0 END) AS weight_lb,
@@ -2497,6 +2502,10 @@ def _kpis_sql(cte_sql: str) -> str:
                 ELSE NULL
             END AS margin_pct,
             COUNT(DISTINCT CASE WHEN ab.is_current_window = 1 THEN ab.order_id END) AS orders,
+            -- The prior order count. Without it the two per-order KPIs have no
+            -- denominator to compare against, so "vs prior fiscal YTD" was an
+            -- em dash on both while every other figure on the card had a delta.
+            COUNT(DISTINCT CASE WHEN ab.is_prior_window = 1 THEN ab.order_id END) AS prior_orders,
             COUNT(DISTINCT CASE WHEN ab.is_current_window = 1 THEN ab.customer_id END) AS customers,
             COUNT(DISTINCT CASE WHEN ab.is_current_window = 1 THEN ab.rep_key END) AS active_reps,
             COUNT(DISTINCT CASE WHEN ab.is_current_window = 1 AND ab.owner_source = 'ownership_bridge' THEN ab.customer_id END) AS bridge_customers,
@@ -3909,6 +3918,28 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         packs_coverage_pct = (1 - (missing_packs_rows / total_rows)) * 100.0
     kpi_margin_status = margin_rules.classify_margin_status(margin_pct, minimum_margin_pct, target_margin_pct)
 
+    def _pct_change(current: float | None, prior: float | None) -> float | None:
+        """Percent change, or None when there is no honest comparison to make.
+
+        A zero prior base is not a 100% gain, and a missing prior is not zero.
+        """
+        if current is None or prior is None or abs(prior) < 1e-9:
+            return None
+        return ((current - prior) / abs(prior)) * 100.0
+
+    # The two per-order KPIs, and the comparison each of them was missing.
+    prior_orders = _clean_int(krow.get("prior_orders"))
+    prior_profit_total = _clean_optional(krow.get("prior_profit"))
+    prior_revenue_total = _clean_optional(krow.get("prior_revenue"))
+    avg_order_value = _clean_optional(krow.get("avg_order_value"))
+    profit_per_order = (profit / orders) if profit is not None and orders else None
+    prior_avg_order_value = (
+        (prior_revenue_total / prior_orders) if prior_revenue_total is not None and prior_orders else None
+    )
+    prior_profit_per_order = (
+        (prior_profit_total / prior_orders) if prior_profit_total is not None and prior_orders else None
+    )
+
     kpis = {
         "revenue": revenue,
         "cost": cost,
@@ -3927,7 +3958,15 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         "weight_lb": weight_lb,
         "asp": asp,
         "asp_lb": asp_lb,
-        "avg_order_value": _clean_optional(krow.get("avg_order_value")),
+        "avg_order_value": avg_order_value,
+        # Profit per order was simply absent from this dict, so the page read
+        # `undefined` and printed an em dash - beside a Profit of $1.66m and an
+        # Orders of 4,184 on the same card, while Overview computed the same
+        # figure from the same two numbers and showed $396.89. Same definition
+        # as Overview's: total profit over order count.
+        "profit_per_order": profit_per_order,
+        "aov_mom_pct": _pct_change(avg_order_value, prior_avg_order_value),
+        "ppo_mom_pct": _pct_change(profit_per_order, prior_profit_per_order),
         "revenue_per_customer": _clean_optional(krow.get("revenue_per_customer")),
         "revenue_mom_pct": revenue_mom_pct,
         "profit_mom_pct": profit_mom_pct,

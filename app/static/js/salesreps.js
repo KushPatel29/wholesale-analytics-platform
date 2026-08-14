@@ -33,7 +33,16 @@
   document.getElementById("GlobalFilters")?.classList.add("sr-global-filters");
 
   const TEXT_EMPTY = "None";
-  const NUMERIC_EMPTY = "0.00";
+  /* An em dash, not "0.00".
+   *
+   * Every missing number on this page was printed as a measured zero. "Margin
+   * Leakage 0.00" does not read as "we have no figure for this" - it reads as
+   * "we checked, and there is none", which is a claim the page cannot support
+   * and the opposite of what a blank means. It also hid the absence: a KPI
+   * showing 0.00 looks answered, so nobody goes looking for why.
+   *
+   * The dash matches how the rest of the app renders an unavailable figure. */
+  const NUMERIC_EMPTY = "—";
   const NA = TEXT_EMPTY;
   const fmtMoney0 = new Intl.NumberFormat(LOCALE, { style: "currency", currency: CURRENCY, maximumFractionDigits: 0 });
   const fmtMoney2 = new Intl.NumberFormat(LOCALE, { style: "currency", currency: CURRENCY, minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1158,7 +1167,7 @@
     if (pctValue === null) {
       return `
         <div class="sr-momentum-stack">
-          <span class="sr-momentum-arrow is-flat">• ${NUMERIC_EMPTY}%</span>
+          <span class="sr-momentum-arrow is-flat">• ${NUMERIC_EMPTY}</span>
           <span class="sr-momentum-sub">${TEXT_EMPTY}</span>
         </div>
       `;
