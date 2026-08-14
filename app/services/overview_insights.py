@@ -435,9 +435,16 @@ def build_insights_payload(
             ),
             rev_decomp_mom AS (
                 SELECT
-                    SUM((p1 - p0) * q0) AS price_effect,
-                    SUM(p0 * (q1 - q0)) AS volume_effect,
-                    SUM((p1 - p0) * (q1 - q0)) AS mix_effect,
+                    -- Price, volume and mix the way a merchant means them.
+                    -- The interaction split this replaced put the whole of a
+                    -- basket shift into `volume` and left `mix` holding only the
+                    -- second-order price x quantity term - which is near zero
+                    -- whenever unit values are steady, so the page reported
+                    -- "Mix +$0" on every window. These three telescope to
+                    -- sum(q1*u1) - sum(q0*u0) exactly.
+                    SUM(q1 * (p1 - p0)) AS price_effect,
+                    SUM(q1 * (p0 - (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue) / SUM(qty) ELSE 0 END FROM sku_prev))) AS mix_effect,
+                    SUM(q1 * (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue) / SUM(qty) ELSE 0 END FROM sku_prev) - q0 * p0) AS volume_effect,
                     SUM(rev1 - rev0) AS total_effect
                 FROM (
                     SELECT
@@ -454,9 +461,16 @@ def build_insights_payload(
             ),
             rev_decomp_yoy AS (
                 SELECT
-                    SUM((p1 - p0) * q0) AS price_effect,
-                    SUM(p0 * (q1 - q0)) AS volume_effect,
-                    SUM((p1 - p0) * (q1 - q0)) AS mix_effect,
+                    -- Price, volume and mix the way a merchant means them.
+                    -- The interaction split this replaced put the whole of a
+                    -- basket shift into `volume` and left `mix` holding only the
+                    -- second-order price x quantity term - which is near zero
+                    -- whenever unit values are steady, so the page reported
+                    -- "Mix +$0" on every window. These three telescope to
+                    -- sum(q1*u1) - sum(q0*u0) exactly.
+                    SUM(q1 * (p1 - p0)) AS price_effect,
+                    SUM(q1 * (p0 - (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue) / SUM(qty) ELSE 0 END FROM sku_yoy))) AS mix_effect,
+                    SUM(q1 * (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue) / SUM(qty) ELSE 0 END FROM sku_yoy) - q0 * p0) AS volume_effect,
                     SUM(rev1 - rev0) AS total_effect
                 FROM (
                     SELECT
@@ -491,9 +505,16 @@ def build_insights_payload(
             ),
             profit_decomp_mom AS (
                 SELECT
-                    SUM((u1 - u0) * q0) AS price_effect,
-                    SUM(u0 * (q1 - q0)) AS volume_effect,
-                    SUM((u1 - u0) * (q1 - q0)) AS mix_effect,
+                    -- Price, volume and mix the way a merchant means them.
+                    -- The interaction split this replaced put the whole of a
+                    -- basket shift into `volume` and left `mix` holding only the
+                    -- second-order price x quantity term - which is near zero
+                    -- whenever unit values are steady, so the page reported
+                    -- "Mix +$0" on every window. These three telescope to
+                    -- sum(q1*u1) - sum(q0*u0) exactly.
+                    SUM(q1 * (u1 - u0)) AS price_effect,
+                    SUM(q1 * (u0 - (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue - cost) / SUM(qty) ELSE 0 END FROM sku_prev_cost))) AS mix_effect,
+                    SUM(q1 * (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue - cost) / SUM(qty) ELSE 0 END FROM sku_prev_cost) - q0 * u0) AS volume_effect,
                     SUM((rev1 - cost1) - (rev0 - cost0)) AS total_effect
                 FROM (
                     SELECT
@@ -512,9 +533,16 @@ def build_insights_payload(
             ),
             profit_decomp_yoy AS (
                 SELECT
-                    SUM((u1 - u0) * q0) AS price_effect,
-                    SUM(u0 * (q1 - q0)) AS volume_effect,
-                    SUM((u1 - u0) * (q1 - q0)) AS mix_effect,
+                    -- Price, volume and mix the way a merchant means them.
+                    -- The interaction split this replaced put the whole of a
+                    -- basket shift into `volume` and left `mix` holding only the
+                    -- second-order price x quantity term - which is near zero
+                    -- whenever unit values are steady, so the page reported
+                    -- "Mix +$0" on every window. These three telescope to
+                    -- sum(q1*u1) - sum(q0*u0) exactly.
+                    SUM(q1 * (u1 - u0)) AS price_effect,
+                    SUM(q1 * (u0 - (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue - cost) / SUM(qty) ELSE 0 END FROM sku_yoy_cost))) AS mix_effect,
+                    SUM(q1 * (SELECT CASE WHEN SUM(qty) > 0 THEN SUM(revenue - cost) / SUM(qty) ELSE 0 END FROM sku_yoy_cost) - q0 * u0) AS volume_effect,
                     SUM((rev1 - cost1) - (rev0 - cost0)) AS total_effect
                 FROM (
                     SELECT

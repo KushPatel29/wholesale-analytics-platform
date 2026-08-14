@@ -809,25 +809,52 @@ def _driver_metric_block(
             work[col] = 0.0
         work[col] = pd.to_numeric(work[col], errors="coerce").fillna(0.0)
 
-    work["qty_avg"] = (work[qty_cur_col] + work[qty_prev_col]) / 2.0
-    work["unit_avg"] = (work[unit_cur_col] + work[unit_prev_col]) / 2.0
-    work["price_contrib"] = (work[unit_cur_col] - work[unit_prev_col]) * work["qty_avg"]
-    work["volume_contrib"] = (work[qty_cur_col] - work[qty_prev_col]) * work["unit_avg"]
-    work["total_delta_contrib"] = work[total_cur_col] - work[total_prev_col]
-    work["mix_contrib"] = work["total_delta_contrib"] - work["price_contrib"] - work["volume_contrib"]
-
     def _series_nansum(series: pd.Series) -> float:
         arr = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float, copy=False)
         if arr.size == 0:
             return 0.0
         return float(np.nansum(arr))
 
+    # Price / volume / mix, the way a merchant means it.
+    #
+    # This used to be a Bennet decomposition - price on average quantity,
+    # volume on average unit value - and mix was whatever was left over. But
+    # Bennet is *exactly* additive on its own: price + volume already equals
+    # the total by construction, so the leftover could only ever be zero. The
+    # page duly reported "Mix +$0" on every window, which reads as a metric
+    # that is not being computed, and it was not.
+    #
+    # The three-way split below is the standard retail one and each term
+    # answers a different question:
+    #
+    #   price   sum of q1 * (u1 - u0)          same basket, new prices
+    #   mix     sum of q1 * u0  -  Q1 * u0bar  the basket shifted toward
+    #                                          dearer or cheaper lines
+    #   volume  Q1 * u0bar  -  sum of q0 * u0  more or fewer units at the
+    #                                          prior average value
+    #
+    # where u0bar is the prior period's quantity-weighted average unit value.
+    # They telescope to sum(q1*u1) - sum(q0*u0), so the identity is exact
+    # rather than assumed - and `reconciliation` below still measures it,
+    # because rows with quantity but no value (or the reverse) can put the
+    # row-level totals and the unit x quantity products slightly out of step.
+    prior_qty_total = _series_nansum(work[qty_prev_col])
+    prior_value_total = _series_nansum(work[qty_prev_col] * work[unit_prev_col])
+    prior_unit_avg = (prior_value_total / prior_qty_total) if abs(prior_qty_total) > 1e-9 else 0.0
+
+    work["price_contrib"] = work[qty_cur_col] * (work[unit_cur_col] - work[unit_prev_col])
+    work["mix_contrib"] = work[qty_cur_col] * (work[unit_prev_col] - prior_unit_avg)
+    work["volume_contrib"] = (work[qty_cur_col] - work[qty_prev_col]) * prior_unit_avg + (
+        work[qty_prev_col] * prior_unit_avg - work[qty_prev_col] * work[unit_prev_col]
+    )
+    work["total_delta_contrib"] = work[total_cur_col] - work[total_prev_col]
+
     current_total = _series_nansum(work[total_cur_col])
     previous_total = _series_nansum(work[total_prev_col])
     total_delta = _series_nansum(work["total_delta_contrib"])
     price_effect = _series_nansum(work["price_contrib"])
+    mix_effect = _series_nansum(work["mix_contrib"])
     volume_effect = _series_nansum(work["volume_contrib"])
-    mix_effect = float(total_delta - price_effect - volume_effect)
     sum_effects = float(price_effect + volume_effect + mix_effect)
     residual = float(sum_effects - total_delta)
     within_tolerance = abs(residual) <= tolerance
@@ -3033,8 +3060,10 @@ def _compute_bundle_context(
     )
     revenue_mom_delta = _clean_optional_float(deltas.get("revenue", {}).get("mom"))
     revenue_mom_delta_pct = _clean_optional_float(deltas.get("revenue", {}).get("mom_pct"))
-    volume_effect = _clean_optional_float(((drivers.get("mom") or {}).get("revenue") or {}).get("volume_effect"))
-    mix_effect = _clean_optional_float(((drivers.get("mom") or {}).get("revenue") or {}).get("mix_effect"))
+    _mom_revenue_drivers = ((drivers.get("mom") or {}).get("revenue") or {})
+    price_effect = _clean_optional_float(_mom_revenue_drivers.get("price_effect"))
+    volume_effect = _clean_optional_float(_mom_revenue_drivers.get("volume_effect"))
+    mix_effect = _clean_optional_float(_mom_revenue_drivers.get("mix_effect"))
 
     narrative: List[str] = []
     if window_contract.terminal_period_incomplete:
@@ -3044,11 +3073,43 @@ def _compute_bundle_context(
     if revenue_mom_delta is not None:
         direction = "up" if revenue_mom_delta >= 0 else "down"
         pct_text = "n/a" if revenue_mom_delta_pct is None else f"{revenue_mom_delta_pct:+.1f}%"
-        vol_text = "n/a" if volume_effect is None else _signed_money(volume_effect)
-        mix_text = "n/a" if mix_effect is None else _signed_money(mix_effect)
-        narrative.append(
-            f"Revenue {direction} {_signed_money(revenue_mom_delta)} versus {primary_compare_label.lower()} ({pct_text}), driven by Volume {vol_text} and Mix {mix_text}."
+        headline = (
+            f"Revenue {direction} {_signed_money(revenue_mom_delta)} versus "
+            f"{primary_compare_label.lower()} ({pct_text})"
         )
+        # All three terms, and only against the delta they actually decompose.
+        #
+        # This sentence used to name Volume and Mix, drop Price, and attach
+        # them to the headline delta - which is a different comparison from
+        # the one the decomposition runs on. So it read "up $479,118, driven
+        # by Volume -883,180 and Mix +$0": a total from one basis, components
+        # from another, and the largest component missing. Nothing about that
+        # could be reconciled by a reader.
+        effects = [
+            ("Price", price_effect),
+            ("Volume", volume_effect),
+            ("Mix", mix_effect),
+        ]
+        decomposed_delta = _clean_optional_float(_mom_revenue_drivers.get("delta"))
+        if all(value is not None for _, value in effects) and decomposed_delta is not None:
+            parts = ", ".join(f"{name} {_signed_money(value)}" for name, value in effects)
+            same_basis = abs(decomposed_delta - revenue_mom_delta) <= max(
+                1.0, abs(revenue_mom_delta) * 0.001
+            )
+            if same_basis:
+                narrative.append(f"{headline}: {parts}.")
+            else:
+                # Say which movement the split explains rather than implying
+                # it explains the headline one.
+                narrative.append(
+                    f"{headline}. Across matched SKUs the movement of "
+                    f"{_signed_money(decomposed_delta)} splits into {parts}."
+                )
+        else:
+            narrative.append(
+                f"{headline}. Price, volume and mix need unit quantities that "
+                f"this window does not carry."
+            )
     if top_customer_gainer or top_customer_decliner:
         gainer_text = ""
         decliner_text = ""

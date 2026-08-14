@@ -169,11 +169,11 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
     except Exception:
         c_insights, c_at_risk, _c_movers, scatter_data = {}, 0, [], []
     
+    # Only the department mix is read from here now; "movers" fed the deleted
+    # product prose, and `build_products_bundle` filtered it out of the request
+    # regardless - it is not one of its sections.
     try:
-        prod_b = products_bundle.build_products_bundle(filters, scope, args, requested_sections=["overview", "movers"])
-        p_kpis = prod_b.get("kpis", {})
-        p_movers = prod_b.get("movers", {}).get("top_gainers", [])[:3]
-        
+        prod_b = products_bundle.build_products_bundle(filters, scope, args, requested_sections=["overview"])
         donut_labels = []
         donut_values = []
         try:
@@ -189,7 +189,6 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
         except Exception:
             pass
     except Exception:
-        p_kpis, p_movers = {}, []
         donut_labels, donut_values = ["Beef", "Poultry", "Pork", "Seafood", "Other"], [45, 25, 15, 10, 5]
     
     try:
@@ -206,20 +205,21 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
     except Exception:
         region_performance = []
     
-    # 3) Overview & AI solutions
+    # 3) Overview
+    # `summary` and `takeaways` were template prose - "Market Pulse: MTD
+    # analytical diagnostics indicate a healthy posture" - assembled from a
+    # format string that read a couple of numbers and asserted a conclusion
+    # around them. Nothing rendered them, and the page they belonged to now
+    # states only what `planning.py` measured. The KPIs stay: those are figures.
     overview = {
         "headline": f"Analytical Briefing: Day {day_of_month} Market Diagnostics",
-        "summary": _generate_ba_summary(kpis, sales_kpis, filters, month_progress_pct, margin_pct),
         "kpis": [
             {"label": "MTD Revenue", "value": fmt_currency(total_rev), "trend": kpis.get("rev_delta_pct", 0)},
             {"label": "Contribution Margin", "value": fmt_percent(margin_pct / 100.0), "trend": round(margin_delta_pct, 1)},
             {"label": "Pace to Target", "value": f"{kpis.get('rev_delta_pct', 0) + 100:.1f}%", "trend": month_progress_pct}
-        ],
-        "takeaways": _generate_ba_takeaways(kpis, sales_kpis, c_insights, p_kpis, day_of_month, margin_pct)
+        ]
     }
-    
-    # AI Solution Section
-    
+
     # 4) Signals
     signals = [
         {"label": "Revenue Velocity", "value": "On Track" if kpis.get("rev_delta_pct", 0) > -2 else "Trailing", "explanation": f"At {month_progress_pct:.0f}% completion, revenue is {'tracking slightly above' if kpis.get('rev_delta_pct', 0) > 0 else 'trailing'} benchmarks by {abs(kpis.get('rev_delta_pct', 0)):.1f}%.", "status": "success" if kpis.get("rev_delta_pct", 0) > -2 else "danger"},
@@ -254,7 +254,6 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
                 {"segment": "Silent Account Leakage", "count": c_at_risk, "insight": f"Analytical identification of {c_at_risk} accounts requiring data-driven recovery outreach."},
                 {"segment": "Growth Acquisition", "count": int(kpis.get('customers_delta', 0)), "insight": "Net-new contribution is pacing 2% above monthly forecast targets."}
             ],
-            "products": _generate_product_insights(p_kpis, p_movers),
             "suppliers": {
                 "top_exposure": [{"name": r.get("name"), "share": int(au.safe_divide(r.get("revenue", 0), total_rev, 0) * 100)} for r in supplier_exposure],
                 "summary": f"Supply chain concentration analysis confirms stable vendor dependency through Day {day_of_month}."
@@ -271,77 +270,20 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
             # the disagreement between them. Computed from the scoped frame in
             # app/services/planning.py.
             #
-            # `ai_solutions`, `scenarios` and `conclusion` used to live here as
-            # generated prose - sentences like "maintains a defensive posture"
-            # that were true of no dataset in particular and were assembled
-            # from a template regardless of what the numbers said. They are
-            # gone; `planning.actions` is computed and every line of it points
-            # at a figure elsewhere on the page.
-            "planning": planning.build_planning(scoped_df),
-            "actions": _generate_ba_actions(kpis, sales_kpis, c_insights, day_of_month, margin_pct)
+            # `ai_solutions`, `scenarios`, `conclusion`, and later the top-level
+            # `actions` and `products` blocks, used to live here as generated
+            # prose - sentences like "maintains a defensive posture", or an
+            # instruction to "execute a formal SKUs audit" issued whether or
+            # not anything had been measured about pricing. They were true of
+            # no dataset in particular and were assembled from a template
+            # regardless of what the numbers said. They are gone;
+            # `planning.actions` is computed and every line of it points at a
+            # figure elsewhere on the page.
+            "planning": planning.build_planning(scoped_df)
         },
         "meta": {
             "dataset_version": fact_store.cache_buster(),
             "applied_filters": str(filters)
         }
     }
-
-def _generate_ba_summary(kpis, sales_kpis, filters, pace, margin):
-    rev = kpis.get("rev_delta_pct", 0)
-    status = "healthy" if rev > -2 and margin > 15 else "under strategic review"
-    
-    regions = []
-    if hasattr(filters, "regions"):
-        regions = filters.regions
-    elif isinstance(filters, dict):
-        regions = filters.get("regions", [])
-        
-    reg = f" in {', '.join(regions)}" if regions else " across store operations"
-    
-    return f"Market Pulse: MTD analytical diagnostics indicate a {status} posture. At {pace:.0f}% month-completion, revenue is tracking {rev:+.1f}% vs comparable period benchmarks{reg}, with Process Margins stabilized at {margin:.1f}%."
-
-def _generate_ba_takeaways(kpis, sales_kpis, c_insights, p_kpis, day, margin):
-    takeaways = []
-    rev = kpis.get("rev_delta_pct", 0)
-    takeaways.append(f"Revenue Pacing: Current velocity suggests a {abs(rev):.1f}% variance vs monthly targets if Day {day} trajectory is maintained.")
-    
-    health = sales_kpis.get("avg_health_index_pct", 0)
-    takeaways.append(f"Commercial Diagnostic: Sales force efficiency is indexed at {health:.0f}%, with strongest gains in fresh department distribution.")
-    
-    takeaways.append(f"Operational Yield: Process margins of {margin:.1f}% confirm successful mix discipline through the first {day} days of the reporting cycle.")
-    
-    return takeaways[:3]
-
-def _generate_product_insights(p_kpis, p_movers):
-    insights = []
-    top_cat = p_kpis.get("top_category")
-    if top_cat:
-        insights.append({"category": top_cat, "momentum": "MTD Leader", "summary": "Core anchor category driving majority of monthly volume targets across BC."})
-    
-    if p_movers:
-        insights.append({"category": "Demand Spike", "momentum": "Trending", "summary": f"High intra-month velocity detected in {p_movers[0].get('name')}, indicating shifting consumer preference."})
-        
-    if not insights:
-        insights = [
-            {"category": "Anchor Departments", "momentum": "Stable", "summary": "Core departments show consistent demand patterns with low intra-month volatility."},
-            {"category": "Specialty Ranges", "momentum": "Opportunity", "summary": "High-margin ranges currently under-pacing volume targets for the ongoing month."}
-        ]
-    return insights
-
-
-def _generate_ba_actions(kpis, sales_kpis, c_insights, day, margin):
-    actions = []
-    rev = kpis.get("rev_delta_pct", 0)
-    
-    if margin < 15:
-        actions.append({"title": "Price-Mix Alignment Audit", "description": "Execute a formal SKUs audit to identify underperforming pricing tiers across departments."})
-    
-    if rev < 0:
-        actions.append({"title": "Strategic Gap-Closure Campaign", "description": f"Launch immediate 'Day {day}' volume drive for top 20 accounts to recover MTD shortfall."})
-    else:
-        actions.append({"title": "High-Margin Upsell Drive", "description": "Leverage current growth momentum to maximize high-margin inventory before month-end."})
-    
-    actions.append({"title": "Silent Account Diagnostics", "description": "Initiate data-driven outreach to all accounts with zero MTD activity to prevent monthly churn."})
-        
-    return actions[:3]
 
