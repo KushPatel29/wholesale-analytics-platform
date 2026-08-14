@@ -198,6 +198,26 @@ def register_blueprints(app: Flask) -> None:
     app.jinja_env.globals["inline_filter_options"] = _inline_filter_options
 
     @app.context_processor
+    def _inject_static_site_link():
+        """Where the prerendered half of the demo lives, if it is deployed.
+
+        The two halves are separate origins: analytics is prerendered onto a
+        CDN, and this app keeps the writes - returns, approvals, admin. The
+        `before_request` above already bounces an analytics path back to the
+        CDN, but a redirect is a round trip a reviewer pays for on a cold
+        container, and it leaves the nav pointing somewhere it will not stay.
+        Given the URL, the nav can link straight there instead.
+        """
+        root = str(os.getenv("DEMO_STATIC_SITE_URL", "")).strip().rstrip("/")
+        if not root:
+            return {"static_site_url": None, "static_page_url": None}
+
+        def static_page_url(suffix: str = "") -> str:
+            return f"{root}/{str(suffix or '').lstrip('/')}"
+
+        return {"static_site_url": root, "static_page_url": static_page_url}
+
+    @app.context_processor
     def _inject_active_drilldown_context():
         try:
             from flask_login import current_user

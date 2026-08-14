@@ -6504,3 +6504,48 @@ body.theme-wa-future .auth-demo__cta .auth-demo__cta-label,
 body.theme-wa-future .auth-demo__cta .auth-demo__cta-sub {
   color: inherit;
 }
+
+/* ── Which half of the demo am I in? ────────────────────────────────────
+ *
+ * Analytics is prerendered onto a CDN; this app keeps the writes. The two
+ * share a nav bar, so crossing between them was invisible - the theme changed
+ * and the user badge changed, and both read as bugs rather than as a boundary.
+ */
+.wa-live-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--wa-warn-wash, rgba(224, 165, 72, 0.28));
+  background: var(--wa-warn-wash, rgba(224, 165, 72, 0.10));
+  color: var(--wa-text, #e6edf3);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.wa-live-banner__dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--wa-warn, #e0a548);
+}
+.wa-live-banner__text { flex: 1 1 22rem; min-width: 0; }
+.wa-live-banner__text strong { font-weight: 700; }
+.wa-live-banner__back {
+  flex: 0 0 auto;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--wa-hairline, rgba(148, 163, 184, 0.35));
+  border-radius: 999px;
+  background: var(--wa-surface, #161d23);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+body.theme-wa-future a.wa-live-banner__back:not(.btn):not(.nav-link):not(.dropdown-item) {
+  color: var(--wa-text, #e6edf3);
+}
+.wa-live-banner__back:hover { border-color: var(--wa-accent, #54c9a0); }
+@media (max-width: 575.98px) {
+  .wa-live-banner { font-size: 0.78rem; }
+}

@@ -11,7 +11,19 @@
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem("wa-theme");
+          /* The demo spans two origins - the prerendered site on a CDN and this
+             app - and `localStorage` does not cross an origin. A visitor who
+             set Light here arrived there in Dark, which reads as two different
+             products rather than two halves of one. So a handoff carries the
+             theme in the URL, and whichever side receives it adopts and stores
+             it before the first paint. */
+          var carried = new URLSearchParams(location.search).get("theme");
+          if (carried === "light" || carried === "dark") {
+            localStorage.setItem("wa-theme", carried);
+          }
+          var stored = carried === "light" || carried === "dark"
+            ? carried
+            : localStorage.getItem("wa-theme");
           if (stored !== "light" && stored !== "dark") {
             stored = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
           }
@@ -28,7 +40,7 @@
        before first paint, and the strict CSP the static host applies blocks
        external hosts outright. Vendored alongside chart.js, same as before. #}
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260814-cta-contrast-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260814-live-boundary-1') }}">
     {% if request.blueprint == 'overview_page' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
     {% endif %}
@@ -181,30 +193,30 @@
           {% if current_user.is_authenticated %}
           <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-2">
             {% if can_permission('page.overview.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ url_for('overview_page.overview_landing') }}">Overview</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ static_page_url('') if static_page_url else url_for('overview_page.overview_landing') }}">Overview</a></li>
             {% endif %}
             {% if can_permission('page.overview.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ url_for('stakeholder_report.index') }}">Planning</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ static_page_url('planning/') if static_page_url else url_for('stakeholder_report.index') }}">Planning</a></li>
             {% endif %}
             {% if can_permission('page.customers.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ url_for('customers.index') }}">Customers</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ static_page_url('customers/') if static_page_url else url_for('customers.index') }}">Customers</a></li>
             {% endif %}
             {% if can_permission('page.products.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ url_for('products.index') }}">Products</a></li>
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}" href="{{ url_for('inventory.index') }}">Inventory</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ static_page_url('products/') if static_page_url else url_for('products.index') }}">Products</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}" href="{{ static_page_url('inventory/') if static_page_url else url_for('inventory.index') }}">Inventory</a></li>
             {% endif %}
             {% if can_permission('page.regions.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ url_for('regions.index') }}">Regions</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ static_page_url('regions/') if static_page_url else url_for('regions.index') }}">Regions</a></li>
             {% endif %}
             {% if can_permission('page.suppliers.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('suppliers.') %}active{% endif %}" href="{{ url_for('suppliers.index') }}">Suppliers</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('suppliers.') %}active{% endif %}" href="{{ static_page_url('suppliers/') if static_page_url else url_for('suppliers.index') }}">Suppliers</a></li>
             {% endif %}
             {% if (has_labor if has_labor is defined else false) and can_permission('page.labor.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('labor.') %}active{% endif %}" href="{{ url_for('labor.index') }}">Labor</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('labor.') %}active{% endif %}" href="{{ static_page_url('labor/') if static_page_url else url_for('labor.index') }}">Labor</a></li>
             {% endif %}
             {% if _has_salesreps %}
               {% if can_permission('page.salesreps.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ url_for('salesreps.index') }}">Sales Reps</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ static_page_url('salesreps/') if static_page_url else url_for('salesreps.index') }}">Sales Reps</a></li>
               {% endif %}
             {% else %}
             <li class="nav-item"><a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Sales Reps</a></li>
@@ -238,8 +250,14 @@
             </li>
             {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
+              {# `get_id()` is the primary key. It rendered as a bare number in
+                 the account menu - and because the two halves of the demo were
+                 built by different accounts, it read "3" on the prerendered
+                 site and "1" on the live app. A reviewer crossing between them
+                 saw a number change for no stated reason, which reads as a
+                 bug. Show who you are signed in as instead. #}
               <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                {{ current_user.get_id() or 'User' }}
+                {{ current_user.username or current_user.email or 'Account' }}
               </a>
               <ul class="dropdown-menu dropdown-menu-end" role="menu">
                 {% if (notifications_enabled if notifications_enabled is defined else false) and can_permission('page.notifications.view') %}
@@ -267,6 +285,24 @@
         </div>
       </div>
     </nav>
+    {% if static_site_url and current_user.is_authenticated %}
+    {# Which half of the demo am I in?
+       The two halves share a nav bar, so crossing between them was invisible -
+       the only signals a visitor got were the theme changing and the user
+       badge changing, both of which read as bugs rather than as a boundary.
+       Say it plainly, and always offer the way back. #}
+    <div class="wa-live-banner" role="note">
+      <span class="wa-live-banner__dot" aria-hidden="true"></span>
+      <span class="wa-live-banner__text">
+        <strong>Live app.</strong>
+        Server-rendered on a free instance, so pages here are slower than the
+        prerendered dashboard. This is where returns, approvals and admin run.
+      </span>
+      <a class="wa-live-banner__back" href="{{ static_page_url('') }}" data-wa-carry-theme>
+        &larr; Back to the fast dashboard
+      </a>
+    </div>
+    {% endif %}
     <main class="app-main container-xxl">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -396,6 +432,28 @@
     <script>
       // Theme toggle. The applied theme is chosen before first paint by the
       // inline script in <head>; this only handles the switch and persistence.
+      // Carry the theme across the origin boundary.
+      //
+      // The nav points at the prerendered site, which is a different origin and
+      // therefore a different `localStorage`. Without this a visitor who chose
+      // Light here lands there in Dark, and the flip is the only sign they
+      // crossed anywhere. The server cannot render the answer in - it does not
+      // know the theme - so stamp it on at click time.
+      (function () {
+        document.addEventListener("click", function (event) {
+          var link = event.target.closest && event.target.closest("a[href]");
+          if (!link) return;
+          var href = link.getAttribute("href") || "";
+          if (!/^https?:\/\//i.test(href)) return;
+          try {
+            var url = new URL(href, location.href);
+            if (url.origin === location.origin) return;
+            var theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+            url.searchParams.set("theme", theme);
+            link.setAttribute("href", url.toString());
+          } catch (e) { /* leave the link alone */ }
+        }, true);
+      })();
       (function () {
         var root = document.documentElement;
         function paint() {

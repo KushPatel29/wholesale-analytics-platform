@@ -244,18 +244,35 @@ SHIM = """
 
 # NOTE: substituted with str.replace, not str.format - the inline CSS below is
 # full of braces that format() would read as fields.
+# Resolve the theme before the first paint, on a page that has had every other
+# script removed. Deliberately tiny and inline: a separate file would be a
+# blocking request in front of the paint it exists to get right.
+STATIC_THEME_BOOT = (
+    "<script>(function(){try{"
+    'var q=new URLSearchParams(location.search).get("theme");'
+    'if(q==="light"||q==="dark"){localStorage.setItem("wa-theme",q);}'
+    'var t=(q==="light"||q==="dark")?q:localStorage.getItem("wa-theme");'
+    'if(t!=="light"&&t!=="dark"){'
+    't=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";}'
+    'document.documentElement.setAttribute("data-theme",t);'
+    "}catch(e){}})();</script>"
+)
+
 STATIC_BANNER = """
 <div class="static-demo-banner" role="note">
   <strong>Prerendered snapshot.</strong>
   Every figure below was computed at build time from the synthetic dataset.
-  <a href="__LIVE_URL__" rel="noopener">Open the live app</a> for filter
-  combinations outside the presets, the returns workflow, and admin.
+  <a href="__LIVE_URL__" rel="noopener" data-wa-live-link>Open the live app</a>
+  for filter combinations outside the presets, the returns workflow, and admin
+  &mdash; <span class="static-demo-banner__warn">it runs on a free instance and
+  can take ~20s to wake</span>.
 </div>
 <style>
 .static-demo-banner{font:500 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;
   padding:10px 16px;background:rgba(125,211,252,.10);border-bottom:1px solid rgba(125,211,252,.28);
   color:inherit;text-align:center}
 .static-demo-banner a{color:#38bdf8;text-decoration:underline;text-underline-offset:2px}
+.static-demo-banner__warn{opacity:.8}
 </style>
 """
 
@@ -636,9 +653,29 @@ STATIC_RUNTIME = r"""
     });
   }
 
+  /* Hand the theme to the live app on the way out.
+     The two halves are separate origins and therefore separate localStorage,
+     so without this a visitor reading in Light arrives in Dark and the flip is
+     the only sign they crossed a boundary at all. */
+  function bindCrossOrigin() {
+    document.addEventListener("click", function (event) {
+      var link = event.target.closest && event.target.closest("a[href]");
+      if (!link) return;
+      var href = link.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) return;
+      try {
+        var url = new URL(href, location.href);
+        if (url.origin === location.origin) return;
+        var root = document.documentElement;
+        url.searchParams.set("theme", root.getAttribute("data-theme") === "light" ? "light" : "dark");
+        link.setAttribute("href", url.toString());
+      } catch (_) { /* leave the link alone */ }
+    }, true);
+  }
+
   function bind() {
     bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews();
-    bindShellMenus(); bindHoverDetails();
+    bindShellMenus(); bindHoverDetails(); bindCrossOrigin();
   }
   bind();
 })();
@@ -2191,6 +2228,16 @@ class Builder:
                 })"""
             )
             html = page.content()
+            # The freeze pass strips every script, including the one in <head>
+            # that resolves the theme before first paint. Two consequences, both
+            # of which shipped: a visitor who chose Light got Dark back on the
+            # next page, because nothing here ever read localStorage; and the
+            # theme a handoff carries in `?theme=` was ignored, so crossing to
+            # the live app and back flipped the colours each way.
+            #
+            # Put it back after the strip, in <head>, so it still runs before
+            # anything paints. It touches no network and no application state.
+            html = html.replace("</head>", STATIC_THEME_BOOT + "</head>", 1)
             runtime = f'<script src="{base}static/js/static-runtime.js" defer></script>'
             html = html.replace("</body>", runtime + "</body>", 1)
             html = _minify_html(html)
