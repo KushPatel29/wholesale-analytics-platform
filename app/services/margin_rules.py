@@ -10,7 +10,7 @@ except Exception:  # pragma: no cover - pandas is available in app runtime/tests
     pd = None  # type: ignore[assignment]
 
 
-_DQ_BUCKET = "Needs Protein Mapping"
+_DQ_BUCKET = "Needs department mapping"
 _NO_COST_LABEL = "No cost visibility"
 _FLAT_OVERHEAD_CHARGE = 0.85
 _WEIGHT_KEYS: Sequence[str] = (

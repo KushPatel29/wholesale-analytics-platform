@@ -479,6 +479,81 @@ STATIC_RUNTIME = r"""
       var owner = event.target.closest("[data-wa-tip]");
       if (owner) hide(owner);
     });
+
+    /* Everything above answers a pointer. A chart also has to answer a
+       keyboard and a finger, and its data points can do neither: they are
+       `aria-hidden` boxes with no tab stop, deliberately, because putting 151
+       empty stops in the tab order is worse than none.
+       So the chart is the tab stop, and the arrow keys walk the points. */
+    function readPoint(chart, spot) {
+      if (!spot) return;
+      chart.querySelectorAll(".wa-hot.is-active").forEach(function (other) {
+        other.classList.remove("is-active");
+      });
+      spot.classList.add("is-active");
+      chart.dataset.waHotIndex = spot.dataset.waHot || "0";
+      var box = spot.getBoundingClientRect();
+      show(spot, box.left + box.width / 2, box.bottom);
+      var live = chart.querySelector(".wa-hot-live");
+      // One sentence, so a screen reader does not read a tooltip's line breaks.
+      if (live) live.textContent = (spot.getAttribute("data-wa-tip") || "").replace(/\n/g, ", ");
+    }
+
+    function clearPoints(chart) {
+      chart.querySelectorAll(".wa-hot.is-active").forEach(function (spot) {
+        spot.classList.remove("is-active");
+      });
+      chart.removeAttribute("data-wa-hot-index");
+      var live = chart.querySelector(".wa-hot-live");
+      if (live) live.textContent = "";
+      hide(active);
+    }
+
+    document.addEventListener("keydown", function (event) {
+      var chart = event.target.closest && event.target.closest(".static-chart-wrap");
+      if (!chart) {
+        if (event.key === "Escape" && active) hide(active);
+        return;
+      }
+      var list = [].slice.call(chart.querySelectorAll(".wa-hot"));
+      if (!list.length) return;
+      var current = parseInt(chart.dataset.waHotIndex, 10);
+      if (isNaN(current)) current = -1;
+      var next;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") next = Math.min(list.length - 1, current + 1);
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = Math.max(0, (current < 0 ? 1 : current) - 1);
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = list.length - 1;
+      else if (event.key === "Escape") { clearPoints(chart); return; }
+      else return;
+      event.preventDefault();
+      readPoint(chart, list[next]);
+    });
+
+    document.addEventListener("focusout", function (event) {
+      var chart = event.target.closest && event.target.closest(".static-chart-wrap");
+      if (chart && !chart.contains(event.relatedTarget)) clearPoints(chart);
+    });
+
+    // A finger lands near a point far more often than on it, so resolve the
+    // tap to the nearest one rather than requiring a direct hit.
+    document.addEventListener("pointerdown", function (event) {
+      if (event.pointerType === "mouse") return;
+      var chart = event.target.closest && event.target.closest(".static-chart-wrap");
+      if (!chart) { if (active) hide(active); return; }
+      var direct = event.target.closest(".wa-hot");
+      if (direct) { readPoint(chart, direct); return; }
+      var best = null;
+      var bestDistance = Infinity;
+      chart.querySelectorAll(".wa-hot").forEach(function (spot) {
+        var box = spot.getBoundingClientRect();
+        var dx = event.clientX - (box.left + box.width / 2);
+        var dy = event.clientY - (box.top + box.height / 2);
+        var distance = dx * dx + dy * dy;
+        if (distance < bestDistance) { bestDistance = distance; best = spot; }
+      });
+      if (best && bestDistance < 88 * 88) readPoint(chart, best); else clearPoints(chart);
+    });
   }
 
   function bindPrint() {
@@ -829,12 +904,25 @@ CHART_MOUNT_JS = """(el, cfg) => {
   if (!hotspots.length) { el.replaceWith(img); return; }
   const wrap = document.createElement('span');
   wrap.className = 'static-chart-wrap';
+  /* One tab stop per chart, not one per point. A page with 151 data points
+     would otherwise put 151 empty stops in the tab order, which is worse for a
+     keyboard user than no access at all. The chart is a single group; the
+     arrow keys walk the points inside it. */
+  wrap.tabIndex = 0;
+  wrap.setAttribute('role', 'group');
+  wrap.setAttribute('aria-label',
+    (cfg.alt && cfg.alt !== 'Analytics chart' ? cfg.alt : 'Chart') +
+    ' — ' + hotspots.length + ' data points. Use the arrow keys to read them.');
   wrap.append(img);
-  hotspots.forEach(spot => {
+  hotspots.forEach((spot, index) => {
     const hot = document.createElement('b');
     hot.className = 'wa-hot';
     hot.setAttribute('data-wa-tip', spot.tip);
+    /* Hidden from the accessibility tree because the value is announced from
+       the chart's live region instead - otherwise a screen reader meets a
+       hundred unlabelled elements. */
     hot.setAttribute('aria-hidden', 'true');
+    hot.dataset.waHot = String(index);
     hot.style.cssText = 'left:' + spot.l + '%;top:' + spot.t + '%;width:' + spot.w + '%;height:' + spot.h + '%';
     /* Flip the label back inside the plot when the point is near an edge:
        above it would leave the top of the chart, and beyond either side it
@@ -844,6 +932,12 @@ CHART_MOUNT_JS = """(el, cfg) => {
     else if (spot.l + spot.w > 78) hot.dataset.waTipAlign = 'end';
     wrap.append(hot);
   });
+  /* Where the keyboard and touch readouts are announced. Polite, so it does
+     not interrupt, and inside the group so it moves with the chart. */
+  const live = document.createElement('span');
+  live.className = 'wa-hot-live';
+  live.setAttribute('aria-live', 'polite');
+  wrap.append(live);
   el.replaceWith(wrap);
 }"""
 
@@ -868,10 +962,18 @@ STATIC_CRITICAL_CSS = """
    working the moment its JavaScript is removed, and takes the element's own
    `title` with it, so those elements ended up with no hover at all. */
 .static-chart-wrap{position:relative;display:block;overflow:visible}
+.static-chart-wrap:focus{outline:none}
+.static-chart-wrap:focus-visible{outline:2px solid var(--wa-accent,#38bdf8);outline-offset:3px;border-radius:.4rem}
 .static-chart-wrap .wa-hot{position:absolute;display:block;margin:0;border-radius:4px;
   background:transparent;pointer-events:auto}
-.static-chart-wrap .wa-hot:hover{background:color-mix(in srgb,var(--wa-accent,#38bdf8) 16%,transparent);
+.static-chart-wrap .wa-hot:hover,.static-chart-wrap .wa-hot.is-active{
+  background:color-mix(in srgb,var(--wa-accent,#38bdf8) 16%,transparent);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--wa-accent,#38bdf8) 55%,transparent)}
+/* Keyboard and touch drive the runtime's own `.wa-hover-detail`, not the CSS
+   pseudo-element - `.wa-tip-runtime` switches that off below. This class only
+   marks which point is being read. */
+.wa-hot-live{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 [data-wa-tip]{position:relative}
 [data-wa-tip]::after{content:attr(data-wa-tip);position:absolute;left:50%;bottom:calc(100% + .5rem);
   transform:translateX(-50%);z-index:70;width:max-content;max-width:17rem;padding:.5rem .65rem;
@@ -904,7 +1006,9 @@ body[data-static-page] .static-chart-wrap{overflow:visible}
 body[data-static-page] :has(> .static-chart-wrap){overflow:visible}
 body[data-static-page] .report-card:not(:has(table)),
 body[data-static-page] .chart-card:not(:has(table)){overflow:visible}
-@media(hover:none){.static-chart-wrap .wa-hot{display:none}}
+/* Touch has no hover, so the label is driven by tap instead - the hotspots
+   must stay in the document for that. They used to be `display:none` here,
+   which is why every chart was inert on a phone. */
 /* Keep prerendered sections in the document while deferring layout and paint
    for sections below the viewport. This breaks one large first-paint layout
    into small scroll-time layouts and keeps the main thread responsive. */

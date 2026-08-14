@@ -223,8 +223,8 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
     # 4) Signals
     signals = [
         {"label": "Revenue Velocity", "value": "On Track" if kpis.get("rev_delta_pct", 0) > -2 else "Trailing", "explanation": f"At {month_progress_pct:.0f}% completion, revenue is {'tracking slightly above' if kpis.get('rev_delta_pct', 0) > 0 else 'trailing'} benchmarks by {abs(kpis.get('rev_delta_pct', 0)):.1f}%.", "status": "success" if kpis.get("rev_delta_pct", 0) > -2 else "danger"},
-        {"label": "Margin Integrity", "value": "Disciplined" if margin_pct > 15 else "Under Review", "explanation": f"Process margins are holding at {margin_pct:.1f}%, indicating successful price-mix synchronization despite BC market volatility.", "status": "success" if margin_pct > 15 else "warning"},
-        {"label": "Commercial Health", "value": f"{sales_kpis.get('avg_health_index_pct', 0):.0f}%", "explanation": f"BC sales efficiency remains robust through Day {day_of_month}, with high engagement recorded in top-tier accounts.", "status": "success" if sales_kpis.get('avg_health_index_pct', 0) > 70 else "warning"},
+        {"label": "Margin Integrity", "value": "Disciplined" if margin_pct > 15 else "Under Review", "explanation": f"Process margins are holding at {margin_pct:.1f}%, indicating successful price-mix synchronization despite market volatility.", "status": "success" if margin_pct > 15 else "warning"},
+        {"label": "Commercial Health", "value": f"{sales_kpis.get('avg_health_index_pct', 0):.0f}%", "explanation": f"Sales efficiency remains robust through Day {day_of_month}, with high engagement recorded in top-tier accounts.", "status": "success" if sales_kpis.get('avg_health_index_pct', 0) > 70 else "warning"},
         {"label": "Portfolio Risk", "value": f"{c_at_risk} Critical", "explanation": f"Current month diagnostics flagged {c_at_risk} accounts with zero order activity; immediate recovery protocols recommended.", "status": "success" if c_at_risk < 5 else "danger"}
     ]
     
@@ -250,8 +250,8 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
                 "watchlist": [{"id": r.get("id"), "name": r.get("name"), "revenue": fmt_currency(r.get("revenue", 0)), "margin": fmt_percent(r.get("margin_pct", 0) / 100.0), "health": int(r.get("health_score", 0))} for r in watchlist]
             },
             "customers": [
-                {"segment": "Key Account Stability", "count": kpis.get("total_customers", 0), "insight": "High-value cohort retention remains the primary MTD revenue anchor for Vancouver."},
-                {"segment": "Silent Account Leakage", "count": c_at_risk, "insight": f"Analytical identification of {c_at_risk} BC accounts requiring data-driven recovery outreach."},
+                {"segment": "Key Account Stability", "count": kpis.get("total_customers", 0), "insight": "High-value cohort retention remains the primary MTD revenue anchor for the chain."},
+                {"segment": "Silent Account Leakage", "count": c_at_risk, "insight": f"Analytical identification of {c_at_risk} accounts requiring data-driven recovery outreach."},
                 {"segment": "Growth Acquisition", "count": int(kpis.get('customers_delta', 0)), "insight": "Net-new contribution is pacing 2% above monthly forecast targets."}
             ],
             "products": _generate_product_insights(p_kpis, p_movers),
@@ -296,17 +296,17 @@ def _generate_ba_summary(kpis, sales_kpis, filters, pace, margin):
     elif isinstance(filters, dict):
         regions = filters.get("regions", [])
         
-    reg = f" in {', '.join(regions)}" if regions else " across BC operations"
+    reg = f" in {', '.join(regions)}" if regions else " across store operations"
     
-    return f"Vancouver Market Pulse: MTD analytical diagnostics indicate a {status} posture. At {pace:.0f}% month-completion, revenue is tracking {rev:+.1f}% vs comparable period benchmarks{reg}, with Process Margins stabilized at {margin:.1f}%."
+    return f"Market Pulse: MTD analytical diagnostics indicate a {status} posture. At {pace:.0f}% month-completion, revenue is tracking {rev:+.1f}% vs comparable period benchmarks{reg}, with Process Margins stabilized at {margin:.1f}%."
 
 def _generate_ba_takeaways(kpis, sales_kpis, c_insights, p_kpis, day, margin):
     takeaways = []
     rev = kpis.get("rev_delta_pct", 0)
-    takeaways.append(f"Revenue Pacing: Current velocity suggests a {abs(rev):.1f}% variance vs monthly targets if Day {day} trajectory is maintained in Vancouver.")
+    takeaways.append(f"Revenue Pacing: Current velocity suggests a {abs(rev):.1f}% variance vs monthly targets if Day {day} trajectory is maintained.")
     
     health = sales_kpis.get("avg_health_index_pct", 0)
-    takeaways.append(f"Commercial Diagnostic: BC sales force efficiency is indexed at {health:.0f}%, with strongest gains in specialty protein distribution.")
+    takeaways.append(f"Commercial Diagnostic: Sales force efficiency is indexed at {health:.0f}%, with strongest gains in fresh department distribution.")
     
     takeaways.append(f"Operational Yield: Process margins of {margin:.1f}% confirm successful mix discipline through the first {day} days of the reporting cycle.")
     
@@ -323,8 +323,8 @@ def _generate_product_insights(p_kpis, p_movers):
         
     if not insights:
         insights = [
-            {"category": "Anchor Proteins", "momentum": "Stable", "summary": "Mainstream BC proteins show consistent demand patterns with low intra-month volatility."},
-            {"category": "Specialty Meat", "momentum": "Opportunity", "summary": "High-margin cuts currently under-pacing volume targets for the ongoing month."}
+            {"category": "Anchor Departments", "momentum": "Stable", "summary": "Core departments show consistent demand patterns with low intra-month volatility."},
+            {"category": "Specialty Ranges", "momentum": "Opportunity", "summary": "High-margin ranges currently under-pacing volume targets for the ongoing month."}
         ]
     return insights
 
@@ -334,14 +334,14 @@ def _generate_ba_actions(kpis, sales_kpis, c_insights, day, margin):
     rev = kpis.get("rev_delta_pct", 0)
     
     if margin < 15:
-        actions.append({"title": "Price-Mix Alignment Audit", "description": "Execute a formal SKUs audit to identify underperforming pricing tiers in Vancouver categories."})
+        actions.append({"title": "Price-Mix Alignment Audit", "description": "Execute a formal SKUs audit to identify underperforming pricing tiers across departments."})
     
     if rev < 0:
         actions.append({"title": "Strategic Gap-Closure Campaign", "description": f"Launch immediate 'Day {day}' volume drive for top 20 accounts to recover MTD shortfall."})
     else:
-        actions.append({"title": "High-Margin Upsell Drive", "description": "Leverage current growth momentum to maximize specialty meat inventory before month-end."})
+        actions.append({"title": "High-Margin Upsell Drive", "description": "Leverage current growth momentum to maximize high-margin inventory before month-end."})
     
-    actions.append({"title": "Silent Account Diagnostics", "description": "Initiate data-driven outreach to all BC accounts with zero MTD activity to prevent monthly churn."})
+    actions.append({"title": "Silent Account Diagnostics", "description": "Initiate data-driven outreach to all accounts with zero MTD activity to prevent monthly churn."})
         
     return actions[:3]
 

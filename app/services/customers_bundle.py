@@ -6812,7 +6812,7 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
         "negative_margin_watchlist": negative_margin_candidates[:10],
         "narrative": (
             f"{float(under_target_margin_exposure_pct or 0.0):.1f}% of current filter-window revenue sits below the "
-            f"{float(margin_target_pct or 0.0):.0f}% weighted protein-aware target margin."
+            f"{float(margin_target_pct or 0.0):.0f}% weighted department target margin."
         ),
     }
 

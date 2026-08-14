@@ -583,7 +583,7 @@
     const cards = asArr(protein.focus_cards);
     if (!cards.length) {
       els.proteinHighlights.innerHTML = "";
-      setText(els.proteinFocusNarrative, "Protein-family mix shift and dependency details will appear here when protein data is available.");
+      setText(els.proteinFocusNarrative, "Department mix shift and dependency details will appear here when department data is available.");
       return;
     }
     els.proteinHighlights.innerHTML = cards

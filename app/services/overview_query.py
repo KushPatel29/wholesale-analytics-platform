@@ -1721,7 +1721,7 @@ def _build_recommendations(
 
 
 def _meat_specific_metrics(df: pd.DataFrame, revenue: pd.Series) -> Dict[str, Any]:
-    """Calculate meat industry-specific KPIs, now with more advanced metrics."""
+    """Calculate retail-specific KPIs, now with more advanced metrics."""
     metrics = {
         "protein_mix": {},
         "pack_analysis": {},
@@ -1737,7 +1737,7 @@ def _meat_specific_metrics(df: pd.DataFrame, revenue: pd.Series) -> Dict[str, An
 
     # --- Existing Metrics (with improved safety) ---
 
-    # Protein mix breakdown
+    # Department mix breakdown
     protein_cols = [c for c in df.columns if 'protein' in c.lower() or 'category' in c.lower()]
     if protein_cols:
         try:
@@ -1751,7 +1751,7 @@ def _meat_specific_metrics(df: pd.DataFrame, revenue: pd.Series) -> Dict[str, An
                         for k, v in protein_groups.nlargest(5).items() if pd.notna(k)
                     }
         except Exception as e:
-            current_app.logger.warning(f"Protein mix calculation failed: {e}")
+            current_app.logger.warning(f"Department mix calculation failed: {e}")
 
     # Pack size analysis
     qty_cols = [c for c in df.columns if c in ('QuantityShipped', 'QuantityOrdered', 'ItemCount')]

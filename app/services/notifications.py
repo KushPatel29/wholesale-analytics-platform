@@ -246,7 +246,7 @@ def _sample_alert_payload(type_key: str, pref_state: Mapping[str, Any]) -> Dict[
     summary_map = {
         "customer_revenue_drop": f"Two customers fell more than {_format_threshold_value('percent_drop', thresholds.get('percent_drop', 30))} month over month, exceeding your configured impact threshold.",
         "customer_profit_drop": f"Profit declined materially for two customers and crossed your {_format_threshold_value('percent_drop', thresholds.get('percent_drop', 25))} alert threshold.",
-        "product_margin_below_target": "Four SKUs are running below their mapped protein target margin while still carrying meaningful revenue.",
+        "product_margin_below_target": "Four SKUs are running below their mapped department target margin while still carrying meaningful revenue.",
         "negative_margin_products": "Negative-margin sales were detected in the current window for multiple SKUs and require follow-up.",
         "new_large_customer_gain": f"A new customer gain exceeded your configured growth threshold of {_format_threshold_value('percent_gain', thresholds.get('percent_gain', 20))}.",
         "concentration_risk_increase": "Customer concentration increased beyond your configured Top 1 / Top 5 or HHI guardrails.",

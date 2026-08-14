@@ -198,31 +198,31 @@
       <div class="card border-0 labor-chart-card labor-chart-card-lg">
         <div class="card-body">
           <div class="labor-chart-title">Departments by labor cost</div>
-          <div id="laborDeptCostChart" class="labor-chart labor-chart-lg"></div>
+          <div id="laborDeptCostChart" role="img" aria-label="Labour cost by department" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card labor-chart-card-lg">
         <div class="card-body">
           <div class="labor-chart-title">Fastest cost movement vs prior comparable window</div>
-          <div id="laborDeptChangeChart" class="labor-chart labor-chart-lg"></div>
+          <div id="laborDeptChangeChart" role="img" aria-label="Change in labour cost by department" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Cost vs paid hours by department</div>
-          <div id="laborDeptScatterChart" class="labor-chart"></div>
+          <div id="laborDeptScatterChart" role="img" aria-label="Labour cost against hours by department" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Premium and absence share</div>
-          <div id="laborDeptRiskChart" class="labor-chart"></div>
+          <div id="laborDeptRiskChart" role="img" aria-label="Departments ranked by labour risk" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Department instability</div>
-          <div id="laborDeptVolatilityChart" class="labor-chart"></div>
+          <div id="laborDeptVolatilityChart" role="img" aria-label="Week-to-week labour volatility by department" class="labor-chart"></div>
         </div>
       </div>
     </div>
@@ -303,7 +303,7 @@
             <div class="card border-0 h-100">
               <div class="card-body">
                 <div class="labor-chart-title">Recent department labor trend</div>
-                <div id="laborDepartmentFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+                <div id="laborDepartmentFocusTrendChart" role="img" aria-label="Labour trend for the selected department" class="labor-chart labor-chart-lg"></div>
               </div>
             </div>
           </div>
@@ -407,7 +407,7 @@
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">{{ (payload.get('charts', {}).get('category_mix_meta') or {}).get('label', 'Category mix') }}</div>
-          <div id="laborCategoryMixChart" class="labor-chart labor-chart-lg"></div>
+          <div id="laborCategoryMixChart" role="img" aria-label="Labour cost mix by category" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
     </div>
@@ -482,7 +482,7 @@
               <div class="card border-0 h-100">
                 <div class="card-body">
                   <div class="labor-chart-title">Recent category trend</div>
-                  <div id="laborCategoryFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+                  <div id="laborCategoryFocusTrendChart" role="img" aria-label="Labour trend for the selected category" class="labor-chart labor-chart-lg"></div>
                 </div>
               </div>
             </div>
@@ -546,19 +546,19 @@
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Top workers by labor cost</div>
-          <div id="laborWorkerCostChart" class="labor-chart"></div>
+          <div id="laborWorkerCostChart" role="img" aria-label="Labour cost by worker" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Top workers by paid hours</div>
-          <div id="laborWorkerHoursChart" class="labor-chart"></div>
+          <div id="laborWorkerHoursChart" role="img" aria-label="Hours by worker" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Worker concentration and exposure</div>
-          <div id="laborWorkerRiskChart" class="labor-chart"></div>
+          <div id="laborWorkerRiskChart" role="img" aria-label="Workers ranked by labour risk" class="labor-chart"></div>
         </div>
       </div>
     </div>
@@ -632,7 +632,7 @@
               <div class="card border-0 h-100">
                 <div class="card-body">
                   <div class="labor-chart-title">Recent worker trend</div>
-                  <div id="laborWorkerFocusTrendChart" class="labor-chart labor-chart-lg"></div>
+                  <div id="laborWorkerFocusTrendChart" role="img" aria-label="Labour trend for the selected worker" class="labor-chart labor-chart-lg"></div>
                 </div>
               </div>
             </div>
@@ -699,25 +699,25 @@
       <div class="card border-0 labor-chart-card labor-chart-card-lg">
         <div class="card-body">
           <div class="labor-chart-title">Labor cost, paid hours, premium cost, and absence cost over time</div>
-          <div id="laborTrendChart" class="labor-chart labor-chart-lg"></div>
+          <div id="laborTrendChart" role="img" aria-label="Labour cost trend" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Blended rate trend</div>
-          <div id="laborRateTrendChart" class="labor-chart"></div>
+          <div id="laborRateTrendChart" role="img" aria-label="Average labour rate trend" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card">
         <div class="card-body">
           <div class="labor-chart-title">Average weekday pattern</div>
-          <div id="laborWeekdayChart" class="labor-chart"></div>
+          <div id="laborWeekdayChart" role="img" aria-label="Labour cost by weekday" class="labor-chart"></div>
         </div>
       </div>
       <div class="card border-0 labor-chart-card labor-chart-card-lg">
         <div class="card-body">
           <div class="labor-chart-title">Top department monthly labor cost trend</div>
-          <div id="laborDeptTrendChart" class="labor-chart labor-chart-lg"></div>
+          <div id="laborDeptTrendChart" role="img" aria-label="Labour cost trend by department" class="labor-chart labor-chart-lg"></div>
         </div>
       </div>
     </div>

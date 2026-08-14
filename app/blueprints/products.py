@@ -4946,11 +4946,11 @@ def _fallback_execution_selection(rows: List[Dict[str, Any]], list_name: str) ->
         if list_name == "cost_fixes":
             if cost_value is not None and cost_value > 0 and row.get("protein_family"):
                 continue
-            action = "Review cost data" if cost_value in (None, 0.0) else "Map protein / category"
+            action = "Review cost data" if cost_value in (None, 0.0) else "Map department / category"
             reason = (
                 "Cost coverage is missing, so minimum and target price guidance cannot be trusted until the row is repaired."
                 if cost_value in (None, 0.0)
-                else "Protein/category mapping is missing, so protein-aware minimum and target margin guardrails cannot be applied yet."
+                else "Department mapping is missing, so department-aware minimum and target margin guardrails cannot be applied yet."
             )
             priority_score = revenue + (velocity * 50.0)
         elif list_name == "pricing_fixes":
@@ -4959,7 +4959,7 @@ def _fallback_execution_selection(rows: List[Dict[str, Any]], list_name: str) ->
             below_minimum = margin_pct < minimum_margin
             action = "Recover minimum price" if below_minimum else "Recover target price"
             reason = (
-                f"Protein mapping is incomplete, so export is using fallback guardrails ({fallback_minimum:.0f}% min / {fallback_target:.0f}% target) to keep the pricing queue actionable."
+                f"Department mapping is incomplete, so export is using fallback guardrails ({fallback_minimum:.0f}% min / {fallback_target:.0f}% target) to keep the pricing queue actionable."
                 if _resolve_row_target_margin_pct(row) is None
                 else "Current margin is below the mapped minimum/target guardrail for this SKU."
             )

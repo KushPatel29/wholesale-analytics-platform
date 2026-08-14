@@ -855,7 +855,7 @@
       <div>
         <h4 class="mb-1">Pricing, Margin & Elasticity</h4>
         <p class="text-muted mb-0">ASP/lb-first diagnostics for distribution, demand response, margin risk, and recovery opportunity.</p>
-        <div class="product-v2-section-note">Use pricing diagnostics to separate broad price dispersion from specific below-target customers. Margin-risk rows rank recoverable uplift to the protein-specific target inside the current scoped window.</div>
+        <div class="product-v2-section-note">Use pricing diagnostics to separate broad price dispersion from specific below-target customers. Margin-risk rows rank recoverable uplift to the department-specific target inside the current scoped window.</div>
       </div>
       <a class="btn btn-sm btn-outline-secondary js-v2-export" data-kind="customers" data-format="csv" href="#">Export pricing base</a>
     </div>
@@ -1465,7 +1465,7 @@
     showIntelPanel({
       eyebrow: "Margin recovery account",
       title: customerName,
-      summary: `${customerName} is currently below the protein-specific target gross-margin threshold for this SKU in the active scoped window.`,
+      summary: `${customerName} is currently below the department-specific target gross-margin threshold for this SKU in the active scoped window.`,
       metrics: [
         { label: "Revenue", value: money(data.customerRevenue) },
         { label: "Shipped lb", value: `${num(data.customerWeight, 1)} lb` },

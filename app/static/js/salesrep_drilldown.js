@@ -2087,7 +2087,7 @@
       "drGapMatrixSummary",
       leadingGap && safeNum(leadingGap[1]) > 0
         ? `${formatInt(leadingGap[1])} of the top customers are missing ${leadingGap[0].charAt(0).toUpperCase()}${leadingGap[0].slice(1)}.`
-        : "The top customers already cover the core protein groups in this view."
+        : "The top customers already cover the core departments in this view."
     );
   };
 

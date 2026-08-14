@@ -362,7 +362,7 @@
 
     setText("v2Title", score.supplier_name || supplierId || "Supplier");
     setChip("badgeSupplierId", `Supplier ID: ${score.supplier_id || supplierId || "—"}`, "accent");
-    setText("v2HeroSubtitle", header.coverage_note || "Executive supplier view for pricing quality, margin trust, customer dependency, and protein concentration under the active scope.");
+    setText("v2HeroSubtitle", header.coverage_note || "Executive supplier view for pricing quality, margin trust, customer dependency, and department concentration under the active scope.");
     setText("v2HeroNarrative", header.narrative || "Supplier detail narrative will populate after scoped supplier metrics load.");
 
     if (windowMeta.start && windowMeta.end) {

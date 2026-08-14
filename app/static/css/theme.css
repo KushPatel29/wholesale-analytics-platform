@@ -44,6 +44,11 @@
 
   /* --- accent: the logo's green, cooled toward the cold room ----------- */
   --wa-accent: #54c9a0;
+  /* Ink for text sitting *on* the accent. It was never defined, so the demo
+     call-to-action fell back to white on light mint - 2.05:1, against a 4.5:1
+     requirement - and read as a blank green rectangle. */
+  --wa-accent-contrast: #07130f;
+  --wa-cta-bg: #54c9a0;
   --wa-accent-bright: #6fdcb5;
   --wa-accent-deep: #2f8f70;
   --wa-accent-wash: rgba(84, 201, 160, 0.12);
@@ -158,6 +163,10 @@
   --wa-on-dark-muted: rgba(255, 255, 255, 0.76);
 
   --wa-accent: #1f8a67;
+  /* White on this green is 4.29:1 - still short of AA at this text size - so
+     the call-to-action darkens its own background rather than its label. */
+  --wa-accent-contrast: #ffffff;
+  --wa-cta-bg: #0f5c44;
   --wa-accent-bright: #16775a;
   --wa-accent-deep: #0f5c44;
   --wa-accent-wash: rgba(31, 138, 103, 0.10);
@@ -5454,7 +5463,7 @@ body.theme-wa-future .auth-demo__cta {
   padding: 0.85rem 1.1rem;
   border: 0;
   border-radius: 12px;
-  background: var(--wa-accent, var(--primary, #2563eb));
+  background: var(--wa-cta-bg, var(--wa-accent, var(--primary, #2563eb)));
   color: var(--wa-accent-contrast, #fff);
   text-align: center;
   text-decoration: none;
@@ -5479,7 +5488,8 @@ body.theme-wa-future .auth-demo__cta-sub {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.78rem;
-  opacity: 0.85;
+  /* Small text on the accent needs the full ink; 0.85 pulled it under AA. */
+  opacity: 0.94;
 }
 
 body.theme-wa-future .auth-about {
@@ -6471,4 +6481,26 @@ body.theme-wa-future .products-hero .btn-outline-light:focus {
   .navbar-wholesale .navbar-nav .nav-link {
     padding-inline: 0.45rem;
   }
+}
+
+/* ── The demo call-to-action, which was painting green-on-green ──────────
+ *
+ * The button is an <a>, and the generic link colour further up
+ *   body.theme-wa-future a:not(.btn):not(.nav-link):not(.dropdown-item)
+ * scores 0-4-2 against the button's own 0-2-1, so the label inherited
+ * `--color-link` — the accent green — and sat on the accent-green background.
+ * Measured 1.06:1. The button rendered as a blank rectangle, and it is the one
+ * control a visitor to this page is meant to use.
+ *
+ * Match the link rule's shape so this wins on order rather than on !important.
+ */
+body.theme-wa-future a.auth-demo__cta:not(.btn):not(.nav-link):not(.dropdown-item),
+body.theme-wa-future a.auth-demo__cta:not(.btn):not(.nav-link):not(.dropdown-item):hover,
+body.theme-wa-future a.auth-demo__cta:not(.btn):not(.nav-link):not(.dropdown-item):focus-visible,
+body.theme-wa-future a.auth-demo__cta:not(.btn):not(.nav-link):not(.dropdown-item):visited {
+  color: var(--wa-accent-contrast, #fff);
+}
+body.theme-wa-future .auth-demo__cta .auth-demo__cta-label,
+body.theme-wa-future .auth-demo__cta .auth-demo__cta-sub {
+  color: inherit;
 }

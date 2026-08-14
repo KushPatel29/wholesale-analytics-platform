@@ -178,7 +178,7 @@
     { id: "fSalesReps", key: "sales_reps", label: "Sales Rep", emptyLabel: "All sales reps", countId: "salesRepsCount" },
     { id: "fSuppliers", key: "suppliers", label: "Supplier", emptyLabel: "All suppliers", countId: "suppliersCount" },
     { id: "fProducts", key: "products", label: "Product", emptyLabel: "All products", countId: "productsCount" },
-    { id: "fProteinGroups", key: "protein_groups", label: "Department", emptyLabel: "All species", countId: "proteinGroupsCount" },
+    { id: "fProteinGroups", key: "protein_groups", label: "Department", emptyLabel: "All departments", countId: "proteinGroupsCount" },
   ];
   const LABEL_ALIASES = {
     methods: ["methods", "shipping_methods", "ship_methods"],

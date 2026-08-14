@@ -2978,7 +2978,7 @@
       const color = stableColor(idx);
       const territoryMeta2 = territoryMeta.get(String(row.territory_name || "").trim()) || {};
       const seriesRepCount = num(territoryMeta2.rep_count ?? row.rep_count);
-      // Rep count badge in chart label: e.g. "Vancouver W · 5 Reps"
+      // Rep count badge in chart label: e.g. "West · 5 Reps"
       const chartLabel = row.territory_name
         ? (seriesRepCount > 0 ? `${row.territory_name} · ${seriesRepCount} Rep${seriesRepCount !== 1 ? "s" : ""}` : row.territory_name)
         : `Territory ${idx + 1}`;
@@ -3936,7 +3936,7 @@
       : "";
     const proteinBody = (account.historical_proteins || []).length
       ? `This customer has historically purchased: ${account.historical_proteins.join(", ")}. Use this to tailor your outreach.`
-      : "Check their historical order guide for species-specific opportunities.";
+      : "Check their historical order guide for department-specific opportunities.";
 
     return {
       emailSubject: `RE: ${account.customer_name || account.customer_id || "Customer"}${proteinText ? ` (${account.historical_proteins[0]} orders)` : ""} - Re-engagement Opportunity`,
@@ -4971,7 +4971,7 @@
         <td class="col-top_territory" title="${escapeHtml(row.top_territory_name || NA)}"><span class="sr-link"${drillAttr(territoryPayload(row.top_territory_name, "Detailed Table", "Top Territory", "Revenue", row.top_territory_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_territory_name || NA)}</span></td>
         <td class="col-top_customer" title="${escapeHtml(row.top_customer_name || NA)}"><span class="sr-link"${drillAttr(repWorkspacePayload(row, "Detailed Table", "Top Customer", "Revenue", row.top_customer_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_customer_name || NA)}</span></td>
         <td class="col-top_protein"><span class="sr-link"${drillAttr(proteinPayload(row.top_protein_family, "Detailed Table", "Top Protein", "Revenue", row.top_protein_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_protein_family || NA)}</span></td>
-        <td class="text-end col-leakage" title="Revenue sold below minimum protein margin target">
+        <td class="text-end col-leakage" title="Revenue sold below minimum department margin target">
           <div class="${row.leakage_revenue > 0 ? "text-danger fw-bold" : "text-muted"}">${money(row.leakage_revenue)}</div>
           <div class="sr-secondary-metric">${fmtInt.format(num(row.leakage_count))} lines</div>
         </td>

@@ -1264,7 +1264,7 @@
     if (statusKey === "needs_mapping" || row?.needs_protein_mapping) {
       return {
         label: "Fix protein mapping",
-        note: "The SKU needs a protein/category rule mapping before minimum and target pricing guidance can be trusted.",
+        note: "The SKU needs a department rule mapping before minimum and target pricing guidance can be trusted.",
         view: { search: getSku(row), section: "table", mode: "analyst" },
       };
     }
@@ -1278,7 +1278,7 @@
     if (belowTarget) {
       return {
         label: "Recover margin",
-        note: `The SKU is below its ${fmtPct1.format(targetMarginPct)}% protein-aware target gross margin inside the visible scope and should sit in the pricing queue.`,
+        note: `The SKU is below its ${fmtPct1.format(targetMarginPct)}% department-aware target gross margin inside the visible scope and should sit in the pricing queue.`,
         view: { quickFilters: ["recover_margin"], section: "pricing", emphasis: "profit", mode: "analyst" },
       };
     }
@@ -1330,7 +1330,7 @@
       row?.target_margin_pct != null && !Number.isNaN(Number(row.target_margin_pct)) &&
       Number(row.margin_pct) < Number(row.target_margin_pct)
     ) {
-      lines.push(`Gross margin is below the ${fmtPct1.format(Number(row.target_margin_pct))}% protein-aware target, so price or cost recovery should be reviewed before broad promotion.`);
+      lines.push(`Gross margin is below the ${fmtPct1.format(Number(row.target_margin_pct))}% department-aware target, so price or cost recovery should be reviewed before broad promotion.`);
     }
     if (
       row?.minimum_margin_pct != null && !Number.isNaN(Number(row.minimum_margin_pct)) &&

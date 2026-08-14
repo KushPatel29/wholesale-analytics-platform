@@ -1338,7 +1338,7 @@ def _build_execution_lists_from_rows(
                 reason = (
                     f"Below target by ${target_gap_shortfall:,.2f} with ${profit_uplift_target:,.0f} of profit leakage at target pricing."
                     if target_gap_shortfall > 0 and profit_uplift_target > 0
-                    else "Below the protein-specific target gross margin on a commercially relevant SKU."
+                    else "Below the department target gross margin on a commercially relevant SKU."
                 )
                 quick_filters = ["recover_margin"]
             pricing_fixes.append(

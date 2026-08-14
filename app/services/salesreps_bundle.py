@@ -3407,7 +3407,7 @@ def _risk_flags(rollup_df) -> List[Dict[str, Any]]:
             "key": "low_margin",
             "severity": "medium" if low_margin_count > 0 else "ok",
             "count": low_margin_count,
-            "label": "Margin below mapped protein target",
+            "label": "Margin below department target",
         },
         {
             "key": "profit_decline",
@@ -4851,7 +4851,7 @@ def build_salesreps_drilldown(rep_id: str, filters: Any, scope: Dict[str, Any], 
             "key": "margin_below_target_skus",
             "severity": "medium" if below_target_count > 0 else "ok",
             "count": below_target_count,
-            "label": "SKUs below protein target margin",
+            "label": "SKUs below department target margin",
         },
         {
             "key": "negative_margin_skus",
@@ -4994,7 +4994,7 @@ def build_salesreps_drilldown(rep_id: str, filters: Any, scope: Dict[str, Any], 
     lost_accounts = _salesrep_lost_accounts(customers_records, ref_date)
 
     gap_columns = [
-        {"key": "fresh", "label": "Fresh & Meat"},
+        {"key": "fresh", "label": "Fresh"},
         {"key": "consumables", "label": "Consumables"},
         {"key": "gm", "label": "Gen. Merch"},
     ]

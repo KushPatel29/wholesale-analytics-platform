@@ -3050,7 +3050,7 @@ def _protein_payload_from_frame(
                 f"Mix {'up' if _clean_float((positive_shift or negative_shift or {}).get('share_delta_pp')) >= 0 else 'down'} "
                 f"{abs(_clean_float((positive_shift or negative_shift or {}).get('share_delta_pp'))):.1f} pp"
                 if (positive_shift or negative_shift)
-                else "No material mix shift in the visible protein set."
+                else "No material mix shift in the visible department set."
             ),
         },
         {
@@ -3082,7 +3082,7 @@ def _protein_payload_from_frame(
         f"{(top_family.get('protein_family') or 'Top protein')} represents "
         f"{float(top_family.get('share_current') or 0.0):.1f}% of supplier revenue in scope. "
         f"{len(margin_watch)} departments are carrying margin pressure and "
-        f"{len([row for row in supplier_dependency if (row.get('share_pct') or 0.0) >= 60.0])} suppliers are highly protein-dependent."
+        f"{len([row for row in supplier_dependency if (row.get('share_pct') or 0.0) >= 60.0])} suppliers are highly department-dependent."
     )
 
     return {
@@ -3255,7 +3255,7 @@ def _portfolio_posture_payload(
             "label": "Protein posture",
             "value": protein_value,
             "note": f"{high_dependency} suppliers are highly dependent on one family, while {diversified} are meaningfully diversified across proteins.",
-            "meta": "Protein concentration highlights supplier exposure and negotiation leverage.",
+            "meta": "Department concentration highlights supplier exposure and negotiation leverage.",
         },
         {
             "key": "trust",
@@ -3268,7 +3268,7 @@ def _portfolio_posture_payload(
     ]
     narrative = (
         f"Supplier exposure is {'broad' if float(concentration.get('top5_share') or 0.0) < 70.0 else 'concentrated'}, "
-        f"with {top_family} leading protein mix and {margin_risk_suppliers} suppliers requiring active commercial follow-up."
+        f"with {top_family} leading department mix and {margin_risk_suppliers} suppliers requiring active commercial follow-up."
     )
     return {"cards": cards, "narrative": narrative}
 
@@ -3518,7 +3518,7 @@ def _build_suppliers_bundle_v2(
         else f"Revenue is {direction} ${abs(revenue_delta):,.0f} under the active window."
     )
     protein_txt = (
-        f" {top_family} leads protein mix at {float(top_family_share or 0.0):.1f}% of supplier revenue."
+        f" {top_family} leads department mix at {float(top_family_share or 0.0):.1f}% of supplier revenue."
         if top_family
         else ""
     )
@@ -4520,7 +4520,7 @@ def _supplier_drilldown_v2_payload(
         },
         "header": {
             "narrative": "Supplier detail will populate when scoped supplier activity is available for the active filter window.",
-            "coverage_note": "Cost coverage and protein mapping update from the active scoped rows.",
+            "coverage_note": "Cost coverage and department mapping update from the active scoped rows.",
             "top_gainer": None,
             "top_decliner": None,
             "top_protein": None,
@@ -5294,7 +5294,7 @@ def _supplier_drilldown_v2_payload(
         {
             "title": "Top department",
             "value": str(top_protein_row.get("protein_family") or "—"),
-            "meta": f"{_clean_optional_float(top_protein_row.get('revenue_share_pct')):.1f}% of revenue" if top_protein_row.get("revenue_share_pct") is not None else "No mapped protein revenue",
+            "meta": f"{_clean_optional_float(top_protein_row.get('revenue_share_pct')):.1f}% of revenue" if top_protein_row.get("revenue_share_pct") is not None else "No mapped department revenue",
             "tone": "accent",
         },
         {
@@ -5361,7 +5361,7 @@ def _supplier_drilldown_v2_payload(
     if (_clean_optional_float(top_protein_row.get("revenue_share_pct")) or 0.0) >= 65.0:
         playbook_cards.append(
             {
-                "title": "Diversify protein exposure",
+                "title": "Diversify department exposure",
                 "body": f"{top_protein_row.get('protein_family') or 'One department'} is carrying a disproportionate share of supplier revenue.",
                 "exposure": f"{float(top_protein_row.get('revenue_share_pct') or 0.0):.1f}% of supplier revenue",
                 "tone": "warn",
@@ -5456,7 +5456,7 @@ def _supplier_drilldown_v2_payload(
             {
                 "tone": "accent",
                 "title": "Protein mapping gap",
-                "message": f"{mapped_protein_share_pct:.1f}% of supplier revenue has mapped protein/category context in the active window.",
+                "message": f"{mapped_protein_share_pct:.1f}% of supplier revenue has mapped department context in the active window.",
             }
         )
 
@@ -5476,7 +5476,7 @@ def _supplier_drilldown_v2_payload(
         f"Customer concentration is {customer_conc.get('top5_share') or 0.0:.1f}% in the top five accounts and SKU concentration is {product_conc.get('top5_share') or 0.0:.1f}% in the top five SKUs."
     )
     protein_narrative = (
-        f"{top_protein_row.get('protein_family') or 'No mapped protein'} is the anchor family at {top_protein_share_pct or 0.0:.1f}% of supplier revenue. "
+        f"{top_protein_row.get('protein_family') or 'No mapped department'} is the anchor family at {top_protein_share_pct or 0.0:.1f}% of supplier revenue. "
         f"{max(protein_rows, key=lambda row: abs(float(row.get('mix_shift_pp') or 0.0))).get('protein_family') if protein_rows else 'No department'} shows the largest mix move versus prior."
     )
     category_narrative = (
@@ -5517,7 +5517,7 @@ def _supplier_drilldown_v2_payload(
             "top_decliner": min(products_rows, key=lambda row: float(row.get("delta_revenue") or 0.0), default={}).get("display_name"),
             "top_protein": top_protein_row.get("protein_family"),
             "concentration_posture": concentration_posture,
-            "data_notice": notices[0]["title"] if notices else "Coverage and protein mapping are healthy enough for commercial interpretation.",
+            "data_notice": notices[0]["title"] if notices else "Coverage and department mapping are healthy enough for commercial interpretation.",
         },
         "scorecard": {
             "supplier_id": supplier_id,

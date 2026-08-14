@@ -1158,13 +1158,27 @@
     const revenueState = (() => {
       const mom = asNumber(headline.revenue_mom_pct);
       const yoy = asNumber(headline.revenue_yoy_pct);
-      if (mom !== null && mom <= -5) {
-        return { tone: "negative", value: "Softening", detail: `${primaryShort} ${formatSigned("percent", mom)}${yoy !== null ? ` and YoY ${formatSigned("percent", yoy)}` : ""}. Review movers and drivers for declining demand.` };
+      // Only the short-term figure could ever move this label down, so a
+      // window trading +2.9% against the prior fiscal YTD was labelled
+      // "Stable" while its own sentence reported -21.8% year over year. A
+      // label that contradicts the number beside it is worse than no label.
+      const shortDown = mom !== null && mom <= -5;
+      const shortUp = mom !== null && mom >= 5;
+      const yearDown = yoy !== null && yoy <= -8;
+      const yearUp = yoy !== null && yoy >= 8;
+      const basis = `${primaryShort} ${mom === null ? `has no clean ${primaryCompare.toLowerCase()} comparator` : formatSigned("percent", mom)}${yoy !== null ? `, YoY ${formatSigned("percent", yoy)}` : ""}`;
+
+      // Divergence earns its own label rather than being rounded to one side.
+      if ((shortUp && yearDown) || (shortDown && yearUp)) {
+        return { tone: "warning", value: "Mixed", detail: `${basis}. The two bases disagree; read them together before acting on either.` };
       }
-      if ((mom !== null && mom >= 5) || (yoy !== null && yoy >= 8)) {
-        return { tone: "positive", value: "Strengthening", detail: `${primaryShort} ${formatSigned("percent", mom)}${yoy !== null ? ` with YoY ${formatSigned("percent", yoy)}` : ""}. Growth is currently favorable under the active window.` };
+      if (shortDown || yearDown) {
+        return { tone: "negative", value: "Softening", detail: `${basis}. Review movers and drivers for declining demand.` };
       }
-      return { tone: "neutral", value: "Stable", detail: `Revenue is trading ${mom === null ? `without a clean ${primaryCompare.toLowerCase()} comparator` : formatSigned("percent", mom)}${yoy !== null ? ` and ${formatSigned("percent", yoy)} YoY` : ""}.` };
+      if (shortUp || yearUp) {
+        return { tone: "positive", value: "Strengthening", detail: `${basis}. Growth is currently favorable under the active window.` };
+      }
+      return { tone: "neutral", value: "Stable", detail: `${basis}. Both comparisons sit inside their flat bands.` };
     })();
 
     const profitState = (() => {
@@ -1988,7 +2002,7 @@
       leadRisk?.label || "No lead SKU risk",
       leadRisk ? formatByFmt("currency", leadRisk.profit_impact) : "-",
       leadRisk
-        ? `${leadRisk.supplier || "Unknown supplier"} / ${leadRisk.protein || "Unknown protein"}${leadRisk.revenue !== null && leadRisk.revenue !== undefined ? ` • revenue ${formatByFmt("currency", leadRisk.revenue)}` : ""}.`
+        ? `${leadRisk.supplier || "Unknown supplier"} / ${leadRisk.protein || "Unknown department"}${leadRisk.revenue !== null && leadRisk.revenue !== undefined ? ` • revenue ${formatByFmt("currency", leadRisk.revenue)}` : ""}.`
         : "No current SKU met the margin-risk watchlist threshold."
     );
 
