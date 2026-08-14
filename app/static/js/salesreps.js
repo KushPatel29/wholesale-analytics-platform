@@ -5884,27 +5884,57 @@
   const MAP_SILENT_RISK_DAYS = 30;
 
   // ── Rep colour palette (hex-matched to brand tokens) ──
-  const REP_COLOR_MAP = [
-    ["fraser",  "#10B981"], // Emerald
-    ["rachel",  "#3B82F6"], // Electric Blue
-    ["scott",   "#8B5CF6"], // Royal Purple
-    ["kim",     "#F97316"], // Sunset Orange
-    ["mike",    "#D946EF"], // Deep Pink
-    ["sarah",   "#06B6D4"], // Cyan
-    ["dave",    "#84CC16"], // Lime
-    ["john",    "#6366F1"], // Indigo
+  /* Rep colours.
+   *
+   * This used to match a rep by name substring - "fraser", "rachel", "scott" -
+   * against a list from the app this was rebuilt from. None of the current
+   * reps match any of those keys, so every one of them fell through to a hash
+   * over their name modulo a ten-colour list. A hash does not avoid
+   * collisions: Marcus Oyelaran and Elliot Vance both landed on red, Tomasz
+   * Bielski and Sam Okonkwo both on blue, Dana Whitfield and Priya
+   * Raghunathan both on light green. A legend with three duplicate pairs
+   * cannot identify anybody, which is the only thing a legend is for.
+   *
+   * Assign by position in the sorted roster instead. Distinct by construction
+   * up to the length of the palette, and stable across renders because the
+   * ordering is the roster's, not the arrival order of the rows.
+   *
+   * Okabe-Ito: eight hues chosen to stay distinguishable under deuteranopia,
+   * protanopia and tritanopia. Reds and greens that read as "good/bad"
+   * elsewhere are not in play here - these are identity colours, not scales.
+   */
+  const REP_PALETTE = [
+    "#0072B2", // blue
+    "#E69F00", // orange
+    "#009E73", // bluish green
+    "#CC79A7", // reddish purple
+    "#56B4E9", // sky blue
+    "#D55E00", // vermillion
+    "#F0E442", // yellow
+    "#332288", // indigo
   ];
+  const _repColorIndex = new Map();
+
+  const _assignRepColors = (repNames) => {
+    const unique = [...new Set((repNames || [])
+      .map((name) => String(name || "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    _repColorIndex.clear();
+    unique.forEach((name, index) => {
+      _repColorIndex.set(name.toLowerCase(), REP_PALETTE[index % REP_PALETTE.length]);
+    });
+    return unique.length;
+  };
+
   const _repColor = (repName) => {
-    if (!repName) return "#CBD5E1";
-    const lower = String(repName).toLowerCase();
-    for (const [key, color] of REP_COLOR_MAP) {
-      if (lower.includes(key)) return color;
-    }
-    // deterministic hash fallback so unknown reps get stable colours
-    let h = 0;
-    for (let i = 0; i < lower.length; i++) h = (h * 31 + lower.charCodeAt(i)) >>> 0;
-    const FALLBACKS = ["#10B981", "#3B82F6", "#8B5CF6", "#F97316", "#D946EF", "#06B6D4", "#84CC16", "#6366F1", "#DC2626", "#F59E0B"];
-    return FALLBACKS[h % FALLBACKS.length];
+    if (!repName) return "#9AA5B1";
+    const key = String(repName).trim().toLowerCase();
+    if (_repColorIndex.has(key)) return _repColorIndex.get(key);
+    // A rep who appears after the roster was assigned still gets a stable
+    // colour rather than the unassigned grey.
+    let hash = 0;
+    for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    return REP_PALETTE[hash % REP_PALETTE.length];
   };
 
   // ── Market / store-city centroid lookup ──
@@ -6285,6 +6315,9 @@
   };
 
   const _buildCustomerFeatures = (customers = []) => {
+    // Fix the palette against the whole roster before any point is coloured,
+    // so a rep keeps the same colour whichever accounts happen to be in scope.
+    _assignRepColors((customers || []).map((row) => row.account_owner_name || row.owner_name));
     const totalRev = Math.max((customers || []).reduce((sum, row) => sum + num(row.revenue), 0), 1);
     const features = (customers || []).map((row) => {
       const silentDays = customerSilentDays(row) ?? (Number(row.silent_days) || 0);
