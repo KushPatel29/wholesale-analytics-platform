@@ -850,6 +850,15 @@ def _driver_metric_block(
     )
     work["total_delta_contrib"] = work[total_cur_col] - work[total_prev_col]
 
+    # A source row can carry value without a usable quantity (legacy imports
+    # are the known case). Price and volume cannot explain that movement, but
+    # dropping it makes the bridge fail to reconcile and, worse, reports Mix as
+    # zero. Keep the retail decomposition for clean rows and assign only the
+    # row-level source residual to Mix, which is the established contract for
+    # basket/value movement that cannot be attributed to price or volume.
+    modelled_delta = work["price_contrib"] + work["volume_contrib"] + work["mix_contrib"]
+    work["mix_contrib"] = work["mix_contrib"] + (work["total_delta_contrib"] - modelled_delta)
+
     current_total = _series_nansum(work[total_cur_col])
     previous_total = _series_nansum(work[total_prev_col])
     total_delta = _series_nansum(work["total_delta_contrib"])

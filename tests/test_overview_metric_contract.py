@@ -252,6 +252,8 @@ def test_driver_mix_not_forced_zero_with_bad_qty_case() -> None:
         metric_available=True,
     )
     assert out["mix_effect"] == pytest.approx(-50.0, abs=1e-6)
+    assert out["reconciliation"]["within_tolerance"] is True
+    assert out["reconciliation"]["sum_effects"] == pytest.approx(out["delta"], abs=1e-6)
 
 
 def test_driver_decomp_flag_defaults_off(monkeypatch) -> None:
