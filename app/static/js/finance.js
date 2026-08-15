@@ -199,9 +199,16 @@
     if (assets) assets.innerHTML = rowsFor(sheet.assets, ["current_assets", "total_assets"]);
     const liabilities = document.getElementById("financeLiabilities");
     if (liabilities) {
-      liabilities.innerHTML = rowsFor(sheet.liabilities, ["current_liabilities", "total_liabilities"]);
+      // Equity closes the statement, so it renders under the liabilities column
+      // where a reader expects to find it.
+      liabilities.innerHTML =
+        rowsFor(sheet.liabilities, ["current_liabilities", "total_liabilities"]) +
+        rowsFor(sheet.equity || [], ["total_equity"]);
     }
-    text("financeBalanceAsOf", `Balances as at ${sheet.as_of}.`);
+    text(
+      "financeBalanceAsOf",
+      `Balances as at ${sheet.as_of}. ${sheet.equity_note || ""}`.trim()
+    );
   };
 
   // ── monthly detail ───────────────────────────────────────────────────────

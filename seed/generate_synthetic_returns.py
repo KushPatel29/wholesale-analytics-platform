@@ -94,7 +94,7 @@ def _weighted_pick(rng: np.random.Generator, options, weights, size: int) -> np.
 
 def load_order_lines(limit: int = 6000):
     """
-    A deterministic sample of real order lines from every fiscal year.
+    A deterministic sample of seeded order lines from every fiscal year.
 
     Keeping the same bounded number of candidate lines per fiscal year makes
     historical static scopes auditable without loading the entire fact into

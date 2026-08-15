@@ -235,3 +235,17 @@
     height: 240px;
   }
 }
+
+/* The synthetic-data disclosure. These are the first pages on the site to
+   publish a full P&L, balance sheet and acquisition economics; a reader
+   arriving on a deep link has no other signal that the company is fictional. */
+.finance-synthetic {
+  margin-top: .55rem !important;
+  font-size: .78rem;
+  color: var(--wa-text-dim, #94a3b8);
+  max-width: 68ch;
+}
+
+.finance-synthetic code {
+  font-size: .95em;
+}

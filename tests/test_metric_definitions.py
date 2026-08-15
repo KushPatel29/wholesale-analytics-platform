@@ -235,8 +235,24 @@ class TestTierAMetrics:
         assert movement["logo_churn_rate_pct"] == pytest.approx(100 / 3)
 
     def test_clv_and_arpa(self):
-        assert metrics.customer_lifetime_value(100, 12, 3, 25) == 900
+        # 100 per order * 12 orders * 3 years * a 25% margin
+        assert metrics.customer_lifetime_value(100, 12, 3, 0.25) == 900
+        assert metrics.customer_lifetime_value(100, 12, 3, 25, margin_is_percent=True) == 900
         assert metrics.average_revenue_per_account(10_000, 20) == 500
+
+    def test_clv_does_not_guess_the_margin_unit(self):
+        """
+        The margin used to be sniffed - `margin / 100 if abs(margin) > 1` - so
+        0.9 was read as 90% whether the caller meant 90% or 0.9%. This book runs
+        a 3.5-4.6% net margin; a caller a decimal point away from that boundary
+        would have inflated CLV a hundredfold silently.
+        """
+        # 0.9 means 0.9 of a dollar per dollar unless told otherwise.
+        assert metrics.customer_lifetime_value(1_000, 1, 1, 0.9) == 900
+        # ...and 0.9 percent is 0.9 percent, not 90 percent.
+        assert metrics.customer_lifetime_value(
+            1_000, 1, 1, 0.9, margin_is_percent=True
+        ) == pytest.approx(9.0)
 
     def test_workforce_rates(self):
         assert metrics.revenue_per_employee(1_000_000, 25) == 40_000

@@ -6,6 +6,7 @@ freeze pass rather than by the app.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -23,20 +24,66 @@ DIST_NAME = os.environ.get("WA_DIST", "dist")
 # Source extensions that can reach a visitor.
 SOURCES = ("*.py", "*.js", "*.html")
 
-# Vocabulary from the wholesale-meat app this project was rebuilt from. A
-# reviewer who finds it reads the whole thing as a partially renamed copy.
+# Domain vocabulary that should not reach a visitor. Generic industry terms
+# only - nothing here names anyone.
 #
 # Only *prose* is checked. `ProteinType` is the fact-table column and the name
 # of every filter key and payload field built on it; renaming those is a schema
 # migration and none of it reaches the screen.
 BANNED_PROSE = re.compile(
-    r"\b(carcass|TRSM|tworiversmeats|Two Rivers"
+    r"\b(carcass"
     r"|specialty meat|protein target|protein-aware|protein mix"
     r"|protein concentration|protein-dependent|protein-specific"
     r"|All species|species-specific|Mainstream BC|BC accounts|BC market"
     r"|Vancouver categories|Vancouver Market)\b",
     re.IGNORECASE,
 )
+
+# Proper nouns are checked by digest rather than in plaintext.
+#
+# The previous version of this guard spelled out the names it was guarding
+# against, directly under a comment explaining that this project was rebuilt
+# from that company's app. On a public repo that is self-defeating: a `git grep`
+# for any one of those words lands on the file that confirms the connection and
+# hands over the rest of the search terms. Comparing digests keeps the guard
+# just as strict without publishing the vocabulary.
+#
+# To add a term: python -c "import hashlib;print(hashlib.sha256(b'the term').hexdigest()[:16])"
+# (lowercase, single spaces). Never commit the plaintext alongside it.
+BANNED_TOKEN_DIGESTS = {
+    "ffc183c541804a3e",
+    "b792c93f38694e9a",
+    "e56fcc447c9c2909",
+    "a78634712b5d0974",
+    "b7d3897f56a89ecf",
+    "ff8226b7efa5a3eb",
+}
+
+_WORD = re.compile(r"[A-Za-z][A-Za-z0-9.'-]*")
+
+
+def _digest(token: str) -> str:
+    return hashlib.sha256(token.lower().encode("utf-8")).hexdigest()[:16]
+
+
+def _banned_tokens_in(text: str):
+    """
+    Yield (line, matched-token) for any banned proper noun.
+
+    Unigrams and bigrams both, because some of the names are two words. The
+    matched token is returned so a failure is still actionable - it names the
+    offending string in the *test output*, which is ephemeral, rather than in
+    the committed source, which is not.
+    """
+    words = [(m.group(0), m.start()) for m in _WORD.finditer(text)]
+    for index, (word, start) in enumerate(words):
+        candidates = [word]
+        if index + 1 < len(words):
+            candidates.append(f"{word} {words[index + 1][0]}")
+        for candidate in candidates:
+            if _digest(candidate) in BANNED_TOKEN_DIGESTS:
+                yield text.count("\n", 0, start) + 1, candidate
+
 
 # Vendored third-party code is not ours to rewrite.
 SKIP_PARTS = {"vendor", "__pycache__", "node_modules"}
@@ -57,6 +104,8 @@ def test_no_wholesale_meat_vocabulary_in_visitor_facing_prose():
         for match in BANNED_PROSE.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
             offenders.append(f"{path.relative_to(ROOT).as_posix()}:{line}: {match.group(0)!r}")
+        for line, token in _banned_tokens_in(text):
+            offenders.append(f"{path.relative_to(ROOT).as_posix()}:{line}: {token!r}")
     assert not offenders, (
         "Pre-pivot wholesale-meat vocabulary is reachable by a visitor:\n  "
         + "\n  ".join(offenders[:20])

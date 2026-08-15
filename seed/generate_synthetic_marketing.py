@@ -129,6 +129,8 @@ def build(*, fact_glob: str, finance_dir: Path, seed: int = 7717) -> tuple[pd.Da
     excluded = sorted({str(m) for m in finance["month"]} - {str(m) for m in scoped["month"]})
 
     rows: list[dict[str, object]] = []
+    # Fractional wins owed to each channel, carried between months.
+    carry: dict[str, float] = {key: 0.0 for key, _l, _s, _c, _q in CHANNELS}
     for index, record in scoped.iterrows():
         month: date = record["month"]
         rng = np.random.default_rng(seed + int(index))
@@ -161,19 +163,57 @@ def build(*, fact_glob: str, finance_dir: Path, seed: int = 7717) -> tuple[pd.Da
             )
 
         # Allocate the month's *real* acquisitions across channels in proportion
-        # to qualified leads, with the remainder going to the strongest channel
-        # so the parts always sum to the count taken from the fact.
+        # to qualified leads, by largest remainder (Hamilton).
+        #
+        # The obvious version - floor each share, then hand the whole remainder
+        # to the channel with the most qualified leads - does not survive these
+        # magnitudes. A month wins 2-10 accounts across six channels, so almost
+        # every floor rounds to zero and the remainder *is* the allocation: 46%
+        # of all wins were being dumped on one or two channels. The published
+        # channel table then showed field sales closing 45% of qualified leads
+        # and trade shows 3%, against a book-wide rate of 23% and a seed that
+        # models no per-channel close-rate difference whatsoever. That is a
+        # rounding artefact presented as a channel-efficiency finding.
+        #
+        # Largest remainder gives the spare wins to the channels with the
+        # largest fractional parts instead, which is the standard apportionment
+        # and keeps every channel near the book-wide rate.
+        # The fractional part carries forward between months (`carry`), so a
+        # channel that is owed 0.2 of a win every month is paid one after five
+        # of them instead of never. Without the carry, largest-remainder still
+        # starved the small channels over a year: trade press earned 12
+        # qualified leads and 0 wins on $48k of spend, which the page would
+        # have published as a channel that never closes.
         qualified_total = sum(int(entry["qualified_leads"]) for entry in channel_rows)
-        allocated = 0
         if qualified_total > 0 and new_customers > 0:
-            for entry in channel_rows:
-                share = int(entry["qualified_leads"]) / qualified_total
-                entry["new_customers"] = int(np.floor(new_customers * share))
-                allocated += int(entry["new_customers"])
-            remainder = new_customers - allocated
-            if remainder > 0:
-                strongest = max(channel_rows, key=lambda e: int(e["qualified_leads"]))
-                strongest["new_customers"] = int(strongest["new_customers"]) + remainder
+            exact = [
+                carry[entry["channel_key"]]
+                + new_customers * int(entry["qualified_leads"]) / qualified_total
+                for entry in channel_rows
+            ]
+            floors = [int(np.floor(value)) for value in exact]
+            fractions = [value - floor for value, floor in zip(exact, floors)]
+            # Settle the difference on the largest fractional parts, ties broken
+            # on qualified leads so the result never depends on dict order.
+            order = sorted(
+                range(len(channel_rows)),
+                key=lambda i: (fractions[i], int(channel_rows[i]["qualified_leads"])),
+                reverse=True,
+            )
+            shortfall = new_customers - sum(floors)
+            for position in range(shortfall):
+                index = order[position % len(order)]
+                floors[index] += 1
+                fractions[index] -= 1.0
+            while sum(floors) > new_customers:
+                for index in reversed(order):
+                    if floors[index] > 0:
+                        floors[index] -= 1
+                        fractions[index] += 1.0
+                        break
+            for entry, won, fraction in zip(channel_rows, floors, fractions):
+                entry["new_customers"] = int(won)
+                carry[entry["channel_key"]] = fraction
         else:
             for entry in channel_rows:
                 entry["new_customers"] = 0

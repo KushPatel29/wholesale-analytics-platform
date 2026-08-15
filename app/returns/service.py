@@ -1612,8 +1612,8 @@ def _build_structured_return_pdf(
     
     # Enterprise Dynamic Branding
     company = str(detail.get("company") or "").strip().lower()
-    if "black forest" in company:
-        logo_file = "bf-logo.png"
+    if "alderwood" in company:
+        logo_file = "wa-logo-badge.png"
         company_header = "Alderwood Grocers Meats"
     else:
         logo_file = "wa-logo-badge.png"
@@ -3407,8 +3407,8 @@ def build_return_pdf_bytes(
     
     # Enterprise Dynamic Branding
     company = str(detail.get("company") or "").strip().lower()
-    if "black forest" in company:
-        logo_file = "bf-logo.png"
+    if "alderwood" in company:
+        logo_file = "wa-logo-badge.png"
         company_header = "Alderwood Grocers Meats"
     else:
         logo_file = "wa-logo-badge.png"
@@ -3557,10 +3557,10 @@ def approve_warehouse(
 def _send_finance_notification_email(rma_detail: dict[str, Any], pdf_bytes: bytes | None = None) -> bool:
     """Send an automated notification to Finance after manager approval."""
     company = str(rma_detail.get("company") or "").strip().lower()
-    if "black forest" in company:
-        recipient = "ar@bfmeats.com"
+    if "alderwood" in company:
+        recipient = "ar@alderwoodgrocers.example.com"
     else:
-        # Default to Northgate Retail Group if not explicitly Alderwood Grocers
+        # Northgate Retail Group is the default book; Alderwood is the second.
         recipient = "ar@wholesaleprovisions.example.com"
     
     rma_id = rma_detail.get("id")

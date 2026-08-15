@@ -9,7 +9,7 @@
 Set these values in `/etc/wholesale_analytics/wholesale.env` (or your deployment env source):
 
 ```env
-SMTP_SERVER=wholesale-provisions-com.mail.protection.outlook.com
+SMTP_SERVER=mail.example.com
 SMTP_PORT=25
 SMTP_USE_TLS=0
 MAIL_FROM=Wholesale Analytics <no-reply@wholesaleprovisions.example.com>

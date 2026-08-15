@@ -384,6 +384,8 @@ def customer_lifetime_value(
     average_transactions_per_year: Any,
     average_retention_years: Any,
     profit_margin: Any,
+    *,
+    margin_is_percent: bool = False,
 ) -> Optional[float]:
     values = [
         _to_float(average_transaction_value),
@@ -393,7 +395,14 @@ def customer_lifetime_value(
     ]
     if any(value is None for value in values):
         return None
-    margin_factor = values[3] / 100.0 if abs(values[3]) > 1.0 else values[3]
+    # `profit_margin` is a fraction unless the caller says otherwise. This used
+    # to sniff its own input - `margin / 100 if abs(margin) > 1 else margin` -
+    # which reads 0.9 as a fraction whether the caller meant 0.9% or 90%. This
+    # book runs a 3.5-4.6% net margin, so a caller one decimal point away from
+    # the boundary would have inflated CLV a hundredfold with no exception and
+    # no failing test, in the one file whose premise is that a metric means
+    # exactly one thing.
+    margin_factor = values[3] / 100.0 if margin_is_percent else values[3]
     return values[0] * values[1] * values[2] * margin_factor
 
 
@@ -757,7 +766,7 @@ METRIC_CATALOGUE: tuple[MetricDefinition, ...] = (
     _definition("forecast_mape", "Forecast MAPE", "mean(|Actual - Forecast| / Actual) * 100", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
     _definition("forecast_bias", "Forecast bias", "mean(Forecast - Actual)", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
     _definition("forecast_hit_rate", "Forecast hit rate", "% of periods within +/-X% tolerance", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
-    _definition("retention", "Customer retention rate", "(Customers at end of period - Customers added during period) / Customers at beginning", "Customer cohort and selected period", "sales_fact", "Customers", "Logo"),
+    _definition("retention", "Customer retention rate", "(Customers at end of period - Customers added during period) / Customers at beginning * 100", "Customer cohort and selected period", "sales_fact", "Customers", "Logo"),
     _definition("churn", "Customer churn rate", "Customers lost during period / Customers at start of period * 100", "Customer cohort and selected period", "sales_fact", "Customers", "Logo and revenue-weighted"),
     _definition("clv", "Customer lifetime value", "(Avg transaction value * Avg transactions per year * Avg retention in years) * Profit margin", "Customer / segment", "sales_fact", "Customers", "Gross-profit default; finite-horizon retention proxy and discount factor are disclosed"),
     _definition("nrr", "Net revenue retention", "(Starting revenue + Expansion - Contraction - Churn) / Starting revenue * 100", "Account and selected period", "sales_fact", "Overview / Customers", "Transaction sales"),
@@ -771,7 +780,7 @@ METRIC_CATALOGUE: tuple[MetricDefinition, ...] = (
     _definition("return_rate", "Return rate", "Returns / Orders * 100", "Selected period", "return_rma + sales_fact", "Returns", "Orders"),
     _definition("return_cost", "Return cost rate", "Credit value / Net sales * 100", "Selected period", "return_rma + sales_fact", "Returns", "Net"),
     _definition("resolution", "Average return resolution", "mean(closed_at - opened_at) across returns", "Resolved return / selected period", "return_rma", "Returns", "Hours"),
-    _definition("quota", "Quota attainment", "Sales achieved by rep or region / Goal for that rep or region", "Rep / region / month", "sales_fact quota", "Sales Reps", "Transaction sales"),
+    _definition("quota", "Quota attainment", "Sales achieved by rep or region / Goal for that rep or region * 100", "Rep / region / month", "sales_fact quota", "Sales Reps", "Transaction sales"),
     _definition("gross_profit_margin", "Gross profit margin", "(Revenue - COGS) / Revenue * 100", "Any grain with revenue and cost", "sales_fact", "Overview / Finance", "Invoiced sales, revenue-weighted"),
     _definition("net_income", "Net income", "Revenue - COGS - OpEx - Other - Interest - Taxes - D&A", "Company / month / fiscal year", "finance_month + sales_fact", "Finance", "Invoiced sales (gross less discounts), matching every other page; entity-level, not sliceable by operational filters"),
     _definition("net_profit_margin", "Net profit margin", "Net income / Revenue * 100", "Company / month / fiscal year", "finance_month + sales_fact", "Finance", "Invoiced sales; the net sales bridge is shown separately on the page"),

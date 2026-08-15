@@ -193,6 +193,38 @@ class TestBundle:
         )
         assert bridge["net_sales"] == pytest.approx(expected, abs=0.02)
 
+    def test_the_returns_window_matches_the_months_on_the_page(self, client):
+        """
+        A short fiscal year deducts returns only from the months it shows.
+
+        The bridge used fiscal-year bounds while gross sales came from the
+        months that survived the incomplete-month drop, so FY2026 netted a July
+        credit against Oct-Jun sales - on the one page whose whole subject is
+        that the figures tie, and directly under a line claiming July was
+        excluded from every figure on it.
+        """
+        from app.services import finance_bundle as fb
+
+        for entry in fb.available_fiscal_years():
+            payload = client.get(f"/finance/api/bundle?fy={entry['year']}").get_json()
+            bridge = payload["income_statement"]["gross_to_net"]
+            if not bridge.get("returns_available"):
+                pytest.skip("returns subsystem unavailable")
+            fy_bridge = payload["income_statement"]["gross_to_net"]
+            months_shown = payload["selected"]["months"]
+            if months_shown >= 12:
+                continue
+            # A short year must not carry more credits than the full year does.
+            full = [y for y in fb.available_fiscal_years() if y["complete"]]
+            if not full:
+                continue
+            full_payload = client.get(f"/finance/api/bundle?fy={full[-1]['year']}").get_json()
+            full_count = full_payload["income_statement"]["gross_to_net"]["return_count"]
+            assert fy_bridge["return_count"] <= full_count, (
+                f"FY{entry['year']} shows {months_shown} months but nets "
+                f"{fy_bridge['return_count']} credits against a full year's {full_count}"
+            )
+
     def test_net_sales_is_below_invoiced_sales(self, bundle):
         """Returns and handling only ever reduce the top line."""
         bridge = bundle["income_statement"]["gross_to_net"]

@@ -85,6 +85,45 @@ class TestSeedTiesToTheOtherLayers:
         for month, won in attributed.items():
             assert int(won) == int(truth.get(month, 0)), f"{month} attributed {won}"
 
+    def test_attribution_is_proportional_to_qualified_leads(self, frame):
+        """
+        The seed models no per-channel close-rate difference, so every channel's
+        share of wins must track its share of qualified leads.
+
+        This pins a real defect. The first allocator floored each channel's
+        proportional share and handed the whole remainder to the channel with
+        the most qualified leads; at 2-10 wins a month across six channels the
+        floors rounded to nothing and the remainder became the allocation. 46%
+        of all wins landed on one or two channels, and the published channel
+        table showed field sales closing 45% of qualified leads against trade
+        shows' 3% - a rounding artefact rendered as a channel-efficiency finding
+        with a "cost per win" column beside it.
+        """
+        for year, scoped in frame.groupby("fiscal_year"):
+            by_channel = scoped.groupby("channel").agg(
+                qualified=("qualified_leads", "sum"), won=("new_customers", "sum")
+            )
+            book_rate = by_channel["won"].sum() / by_channel["qualified"].sum() * 100
+            rates = by_channel["won"] / by_channel["qualified"] * 100
+            spread = rates.max() - rates.min()
+            assert spread < 12, (
+                f"FY{year} channel win rates span {spread:.1f} points around a book rate of "
+                f"{book_rate:.1f}% with no modelled difference between channels:\n{rates}"
+            )
+
+    def test_no_channel_is_published_as_never_closing(self, frame):
+        """
+        A channel showing real spend and zero wins reads as "this channel does
+        not work". It was an artefact of the allocator starving small channels,
+        not a property of the data.
+        """
+        for year, scoped in frame.groupby("fiscal_year"):
+            by_channel = scoped.groupby("channel").agg(
+                spend=("spend", "sum"), won=("new_customers", "sum")
+            )
+            starved = by_channel[(by_channel["spend"] > 0) & (by_channel["won"] == 0)]
+            assert starved.empty, f"FY{year} publishes spend with no wins:\n{starved}"
+
     def test_the_opening_book_is_excluded_and_the_reason_is_recorded(self, frame, manifest):
         """
         504 of 620 customers place a first order in the dataset's first month.

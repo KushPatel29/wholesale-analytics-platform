@@ -238,9 +238,40 @@ def _balance_sheet(closing: pd.Series) -> dict[str, Any]:
         item("long_term_debt", "Long-term debt"),
         item("total_liabilities", "Total liabilities"),
     ]
+    # Equity closes the statement. Assets and liabilities are modelled from
+    # independent drivers (AR from DSO, inventory from DIO, AP from DPO), so
+    # there is no retained-earnings account rolling forward behind them - the
+    # residual moves by up to $2M in a month against $186k of net income.
+    # Publishing it as "retained earnings" would be a fabrication; omitting it
+    # leaves a page headed "Balance sheet" that visibly does not balance. So it
+    # is stated as the residual it is, and the page says the statement does not
+    # articulate to a roll-forward.
+    total_assets = _f(closing.get("total_assets"))
+    total_liabilities = _f(closing.get("total_liabilities"))
+    total_equity = (
+        None
+        if total_assets is None or total_liabilities is None
+        else total_assets - total_liabilities
+    )
+    equity = [
+        {"key": "total_equity", "label": "Net assets (residual)", "amount": total_equity},
+    ]
+
     return {
         "assets": assets,
         "liabilities": liabilities,
+        "equity": equity,
+        "balances": (
+            total_assets is not None
+            and total_liabilities is not None
+            and total_equity is not None
+            and abs(total_assets - (total_liabilities + total_equity)) < 0.01
+        ),
+        "equity_note": (
+            "Net assets is derived as total assets less total liabilities. Assets and liabilities are "
+            "modelled from independent drivers, so this is a residual rather than a retained-earnings "
+            "account that rolls forward from net income."
+        ),
         "ar_aging": [
             {"key": key, "label": label, "amount": _f(closing.get(key))}
             for key, label in AR_AGING_LABELS
@@ -544,7 +575,14 @@ def build_finance_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
         raise FinanceDatasetNotBuiltError(f"No finance rows for FY{year}")
 
     closing = scoped.iloc[-1]
-    start, end = fiscal_year_bounds(year)
+    # Bound the returns window by the months the statement actually contains,
+    # not by the fiscal year. They differ whenever the tail month was dropped as
+    # incomplete: FY2026 covers Oct-Jun, but fiscal-year bounds reach to Sep 30
+    # and pulled in a July credit, so the bridge deducted returns from a month
+    # whose sales were not on the page - while the page's own provenance line
+    # claimed that month was excluded from every figure on it.
+    start = min(scoped["month"])
+    end = (pd.Timestamp(max(scoped["month"])) + pd.offsets.MonthEnd(0)).date()
     reconciliation = _gross_to_net(scoped, start, end)
     statement = _income_statement(scoped, reconciliation)
     balance_sheet = _balance_sheet(closing)
