@@ -326,6 +326,32 @@ web-funnel measures, HRIS metrics, market share, lead response time — are in t
 catalogue too, marked **not implemented, with the system each would require**.
 Fabricating them would have been easier and worth less.
 
+### What it reads, on the published snapshot
+
+Every figure below is on the live site right now, on the FY-to-date scope. They
+are here because a README that describes a metric layer without showing a single
+number is asking to be taken on faith.
+
+| | | |
+|---|---|---|
+| Revenue · profit | **$51.0M · $11.7M** | Invoiced sales, stated basis |
+| Gross · net margin | **23.0% · 4.6%** | Net margin is below the D&A, interest and tax lines |
+| Net revenue retention | **104.4%** | Expansion outruns contraction and churn |
+| Retention · logo churn | **94.3% · 5.7%** | Rates, not counts; revenue churn 3.5% alongside |
+| ARPA · AOV | **$92,259 · $2,097** | Per account and per order — different questions |
+| Current ratio · working capital | **2.23× · $7.46M** | Month-end balance |
+| AR turnover · ROA | **9.7× · 11.8%** | Average balance, ~37-day DSO |
+| Inventory turnover | **8.1×** cost basis | The Inventory page's usage-based turns is a *different* measure |
+| CAC · payback | **$17,655 · 9.1 months** | Marketing plus an 18% acquisition share of selling |
+| CLV:CAC | **1.32×** | 12-month CLV — stricter than the lifetime basis the 3:1 rule assumes |
+| Forecast variance · bias | **−18.9% · +$881k** | Over-forecasting, at a 50% hit rate within ±10% |
+| Customer concentration | **HHI 30** | Labelled with its dimension, on the 0–10,000 scale |
+
+The forecast also publishes a **209% MAPE**, which is the least flattering number
+on the site and stays because it is true: MAPE divides by the actual, and at
+SKU-month grain the small denominators dominate it. That is precisely why hit
+rate, variance and signed bias are shown beside it rather than instead of it.
+
 [catalogue]: https://kushpatel29.github.io/wholesale-analytics-platform/metrics/
 
 ### Comparison windows
