@@ -889,7 +889,12 @@ PLOTLY_FREEZE_JS = (
       let hotspots = [];
       try { hotspots = plotlyHotspots(el); } catch (_) { hotspots = []; }
       const url = await window.Plotly.toImage(el, {format:'svg', width, height});
-      const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
+      // Nearest card first, then the section. Two charts sharing one section
+      // both inherited its heading - the regions drilldown published two
+      // images both called "Operational Mix", which a screen reader cannot
+      // tell apart. Card headings are h5 here, so h5/h6 are included.
+      const heading = (el.closest('.card,.chart-card,figure') || el.closest('section,article'))
+        ?.querySelector('h2,h3,h4,h5,h6');
       return {url, width, height, hotspots,
               alt: el.getAttribute('aria-label') || heading?.textContent?.trim() || 'Analytics chart'};
     }"""
@@ -917,7 +922,12 @@ CANVAS_FREEZE_JS = (
           return opaque > 8 && colours.size > 2;
         } catch (_) { return false; }
       })();
-      const heading = el.closest('section,article')?.querySelector('h2,h3,h4');
+      // Nearest card first, then the section. Two charts sharing one section
+      // both inherited its heading - the regions drilldown published two
+      // images both called "Operational Mix", which a screen reader cannot
+      // tell apart. Card headings are h5 here, so h5/h6 are included.
+      const heading = (el.closest('.card,.chart-card,figure') || el.closest('section,article'))
+        ?.querySelector('h2,h3,h4,h5,h6');
       const width = Math.max(1, Math.round(rect.width || el.width || 800));
       let height = Math.max(1, Math.round(rect.height || el.height || 320));
       /* The capture must carry the backing store's aspect, not the CSS box's.

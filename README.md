@@ -282,6 +282,52 @@ the same idea.
 confusion is what produced the empty Active count: the dataset ended five weeks
 before the server's today, so nothing could fall inside a 30-day window.
 
+### The catalogue
+
+Those are the definitions that settled the contradictions above. There are now
+**42**, and the full list is a page on the site — [`/metrics/`][catalogue] —
+because a definition nobody can read is a definition nobody can check. Each row
+carries a formula, a grain, a source table, an owner page, and a **gross-or-net
+basis**, and each is pinned by a unit test with a hand-computed expected value.
+
+What the catalogue added beyond the originals:
+
+* **Forecast accuracy** on the Planner — variance %, MAPE, signed bias and hit
+  rate. The demand planner previously produced a forecast and never scored it,
+  which is the largest thing that was missing from this app.
+* **Net sales**, stated as an explicit gross → discounts → returns → net bridge
+  on the Overview, so the basis of every other figure is answerable in one line.
+* **Customer economics** — retention and churn as *rates* rather than counts,
+  revenue-weighted as well as logo, NRR decomposed into new/expansion/
+  contraction/churned, ARPA, and CLV with its inputs beside it.
+* **Retail and ops** — GMROI, sell-through, shrink, return rate, return cost
+  rate, resolution time, quota attainment, revenue per employee and per paid
+  hour, and employee turnover split voluntary/involuntary.
+* **A Finance page** — income statement, balance sheet, and the ratios that read
+  them. Operating expenses, D&A, interest, tax and the balance sheet are seeded;
+  revenue, gross sales, discounts and COGS are read from the sales fact, so the
+  top line matches the Overview rather than describing a second company.
+* **A Marketing page** — CAC, CPL, CLV:CAC and payback. Campaign spend
+  reconciles to the Finance page's marketing expense line and new customers are
+  counted by first order in the sales fact; only the channel split is modelled.
+
+Two of those deserve their caveats in public. **Inventory turnover** appears
+twice on purpose — a cost-basis multiple on Finance and the Inventory page's
+usage-based `52 ÷ weeks on hand` — because they are different measures that will
+not agree, so they carry separate catalogue keys and each states its basis on
+screen. And **ROMI** is implemented exactly as the standard formula writes it,
+which credits marketing with every dollar of company sales movement; revenue
+fell year-over-year for reasons campaigns do not drive, so it reads sharply
+negative and the page says why rather than quietly swapping in a friendlier
+denominator.
+
+Metrics that would need a source system this business does not have — MRR, NPS,
+web-funnel measures, HRIS metrics, market share, lead response time — are in the
+catalogue too, marked **not implemented, with the system each would require**.
+Fabricating them would have been easier and worth less.
+
+[catalogue]: https://kushpatel29.github.io/wholesale-analytics-platform/metrics/
+
 ### Comparison windows
 
 `app/services/comparison.py` decides what every page compares against. Two
