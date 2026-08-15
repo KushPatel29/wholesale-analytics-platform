@@ -1623,7 +1623,14 @@
     setText("kpiAvgOrderValue", k.avg_order_value == null ? NA : money(k.avg_order_value, false));
     setText("kpiRevenuePerCustomer", k.revenue_per_customer == null ? NA : money(k.revenue_per_customer, false));
     setText("kpiLeakage", money(k.leakage_revenue));
-    setText("kpiOverdue", fmtInt.format(num(k.overdue_customers)));
+    setText("kpiQuota", k.quota_attainment_pct == null ? NA : `${fmtPct.format(num(k.quota_attainment_pct))}%`);
+    setText("kpiNrr", k.nrr_pct == null ? NA : `${fmtPct.format(num(k.nrr_pct))}%`);
+    setText(
+      "kpiQuotaDelta",
+      k.reps_scored_for_quota
+        ? `${fmtInt.format(num(k.reps_at_or_above_quota))} of ${fmtInt.format(num(k.reps_scored_for_quota))} reps at or above goal`
+        : "Quota data unavailable for this scope"
+    );
     setText("kpiInheritedRevenue", k.inherited_revenue == null ? NA : money(k.inherited_revenue));
     setText("srTransferredAccounts", fmtInt.format(num(k.transferred_accounts_count)));
     setText("srTransferredRevenue", `${money(k.transferred_in_revenue)} in | ${money(k.transferred_out_revenue)} out`);
@@ -4602,6 +4609,68 @@
     if (!chart) toggleEmpty(canvasId, true, "Chart unavailable.");
   };
 
+  const renderQuotaAttainment = (rows = []) => {
+    const canvasId = "srQuotaChart";
+    const ranked = (Array.isArray(rows) ? rows : [])
+      .filter((row) => opt(row.attainment_pct) !== null)
+      .slice(0, state.topN);
+    const hasData = ranked.length > 0;
+
+    toggleEmpty(canvasId, !hasData, "Quota data is unavailable for the current scope.");
+    if (!ChartLib) return;
+    if (!hasData) {
+      destroyChart("quota");
+      return;
+    }
+
+    const chart = createChart("quota", canvasId, {
+      data: {
+        labels: ranked.map((row) => repDisplayName(row)),
+        datasets: [
+          {
+            type: "bar",
+            label: "Quota attainment",
+            data: ranked.map((row) => num(row.attainment_pct)),
+            backgroundColor: ranked.map((row) => num(row.attainment_pct) >= 100 ? SR_THEME.forest : SR_THEME.gold),
+            borderRadius: 4,
+          },
+          {
+            type: "line",
+            label: "Goal",
+            data: ranked.map(() => 100),
+            borderColor: SR_THEME.oxblood,
+            borderDash: [6, 4],
+            borderWidth: 2,
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (value) => `${fmtPct.format(value)}%` },
+            title: { display: true, text: "Sales ÷ governed quota" },
+          },
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items?.[0]?.dataIndex;
+                const row = idx == null ? null : ranked[idx];
+                return row ? [`Sales: ${money(row.sales)}`, `Quota: ${money(row.quota)}`] : [];
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!chart) toggleEmpty(canvasId, true, "Chart unavailable.");
+  };
+
   const renderEfficiency = (rows = []) => {
     const canvasId = "effChart";
     const points = (Array.isArray(rows) ? rows : []).map((r) => ({
@@ -5320,6 +5389,7 @@
       updateColumnLabels(payload.meta || {});
       resolveFocusedCustomerFromPayload(payload);
       renderExecutive(payload);
+      renderQuotaAttainment(payload.charts?.quota_attainment || []);
       renderSummaryNarrative(payload);
       renderWarnings(payload.warnings, payload);
       renderInsights(payload);

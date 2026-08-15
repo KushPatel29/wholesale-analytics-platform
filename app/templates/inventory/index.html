@@ -56,7 +56,10 @@
       ('inventoryReorder', 'Needs replenishment', 'Critical + reorder SKUs'),
       ('inventoryExcess', 'Excess cover', 'Above the category guardrail'),
       ('inventoryBackorders', 'Backorder units', 'Open unit exposure'),
-      ('inventoryHolding', 'Annual holding cost', '11% planning assumption')
+      ('inventoryHolding', 'Annual holding cost', '11% planning assumption'),
+      ('inventoryGmroi', 'GMROI', 'Gross margin $ ÷ average inventory cost'),
+      ('inventorySellThrough', 'Sell-through', 'Units sold ÷ units available'),
+      ('inventoryShrink', 'Shrink', '(Book − physical) ÷ book')
     ] %}
       <article class="inventory-kpi">
         <span>{{ label }}</span><strong id="{{ id }}">—</strong><small>{{ hint }}</small>
@@ -178,8 +181,8 @@
     </div>
     <div class="table-responsive inventory-table-wrap">
       <table class="table table-sm table-hover align-middle mb-0">
-        <thead><tr><th>SKU / Product</th><th>Posture</th><th>ABC</th><th class="text-end">On hand</th><th class="text-end">Days</th><th class="text-end">Turns</th><th class="text-end">SVSI</th><th class="text-end">Inventory value</th><th>Recommended action</th></tr></thead>
-        <tbody id="inventoryTableBody"><tr><td colspan="9" class="text-center text-muted py-5">Loading inventory analysis…</td></tr></tbody>
+        <thead><tr><th>SKU / Product</th><th>Posture</th><th>ABC</th><th class="text-end">On hand</th><th class="text-end">Days</th><th class="text-end">Turns</th><th class="text-end">GMROI</th><th class="text-end">Sell-through</th><th class="text-end">Shrink</th><th class="text-end">SVSI</th><th class="text-end">Inventory value</th><th>Recommended action</th></tr></thead>
+        <tbody id="inventoryTableBody"><tr><td colspan="12" class="text-center text-muted py-5">Loading inventory analysis…</td></tr></tbody>
       </table>
     </div>
     <div class="inventory-pager">
@@ -192,5 +195,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/inventory.js', v='20260813-ready-2') }}" defer></script>
+<script src="{{ url_for('static', filename='js/inventory.js', v='20260815-metrics-gap-1') }}" defer></script>
 {% endblock %}

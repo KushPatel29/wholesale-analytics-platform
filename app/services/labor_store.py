@@ -339,6 +339,9 @@ def _register_views(conn: duckdb.DuckDBPyConnection, *, dataset_path: Optional[P
                     MD5(CONCAT_WS('|', COALESCE({_text_expr(cols, "department_number")}, ''), COALESCE({_text_expr(cols, "department_name")}, 'Unassigned')))
                 ) AS department_key,
                 COALESCE({_text_expr(cols, "employee_status_group")}, 'active') AS employee_status_group,
+                {_date_expr(cols, "separation_date", "termination_date", "employment_end_date")} AS separation_date,
+                {_text_expr(cols, "separation_type", "termination_type", "termination_reason_category")} AS separation_type,
+                COALESCE({_boolean_expr(cols, "separation_flag")}, {_date_expr(cols, "separation_date", "termination_date", "employment_end_date")} IS NOT NULL, FALSE) AS separation_flag,
                 {_timestamp_expr(cols, "source_loaded_at")} AS source_loaded_at,
                 {source_partition_date_expr} AS source_partition_date,
                 {_text_expr(cols, "source_row_hash")} AS source_row_hash,

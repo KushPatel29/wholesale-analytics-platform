@@ -1,0 +1,237 @@
+/*
+ * Finance page.
+ *
+ * Every selector is scoped under `.finance-page`, so none of this competes with
+ * the stacked theme generations in theme.css - the specificity fight documented
+ * there is between rules that share a target, and these have no target in
+ * common with anything else.
+ */
+
+.finance-page {
+  --finance-gap: 1.25rem;
+}
+
+.finance-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--finance-gap);
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid var(--wa-border, rgba(148, 163, 184, .22));
+  border-radius: 14px;
+  background: var(--wa-surface, rgba(148, 163, 184, .06));
+}
+
+.finance-hero h1 {
+  margin: .2rem 0 .5rem;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+}
+
+.finance-hero p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .72rem;
+  color: var(--wa-accent, #34d399);
+}
+
+.finance-scope {
+  margin-top: .6rem !important;
+  font-size: .82rem;
+  padding-left: .7rem;
+  border-left: 2px solid var(--wa-accent, #34d399);
+}
+
+.finance-hero__meta {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  font-size: .8rem;
+  color: var(--wa-text-dim, #94a3b8);
+  text-align: right;
+}
+
+.finance-unavailable {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--wa-warning, #fbbf24);
+  border-radius: 12px;
+  margin-bottom: var(--finance-gap);
+}
+
+.finance-ratios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .85rem;
+  margin-bottom: var(--finance-gap);
+}
+
+.finance-ratio {
+  padding: .9rem 1rem;
+  border: 1px solid var(--wa-border, rgba(148, 163, 184, .22));
+  border-radius: 12px;
+  background: var(--wa-surface, rgba(148, 163, 184, .06));
+}
+
+.finance-ratio__label {
+  display: block;
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-ratio__value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.25;
+  margin: .15rem 0 .3rem;
+}
+
+/* The formula and basis sit on the card rather than in a tooltip: a ratio a
+   reviewer cannot check the definition of is a ratio they have to trust. */
+.finance-ratio__formula {
+  display: block;
+  font-size: .72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-ratio__basis {
+  display: block;
+  font-size: .7rem;
+  margin-top: .25rem;
+  color: var(--wa-text-dim, #94a3b8);
+  opacity: .85;
+}
+
+.finance-ratio__note {
+  display: inline-block;
+  margin-top: .3rem;
+  padding: .05rem .4rem;
+  border-radius: 999px;
+  font-size: .66rem;
+  background: rgba(251, 191, 36, .16);
+  color: var(--wa-warning, #fbbf24);
+}
+
+.finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--finance-gap);
+}
+
+.finance-card {
+  padding: 1.15rem 1.3rem 1.3rem;
+  border: 1px solid var(--wa-border, rgba(148, 163, 184, .22));
+  border-radius: 14px;
+  background: var(--wa-surface, rgba(148, 163, 184, .06));
+}
+
+.finance-card > header {
+  margin-bottom: .85rem;
+}
+
+.finance-card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 .2rem;
+}
+
+.finance-card > header p {
+  margin: 0;
+  font-size: .8rem;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-table-scroll {
+  overflow-x: auto;
+}
+
+.finance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .84rem;
+}
+
+.finance-table th,
+.finance-table td {
+  padding: .38rem .5rem;
+  border-bottom: 1px solid var(--wa-border, rgba(148, 163, 184, .16));
+  text-align: left;
+  white-space: nowrap;
+}
+
+.finance-table th.num,
+.finance-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-table thead th {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-row--subtotal td {
+  font-weight: 620;
+  border-top: 1px solid var(--wa-border, rgba(148, 163, 184, .3));
+}
+
+.finance-row--total td {
+  font-weight: 700;
+  border-top: 2px solid var(--wa-accent, #34d399);
+  border-bottom: none;
+}
+
+.finance-row--indent td:first-child {
+  padding-left: 1.4rem;
+}
+
+.finance-negative {
+  color: var(--wa-danger, #f87171);
+}
+
+.finance-balance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1rem;
+}
+
+.finance-chart {
+  width: 100%;
+  height: 280px;
+}
+
+.finance-chart--wide {
+  height: 320px;
+}
+
+.finance-read {
+  margin: .6rem 0 0;
+  font-size: .8rem;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+.finance-provenance {
+  margin-top: var(--finance-gap);
+  font-size: .76rem;
+  color: var(--wa-text-dim, #94a3b8);
+}
+
+@media (max-width: 720px) {
+  .finance-hero__meta {
+    text-align: left;
+  }
+
+  .finance-chart {
+    height: 240px;
+  }
+}

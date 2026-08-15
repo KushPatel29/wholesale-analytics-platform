@@ -50,10 +50,12 @@ TEXT_COLUMNS = [
     "employee_day_key",
     "department_key",
     "employee_status_group",
+    "separation_type",
     "source_row_hash",
 ]
 DATE_COLUMNS = [
     "labor_date",
+    "separation_date",
     "week_start",
     "source_partition_date",
     "source_window_start",
@@ -101,6 +103,7 @@ BOOL_COLUMNS = [
     "is_memo",
     "has_time_transaction",
     "primary_row_flag",
+    "separation_flag",
 ]
 LABOR_FACT_COLUMNS = [
     "labor_date",
@@ -154,6 +157,9 @@ LABOR_FACT_COLUMNS = [
     "employee_day_key",
     "department_key",
     "employee_status_group",
+    "separation_date",
+    "separation_type",
+    "separation_flag",
     "employee_day_transaction_count",
     "active_employee_flag",
     "primary_row_flag",
@@ -385,6 +391,17 @@ def normalize_labor_records(
         department_number = _clean_text(record.get("DepartmentNumber"))
         status = _clean_text(record.get("Status"))
         work_rule = _clean_text(record.get("WorkRule"))
+        separation_date = _parse_date(
+            record.get("SeparationDate")
+            or record.get("TerminationDate")
+            or record.get("EmploymentEndDate")
+        )
+        separation_type = _clean_text(
+            record.get("SeparationType")
+            or record.get("TerminationType")
+            or record.get("TerminationReasonCategory")
+        )
+        separation_flag = bool(separation_date) or _normalize_bool(record.get("SeparationFlag"))
         shift_match_ts = _timestamp_or_none(record.get("ShiftMatchDate"))
         anchor_date = _safe_date(shift_match_ts)
         schedule_start = _timestamp_or_none(record.get("ScheduleStart"), anchor_date=anchor_date)
@@ -505,6 +522,9 @@ def normalize_labor_records(
                     "employee_day_key": employee_day_key,
                     "department_key": department_key,
                     "employee_status_group": _status_group(status),
+                    "separation_date": separation_date,
+                    "separation_type": separation_type,
+                    "separation_flag": separation_flag,
                     "employee_day_transaction_count": transaction_count,
                     "active_employee_flag": 1 if index == 1 else 0,
                     "primary_row_flag": index == 1,

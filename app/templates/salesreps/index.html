@@ -155,19 +155,30 @@
           </div>
         </div>
       </div>
-      <!-- Intelligence: Leakage / Churn -->
+      <!-- Targets: quota / leakage -->
       <div class="col-12 col-lg-3">
         <div class="card h-100 border-0 shadow-sm scorecard-column intelligence-column">
-          <div class="card-header bg-dark text-white py-1 fw-bold small">INTELLIGENCE: LEAKAGE / CHURN</div>
+          <div class="card-header bg-dark text-white py-1 fw-bold small">TARGETS: QUOTA / LEAKAGE</div>
           <div class="card-body p-2">
             <div class="row g-2">
+              <div class="col-12"><div class="sr-kpi"><div class="label">Quota Attainment</div><div class="value" id="kpiQuota"><span class="skeleton"></span></div><div class="delta" id="kpiQuotaDelta">Sales ÷ governed monthly goals</div></div></div>
+              <div class="col-12"><div class="sr-kpi"><div class="label">NRR by book</div><div class="value" id="kpiNrr"><span class="skeleton"></span></div><div class="delta">Starting + expansion - contraction - churn; new revenue excluded</div></div></div>
               <div class="col-12"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="leakage_revenue"><div class="label">Margin Leakage <span id="statusLeakage" class="status-dot"></span></div><div class="value" id="kpiLeakage"><span class="skeleton"></span></div><div class="delta" id="kpiLeakageDelta">&nbsp;</div></div></div>
-              <div class="col-12"><div class="sr-kpi sr-kpi-clickable" data-kpi-sort="overdue_customers"><div class="label">Overdue Accounts</div><div class="value" id="kpiOverdue"><span class="skeleton"></span></div><div class="delta" id="kpiOverdueDelta">Predictive Churn</div></div></div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="mb-4" id="srQuotaSection">
+    <article class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 sr-section-header">
+        <div class="fw-semibold">Quota attainment distribution</div>
+        <div class="text-muted small">Sales achieved ÷ the rep's monthly goals. The 100% line separates attained from below plan.</div>
+      </div>
+      <div class="card-body"><div style="height:300px"><canvas id="srQuotaChart" aria-label="Quota attainment by sales representative"></canvas></div></div>
+    </article>
   </section>
 
   {# Live Account Map.
@@ -958,5 +969,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/salesreps.js', v='20260815-kpi-truth-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/salesreps.js', v='20260815-metrics-gap-1') }}" defer></script>
 {% endblock %}

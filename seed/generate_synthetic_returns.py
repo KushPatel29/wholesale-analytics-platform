@@ -94,11 +94,11 @@ def _weighted_pick(rng: np.random.Generator, options, weights, size: int) -> np.
 
 def load_order_lines(limit: int = 6000):
     """
-    A sample of real order lines, newest first.
+    A deterministic sample of real order lines from every fiscal year.
 
-    Newest first because a returns tracker is a working queue: a credit request
-    raised eighteen months ago is history, not work, and the default filter
-    window would hide it anyway.
+    Keeping the same bounded number of candidate lines per fiscal year makes
+    historical static scopes auditable without loading the entire fact into
+    Python. The final result remains newest-first for tracker presentation.
     """
     from app.services import fact_store
 
@@ -123,8 +123,11 @@ def load_order_lines(limit: int = 6000):
             pack_item_count_sum
         FROM fact
         WHERE QuantityShipped > 0
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY YEAR(DateExpected) + CASE WHEN MONTH(DateExpected) >= 10 THEN 1 ELSE 0 END
+            ORDER BY HASH(OrderId, SKU)
+        ) <= ?
         ORDER BY DateExpected DESC
-        LIMIT ?
     """
     return fact_store.execute_sql_df(sql, [int(limit)], tag="seed.returns")
 
@@ -306,7 +309,10 @@ def write_returns(payloads: list[dict], *, wh_user_id: int | None, mgr_user_id: 
                 reject_reason=reject_reason,
                 created_at=payload["date_submitted"],
                 updated_at=payload["date_submitted"],
-                metadata_json=json.dumps({"source": "seed.generate_synthetic_returns"}),
+                metadata_json=json.dumps({
+                    "source": "seed.generate_synthetic_returns",
+                    "return_handling_cost": round(max(float(payload["total_credit_amount"]) * 0.035, 2.5), 2),
+                }),
             )
 
             stages = _TRAIL.get(payload["status"], ())

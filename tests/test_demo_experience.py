@@ -19,6 +19,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 
 import pytest
 
@@ -80,6 +81,23 @@ class TestStaticDemoRouting:
             "suppliers/?date_preset=current_fy"
         )
 
+    @pytest.mark.parametrize("workspace", ["finance", "marketing", "metrics"])
+    def test_new_metric_workspaces_use_cdn(self, app, monkeypatch, workspace):
+        from app.auth.models import get_user_by_username
+
+        monkeypatch.setenv("DEMO_STATIC_SITE_URL", "https://static.example.test")
+        user = get_user_by_username(demo_accounts.DEMO_VIEWER_USERNAME)
+        assert user is not None
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(user.id)
+            sess["_fresh"] = True
+
+        response = client.get(f"/{workspace}/")
+
+        assert response.status_code == 302
+        assert response.location == f"https://static.example.test/{workspace}/"
+
     def test_returns_stays_on_live_host(self, app, monkeypatch):
         from app.auth.models import get_user_by_username
 
@@ -92,6 +110,37 @@ class TestStaticDemoRouting:
             sess["_fresh"] = True
         response = client.get("/returns/")
         assert response.location != "https://static.example.test/returns/"
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/finance/", "/finance/api/bundle", "/marketing/", "/marketing/api/bundle"],
+    )
+    def test_cost_masked_viewer_cannot_open_financial_workspaces(self, app, monkeypatch, path):
+        from app.auth.models import SessionLocal, User
+
+        monkeypatch.delenv("DEMO_STATIC_SITE_URL", raising=False)
+        username = f"no-cost-metrics-{uuid.uuid4().hex[:8]}"
+        with SessionLocal() as db:
+            user = User(
+                username=username,
+                email=f"{username}@example.test",
+                role="warehouse",
+                is_active=True,
+                is_approved=True,
+            )
+            user.set_password("test-password")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            user_id = user.id
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(user_id)
+            sess["_fresh"] = True
+
+        response = client.get(path)
+
+        assert response.status_code == 403
 
 
 class TestCatalogueIsShared:

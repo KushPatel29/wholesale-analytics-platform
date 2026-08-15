@@ -62,6 +62,13 @@ def check(dist: Path) -> int:
                             // defers layout for below-the-fold sections.
                             mainText: (document.querySelector('main')?.textContent || '').trim().length,
                             options: optionPayload?.options || {},
+                            // A page can legitimately have no filter bar. Finance
+                            // reports entity-level statements, and a balance sheet
+                            // has no region dimension to filter by, so it sets
+                            // `hide_global_filters` and base.html stamps the body
+                            // `disabled`. Demanding an options payload there would
+                            // force the page to publish filters it does not honour.
+                            filtersDisabled: document.body.dataset.filtersHandler === 'disabled',
                             retired: [
                               'filtersLoadingOverlay', 'filtersRetryBtn',
                               'filtersRetryWrap', 'filtersErrorBanner'
@@ -77,8 +84,10 @@ def check(dist: Path) -> int:
                         issues.append("missing frozen marker")
                     if result["mainText"] < 150:
                         issues.append(f"main content only {result['mainText']} characters")
-                    if not result["options"]:
+                    if not result["options"] and not result["filtersDisabled"]:
                         issues.append("inline filter options are empty")
+                    if result["options"] and result["filtersDisabled"]:
+                        issues.append("filters are disabled but an options payload was published")
                     if result["retired"]:
                         issues.append(f"retired UI exists: {result['retired']}")
                     if result["waitingText"]:

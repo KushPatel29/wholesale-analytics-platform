@@ -212,6 +212,15 @@
     <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">NRR</div><div class="h5 mb-0">{{ fmt_percent((summary.get('nrr') or 0) * 100 if summary.get('nrr') is not none else none) }}</div></div></div>
   </div>
   <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Retention (logo)</div><div class="h5 mb-0">{{ fmt_percent(summary.get('retention_rate_pct')) }}</div><div class="small text-muted">End less new ÷ start</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Churn (logo)</div><div class="h5 mb-0">{{ fmt_percent(summary.get('logo_churn_rate_pct')) }}</div><div class="small text-muted">Lost accounts ÷ starting accounts</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Churn (revenue)</div><div class="h5 mb-0">{{ fmt_percent(summary.get('revenue_churn_rate_pct')) }}</div><div class="small text-muted">Lost revenue ÷ starting revenue</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
     <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">GRR</div><div class="h5 mb-0">{{ fmt_percent((summary.get('grr') or 0) * 100 if summary.get('grr') is not none else none) }}</div></div></div>
   </div>
   <div class="col-12 col-md-6 col-xl-2">
@@ -225,6 +234,26 @@
   </div>
   <div class="col-12 col-md-6 col-xl-2">
     <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">Concentration</div><div class="small">Top 1: <span class="fw-semibold">{{ fmt_percent(summary.get('top1_share_pct')) }}</span></div><div class="small">HHI (customers): <span class="fw-semibold">{{ fmt_int(summary.get('hhi')) }}</span></div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">ARPA</div><div class="h5 mb-0">{{ fmt_currency(summary.get('arpa')) }}</div><div class="small text-muted">Revenue ÷ active accounts</div></div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xl-2">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body py-3"><div class="small text-uppercase text-muted">New / established ARPA</div><div class="small">New <span class="fw-semibold">{{ fmt_currency(summary.get('new_account_arpa')) }}</span></div><div class="small">Established <span class="fw-semibold">{{ fmt_currency(summary.get('established_account_arpa')) }}</span></div></div></div>
+  </div>
+</section>
+
+{% set movement = summary.get('revenue_movement') or {} %}
+<section class="card border-0 shadow-sm mb-3" aria-label="Net revenue retention decomposition">
+  <div class="card-header bg-white"><h2 class="h6 mb-0">NRR decomposition <span class="small fw-normal text-muted">transaction-sales basis; new-account revenue excluded from NRR</span></h2></div>
+  <div class="card-body py-3">
+    <div class="row g-3 small">
+      <div class="col-6 col-lg"><div class="text-muted">Starting revenue</div><div class="fw-semibold">{{ fmt_currency(movement.get('starting_revenue')) }}</div></div>
+      <div class="col-6 col-lg"><div class="text-muted">New revenue</div><div class="fw-semibold">{{ fmt_currency(movement.get('new_revenue')) }}</div></div>
+      <div class="col-6 col-lg"><div class="text-muted">Expansion</div><div class="fw-semibold">{{ fmt_currency(movement.get('expansion')) }}</div></div>
+      <div class="col-6 col-lg"><div class="text-muted">Contraction</div><div class="fw-semibold">{{ fmt_currency(movement.get('contraction')) }}</div></div>
+      <div class="col-6 col-lg"><div class="text-muted">Churned revenue</div><div class="fw-semibold">{{ fmt_currency(movement.get('churned_revenue')) }}</div></div>
+    </div>
   </div>
 </section>
 

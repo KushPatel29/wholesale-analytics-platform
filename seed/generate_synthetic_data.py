@@ -631,6 +631,12 @@ def build_lines(
     price = np.where(by_weight, price_per_lb, price_per_lb * case_weight)
     cost_price = np.where(by_weight, cost_per_lb, cost_per_lb * case_weight)
 
+    # Commercial reconciliation inputs. ``Price`` remains the invoiced price
+    # used by every existing revenue metric; gross price is the pre-discount
+    # list amount and the discount/cost fields are explicit source measures.
+    discount_rate = np.clip(rng.normal(0.045, 0.018, size=n_lines), 0.005, 0.12)
+    gross_price = price / (1.0 - discount_rate)
+
     # Delivery performance: region transit + method surcharge, with a
     # method-specific chance of running late.
     method_idx = _weighted_choice(
@@ -734,6 +740,15 @@ def build_lines(
     )
 
     on_hand_value = on_hand_cases * cost_price
+    physical_count_cases = np.maximum(
+        on_hand_cases - rng.binomial(on_hand_cases.astype("int64"), np.clip(rng.normal(0.012, 0.006, size=n_lines), 0.0, 0.04)),
+        0.0,
+    )
+    billed_units = np.where(by_weight, pack_weight_lb_sum, pack_item_count_sum)
+    gross_sales = gross_price * billed_units
+    invoice_sales = price * billed_units
+    discount_amount = np.maximum(gross_sales - invoice_sales, 0.0)
+    discount_handling_cost = discount_amount * 0.0125
 
     frame = pd.DataFrame(
         {
@@ -782,6 +797,9 @@ def build_lines(
             "IsStockout": is_stockout,
             # Inventory position the line was picked against.
             "OnHandQty": on_hand_cases,
+            "BookInventoryQty": on_hand_cases,
+            "PhysicalInventoryQty": physical_count_cases,
+            "PhysicalCountDate": expected.to_numpy(),
             "OnHandValue": on_hand_value.round(2),
             "DaysOfSupply": cover_days.round(2),
             "SafetyStockQty": safety_stock_cases,
@@ -792,6 +810,10 @@ def build_lines(
             "pack_weight_lb_sum": pack_weight_lb_sum.round(3),
             "pack_item_count_sum": pack_item_count_sum,
             "Price": price.round(4),
+            "ListPrice": gross_price.round(4),
+            "GrossSales": gross_sales.round(2),
+            "DiscountAmount": discount_amount.round(2),
+            "DiscountHandlingCost": discount_handling_cost.round(2),
             "CostPrice": cost_price.round(4),
             "TransitDays": transit,
             "IsLate": is_late,
@@ -806,6 +828,33 @@ def build_lines(
     # Watermark column the incremental refresh keys off.
     frame["UpdatedAt"] = frame["DateExpected"]
     frame["DeliveryStatus"] = np.where(frame["IsLate"], "Late", "On Time")
+
+    # Monthly rep goals are a separate plan measure, repeated at fact grain for
+    # simple demo lineage. The target is 104% of the same rep/month last year;
+    # the first year uses a deterministic capacity baseline because no prior
+    # period exists. No current-month sales are used to set its own quota.
+    line_sales = np.where(
+        frame["UnitOfBillingId"] == C.BILL_BY_WEIGHT,
+        frame["pack_weight_lb_sum"] * frame["Price"],
+        frame["pack_item_count_sum"] * frame["Price"],
+    )
+    quota_work = pd.DataFrame(
+        {
+            "rep": frame["SalesRepId"].astype(str),
+            "month": pd.to_datetime(frame["Date"]).dt.to_period("M"),
+            "sales": line_sales,
+        }
+    )
+    monthly_sales = quota_work.groupby(["rep", "month"])["sales"].sum().to_dict()
+    quota_lookup: dict[tuple[str, pd.Period], float] = {}
+    for rep, month in monthly_sales:
+        prior_month = month - 12
+        prior_sales = monthly_sales.get((rep, prior_month))
+        rep_digits = int("".join(ch for ch in rep if ch.isdigit()) or 1)
+        capacity_baseline = 85_000.0 + rep_digits * 9_500.0
+        quota_lookup[(rep, month)] = round((prior_sales * 1.04) if prior_sales is not None else capacity_baseline, 2)
+    frame["QuotaMonth"] = quota_work["month"].astype(str)
+    frame["MonthlyQuota"] = [quota_lookup[(rep, month)] for rep, month in zip(quota_work["rep"], quota_work["month"])]
     return frame
 
 
@@ -1102,15 +1151,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"\nwriting -> {dataset_path}")
 
+    generated_start = pd.to_datetime(lines["DateExpected"], errors="coerce").min().date()
+    generated_end = pd.to_datetime(lines["DateExpected"], errors="coerce").max().date()
+    existing_manifest = watermark_store.read_manifest(dataset_path) or {}
+    existing_start = pd.to_datetime(
+        existing_manifest.get("date_min") or existing_manifest.get("min_date"), errors="coerce"
+    )
+    existing_end = pd.to_datetime(
+        existing_manifest.get("date_max") or existing_manifest.get("max_date"), errors="coerce"
+    )
+    replace_start = min(generated_start, existing_start.date()) if pd.notna(existing_start) else generated_start
+    replace_end = max(generated_end, existing_end.date()) if pd.notna(existing_end) else generated_end
+
     result = upsert_dataset(
         lines,
         dataset_path=dataset_path,
         pk_col="OrderLineId",
         date_col="DateExpected",
+        replace_window_start=replace_start,
+        replace_window_end=replace_end,
         manifest_updates={
             "source": "seed.generate_synthetic_data",
             "synthetic": True,
             "seed": args.seed,
+            "min_date": generated_start.isoformat(),
+            "max_date": generated_end.isoformat(),
         },
     )
     print(f"  rows in dataset: {result.get('row_count'):,}")

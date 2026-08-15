@@ -125,6 +125,34 @@ class TestDemand:
         assert "too short" in meta.get("reason", "").lower()
 
 
+class TestForecastAccuracy:
+    def test_rolling_origin_uses_only_history_available_at_origin(self):
+        rows = []
+        for month, revenue in enumerate([100, 100, 100, 100, 120, 90], start=1):
+            row = _line(f"2026-{month:02d}-01", "Grocery", revenue, False)
+            row.update({"SKU": "SKU-1", "RegionName": "West"})
+            rows.append(row)
+        result = planning.build_forecast_accuracy(_frame(rows))
+
+        # Month five is forecast from months two-four: (100 + 100 + 100) / 3.
+        assert result["series"][0]["forecast"] == 100
+        assert result["series"][0]["actual"] == 120
+        assert result["series"][0]["variance_pct"] == pytest.approx(100 / 6)
+        assert result["headline"]["scored_periods"] == 2
+        assert result["by_sku"][0]["label"] == "SKU-1"
+        assert result["by_region"][0]["label"] == "West"
+
+    def test_tolerance_band_is_explicit_and_symmetric(self):
+        monthly = pd.DataFrame({
+            "month": pd.period_range("2026-01", periods=5, freq="M"),
+            "actual": [100, 100, 100, 100, 120],
+        })
+        row = planning._rolling_origin_rows(monthly)[0]
+        assert row["lower"] == 90
+        assert row["upper"] == 110.00000000000001
+        assert row["method"] == "trailing 3-month mean"
+
+
 class TestEndToEnd:
     def test_the_at_risk_department_reaches_the_action_list(self):
         """

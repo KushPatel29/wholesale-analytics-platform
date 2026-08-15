@@ -21,6 +21,7 @@ from app.cache import cache
 from app.core import prebuilt_cache
 from app.services import analytics_utils as au
 from app.services import margin_rules
+from app.services import metrics
 from app.services import overview_metrics as om
 from app.services.filters import (
     FilterParams,
@@ -1356,6 +1357,26 @@ def _compute_window_comparison_context(
                 COUNT(DISTINCT customer_key) AS customers
             FROM yoy_window
         ),
+        customer_current_revenue AS (
+            SELECT customer_key, SUM(revenue) AS revenue
+            FROM current_window GROUP BY customer_key
+        ),
+        customer_prior_revenue AS (
+            SELECT customer_key, SUM(revenue) AS revenue
+            FROM prior_window GROUP BY customer_key
+        ),
+        customer_revenue_movement AS (
+            SELECT
+                SUM(COALESCE(p.revenue, 0)) AS starting_revenue,
+                SUM(COALESCE(c.revenue, 0)) AS ending_revenue,
+                SUM(CASE WHEN p.customer_key IS NULL THEN c.revenue ELSE 0 END) AS new_revenue,
+                SUM(CASE WHEN c.customer_key IS NULL THEN p.revenue ELSE 0 END) AS churned_revenue,
+                SUM(CASE WHEN p.customer_key IS NOT NULL AND c.customer_key IS NOT NULL AND c.revenue > p.revenue THEN c.revenue - p.revenue ELSE 0 END) AS expansion,
+                SUM(CASE WHEN p.customer_key IS NOT NULL AND c.customer_key IS NOT NULL AND c.revenue < p.revenue THEN p.revenue - c.revenue ELSE 0 END) AS contraction,
+                COUNT(*) FILTER (WHERE c.customer_key IS NULL) AS lost_customers
+            FROM customer_prior_revenue p
+            FULL OUTER JOIN customer_current_revenue c USING (customer_key)
+        ),
         customer_curr AS (SELECT DISTINCT customer_key FROM current_window),
         customer_prev AS (SELECT DISTINCT customer_key FROM prior_window),
         customer_preprev AS (SELECT DISTINCT customer_key FROM preprior_window),
@@ -1400,11 +1421,19 @@ def _compute_window_comparison_context(
             yoy_totals.weight AS weight_yoy,
             yoy_totals.orders AS orders_yoy,
             yoy_totals.customers AS customers_yoy_total,
+            customer_revenue_movement.starting_revenue,
+            customer_revenue_movement.ending_revenue,
+            customer_revenue_movement.new_revenue,
+            customer_revenue_movement.churned_revenue,
+            customer_revenue_movement.expansion,
+            customer_revenue_movement.contraction,
+            customer_revenue_movement.lost_customers,
             customer_stats.*,
             activity.*
         FROM current_totals
         CROSS JOIN prior_totals
         CROSS JOIN yoy_totals
+        CROSS JOIN customer_revenue_movement
         CROSS JOIN customer_stats
         CROSS JOIN activity
     """
@@ -1470,6 +1499,13 @@ def _compute_window_comparison_context(
             "returning": int(row.get("returning_customers") or 0),
             "new_prev": int(row.get("new_customers_prev") or 0),
             "returning_prev": int(row.get("returning_customers_prev") or 0),
+            "lost": int(row.get("lost_customers") or 0),
+            "starting_revenue": _clean_optional_float(row.get("starting_revenue")),
+            "ending_revenue": _clean_optional_float(row.get("ending_revenue")),
+            "new_revenue": _clean_optional_float(row.get("new_revenue")),
+            "expansion": _clean_optional_float(row.get("expansion")),
+            "contraction": _clean_optional_float(row.get("contraction")),
+            "churned_revenue": _clean_optional_float(row.get("churned_revenue")),
         },
         "activity": {
             "active_skus": int(row.get("active_skus") or 0),
@@ -1869,6 +1905,76 @@ def get_bundle_context(filters: FilterParams, include_current_month: bool = Fals
         return {"payload": payload, "monthly": ctx.get("monthly"), "cache_hit": False, "cache_key": cache_key}
 
 
+def _return_adjustments_for_orders(
+    order_ids: Any,
+    *,
+    start: date,
+    end_exclusive: date,
+) -> Dict[str, Any]:
+    """
+    Approved return credits and explicitly seeded handling costs, restricted to
+    the orders that survived the page's filters.
+
+    An empty or missing order list means the filters matched nothing, so no
+    return belongs to the window either - which is why `None` here restricts to
+    nothing rather than lifting the restriction.
+    """
+    raw_order_ids = [] if order_ids is None else list(order_ids)
+    allowed = {str(value) for value in raw_order_ids if value not in (None, "")}
+    return _return_adjustments(allowed, start=start, end_exclusive=end_exclusive)
+
+
+def entity_return_adjustments(*, start: date, end_exclusive: date) -> Dict[str, Any]:
+    """
+    The same approved return credits, company-wide and unrestricted by order.
+
+    The Finance page reports entity-level statements, so it has no filtered
+    order list to intersect against. It shares this implementation rather than
+    growing a second one - a Finance "net sales" that disagreed with the
+    Overview's would be precisely the contradiction the metric layer exists to
+    prevent.
+    """
+    return _return_adjustments(None, start=start, end_exclusive=end_exclusive)
+
+
+def _return_adjustments(
+    allowed: Optional[set],
+    *,
+    start: date,
+    end_exclusive: date,
+) -> Dict[str, Any]:
+    """`allowed=None` applies no order restriction; a set restricts to it."""
+    try:
+        from app.returns.models import ReturnRMA, get_session
+
+        with get_session() as session:
+            rows = (
+                session.query(ReturnRMA)
+                .filter(ReturnRMA.date_submitted >= datetime.combine(start, datetime.min.time()))
+                .filter(ReturnRMA.date_submitted < datetime.combine(end_exclusive, datetime.min.time()))
+                .filter(ReturnRMA.status.in_(["approved", "completed"]))
+                .all()
+            )
+        if allowed is not None:
+            rows = [row for row in rows if str(row.order_id) in allowed]
+        credits = sum(float(row.total_credit_amount or 0.0) for row in rows)
+        handling_values: List[float] = []
+        for item in rows:
+            metadata = json.loads(item.metadata_json or "{}")
+            value = _clean_optional_float(metadata.get("return_handling_cost"))
+            if value is None:
+                return {"returns": credits, "return_handling_cost": None, "return_count": len(rows), "available": True}
+            handling_values.append(value)
+        return {
+            "returns": credits,
+            "return_handling_cost": sum(handling_values),
+            "return_count": len(rows),
+            "available": True,
+        }
+    except Exception:
+        return {"returns": None, "return_handling_cost": None, "return_count": None, "available": False}
+
+
 def _compute_bundle_context(
     filters: FilterParams,
     *,
@@ -1918,6 +2024,9 @@ def _compute_bundle_context(
     protein_col = _safe_col(cols, "Protein", "ProteinType", "ProteinName", "Category", "ProductCategory")
     pack_item_col = _safe_col(cols, "pack_item_count_sum")
     pack_weight_col = _safe_col(cols, "pack_weight_lb_sum")
+    gross_sales_col = _safe_col(cols, "GrossSales")
+    discount_col = _safe_col(cols, "DiscountAmount")
+    discount_cost_col = _safe_col(cols, "DiscountHandlingCost")
     cost_available = any(c in cols for c in cost_candidates)
 
     date_expr = _col_expr(date_col, "DATE", "NULL")
@@ -1940,6 +2049,9 @@ def _compute_bundle_context(
     protein_expr = _col_expr(protein_col, "VARCHAR", "NULL")
     pack_item_expr = _col_expr(pack_item_col, "DOUBLE", "NULL")
     pack_weight_expr = _col_expr(pack_weight_col, "DOUBLE", "NULL")
+    gross_sales_expr = _col_expr(gross_sales_col, "DOUBLE", "NULL")
+    discount_expr = _col_expr(discount_col, "DOUBLE", "NULL")
+    discount_cost_expr = _col_expr(discount_cost_col, "DOUBLE", "NULL")
     effective_cost_expr = margin_rules.sql_effective_cost_expr("cost_raw", "weight", "qty", fallback="NULL::DOUBLE")
 
     sql = f"""
@@ -1960,7 +2072,10 @@ def _compute_bundle_context(
                 {supplier_expr} AS supplier,
                 {protein_expr} AS protein,
                 {pack_item_expr} AS pack_item_count,
-                {pack_weight_expr} AS pack_weight_lb
+                {pack_weight_expr} AS pack_weight_lb,
+                {gross_sales_expr} AS gross_sales,
+                {discount_expr} AS discount_amount,
+                {discount_cost_expr} AS discount_handling_cost
             FROM fact
             WHERE {where_sql}
         ),
@@ -1982,7 +2097,10 @@ def _compute_bundle_context(
                 supplier,
                 protein,
                 pack_item_count,
-                pack_weight_lb
+                pack_weight_lb,
+                gross_sales,
+                discount_amount,
+                discount_handling_cost
             FROM scoped_base
         ),
         current_window AS (
@@ -2000,7 +2118,11 @@ def _compute_bundle_context(
                 SUM(qty) AS qty,
                 SUM(weight) AS weight,
                 COUNT(DISTINCT order_id) AS orders,
-                COUNT(DISTINCT customer_id) AS customers
+                COUNT(DISTINCT customer_id) AS customers,
+                SUM(gross_sales) AS gross_sales,
+                SUM(discount_amount) AS discount_amount,
+                SUM(discount_handling_cost) AS discount_handling_cost,
+                LIST(DISTINCT order_id) FILTER (WHERE order_id IS NOT NULL) AS order_ids
             FROM current_window
         ),
         monthly_all AS (
@@ -2610,6 +2732,35 @@ def _compute_bundle_context(
     margin_pct = _clean_optional_float(current_window_metrics.get("margin_pct"))
     roi_pct = au.safe_div(profit, cost) * 100 if (profit is not None and cost) else None
     asp_cost_basis = _clean_optional_float(current_window_metrics.get("asp_cost_basis"))
+    gross_sales = _clean_optional_float(row.get("gross_sales"))
+    discounts = _clean_optional_float(row.get("discount_amount"))
+    discount_handling_cost = _clean_optional_float(row.get("discount_handling_cost"))
+    return_adjustments = _return_adjustments_for_orders(
+        row.get("order_ids"),
+        start=window_contract.current_start,
+        end_exclusive=window_contract.current_end_exclusive,
+    )
+    return_credits = _clean_optional_float(return_adjustments.get("returns"))
+    return_handling_cost = _clean_optional_float(return_adjustments.get("return_handling_cost"))
+    adjustment_costs = (
+        discount_handling_cost + return_handling_cost
+        if discount_handling_cost is not None and return_handling_cost is not None
+        else None
+    )
+    sales_reconciliation = metrics.net_sales_reconciliation(
+        gross_sales, discounts, return_credits, adjustment_costs
+    )
+    sales_reconciliation.update(
+        {
+            "invoice_sales": revenue,
+            "discount_handling_cost": discount_handling_cost,
+            "return_handling_cost": return_handling_cost,
+            "return_count": return_adjustments.get("return_count"),
+            "basis_note": (
+                "Existing revenue, margin, AOV, growth, and forecast metrics use invoiced sales after discounts and before approved return credits. Net sales is shown separately."
+            ),
+        }
+    )
 
     totals = {
         "revenue": revenue,
@@ -3049,6 +3200,28 @@ def _compute_bundle_context(
     returning_customers = int(customer_ops.get("returning") or 0)
     new_share_pct = (new_customers / customer_current * 100.0) if customer_current else None
     returning_share_pct = (returning_customers / customer_current * 100.0) if customer_current else None
+    starting_customers = int(customer_ops.get("previous") or 0)
+    lost_customers = int(customer_ops.get("lost") or 0)
+    starting_revenue = _clean_optional_float(customer_ops.get("starting_revenue"))
+    ending_revenue = _clean_optional_float(customer_ops.get("ending_revenue"))
+    new_revenue = _clean_optional_float(customer_ops.get("new_revenue"))
+    expansion_revenue = _clean_optional_float(customer_ops.get("expansion"))
+    contraction_revenue = _clean_optional_float(customer_ops.get("contraction"))
+    churned_revenue = _clean_optional_float(customer_ops.get("churned_revenue"))
+    retention_pct = metrics.retention_rate(starting_customers, customer_current, new_customers)
+    logo_churn_pct = metrics.churn_rate(lost_customers, starting_customers)
+    revenue_churn_pct = metrics.revenue_churn_rate(churned_revenue, starting_revenue)
+    nrr_pct = metrics.net_revenue_retention(
+        starting_revenue, expansion_revenue, contraction_revenue, churned_revenue
+    )
+    arpa = metrics.average_revenue_per_account(ending_revenue, customer_current)
+    new_arpa = metrics.average_revenue_per_account(new_revenue, new_customers)
+    established_revenue = (
+        ending_revenue - new_revenue
+        if ending_revenue is not None and new_revenue is not None
+        else None
+    )
+    established_arpa = metrics.average_revenue_per_account(established_revenue, returning_customers)
     margin_risk_rows = profitability.get("margin_risk") or []
     margin_risk_revenue = float(
         sum(float(_clean_optional_float(rec.get("revenue")) or 0.0) for rec in margin_risk_rows)
@@ -3358,12 +3531,29 @@ def _compute_bundle_context(
             "profit_per_order": profit_per_order,
             "profit_per_lb": profit_per_lb,
         },
+        "sales_reconciliation": sales_reconciliation,
         "growth_retention": {
             "new_customers": new_customers,
             "new_customer_share_pct": new_share_pct,
             "returning_customer_share_pct": returning_share_pct,
             "active_customers_current": customer_current,
             "active_customers_previous": int(customer_ops.get("previous") or 0),
+            "lost_customers": lost_customers,
+            "retention_rate_pct": retention_pct,
+            "logo_churn_rate_pct": logo_churn_pct,
+            "revenue_churn_rate_pct": revenue_churn_pct,
+            "nrr_pct": nrr_pct,
+            "arpa": arpa,
+            "new_arpa": new_arpa,
+            "established_arpa": established_arpa,
+            "revenue_movement": {
+                "starting": starting_revenue,
+                "new": new_revenue,
+                "expansion": expansion_revenue,
+                "contraction": contraction_revenue,
+                "churned": churned_revenue,
+                "ending": ending_revenue,
+            },
         },
         "risk_indicators": {
             "margin_risk_sku_count": len(margin_risk_rows),

@@ -65,11 +65,23 @@ def generate(*, days: int = 210, seed: int = 4207, output: Path = Path("cache/la
             rate = base_rate * (0.92 + 0.035 * (local_index % 5))
             employees.append((code, f"{first} {last}", dept_no, dept_name, round(rate, 2)))
 
+    # Sparse, deterministic lifecycle events make turnover demonstrable while
+    # retaining enough employees for useful department comparisons.  These are
+    # explicit HR-source fields; attendance gaps are never treated as exits.
+    separation_schedule = {
+        "E0010": (end - timedelta(days=42), "Voluntary"),
+        "E0024": (end - timedelta(days=76), "Involuntary"),
+        "E0037": (end - timedelta(days=138), "Voluntary"),
+    }
+
     for labor_day in pd.date_range(start, end, freq="D"):
         if labor_day.weekday() >= 5:
             continue
         seasonal = 1.0 + 0.08 * np.sin((labor_day.dayofyear / 365.25) * 2 * np.pi)
         for code, name, dept_no, dept_name, base_rate in employees:
+            separation_date, separation_type = separation_schedule.get(code, (None, None))
+            if separation_date is not None and labor_day.date() > separation_date:
+                continue
             day_seed = int(hashlib.sha1(f"{code}|{labor_day.date()}".encode()).hexdigest()[:8], 16)
             local = np.random.default_rng(seed + day_seed)
             absence = bool(local.random() < (0.035 if dept_no not in {"100", "200"} else 0.05))
@@ -103,7 +115,7 @@ def generate(*, days: int = 210, seed: int = 4207, output: Path = Path("cache/la
                 "payroll_code": code,
                 "department_name": dept_name,
                 "department_number": dept_no,
-                "status": "Active",
+                "status": "Separated" if separation_date == labor_day.date() else "Active",
                 "work_rule": "Hourly",
                 "shift_match_date": labor_day.to_pydatetime(),
                 "schedule_start": start_time.to_pydatetime(),
@@ -141,6 +153,9 @@ def generate(*, days: int = 210, seed: int = 4207, output: Path = Path("cache/la
                 "employee_day_key": employee_day_key,
                 "department_key": department_key,
                 "employee_status_group": "active",
+                "separation_date": separation_date,
+                "separation_type": separation_type,
+                "separation_flag": separation_date is not None,
                 "employee_day_transaction_count": 1,
                 "active_employee_flag": 1 if not absence else 0,
                 "primary_row_flag": True,

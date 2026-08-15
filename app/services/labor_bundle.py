@@ -15,7 +15,7 @@ from flask import current_app, request, url_for
 
 from app.core import prebuilt_cache
 from app.core.cache_manager import TTLValueCache
-from app.services import comparison, labor_store
+from app.services import comparison, fact_schema as fs, fact_store, labor_store, metrics
 
 
 WEEKDAY_ORDER = {
@@ -345,6 +345,125 @@ def _query_summary(filters: LaborFilters, *, start: date | None = None, end: dat
     row["active_departments"] = int(row.get("active_departments") or 0)
     row["transaction_count"] = int(row.get("transaction_count") or 0)
     return row
+
+
+def _query_workforce_metrics(filters: LaborFilters, current_summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Return governed productivity and turnover measures for the labor scope.
+
+    Revenue has no department or employee key in the sales fact.  It is only
+    joined at company/date grain; narrower labor scopes are deliberately shown
+    as unavailable instead of comparing a scoped denominator to company sales.
+    """
+    where_sql, params = build_where_clause(filters)
+    workforce = _query_df(
+        f"""
+        WITH scoped AS (
+            SELECT labor_date, employee_key, separation_date, separation_type
+            FROM labor_fact lf
+            WHERE {where_sql}
+        ),
+        daily AS (
+            SELECT labor_date, COUNT(DISTINCT employee_key) AS employees
+            FROM scoped
+            GROUP BY 1
+        ),
+        exits AS (
+            SELECT
+                COUNT(DISTINCT CASE
+                    WHEN separation_date BETWEEN ? AND ? THEN employee_key
+                END) AS separations,
+                COUNT(DISTINCT CASE
+                    WHEN separation_date BETWEEN ? AND ?
+                     AND LOWER(COALESCE(separation_type, '')) LIKE 'voluntary%'
+                    THEN employee_key
+                END) AS voluntary_separations,
+                COUNT(DISTINCT CASE
+                    WHEN separation_date BETWEEN ? AND ?
+                     AND LOWER(COALESCE(separation_type, '')) LIKE 'involuntary%'
+                    THEN employee_key
+                END) AS involuntary_separations,
+                COUNT(DISTINCT CASE
+                    WHEN separation_date BETWEEN ? AND ? AND separation_type IS NOT NULL
+                    THEN employee_key
+                END) AS typed_separations
+            FROM scoped
+        ),
+        source_support AS (
+            SELECT COUNT(*) AS sourced_events
+            FROM labor_fact
+            WHERE separation_date IS NOT NULL
+        )
+        SELECT
+            (SELECT AVG(employees) FROM daily) AS average_employees,
+            exits.*,
+            source_support.sourced_events
+        FROM exits CROSS JOIN source_support
+        """,
+        [
+            *params,
+            str(filters.start), str(filters.end),
+            str(filters.start), str(filters.end),
+            str(filters.start), str(filters.end),
+            str(filters.start), str(filters.end),
+        ],
+    )
+    row = workforce.iloc[0].to_dict() if not workforce.empty else {}
+    average_employees = _li_safe_float(row.get("average_employees"))
+    sourced_events = int(row.get("sourced_events") or 0)
+    separations = int(row.get("separations") or 0) if sourced_events else None
+    typed_separations = int(row.get("typed_separations") or 0) if sourced_events else None
+
+    revenue = None
+    productivity_basis = "Company/date grain"
+    is_company_scope = not any(
+        (
+            filters.departments,
+            filters.employees,
+            filters.time_categories,
+            filters.statuses,
+            filters.work_rules,
+            filters.search,
+        )
+    )
+    if is_company_scope:
+        try:
+            columns = fact_store.list_columns()
+            date_col = next((name for name in fs.DATE_CANDIDATES if name in columns), None)
+            revenue_col = next((name for name in fs.REVENUE_CANDIDATES if name in columns), None)
+            if date_col and revenue_col:
+                date_ident = '"' + date_col.replace('"', '""') + '"'
+                revenue_ident = '"' + revenue_col.replace('"', '""') + '"'
+                sales = fact_store.execute_sql_df(
+                    f"""
+                    SELECT COUNT(*) AS source_rows, SUM(TRY_CAST({revenue_ident} AS DOUBLE)) AS revenue
+                    FROM fact
+                    WHERE TRY_CAST({date_ident} AS DATE) BETWEEN ? AND ?
+                    """,
+                    [str(filters.start), str(filters.end)],
+                    tag="labor_productivity_revenue",
+                )
+                if not sales.empty and int(sales.iloc[0].get("source_rows") or 0) > 0:
+                    revenue = _li_safe_float(sales.iloc[0].get("revenue"))
+        except Exception:
+            revenue = None
+    else:
+        productivity_basis = "Unavailable below company/date grain; sales fact has no labor department or employee key"
+
+    total_paid_hours = current_summary.get("total_paid_hours")
+    separation_types_complete = bool(separations is not None and typed_separations == separations)
+    return {
+        "revenue": revenue,
+        "revenue_per_employee": metrics.revenue_per_employee(revenue, average_employees),
+        "revenue_per_paid_hour": metrics.revenue_per_paid_hour(revenue, total_paid_hours),
+        "average_employees": average_employees,
+        "separations": separations,
+        "turnover_rate_pct": metrics.employee_turnover_rate(separations, average_employees),
+        "voluntary_turnover_rate_pct": metrics.employee_turnover_rate(row.get("voluntary_separations"), average_employees) if separation_types_complete else None,
+        "involuntary_turnover_rate_pct": metrics.employee_turnover_rate(row.get("involuntary_separations"), average_employees) if separation_types_complete else None,
+        "separation_source_available": bool(sourced_events),
+        "separation_types_available": separation_types_complete,
+        "productivity_basis": productivity_basis,
+    }
 
 
 def _query_department_summary(filters: LaborFilters, *, start: date | None = None, end: date | None = None) -> pd.DataFrame:
@@ -2580,9 +2699,15 @@ def _li_build_scorecard_groups(analysis: Mapping[str, Any]) -> list[dict[str, An
         },
         {
             'title': 'Workforce Footprint',
-            'description': 'How broad the scoped workforce is and how concentrated its labor cost has become.',
+            'description': 'Workforce size, governed productivity, and explicit employee lifecycle outcomes.',
             'metrics': [
                 _li_metric('Active Employees', current_summary.get('active_employees'), 'integer', 'Distinct employee_key values represented by the current filters.'),
+                _li_metric('Average Employees', overall.get('average_employees'), 'number', 'Average daily distinct employees represented during the selected period.'),
+                _li_metric('Revenue / Employee', overall.get('revenue_per_employee'), 'currency', 'Transaction sales in the selected period divided by average daily employees.', tone='primary', note=overall.get('productivity_basis')),
+                _li_metric('Revenue / Paid Hour', overall.get('revenue_per_paid_hour'), 'currency', 'Transaction sales in the selected period divided by scoped paid hours.', tone='primary', note=overall.get('productivity_basis')),
+                _li_metric('Employee Turnover', overall.get('turnover_rate_pct'), 'percent', 'Distinct separations in the period divided by average daily employees.', tone='warning', note='Shown as n/a when the source has no explicit separation events.'),
+                _li_metric('Voluntary Turnover', overall.get('voluntary_turnover_rate_pct'), 'percent', 'Voluntary separations divided by average daily employees.', tone='warning', note='Shown only when every scoped separation has a source type.'),
+                _li_metric('Involuntary Turnover', overall.get('involuntary_turnover_rate_pct'), 'percent', 'Involuntary separations divided by average daily employees.', tone='warning', note='Shown only when every scoped separation has a source type.'),
                 _li_metric('Active Departments', current_summary.get('active_departments'), 'integer', 'Distinct department_key values represented by the current filters.'),
                 _li_metric('Transaction Rows', current_summary.get('transaction_count'), 'integer', 'Underlying labor transaction rows included by the active filters.'),
                 _li_metric('Worker Concentration', overall.get('worker_concentration_top5_share'), 'percent', 'Share of scoped labor cost carried by the top five workers.', tone='warning'),
@@ -2869,6 +2994,7 @@ def _li_build_analysis(filters: LaborFilters) -> dict[str, Any]:
     prior_start, prior_end = _prior_window(filters)
     filter_options = _query_filter_options(filters)
     current_summary = _query_summary(filters)
+    workforce_metrics = _query_workforce_metrics(filters, current_summary)
     prior_summary = _query_summary(filters, start=prior_start, end=prior_end)
     department_daily = _query_department_daily(filters)
     current_departments = _li_enrich_department_summary(
@@ -2938,6 +3064,7 @@ def _li_build_analysis(filters: LaborFilters) -> dict[str, Any]:
         'top_worker_share_pct': worker_top3.get('top_share_pct'),
         'stability_score': stability_score,
         'category_mix_basis': category_basis,
+        **workforce_metrics,
     }
 
     department_watchlist = dept_priority.loc[pd.to_numeric(dept_priority.get('priority_score', pd.Series(dtype='float64')), errors='coerce').fillna(0).ge(_LI_WATCH_THRESHOLD)].copy() if not dept_priority.empty else dept_priority
@@ -3169,7 +3296,9 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
         'total_paid_hours': current_summary.get('total_paid_hours'),
         'active_departments': current_summary.get('active_departments'),
         'active_employees': current_summary.get('active_employees'),
-        'stability_score': overall.get('stability_score'),
+        'revenue_per_employee': overall.get('revenue_per_employee'),
+        'revenue_per_paid_hour': overall.get('revenue_per_paid_hour'),
+        'turnover_rate_pct': overall.get('turnover_rate_pct'),
     }
 
     kpis = {
@@ -3185,6 +3314,15 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
         'top_worker_share_pct': overall.get('top_worker_share_pct'),
         'category_concentration_top3_share': overall.get('category_concentration_top3_share'),
         'stability_score': overall.get('stability_score'),
+        'revenue': overall.get('revenue'),
+        'revenue_per_employee': overall.get('revenue_per_employee'),
+        'revenue_per_paid_hour': overall.get('revenue_per_paid_hour'),
+        'average_employees': overall.get('average_employees'),
+        'separations': overall.get('separations'),
+        'turnover_rate_pct': overall.get('turnover_rate_pct'),
+        'voluntary_turnover_rate_pct': overall.get('voluntary_turnover_rate_pct'),
+        'involuntary_turnover_rate_pct': overall.get('involuntary_turnover_rate_pct'),
+        'productivity_basis': overall.get('productivity_basis'),
     }
     payload['kpis'] = kpis
 

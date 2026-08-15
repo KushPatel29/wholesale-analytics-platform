@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{# `finance` is not one of the blueprints base.html loads Plotly for, and this
+   page draws five charts, so it asks for the libraries explicitly. The static
+   build strips every <script> once it has frozen the charts to SVG, so this
+   costs the published pages nothing. #}
+{% set needs_plotly = true %}
+{# The statements are entity-level, so the global filter bar has nothing to act
+   on here. Rendering it would put a live-looking control on the page that
+   changes none of the figures below it - the same dead-control problem the
+   Planning page was rebuilt to remove. #}
+{% set hide_global_filters = true %}
+{% block title %}Finance | Northgate Retail Analytics{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/finance.css', v='20260815-finance-1') }}">
+{% endblock %}
+
+{% block content %}
+<div id="FinanceApp" class="finance-page" data-bundle-url="{{ url_for('finance.bundle') }}">
+
+  <section class="finance-hero mb-4">
+    <div>
+      <div class="finance-eyebrow">Financial statements</div>
+      <h1>Finance</h1>
+      <p>
+        Income statement, balance sheet and the ratios that read them &mdash; the layer below the
+        gross-margin line that the operational pages stop at.
+      </p>
+      <p class="finance-scope" id="financeScope">&mdash;</p>
+    </div>
+    <div class="finance-hero__meta">
+      <span id="financeWindow">&mdash;</span>
+      <span id="financeGrain">&mdash;</span>
+    </div>
+  </section>
+
+  <div class="finance-unavailable" id="financeUnavailable" hidden>
+    <strong>Financial layer not built.</strong>
+    <span id="financeUnavailableDetail"></span>
+  </div>
+
+  <div id="financeBody" hidden>
+
+    <section class="finance-ratios" id="financeRatios" aria-label="Financial ratios"></section>
+
+    <section class="finance-grid mb-4">
+      <article class="finance-card">
+        <header>
+          <h2>Income statement</h2>
+          <p id="financeStatementBasis">&mdash;</p>
+        </header>
+        <div class="finance-table-scroll">
+          <table class="finance-table" id="financeStatement">
+            <thead><tr id="financeStatementHead"></tr></thead>
+            <tbody id="financeStatementBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="finance-card">
+        <header>
+          <h2>Gross to net sales</h2>
+          <p id="financeBridgeBasis">&mdash;</p>
+        </header>
+        <table class="finance-table finance-table--bridge" id="financeBridge">
+          <tbody id="financeBridgeBody"></tbody>
+        </table>
+        <div class="finance-chart" id="financeProfitBridgeChart" role="img"
+             aria-label="Waterfall from invoiced sales down to net income"></div>
+        <p class="finance-read" id="financeProfitBridgeRead">&mdash;</p>
+      </article>
+    </section>
+
+    <section class="finance-grid mb-4">
+      <article class="finance-card">
+        <header><h2>Balance sheet</h2><p id="financeBalanceAsOf">&mdash;</p></header>
+        <div class="finance-balance">
+          <table class="finance-table"><tbody id="financeAssets"></tbody></table>
+          <table class="finance-table"><tbody id="financeLiabilities"></tbody></table>
+        </div>
+      </article>
+
+      <article class="finance-card">
+        <header>
+          <h2>Receivables aging</h2>
+          <p>Month-end receivable book by days past invoice.</p>
+        </header>
+        <div class="finance-chart" id="financeAgingChart" role="img"
+             aria-label="Accounts receivable by aging bucket"></div>
+        <p class="finance-read" id="financeAgingRead">&mdash;</p>
+      </article>
+    </section>
+
+    <section class="finance-grid mb-4">
+      <article class="finance-card">
+        <header>
+          <h2>Monthly result</h2>
+          <p>Invoiced sales against net income, with the net margin on the right axis.</p>
+        </header>
+        <div class="finance-chart finance-chart--wide" id="financeResultChart" role="img"
+             aria-label="Monthly invoiced sales, net income and net margin"></div>
+        <p class="finance-read" id="financeResultRead">&mdash;</p>
+      </article>
+
+      <article class="finance-card">
+        <header>
+          <h2>Operating expense mix</h2>
+          <p>Where the operating cost base sits, for the fiscal year shown.</p>
+        </header>
+        <div class="finance-chart" id="financeOpexChart" role="img"
+             aria-label="Operating expenses by category"></div>
+        <p class="finance-read" id="financeOpexRead">&mdash;</p>
+      </article>
+    </section>
+
+    <section class="finance-card mb-4">
+      <header>
+        <h2>Liquidity</h2>
+        <p>Working capital and the current ratio, month by month across the whole dataset.</p>
+      </header>
+      <div class="finance-chart finance-chart--wide" id="financeLiquidityChart" role="img"
+           aria-label="Working capital and current ratio by month"></div>
+      <p class="finance-read" id="financeLiquidityRead">&mdash;</p>
+    </section>
+
+    <section class="finance-card">
+      <header>
+        <h2>Monthly detail</h2>
+        <p id="financeMonthlyBasis">&mdash;</p>
+      </header>
+      <div class="finance-table-scroll">
+        <table class="finance-table">
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col" class="num">Invoiced sales</th>
+              <th scope="col" class="num">Gross profit</th>
+              <th scope="col" class="num">Operating expenses</th>
+              <th scope="col" class="num">Net income</th>
+              <th scope="col" class="num">Net margin</th>
+              <th scope="col" class="num">Working capital</th>
+              <th scope="col" class="num">Current ratio</th>
+            </tr>
+          </thead>
+          <tbody id="financeMonthly"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="finance-provenance" id="financeProvenance">&mdash;</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/finance.js', v='20260815-finance-1') }}" defer></script>
+{% endblock %}

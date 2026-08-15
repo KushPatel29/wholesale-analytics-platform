@@ -12,8 +12,8 @@
 // page cannot re-render sections, but it can hide the ones a view excludes -
 // and a select that does nothing is worse than no select at all.
 const REPORT_VIEW_PRESETS = {
-  full: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
-  demand: ['plan', 'demand', 'matrix', 'actions'],
+  full: ['plan', 'forecast', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
+  demand: ['plan', 'forecast', 'demand', 'matrix', 'actions'],
   supply: ['plan', 'inventory', 'service', 'exposure', 'actions'],
   actions: ['plan', 'actions']
 };
@@ -26,7 +26,7 @@ class ReportWorkspace {
     this.bundleUrl = this.container.getAttribute('data-bundle-url');
     this.state = {
       type: 'full',
-      sections: ['plan', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
+      sections: ['plan', 'forecast', 'demand', 'inventory', 'service', 'matrix', 'exposure', 'actions'],
       data: null
     };
 
@@ -36,6 +36,7 @@ class ReportWorkspace {
     // were template prose that asserted rather than measured. All removed.
     this.sectionRegistry = {
       plan: { label: 'Planning Position', icon: 'bi-speedometer2', render: this.renderPlanningPosition.bind(this) },
+      forecast: { label: 'Forecast Accuracy', icon: 'bi-bullseye', render: this.renderForecastAccuracy.bind(this) },
       demand: { label: 'Demand Signal', icon: 'bi-graph-up-arrow', render: this.renderDemand.bind(this) },
       inventory: { label: 'Inventory & OTIF', icon: 'bi-box-seam', render: this.renderInventory.bind(this) },
       service: { label: 'Service Level', icon: 'bi-truck', render: this.renderService.bind(this) },
@@ -192,6 +193,7 @@ class ReportWorkspace {
       this.drawExposureChart();
       this.drawServiceChart();
       this.drawCoverChart();
+      this.drawForecastChart();
     };
     if (window.ChartUtils && window.ChartUtils.whenPlotlyReady) {
       window.ChartUtils.whenPlotlyReady(draw);
@@ -512,9 +514,47 @@ class ReportWorkspace {
     }, { displayModeBar: false, responsive: true });
   }
 
+  drawForecastChart() {
+    const host = document.getElementById('planForecastChart');
+    const rows = this._plan().forecast_accuracy?.series || [];
+    if (!host || !rows.length || !window.Plotly) return;
+
+    const theme = this._plotTheme();
+    const x = rows.map(row => row.period);
+    Plotly.newPlot(host, [
+      {
+        x, y: rows.map(row => row.lower), type: 'scatter', mode: 'lines',
+        line: { width: 0 }, hoverinfo: 'skip', showlegend: false,
+      },
+      {
+        x, y: rows.map(row => row.upper), type: 'scatter', mode: 'lines',
+        line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(251,191,36,.14)',
+        name: '+/-10% tolerance', hoverinfo: 'skip',
+      },
+      {
+        x, y: rows.map(row => row.actual), type: 'scatter', mode: 'lines+markers',
+        name: 'Actual', line: { color: theme.accent, width: 3 },
+        hovertemplate: '<b>%{x}</b><br>Actual %{y:$,.0f}<extra></extra>',
+      },
+      {
+        x, y: rows.map(row => row.forecast), type: 'scatter', mode: 'lines+markers',
+        name: 'Forecast', line: { color: theme.warn, width: 2, dash: 'dash' },
+        hovertemplate: '<b>%{x}</b><br>Forecast %{y:$,.0f}<extra></extra>',
+      },
+    ], {
+      margin: { l: 66, r: 20, t: 10, b: 48 }, height: 350,
+      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: theme.text, size: 11 },
+      xaxis: { title: 'Scored month', gridcolor: theme.grid, linecolor: theme.grid },
+      yaxis: { title: 'Sales revenue', tickprefix: '$', tickformat: ',.2s', gridcolor: theme.grid, linecolor: theme.grid },
+      legend: { orientation: 'h', y: -0.24 },
+    }, { displayModeBar: false, responsive: true });
+  }
+
   createSectionHeader(id, title) {
     const eyebrows = {
       plan: 'Where the plan stands',
+      forecast: 'How the demand signal performs out of sample',
       demand: 'Which way demand is moving',
       inventory: 'What is on hand and whether it arrives complete',
       service: 'How reliably we can supply it',
@@ -629,6 +669,55 @@ class ReportWorkspace {
             <div class="plan-kpi__note">Departments over ${plan.thresholds?.concentration_warn_pct ?? 45}% from one vendor</div>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  renderForecastAccuracy() {
+    const forecast = this._plan().forecast_accuracy || {};
+    const head = forecast.headline || {};
+    const rows = forecast.series || [];
+    if (!rows.length) {
+      return this._empty('At least five complete months are needed to score the forecast without looking ahead.');
+    }
+    const biasDirection = Number(head.bias) > 0 ? 'over-forecast' : Number(head.bias) < 0 ? 'under-forecast' : 'neutral';
+    const scoreTable = (items, label) => items.length ? `
+      <table class="plan-table">
+        <caption class="plan-caption">${label}</caption>
+        <thead><tr><th>Name</th><th class="num">MAPE</th><th class="num">Variance</th><th class="num">Bias</th><th class="num">Hit rate</th><th class="num">Periods</th></tr></thead>
+        <tbody>${items.map(row => `
+          <tr>
+            <td><span class="plan-label">${row.label || `${row.horizon_months}-month horizon`}</span></td>
+            <td class="num">${this._pct(row.mape_pct)}</td>
+            <td class="num">${this._pct(row.variance_pct)}</td>
+            <td class="num">${this._money(row.bias)}</td>
+            <td class="num">${this._pct(row.hit_rate_pct)}</td>
+            <td class="num">${row.scored_periods}</td>
+          </tr>`).join('')}</tbody>
+      </table>` : this._empty(`No ${label.toLowerCase()} scores are available for this scope.`);
+
+    return `
+      <div class="report-card">
+        <p class="plan-lede">
+          Rolling-origin backtest: each point is predicted using only history available at that origin.
+          Percentage errors exclude zero-actual periods; signed bias keeps them. The shaded region is a
+          <strong>+/-${head.tolerance_pct}% hit-tolerance band</strong>, not a confidence interval.
+        </p>
+        <div class="plan-kpis">
+          <div class="plan-kpi"><div class="plan-kpi__label">Variance</div><div class="plan-kpi__value">${this._pct(head.variance_pct)}</div><div class="plan-kpi__note">(Actual - forecast) / actual</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">MAPE</div><div class="plan-kpi__value">${this._pct(head.mape_pct)}</div><div class="plan-kpi__note">Mean absolute percentage error</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">Bias</div><div class="plan-kpi__value">${this._money(head.bias)}</div><div class="plan-kpi__note">Forecast - actual; ${biasDirection}</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">Hit rate</div><div class="plan-kpi__value">${this._pct(head.hit_rate_pct)}</div><div class="plan-kpi__note">Within +/-${head.tolerance_pct}% across ${head.scored_periods} periods</div></div>
+        </div>
+        <div id="planForecastChart" class="plan-chart" role="img" aria-label="Actual sales against rolling-origin forecast and tolerance band"></div>
+        <div class="plan-spacer"></div>
+        ${scoreTable(forecast.by_horizon || [], 'By forecast horizon')}
+        <div class="plan-spacer"></div>
+        <div class="report-grid">
+          <div>${scoreTable(forecast.by_sku || [], 'By SKU')}</div>
+          <div>${scoreTable(forecast.by_region || [], 'By region')}</div>
+        </div>
+        <p class="plan-footnote">${forecast.methodology?.model || ''} ${forecast.methodology?.zero_actuals || ''}</p>
       </div>
     `;
   }

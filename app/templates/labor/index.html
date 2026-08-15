@@ -69,9 +69,9 @@
       </div>
       <div class="labor-summary-strip mt-4">
         {{ mini_stat('Labor Cost', (hero.get('total_labor_cost') or 0)|money, 'Paid hours ' ~ ((hero.get('total_paid_hours') or 0)|dec(decimals=1)), 'primary') }}
-        {{ mini_stat('Stability Score', '%0.0f'|format(hero.get('stability_score') or 0) if hero.get('stability_score') is not none else 'n/a', 'Higher is more stable', 'info') }}
+        {{ mini_stat('Revenue / Employee', hero.get('revenue_per_employee')|money if hero.get('revenue_per_employee') is not none else 'n/a', 'Revenue / paid hour ' ~ (hero.get('revenue_per_paid_hour')|money if hero.get('revenue_per_paid_hour') is not none else 'n/a'), 'info') }}
         {{ mini_stat('Top Department', hero.get('top_department') or 'n/a', 'Top worker ' ~ (hero.get('top_worker') or 'n/a'), 'info') }}
-        {{ mini_stat('Top Category', hero.get('top_category') or 'n/a', 'Top driver ' ~ (hero.get('top_driver') or 'Stable'), 'info') }}
+        {{ mini_stat('Employee Turnover', '%0.1f%%'|format(hero.get('turnover_rate_pct')) if hero.get('turnover_rate_pct') is not none else 'n/a', 'Explicit separations / average employees', 'info') }}
       </div>
     </div>
   </section>

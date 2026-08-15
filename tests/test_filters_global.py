@@ -46,6 +46,14 @@ def test_parse_filters_marks_new_fiscal_presets_as_fiscal():
     assert params.end == periods["current_fm"]["end"]
 
 
+def test_fixed_fiscal_year_preset_uses_the_canonical_october_year():
+    params = parse_filters({"date_preset": "fy2025"})
+
+    assert params.date_type == "fiscal"
+    assert str(params.start.date()) == "2024-10-01"
+    assert str(params.end.date()) == "2025-09-30"
+
+
 def test_get_fiscal_periods_uses_october_year_start():
     periods = get_fiscal_periods(pd.Timestamp("2026-04-08"))
     assert str(periods["current_fy"]["start"].date()) == "2025-10-01"

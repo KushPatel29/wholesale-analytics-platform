@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{# Not a blueprint base.html loads Plotly for, and this page draws three charts.
+   The static build strips every <script> once it has frozen them to SVG. #}
+{% set needs_plotly = true %}
+{# Entity-level, like Finance: a campaign has no region or protein dimension, so
+   a global filter bar here would be a control that changes nothing. #}
+{% set hide_global_filters = true %}
+{% block title %}Marketing | Northgate Retail Analytics{% endblock %}
+
+{% block head_extras %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/finance.css', v='20260815-finance-1') }}">
+{% endblock %}
+
+{% block content %}
+<div id="MarketingApp" class="finance-page" data-bundle-url="{{ url_for('marketing.bundle') }}">
+
+  <section class="finance-hero mb-4">
+    <div>
+      <div class="finance-eyebrow">Acquisition</div>
+      <h1>Marketing</h1>
+      <p>
+        What it costs to win an account, where the spend goes, and how long the account takes to
+        repay it &mdash; the one block of the metric reference that needed a source system the
+        sales fact does not contain.
+      </p>
+      <p class="finance-scope" id="marketingScope">&mdash;</p>
+    </div>
+    <div class="finance-hero__meta">
+      <span id="marketingWindow">&mdash;</span>
+      <span id="marketingGrain">&mdash;</span>
+    </div>
+  </section>
+
+  <div class="finance-unavailable" id="marketingUnavailable" hidden>
+    <strong>Campaign layer not built.</strong>
+    <span id="marketingUnavailableDetail"></span>
+  </div>
+
+  <div id="marketingBody" hidden>
+
+    <section class="finance-ratios" id="marketingKpis" aria-label="Acquisition metrics"></section>
+
+    <div class="finance-unavailable" id="marketingRomiCaveat" hidden></div>
+
+    <section class="finance-grid mb-4">
+      <article class="finance-card">
+        <header>
+          <h2>Spend against accounts won</h2>
+          <p>Total acquisition spend each month, with the accounts it won and the resulting CAC.</p>
+        </header>
+        <div class="finance-chart finance-chart--wide" id="marketingSpendChart" role="img"
+             aria-label="Monthly acquisition spend, accounts won and cost per acquisition"></div>
+        <p class="finance-read" id="marketingSpendRead">&mdash;</p>
+      </article>
+
+      <article class="finance-card">
+        <header>
+          <h2>Acquisition funnel</h2>
+          <p>Leads, the share that qualified, and the accounts that closed.</p>
+        </header>
+        <div class="finance-chart" id="marketingFunnelChart" role="img"
+             aria-label="Leads, qualified leads and accounts won"></div>
+        <p class="finance-read" id="marketingFunnelRead">&mdash;</p>
+      </article>
+    </section>
+
+    <section class="finance-grid mb-4">
+      <article class="finance-card">
+        <header>
+          <h2>Where the spend goes</h2>
+          <p>Marketing spend by channel for the fiscal year shown.</p>
+        </header>
+        <div class="finance-chart" id="marketingChannelChart" role="img"
+             aria-label="Marketing spend by channel"></div>
+        <p class="finance-read" id="marketingChannelRead">&mdash;</p>
+      </article>
+
+      <article class="finance-card">
+        <header>
+          <h2>Channel performance</h2>
+          <p id="marketingChannelBasis">&mdash;</p>
+        </header>
+        <div class="finance-table-scroll">
+          <table class="finance-table">
+            <thead>
+              <tr>
+                <th scope="col">Channel</th>
+                <th scope="col" class="num">Spend</th>
+                <th scope="col" class="num">Leads</th>
+                <th scope="col" class="num">Qualified</th>
+                <th scope="col" class="num">Won</th>
+                <th scope="col" class="num">CPL</th>
+                <th scope="col" class="num">Cost per win</th>
+              </tr>
+            </thead>
+            <tbody id="marketingChannels"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="finance-card">
+      <header>
+        <h2>Monthly detail</h2>
+        <p id="marketingMonthlyBasis">&mdash;</p>
+      </header>
+      <div class="finance-table-scroll">
+        <table class="finance-table">
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col" class="num">Marketing spend</th>
+              <th scope="col" class="num">Acquisition selling</th>
+              <th scope="col" class="num">Total</th>
+              <th scope="col" class="num">Leads</th>
+              <th scope="col" class="num">Qualified</th>
+              <th scope="col" class="num">Won</th>
+              <th scope="col" class="num">CAC</th>
+            </tr>
+          </thead>
+          <tbody id="marketingMonthly"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="finance-provenance" id="marketingProvenance">&mdash;</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/marketing.js', v='20260815-marketing-1') }}" defer></script>
+{% endblock %}

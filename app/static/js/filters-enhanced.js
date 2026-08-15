@@ -167,6 +167,8 @@
     "current_fm",
     "previous_fm",
     "fytd_comparison",
+    "fy2025",
+    "fy2024",
   ]);
   const FISCAL_START_MONTH_INDEX = 9;
   const FISCAL_START_DAY = 1;
@@ -193,6 +195,8 @@
     current_fm: "Current FM",
     previous_fm: "Previous FM",
     fytd_comparison: "FYTD Comparison",
+    fy2025: "FY 2025 (Oct 2024-Sep 2025)",
+    fy2024: "FY 2024 (Oct 2023-Sep 2024)",
     today: "Today",
     yesterday: "Yesterday",
     "7d": "Last 7 Days",
@@ -679,6 +683,8 @@
       current_fm: { start: currentFmStart, end: today, compareStart: previousFmStart, compareEnd: previousFmMtdEnd > previousFmEnd ? previousFmEnd : previousFmMtdEnd },
       previous_fm: { start: previousFmStart, end: previousFmEnd, compareStart: priorFmStart, compareEnd: priorFmEnd },
       fytd_comparison: { start: currentFyStart, end: today, compareStart: previousFyStart, compareEnd: previousFyYtdEnd > previousFyEnd ? previousFyEnd : previousFyYtdEnd },
+      fy2025: { start: new Date(2024, FISCAL_START_MONTH_INDEX, FISCAL_START_DAY), end: new Date(2025, FISCAL_START_MONTH_INDEX, 0) },
+      fy2024: { start: new Date(2023, FISCAL_START_MONTH_INDEX, FISCAL_START_DAY), end: new Date(2024, FISCAL_START_MONTH_INDEX, 0) },
     };
   };
 

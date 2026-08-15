@@ -17,7 +17,7 @@ from typing import Any, Iterable
 import pandas as pd
 
 from app.core.rbac import has_permission
-from app.services import fact_store
+from app.services import fact_store, metrics
 
 
 ANNUAL_CAPITAL_RATE = 0.05
@@ -105,7 +105,9 @@ def _safe_text(value: Any, fallback: str = "Unknown") -> str:
     return text or fallback
 
 
-def _sku_query(where_sql: str) -> str:
+def _sku_query(where_sql: str, *, has_physical_counts: bool) -> str:
+    book_expr = "COALESCE(BookInventoryQty, OnHandQty, 0)" if has_physical_counts else "COALESCE(OnHandQty, 0)"
+    physical_expr = "PhysicalInventoryQty" if has_physical_counts else "NULL::DOUBLE"
     return f"""
         WITH scoped AS (
             SELECT *
@@ -127,7 +129,10 @@ def _sku_query(where_sql: str) -> str:
             SUM(COALESCE(Revenue, 0)) AS revenue,
             SUM(COALESCE(Cost, 0)) AS sales_cost,
             ARG_MAX(COALESCE(OnHandQty, 0), Date) AS on_hand_qty,
+            ARG_MAX({book_expr}, Date) AS book_inventory_qty,
+            ARG_MAX({physical_expr}, Date) AS physical_inventory_qty,
             ARG_MAX(COALESCE(OnHandValue, 0), Date) AS inventory_value,
+            AVG(COALESCE(OnHandValue, 0)) AS average_inventory_cost,
             ARG_MAX(COALESCE(DaysOfSupply, 0), Date) AS days_supply,
             ARG_MAX(COALESCE(ReorderPointQty, 0), Date) AS reorder_point_qty,
             ARG_MAX(COALESCE(SafetyStockQty, 0), Date) AS safety_stock_qty,
@@ -184,6 +189,13 @@ def _classify_rows(rows: list[dict[str, Any]], window_end: str | None) -> None:
         row["unit_cost"] = unit_cost
         row["suggested_buy_cost"] = row["suggested_buy_units"] * unit_cost
         row["holding_cost_annual"] = _number(row.get("inventory_value")) * ANNUAL_HOLDING_RATE
+        gross_margin = _number(row.get("revenue")) - _number(row.get("sales_cost"))
+        row["gross_margin_dollars"] = gross_margin
+        row["gmroi"] = metrics.gmroi(gross_margin, row.get("average_inventory_cost"))
+        units_available = _number(row.get("usage_units")) + _number(row.get("book_inventory_qty"))
+        row["units_available"] = units_available
+        row["sell_through_pct"] = metrics.sell_through_rate(row.get("usage_units"), units_available)
+        row["shrink_pct"] = metrics.shrink_rate(row.get("book_inventory_qty"), row.get("physical_inventory_qty"))
 
         posture, posture_key, priority = _stock_posture(row)
         row["posture"] = posture
@@ -342,7 +354,7 @@ def _mask_financials(payload: dict[str, Any]) -> None:
         return
     financial_keys = {
         "inventory_value", "holding_cost_annual", "suggested_buy_cost", "unit_cost",
-        "capital", "service", "storage", "risk", "total", "sales_cost",
+        "capital", "service", "storage", "risk", "total", "sales_cost", "gross_margin_dollars", "gmroi",
     }
 
     def walk(value: Any) -> None:
@@ -375,7 +387,10 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
     where_sql, where_params, start_iso, end_iso = fact_store.build_where_clause(
         filters, cols, scope, apply_default_window=True
     )
-    frame = fact_store.execute_sql_df(_sku_query(where_sql), where_params, tag="inventory.skus")
+    has_physical_counts = {"BookInventoryQty", "PhysicalInventoryQty"}.issubset(cols)
+    frame = fact_store.execute_sql_df(
+        _sku_query(where_sql, has_physical_counts=has_physical_counts), where_params, tag="inventory.skus"
+    )
     rows = _records(frame)
     _classify_rows(rows, end_iso)
 
@@ -389,6 +404,16 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
     )
     aggregate_weeks_on_hand = on_hand_qty / average_weekly_usage if average_weekly_usage > 0 else None
     annual_turns = 52.0 / aggregate_weeks_on_hand if _number(aggregate_weeks_on_hand) > 0 else None
+    gross_margin_dollars = sum(_number(row.get("gross_margin_dollars")) for row in rows)
+    average_inventory_cost = sum(_number(row.get("average_inventory_cost")) for row in rows)
+    gmroi_value = metrics.gmroi(gross_margin_dollars, average_inventory_cost)
+    usage_units = sum(_number(row.get("usage_units")) for row in rows)
+    units_available = sum(_number(row.get("units_available")) for row in rows)
+    sell_through_pct = metrics.sell_through_rate(usage_units, units_available)
+    book_inventory_qty = sum(_number(row.get("book_inventory_qty")) for row in rows)
+    physical_values = [_optional_number(row.get("physical_inventory_qty")) for row in rows]
+    physical_inventory_qty = sum(value for value in physical_values if value is not None) if physical_values and all(value is not None for value in physical_values) else None
+    shrink_pct = metrics.shrink_rate(book_inventory_qty, physical_inventory_qty)
     critical = [row for row in rows if row.get("posture_key") == "critical"]
     reorder = [row for row in rows if row.get("posture_key") == "reorder"]
     excess = [row for row in rows if row.get("posture_key") == "excess"]
@@ -456,6 +481,9 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
             "stockout_skus": sum(1 for row in rows if bool(row.get("is_stockout"))),
             "backorder_units": backorders,
             "holding_cost_annual": total_holding,
+            "gmroi": gmroi_value,
+            "sell_through_pct": sell_through_pct,
+            "shrink_pct": shrink_pct,
             "start": start_iso,
             "end": end_iso,
         },
@@ -507,7 +535,7 @@ def build_inventory_bundle(filters: Any, scope: dict[str, Any], args: Any) -> di
             "woh_definition": "Current on-hand units divided by average weekly usage in the active window",
             "turns_definition": "52 divided by weeks on hand",
         },
-        "warnings": [],
+        "warnings": [] if has_physical_counts else ["Physical inventory counts are not available; shrink is withheld."],
     }
     _mask_financials(payload)
     return payload

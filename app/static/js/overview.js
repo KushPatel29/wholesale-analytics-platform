@@ -247,6 +247,20 @@
     scoreReturningShare: document.getElementById("scoreReturningShare"),
     scoreConcentration: document.getElementById("scoreConcentration"),
     scoreMarginRisk: document.getElementById("scoreMarginRisk"),
+    scoreRetention: document.getElementById("scoreRetention"),
+    scoreLogoChurn: document.getElementById("scoreLogoChurn"),
+    scoreRevenueChurn: document.getElementById("scoreRevenueChurn"),
+    scoreNrr: document.getElementById("scoreNrr"),
+    scoreArpa: document.getElementById("scoreArpa"),
+    scoreArpaCohorts: document.getElementById("scoreArpaCohorts"),
+    salesBasisNote: document.getElementById("salesBasisNote"),
+    reconGrossSales: document.getElementById("reconGrossSales"),
+    reconDiscounts: document.getElementById("reconDiscounts"),
+    reconInvoiceSales: document.getElementById("reconInvoiceSales"),
+    reconReturns: document.getElementById("reconReturns"),
+    reconAdjustmentCosts: document.getElementById("reconAdjustmentCosts"),
+    reconNetSales: document.getElementById("reconNetSales"),
+    reconSourceNote: document.getElementById("reconSourceNote"),
     kpiGrid: document.getElementById("kpiGrid"),
     kpiScaleGrid: document.getElementById("kpiScaleGrid"),
     kpiDemandGrid: document.getElementById("kpiDemandGrid"),
@@ -1464,6 +1478,7 @@
     const headline = scorecard.headline || {};
     const unit = scorecard.unit_economics || {};
     const growth = scorecard.growth_retention || {};
+    const reconciliation = scorecard.sales_reconciliation || {};
     const risk = scorecard.risk_indicators || {};
     const profitability = payload.profitability || {};
     const minimumMargin = asNumber(profitability.minimum_margin_pct);
@@ -1486,6 +1501,27 @@
     setText(els.scoreProfitPerLb, unit.profit_per_lb === null || unit.profit_per_lb === undefined ? "Restricted" : formatByFmt("currency", unit.profit_per_lb));
     setText(els.scoreNewShare, formatByFmt("percent", growth.new_customer_share_pct));
     setText(els.scoreReturningShare, formatByFmt("percent", growth.returning_customer_share_pct));
+    setText(els.scoreRetention, formatByFmt("percent", growth.retention_rate_pct));
+    setText(els.scoreLogoChurn, formatByFmt("percent", growth.logo_churn_rate_pct));
+    setText(els.scoreRevenueChurn, formatByFmt("percent", growth.revenue_churn_rate_pct));
+    setText(els.scoreNrr, formatByFmt("percent", growth.nrr_pct));
+    setText(els.scoreArpa, formatByFmt("currency", growth.arpa));
+    setText(
+      els.scoreArpaCohorts,
+      growth.new_arpa === null || growth.new_arpa === undefined || growth.established_arpa === null || growth.established_arpa === undefined
+        ? "n/a"
+        : `${formatByFmt("currency", growth.new_arpa)} / ${formatByFmt("currency", growth.established_arpa)}`
+    );
+    setText(els.reconGrossSales, formatByFmt("currency", reconciliation.gross_sales));
+    setText(els.reconDiscounts, formatByFmt("currency", reconciliation.discounts));
+    setText(els.reconInvoiceSales, formatByFmt("currency", reconciliation.invoice_sales));
+    setText(els.reconReturns, formatByFmt("currency", reconciliation.returns));
+    setText(els.reconAdjustmentCosts, formatByFmt("currency", reconciliation.adjustment_costs));
+    setText(els.reconNetSales, formatByFmt("currency", reconciliation.net_sales));
+    setText(els.salesBasisNote, reconciliation.basis_note || "Gross-to-net components are unavailable for this source snapshot.");
+    if (els.reconSourceNote && reconciliation.return_count !== null && reconciliation.return_count !== undefined) {
+      els.reconSourceNote.textContent = `${formatByFmt("number", reconciliation.return_count)} approved returns matched to orders in this scope. Discount and handling costs are explicit source fields.`;
+    }
     if (els.scoreConcentration) {
       const top1 = risk.top1_customer_share_pct;
       const hhi = risk.customer_hhi;
@@ -2671,7 +2707,10 @@
     const qualityScore = asNumber(model.quality_score);
     const forecastability = asNumber(model.forecastability_score ?? diagnostics.forecastability_score);
     const smape = asNumber(model.smape);
+    const mape = asNumber(model.mape);
     const wape = asNumber(model.wape);
+    const bias = asNumber(model.bias);
+    const hitRate = asNumber(model.hit_rate_pct);
     const dirAcc = asNumber(model.directional_accuracy);
     const historyExcludedPoints = asNumber(diagnostics.history_excluded_points);
     const historyBasisLabel = diagnostics.history_basis_label || "Comparable history";
@@ -2707,10 +2746,12 @@
       els.forecastConfidenceDetail.textContent = confBits.join(" • ") || "Confidence and forecastability will appear here.";
     }
     if (els.forecastQualityValue) {
-      els.forecastQualityValue.textContent = qualityScore !== null ? `${fmtNumber0.format(qualityScore)}/100` : "-";
+      els.forecastQualityValue.textContent = mape !== null ? `MAPE ${fmtNumber1.format(mape)}%` : (qualityScore !== null ? `${fmtNumber0.format(qualityScore)}/100` : "-");
     }
     if (els.forecastQualityDetail) {
       const qualityBits = [];
+      if (bias !== null) qualityBits.push(`Bias ${bias >= 0 ? "+" : ""}${fmtNumber1.format(bias)}`);
+      if (hitRate !== null) qualityBits.push(`Within ±10% ${fmtNumber1.format(hitRate)}%`);
       if (smape !== null) qualityBits.push(`SMAPE ${fmtNumber1.format(smape)}%`);
       if (wape !== null) qualityBits.push(`WAPE ${fmtNumber1.format(wape)}%`);
       if (dirAcc !== null) qualityBits.push(`Direction ${fmtNumber0.format(dirAcc)}%`);
@@ -3613,4 +3654,60 @@
     if (document.visibilityState === "hidden") persistSnapshot();
   });
   bootstrap();
+})();
+
+/*
+ * Acquisition economics panel.
+ *
+ * A separate IIFE with its own fetch, on purpose. CAC needs the campaign layer
+ * and CLV:CAC needs the Customers page's governed CLV; computing either inside
+ * the overview bundle added ~5s to a request that already takes ~12s cold, and
+ * this page's cold start is the one that decides whether a reviewer waits. So
+ * the main payload renders first and this fills one panel afterwards.
+ *
+ * The panel stays hidden unless the fetch returns real numbers — an
+ * "acquisition economics" card showing four dashes is worse than no card.
+ */
+(() => {
+  "use strict";
+
+  const card = document.getElementById("acquisitionEconomicsCard");
+  if (!card) return;
+
+  const F = window.WAFormat || {};
+  const MISSING = F.MISSING || "—";
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const money = (v) => (num(v) == null ? MISSING : F.currency(v, { forceDecimals: false }));
+  const mult = (v) => (num(v) == null ? MISSING : `${F.decimal(v, { decimals: 2 })}×`);
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  fetch("/marketing/api/bundle", { credentials: "same-origin", headers: { Accept: "application/json" } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((payload) => {
+      if (!payload || payload.available === false) return;
+      const by = {};
+      (payload.kpis || []).forEach((k) => { by[k.key] = k.value; });
+      const clv = payload.totals?.average_clv;
+      if (num(by.cac) == null || num(clv) == null) return;
+
+      setText("acqCac", money(by.cac));
+      setText("acqClv", money(clv));
+      setText("acqClvCac", mult(by.clv_cac));
+      setText("acqPayback", num(by.cac_payback) == null
+        ? MISSING
+        : `${F.decimal(by.cac_payback, { decimals: 1 })} mo`);
+      setText("acqBasisNote",
+        `${payload.selected?.label || ""} acquisition economics. CLV is the 12-month discounted `
+        + "gross-profit figure from the Customers page, so the ratio is a first-year measure, not "
+        + "the lifetime basis the 3:1 benchmark assumes.");
+      setText("acqSourceNote",
+        `${payload.totals?.new_customers ?? 0} accounts won on `
+        + `${money(payload.totals?.total_acquisition_spend)} of marketing and acquisition selling spend. `
+        + "Full channel detail is on the Marketing page.");
+      card.hidden = false;
+    })
+    .catch(() => { /* panel simply stays hidden */ });
 })();

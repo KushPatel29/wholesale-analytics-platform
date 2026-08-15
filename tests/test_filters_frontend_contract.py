@@ -21,6 +21,8 @@ def test_filters_enhanced_frontend_contract(app):
         assert '"current_fm"' in body
         assert '"previous_fm"' in body
         assert '"fytd_comparison"' in body
+        assert '"fy2025"' in body
+        assert 'fy2025: { start: new Date(2024, FISCAL_START_MONTH_INDEX' in body
         assert "const getFiscalPeriods = (referenceDate = new Date()) => {" in body
         assert 'if (!state.applyInFlight && !state.applyAckTimer)' in body
         assert 'const readInlineSchemaPayload = () => {' in body

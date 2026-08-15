@@ -32,7 +32,7 @@ from app.core.exports import fmt_currency, fmt_percent
 # pins the payload against an unprojected read for exactly that reason.
 PLANNING_COLUMNS = [
     # identity and period
-    "Date", "OrderId", "CustomerId",
+    "Date", "OrderId", "CustomerId", "RegionName",
     # measures the KPI strip reads
     "WeightLb", "QtyShippedLb", "pack_weight_lb_sum", "CostPrice",
     # department, however this dataset spells it
@@ -286,4 +286,3 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
             "applied_filters": str(filters)
         }
     }
-

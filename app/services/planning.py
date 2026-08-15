@@ -26,11 +26,12 @@ Three ideas carry the page:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Sequence
 
 import pandas as pd
 
 from app.services import analytics_utils as au
+from app.services import metrics
 
 # A lane or vendor below this hits the watch list. Retail replenishment
 # generally runs a 95%+ case fill; 92% is deliberately permissive so the demo
@@ -48,6 +49,8 @@ CONCENTRATION_WARN_PCT = 45.0
 # Rows below this in a group make a percentage meaningless. A lane with four
 # deliveries that missed one is not "25% late" in any useful sense.
 MIN_ROWS_FOR_RATE = 25
+FORECAST_TOLERANCE_PCT = 10.0
+FORECAST_MIN_TRAINING_MONTHS = 4
 
 
 def _money(value: float) -> str:
@@ -401,6 +404,114 @@ def _department_column(frame: pd.DataFrame) -> str:
     return "ProteinType"
 
 
+def _monthly_revenue(frame: pd.DataFrame, group_column: str | None = None) -> pd.DataFrame:
+    if frame.empty or "Date" not in frame.columns:
+        return pd.DataFrame(columns=["month", "actual"])
+    revenue_col = au.revenue_column(frame)
+    if revenue_col not in frame.columns:
+        return pd.DataFrame(columns=["month", "actual"])
+    working = frame[["Date", revenue_col] + ([group_column] if group_column and group_column in frame.columns else [])].copy()
+    working["Date"] = pd.to_datetime(working["Date"], errors="coerce")
+    working["actual"] = au.to_numeric_safe(working[revenue_col])
+    working = working.dropna(subset=["Date"])
+    working["month"] = working["Date"].dt.to_period("M")
+    groupers = ([group_column] if group_column and group_column in working.columns else []) + ["month"]
+    return working.groupby(groupers, dropna=False)["actual"].sum().reset_index()
+
+
+def _rolling_origin_rows(monthly: pd.DataFrame, horizon: int = 1) -> List[Dict[str, Any]]:
+    """Honest backtest: each forecast sees only months available at its origin."""
+    if monthly.empty:
+        return []
+    series = monthly.groupby("month")["actual"].sum().sort_index()
+    if len(series) <= FORECAST_MIN_TRAINING_MONTHS + horizon - 1:
+        return []
+    months = list(series.index)
+    actuals = [float(series.loc[month]) for month in months]
+    rows: List[Dict[str, Any]] = []
+    for target_index in range(FORECAST_MIN_TRAINING_MONTHS + horizon - 1, len(months)):
+        origin_index = target_index - horizon
+        seasonal_index = target_index - 12
+        if seasonal_index >= 0 and seasonal_index <= origin_index:
+            forecast = actuals[seasonal_index]
+            method = "same month prior year"
+        else:
+            training = actuals[max(0, origin_index - 2): origin_index + 1]
+            if not training:
+                continue
+            forecast = sum(training) / len(training)
+            method = "trailing 3-month mean"
+        actual = actuals[target_index]
+        tolerance = FORECAST_TOLERANCE_PCT / 100.0
+        rows.append(
+            {
+                "period": str(months[target_index]),
+                "actual": actual,
+                "forecast": forecast,
+                "lower": forecast * (1.0 - tolerance),
+                "upper": forecast * (1.0 + tolerance),
+                "variance_pct": metrics.variance_pct(actual, forecast),
+                "horizon_months": horizon,
+                "method": method,
+            }
+        )
+    return rows
+
+
+def _score_rows(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    return metrics.forecast_accuracy_suite(
+        [row.get("actual") for row in rows],
+        [row.get("forecast") for row in rows],
+        tolerance_pct=FORECAST_TOLERANCE_PCT,
+    )
+
+
+def _forecast_by_dimension(frame: pd.DataFrame, column: str, *, limit: int = 10) -> List[Dict[str, Any]]:
+    monthly = _monthly_revenue(frame, column)
+    if monthly.empty or column not in monthly.columns:
+        return []
+    leaders = (
+        monthly.groupby(column, dropna=False)["actual"].sum().sort_values(ascending=False).head(limit).index
+    )
+    results: List[Dict[str, Any]] = []
+    for label in leaders:
+        group = monthly[monthly[column].fillna("Unknown") == ("Unknown" if pd.isna(label) else label)]
+        rows = _rolling_origin_rows(group, horizon=1)
+        if not rows:
+            continue
+        result = {"label": "Unknown" if pd.isna(label) else str(label), **_score_rows(rows)}
+        result["actual"] = sum(float(row["actual"]) for row in rows)
+        result["forecast"] = sum(float(row["forecast"]) for row in rows)
+        results.append(result)
+    results.sort(key=lambda row: (row.get("mape_pct") is None, -(row.get("actual") or 0)))
+    return results
+
+
+def build_forecast_accuracy(frame: pd.DataFrame) -> Dict[str, Any]:
+    """Rolling-origin forecast scorecard with no future-data leakage."""
+    monthly = _monthly_revenue(frame)
+    series = _rolling_origin_rows(monthly, horizon=1)
+    horizons = []
+    for horizon in (1, 2, 3):
+        rows = _rolling_origin_rows(monthly, horizon=horizon)
+        horizons.append({"horizon_months": horizon, **_score_rows(rows)})
+    product_column = next((c for c in ("SKU", "ProductName", "ProductId") if c in frame.columns), "SKU")
+    region_column = next((c for c in ("RegionName", "Region", "State") if c in frame.columns), "RegionName")
+    return {
+        "headline": _score_rows(series),
+        "series": series,
+        "by_horizon": horizons,
+        "by_sku": _forecast_by_dimension(frame, product_column),
+        "by_region": _forecast_by_dimension(frame, region_column),
+        "methodology": {
+            "backtest": "Rolling origin; each prediction uses only data available at its forecast origin.",
+            "model": "Same month prior year when available; otherwise trailing 3-month mean.",
+            "error_band": f"+/-{FORECAST_TOLERANCE_PCT:.0f}% hit-tolerance band around forecast.",
+            "zero_actuals": "Excluded from percentage errors and hit-rate; retained in signed bias.",
+        },
+    }
+
+
 def build_planning(frame: pd.DataFrame) -> Dict[str, Any]:
     """The whole planner payload for one scoped, filtered frame."""
     dept_col = _department_column(frame)
@@ -433,6 +544,7 @@ def build_planning(frame: pd.DataFrame) -> Dict[str, Any]:
             "single_sourced_departments": sum(1 for row in concentration if row["concentrated"]),
         },
         "demand": demand,
+        "forecast_accuracy": build_forecast_accuracy(frame),
         "service_by_lane": lanes,
         "service_by_vendor": vendors,
         "matrix": matrix,

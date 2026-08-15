@@ -198,12 +198,17 @@
             {% if can_permission('page.overview.view') %}
             <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ static_page_url('planning/') if static_page_url else url_for('stakeholder_report.index') }}">Planning</a></li>
             {% endif %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint == 'pages.metric_catalogue' %}active{% endif %}" href="{{ static_page_url('metrics/') if static_page_url else url_for('pages.metric_catalogue') }}">Metrics</a></li>
             {% if can_permission('page.customers.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ static_page_url('customers/') if static_page_url else url_for('customers.index') }}">Customers</a></li>
             {% endif %}
             {% if can_permission('page.products.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ static_page_url('products/') if static_page_url else url_for('products.index') }}">Products</a></li>
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}" href="{{ static_page_url('inventory/') if static_page_url else url_for('inventory.index') }}">Inventory</a></li>
+            {% endif %}
+            {% if can_permission('data.cost.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('finance.') %}active{% endif %}" href="{{ static_page_url('finance/') if static_page_url else url_for('finance.index') }}">Finance</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('marketing.') %}active{% endif %}" href="{{ static_page_url('marketing/') if static_page_url else url_for('marketing.index') }}">Marketing</a></li>
             {% endif %}
             {% if can_permission('page.regions.view') %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ static_page_url('regions/') if static_page_url else url_for('regions.index') }}">Regions</a></li>

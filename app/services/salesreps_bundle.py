@@ -20,6 +20,7 @@ from app.services import fact_store
 from app.services import planning
 from app.services import filters_service
 from app.services import margin_rules
+from app.services import metrics
 from app.services import salesrep_ownership
 
 
@@ -676,6 +677,11 @@ def _sanitize_rollup_record(rec: Dict[str, Any]) -> Dict[str, Any]:
             target_margin_pct = _clean_optional(margin_rule.get("target_gross_margin_pct"))
     status = margin_rules.classify_margin_status(rec.get("margin_pct"), minimum_margin_pct, target_margin_pct)
     revenue = _clean_float(rec.get("revenue"))
+    quota = _clean_optional(rec.get("quota"))
+    starting_revenue = _clean_optional(rec.get("starting_revenue"))
+    expansion_revenue = _clean_optional(rec.get("expansion_revenue"))
+    contraction_revenue = _clean_optional(rec.get("contraction_revenue"))
+    churned_revenue = _clean_optional(rec.get("churned_revenue"))
     profit = _clean_optional(rec.get("profit"))
     invoice_count = _clean_int(
         rec.get("invoice_count") if rec.get("invoice_count") is not None else rec.get("orders")
@@ -700,6 +706,19 @@ def _sanitize_rollup_record(rec: Dict[str, Any]) -> Dict[str, Any]:
         "rep_name": rep_name,
         "rep_key": rec.get("rep_key") or rec.get("rep_id"),
         "revenue": revenue,
+        "quota": quota,
+        "quota_attainment_pct": metrics.quota_attainment(revenue, quota),
+        "starting_revenue": starting_revenue,
+        "new_revenue": _clean_optional(rec.get("new_revenue")),
+        "expansion_revenue": expansion_revenue,
+        "contraction_revenue": contraction_revenue,
+        "churned_revenue": churned_revenue,
+        "nrr_pct": metrics.net_revenue_retention(
+            starting_revenue,
+            expansion_revenue,
+            contraction_revenue,
+            churned_revenue,
+        ),
         "cost": _clean_optional(rec.get("cost")),
         "profit": profit,
         "prior_revenue": _clean_optional(rec.get("prior_revenue")),
@@ -1379,6 +1398,7 @@ def _attributed_salesrep_ctes(
     email_expr = cols_map.get("email_expr") or "NULL::VARCHAR"
     lat_expr = cols_map.get("lat_expr") or "NULL::DOUBLE"
     lng_expr = cols_map.get("lng_expr") or "NULL::DOUBLE"
+    monthly_quota_expr = "CAST(\"MonthlyQuota\" AS DOUBLE)" if "MonthlyQuota" in cols else "NULL::DOUBLE"
 
     return f"""
         fact_scope AS (
@@ -1411,6 +1431,7 @@ def _attributed_salesrep_ctes(
                 END AS profit,
                 CAST({qty_expr} AS DOUBLE) AS units,
                 CAST({weight_expr} AS DOUBLE) AS weight_lb,
+                {monthly_quota_expr} AS monthly_quota,
                 ({minimum_margin_expr}) AS minimum_margin_pct_rule,
                 ({target_margin_expr}) AS target_margin_pct_rule,
                 {missing_packs_expr} AS missing_packs
@@ -2194,6 +2215,16 @@ def _rollup_sql(cte_sql: str) -> str:
             FROM attributed_base
             GROUP BY rep_key
         ),
+        quota_monthly AS (
+            SELECT rep_key, DATE_TRUNC('month', order_date) AS quota_month, MAX(monthly_quota) AS monthly_quota
+            FROM attributed_base
+            WHERE is_current_window = 1 AND monthly_quota IS NOT NULL
+            GROUP BY 1, 2
+        ),
+        rep_quota AS (
+            SELECT rep_key, SUM(monthly_quota) AS quota
+            FROM quota_monthly GROUP BY 1
+        ),
         protein_penetration AS (
             SELECT 
                 rep_key,
@@ -2244,6 +2275,17 @@ def _rollup_sql(cte_sql: str) -> str:
                 COUNT(DISTINCT CASE WHEN revenue > 0 AND current_owner_id = rep_key THEN customer_id END) AS current_owned_customers,
                 COUNT(DISTINCT CASE WHEN revenue > 0 AND current_owner_id = rep_key AND inherited_flag = 1 THEN customer_id END) AS inherited_customers,
                 COUNT(DISTINCT CASE WHEN revenue > 0 AND owner_missing = 1 THEN customer_id END) AS unassigned_customers
+            FROM customer_rollup
+            GROUP BY rep_key
+        ),
+        book_movement AS (
+            SELECT
+                rep_key,
+                SUM(CASE WHEN prior_revenue > 0 THEN prior_revenue ELSE 0 END) AS starting_revenue,
+                SUM(CASE WHEN prior_revenue <= 0 AND revenue > 0 THEN revenue ELSE 0 END) AS new_revenue,
+                SUM(CASE WHEN prior_revenue > 0 AND revenue > prior_revenue THEN revenue - prior_revenue ELSE 0 END) AS expansion_revenue,
+                SUM(CASE WHEN revenue > 0 AND prior_revenue > revenue THEN prior_revenue - revenue ELSE 0 END) AS contraction_revenue,
+                SUM(CASE WHEN prior_revenue > 0 AND revenue <= 0 THEN prior_revenue ELSE 0 END) AS churned_revenue
             FROM customer_rollup
             GROUP BY rep_key
         ),
@@ -2327,6 +2369,13 @@ def _rollup_sql(cte_sql: str) -> str:
             rt.rep_key,
             rt.rep_name,
             rt.revenue,
+            rq.quota,
+            CASE WHEN rq.quota > 0 THEN rt.revenue / rq.quota * 100 ELSE NULL END AS quota_attainment_pct,
+            bm.starting_revenue,
+            bm.new_revenue,
+            bm.expansion_revenue,
+            bm.contraction_revenue,
+            bm.churned_revenue,
             rt.cost,
             rt.profit,
             rt.leakage_revenue,
@@ -2446,6 +2495,8 @@ def _rollup_sql(cte_sql: str) -> str:
             tp.protein_family AS top_protein_family,
             tp.revenue AS top_protein_revenue
         FROM rep_totals rt
+        LEFT JOIN rep_quota rq ON rq.rep_key = rt.rep_key
+        LEFT JOIN book_movement bm ON bm.rep_key = rt.rep_key
         LEFT JOIN concentration conc ON conc.rep_key = rt.rep_key
         LEFT JOIN customer_stats cs ON cs.rep_key = rt.rep_key
         LEFT JOIN territory_summary ts ON ts.rep_key = rt.rep_key
@@ -2477,9 +2528,16 @@ def _kpis_sql(cte_sql: str) -> str:
             LEFT JOIN customer_pulse cp ON cp.customer_id = ab.customer_id
             WHERE ab.customer_id IS NOT NULL AND ab.customer_id <> ''
             GROUP BY 1
+        ),
+        quota_monthly AS (
+            SELECT rep_key, DATE_TRUNC('month', order_date) AS quota_month, MAX(monthly_quota) AS monthly_quota
+            FROM attributed_base
+            WHERE is_current_window = 1 AND monthly_quota IS NOT NULL
+            GROUP BY 1, 2
         )
         SELECT
             SUM(CASE WHEN ab.is_current_window = 1 THEN ab.revenue ELSE 0 END) AS revenue,
+            (SELECT SUM(monthly_quota) FROM quota_monthly) AS quota,
             SUM(CASE WHEN ab.is_current_window = 1 THEN ab.cost END) AS cost,
             SUM(CASE WHEN ab.is_current_window = 1 THEN ab.profit END) AS profit,
             SUM(CASE WHEN ab.is_current_window = 1 AND ab.is_margin_leakage = 1 THEN ab.revenue ELSE 0 END) AS leakage_revenue,
@@ -3719,6 +3777,8 @@ def _salesrep_page_insights(kpis: Dict[str, Any], rows: List[Dict[str, Any]]) ->
         metric_val = _clean_optional(row.get(metric_key))
         if metric_val is None:
             return
+        if key == "highest_inherited_exposure" and metric_val <= 0:
+            return
         if formatter == "pct":
             value = metric_val
             display = f"{metric_val:+.1f}%"
@@ -3890,6 +3950,7 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
 
     krow = kpis_df.iloc[0] if not kpis_df.empty else {}
     revenue = _clean_float(krow.get("revenue"))
+    quota = _clean_optional(krow.get("quota"))
     cost = _clean_optional(krow.get("cost"))
     profit = _clean_optional(krow.get("profit"))
     margin_pct = _clean_optional(krow.get("margin_pct"))
@@ -3942,6 +4003,8 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
 
     kpis = {
         "revenue": revenue,
+        "quota": quota,
+        "quota_attainment_pct": metrics.quota_attainment(revenue, quota),
         "cost": cost,
         "profit": profit,
         "margin_pct": margin_pct,
@@ -4093,6 +4156,21 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
         }
 
     rollup_rows = [_sanitize_rollup_record(rec) for rec in _rollup_records(rollup_df)]
+    scored_quota_rows = [row for row in rollup_rows if row.get("quota_attainment_pct") is not None]
+    kpis["reps_at_or_above_quota"] = sum(
+        1 for row in scored_quota_rows if float(row["quota_attainment_pct"]) >= 100.0
+    )
+    kpis["reps_scored_for_quota"] = len(scored_quota_rows)
+    kpis["reps_at_or_above_quota_pct"] = metrics.quota_attainment(
+        kpis["reps_at_or_above_quota"], len(scored_quota_rows)
+    )
+    movement_rows = [row for row in rollup_rows if row.get("starting_revenue") is not None]
+    kpis["nrr_pct"] = metrics.net_revenue_retention(
+        sum(float(row.get("starting_revenue") or 0.0) for row in movement_rows),
+        sum(float(row.get("expansion_revenue") or 0.0) for row in movement_rows),
+        sum(float(row.get("contraction_revenue") or 0.0) for row in movement_rows),
+        sum(float(row.get("churned_revenue") or 0.0) for row in movement_rows),
+    ) if movement_rows else None
     rank_change_map = _build_rank_change_map(rollup_rows)
     for row in rollup_rows:
         rep_id = str(row.get("rep_id") or row.get("rep_key") or "")
@@ -4112,6 +4190,20 @@ def build_salesreps_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Di
     }
     charts: Dict[str, Any] = {}
     if rollup_rows:
+        charts["quota_attainment"] = [
+            {
+                "rep_id": row.get("rep_id"),
+                "rep_name": row.get("rep_name"),
+                "sales": row.get("revenue"),
+                "quota": row.get("quota"),
+                "attainment_pct": row.get("quota_attainment_pct"),
+            }
+            for row in sorted(
+                scored_quota_rows,
+                key=lambda value: float(value.get("quota_attainment_pct") or 0),
+                reverse=True,
+            )
+        ]
         top_reps = _sort_rollup_records(rollup_rows, "revenue", "desc")[:10]
         charts["top_reps"] = [
             {

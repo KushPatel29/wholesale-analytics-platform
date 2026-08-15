@@ -58,7 +58,7 @@
       <div class="col-12 col-lg-7">
         <div><strong>Definition</strong>: {{ clv_defs.get('overview') or 'Expected gross profit over selected horizon using observed behavior.' }}</div>
         <div><strong>Formula</strong>: {{ clv_defs.get('formula') or 'CLV = (AOV × Orders/Year × BasisFactor) × HorizonYears × RetentionFactor × DiscountFactor.' }}</div>
-        <div><strong>Inputs</strong>: AOV, Frequency, Margin basis, Retention model, Discount rate.</div>
+        <div><strong>Inputs</strong>: Average transaction value, transactions/year, horizon years, observed retention proxy, profit/revenue basis, and discount rate.</div>
       </div>
       <div class="col-12 col-lg-5">
         <div><strong>Monetary basis</strong>: {{ settings.get('monetary_basis') or 'revenue' }}</div>

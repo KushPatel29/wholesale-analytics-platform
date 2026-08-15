@@ -1385,6 +1385,12 @@
                 <div class="label">Margin risk</div>
                 <div class="value" id="scoreMarginRisk">-</div>
               </article>
+              <article class="hero-side-metric"><div class="label">Retention</div><div class="value" id="scoreRetention">-</div></article>
+              <article class="hero-side-metric"><div class="label">Logo churn</div><div class="value" id="scoreLogoChurn">-</div></article>
+              <article class="hero-side-metric"><div class="label">Revenue churn</div><div class="value" id="scoreRevenueChurn">-</div></article>
+              <article class="hero-side-metric"><div class="label">NRR</div><div class="value" id="scoreNrr">-</div></article>
+              <article class="hero-side-metric"><div class="label">ARPA</div><div class="value" id="scoreArpa">-</div></article>
+              <article class="hero-side-metric"><div class="label">New / established ARPA</div><div class="value" id="scoreArpaCohorts">-</div></article>
             </div>
           </div>
 
@@ -1411,6 +1417,48 @@
             </div>
           </aside>
         </div>
+      </div>
+    </section>
+
+    <section class="overview-panel" id="salesReconciliationCard">
+      <div class="panel-header">
+        <div class="panel-eyebrow">Revenue basis</div>
+        <h2 class="panel-title">Gross-to-net sales reconciliation</h2>
+        <div class="panel-subtitle" id="salesBasisNote">Revenue basis is loading.</div>
+      </div>
+      <div class="panel-body">
+        <div class="command-secondary-grid">
+          <article class="hero-side-metric"><div class="label">Gross sales</div><div class="value" id="reconGrossSales">-</div></article>
+          <article class="hero-side-metric"><div class="label">Less discounts</div><div class="value" id="reconDiscounts">-</div></article>
+          <article class="hero-side-metric"><div class="label">Invoice sales</div><div class="value" id="reconInvoiceSales">-</div></article>
+          <article class="hero-side-metric"><div class="label">Less approved returns</div><div class="value" id="reconReturns">-</div></article>
+          <article class="hero-side-metric"><div class="label">Less related costs</div><div class="value" id="reconAdjustmentCosts">-</div></article>
+          <article class="hero-side-metric"><div class="label">Net sales</div><div class="value" id="reconNetSales">-</div></article>
+        </div>
+        <div class="small text-muted mt-3" id="reconSourceNote">Approved return credits are matched to orders in the selected fact scope; discount and handling costs are explicit source fields.</div>
+      </div>
+    </section>
+
+    {# Acquisition economics. Filled from /marketing/api/bundle *after* the main
+       payload renders, deliberately: computing CLV server-side inside the
+       overview bundle added five seconds to a request that already takes
+       twelve, and this page's cold start is the one that matters most. The
+       panel stays hidden until that secondary fetch answers, so it is never a
+       row of dashes. #}
+    <section class="overview-panel" id="acquisitionEconomicsCard" hidden>
+      <div class="panel-header">
+        <div class="panel-eyebrow">Acquisition economics</div>
+        <h2 class="panel-title">What an account costs to win</h2>
+        <div class="panel-subtitle" id="acqBasisNote">Acquisition economics are loading.</div>
+      </div>
+      <div class="panel-body">
+        <div class="command-secondary-grid">
+          <article class="hero-side-metric"><div class="label">CAC</div><div class="value" id="acqCac">-</div></article>
+          <article class="hero-side-metric"><div class="label">CLV (12-month)</div><div class="value" id="acqClv">-</div></article>
+          <article class="hero-side-metric"><div class="label">CLV:CAC</div><div class="value" id="acqClvCac">-</div></article>
+          <article class="hero-side-metric"><div class="label">CAC payback</div><div class="value" id="acqPayback">-</div></article>
+        </div>
+        <div class="small text-muted mt-3" id="acqSourceNote">&nbsp;</div>
       </div>
     </section>
 
@@ -1615,5 +1663,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js', v='20260814-trend-label-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview.js', v='20260815-metrics-gap-1') }}" defer></script>
 {% endblock %}

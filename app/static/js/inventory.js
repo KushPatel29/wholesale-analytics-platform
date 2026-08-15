@@ -40,6 +40,9 @@
     text("inventoryExcess", fmt(kpi.excess_skus));
     text("inventoryBackorders", fmt(kpi.backorder_units));
     text("inventoryHolding", money(kpi.holding_cost_annual));
+    text("inventoryGmroi", one(kpi.gmroi));
+    text("inventorySellThrough", kpi.sell_through_pct == null ? "—" : `${one(kpi.sell_through_pct)}%`);
+    text("inventoryShrink", kpi.shrink_pct == null ? "—" : `${one(kpi.shrink_pct)}%`);
     text("inventoryWindow", kpi.start && kpi.end ? window.WAFormat.dayRange(kpi.start, kpi.end) : "Active filtered window");
   };
 
@@ -102,8 +105,8 @@
     body.innerHTML = rows.length ? rows.map((row) => `<tr>
       <td><div class="inventory-product-name">${escapeHtml(row.product_name)}<small>${escapeHtml(row.product_id)} · ${escapeHtml(row.supplier)}</small></div></td>
       <td><span class="inventory-status" data-key="${escapeHtml(row.posture_key)}">${escapeHtml(row.posture)}</span></td>
-      <td><strong>${escapeHtml(row.abc_class)}</strong></td><td class="text-end">${fmt(row.on_hand_qty)}</td><td class="text-end">${one(row.days_supply)}</td><td class="text-end">${one(row.annual_turns)}</td><td class="text-end">${one(row.svsi)}</td><td class="text-end">${money(row.inventory_value)}</td><td>${escapeHtml(actionFor(row))}</td>
-    </tr>`).join("") : '<tr><td colspan="9" class="text-center text-muted py-5">No inventory rows match this view.</td></tr>';
+      <td><strong>${escapeHtml(row.abc_class)}</strong></td><td class="text-end">${fmt(row.on_hand_qty)}</td><td class="text-end">${one(row.days_supply)}</td><td class="text-end">${one(row.annual_turns)}</td><td class="text-end">${one(row.gmroi)}</td><td class="text-end">${row.sell_through_pct == null ? "—" : `${one(row.sell_through_pct)}%`}</td><td class="text-end">${row.shrink_pct == null ? "—" : `${one(row.shrink_pct)}%`}</td><td class="text-end">${one(row.svsi)}</td><td class="text-end">${money(row.inventory_value)}</td><td>${escapeHtml(actionFor(row))}</td>
+    </tr>`).join("") : '<tr><td colspan="12" class="text-center text-muted py-5">No inventory rows match this view.</td></tr>';
     const totalPages = Math.max(1, Math.ceil(num(table.total) / num(table.page_size || state.pageSize)));
     state.page = num(table.page) || 1;
     text("inventoryTableStatus", `${fmt(table.total)} SKUs in the current view`);
@@ -407,8 +410,8 @@
   const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   const exportCsv = () => {
     const rows = state.payload?.table?.rows || [];
-    const header = ["SKU","Product","Supplier","Posture","ABC","OnHandQty","DaysOfSupply","AnnualTurns","SVSI","InventoryValue","SuggestedBuyUnits","Action"];
-    const lines = [header, ...rows.map((row) => [row.product_id,row.product_name,row.supplier,row.posture,row.abc_class,row.on_hand_qty,row.days_supply,row.annual_turns,row.svsi,row.inventory_value,row.suggested_buy_units,actionFor(row)])].map((row) => row.map(csvCell).join(","));
+    const header = ["SKU","Product","Supplier","Posture","ABC","OnHandQty","DaysOfSupply","AnnualTurns","GMROI","SellThroughPct","ShrinkPct","SVSI","InventoryValue","SuggestedBuyUnits","Action"];
+    const lines = [header, ...rows.map((row) => [row.product_id,row.product_name,row.supplier,row.posture,row.abc_class,row.on_hand_qty,row.days_supply,row.annual_turns,row.gmroi,row.sell_through_pct,row.shrink_pct,row.svsi,row.inventory_value,row.suggested_buy_units,actionFor(row)])].map((row) => row.map(csvCell).join(","));
     const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "inventory_analysis.csv"; link.click(); URL.revokeObjectURL(url);
   };

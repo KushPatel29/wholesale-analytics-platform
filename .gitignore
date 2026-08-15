@@ -90,3 +90,11 @@ test-results/
 
 # Static prerendered sites (build artefacts of build_static.py)
 /dist*/
+
+# Local working scratch. These are session artefacts, not project files: the
+# live-*.tmp.html captures, the ad-hoc reports/ output, and the working notes a
+# session leaves for the next one. This is a public portfolio repo and none of
+# it is meant for a reader.
+/live-*.tmp.html
+/reports/
+/NEXT_SESSION_PROMPT.md

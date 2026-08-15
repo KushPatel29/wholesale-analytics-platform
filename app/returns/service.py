@@ -22,7 +22,7 @@ from werkzeug.utils import secure_filename
 from app.cache import cache
 from app.core.exports import dataframe_to_csv_response, dataframes_to_xlsx_response
 from app.core.access_policy import get_current_scope, scope_for_user
-from app.services import fact_store
+from app.services import fact_store, metrics
 from app.services.mailer import send_email
 
 from . import orders as orders_provider
@@ -2156,6 +2156,13 @@ def _analytics_frames(
                 "date_submitted": pd.to_datetime(row.date_submitted or row.created_at),
                 "wh_approved_at": pd.to_datetime(row.wh_approved_at),
                 "mgr_approved_at": pd.to_datetime(row.mgr_approved_at),
+                "closed_at": pd.to_datetime(
+                    row.fin_cleared_at
+                    or row.rejected_at
+                    or row.mgr_approved_at
+                    or (row.updated_at if row.status in {STATUS_COMPLETED, STATUS_APPROVED, STATUS_REJECTED} else None)
+                ),
+                "return_handling_cost": loads_json(row.metadata_json, {}).get("return_handling_cost"),
                 "total_credit_amount": float(row.total_credit_amount or 0),
                 "total_weight_lb": float(row.total_weight_lb or 0),
                 "total_packs": int(row.total_packs or 0),
@@ -2484,6 +2491,87 @@ def _analytics_cache_key(
     return f"returns:analytics:v1:{user_id}:{scope_hash}:{start}:{end}"
 
 
+def _returns_commercial_summary(
+    headers: pd.DataFrame,
+    *,
+    from_date: str | None,
+    to_date: str | None,
+) -> dict[str, Any]:
+    """Return rate, credit burden, and end-to-end resolution at governed grain."""
+    def optional_number(value: Any) -> float | None:
+        try:
+            parsed = float(value)
+            return parsed if pd.notna(parsed) else None
+        except (TypeError, ValueError):
+            return None
+
+    if headers.empty:
+        return {
+            "orders": None,
+            "net_sales": None,
+            "return_rate_pct": None,
+            "return_cost_rate_pct": None,
+            "avg_resolution_hours": None,
+            "resolved_returns": 0,
+        }
+    submitted = pd.to_datetime(headers["date_submitted"], errors="coerce").dropna()
+    requested_start = _coerce_datetime(from_date)
+    requested_end = _coerce_datetime(to_date)
+    start = requested_start.date() if requested_start else submitted.min().date()
+    end = requested_end.date() if requested_end else submitted.max().date()
+
+    sales: dict[str, Any] = {}
+    try:
+        cols = fact_store.list_columns()
+        gross_expr = "SUM(CAST(GrossSales AS DOUBLE))" if "GrossSales" in cols else "NULL::DOUBLE"
+        discount_expr = "SUM(CAST(DiscountAmount AS DOUBLE))" if "DiscountAmount" in cols else "NULL::DOUBLE"
+        discount_cost_expr = "SUM(CAST(DiscountHandlingCost AS DOUBLE))" if "DiscountHandlingCost" in cols else "NULL::DOUBLE"
+        frame = fact_store.execute_sql_df(
+            f"""
+            SELECT COUNT(DISTINCT OrderId) AS orders,
+                   {gross_expr} AS gross_sales,
+                   {discount_expr} AS discounts,
+                   {discount_cost_expr} AS discount_handling_cost
+            FROM fact
+            WHERE CAST(Date AS DATE) >= CAST(? AS DATE) AND CAST(Date AS DATE) <= CAST(? AS DATE)
+            """,
+            [start.isoformat(), end.isoformat()],
+            tag="returns.analytics.commercial_basis",
+        )
+        sales = frame.iloc[0].to_dict() if not frame.empty else {}
+    except Exception:
+        sales = {}
+
+    credits = float(pd.to_numeric(headers["total_credit_amount"], errors="coerce").fillna(0.0).sum())
+    handling = pd.to_numeric(headers.get("return_handling_cost"), errors="coerce")
+    return_handling_cost = (
+        float(handling.sum()) if len(handling.index) == len(headers.index) and not handling.isna().any() else None
+    )
+    discount_cost = optional_number(sales.get("discount_handling_cost"))
+    adjustment_costs = (
+        discount_cost + return_handling_cost
+        if discount_cost is not None and return_handling_cost is not None
+        else None
+    )
+    reconciliation = metrics.net_sales_reconciliation(
+        sales.get("gross_sales"), sales.get("discounts"), credits, adjustment_costs
+    )
+    pairs = [
+        (row.date_submitted, row.closed_at)
+        for row in headers.itertuples(index=False)
+        if pd.notna(getattr(row, "closed_at", None))
+    ]
+    orders = int(sales.get("orders")) if optional_number(sales.get("orders")) is not None else None
+    return {
+        "orders": orders,
+        "net_sales": reconciliation.get("net_sales"),
+        "return_rate_pct": metrics.return_rate(len(headers.index), orders),
+        "return_cost_rate_pct": metrics.return_cost_rate(credits, reconciliation.get("net_sales")),
+        "avg_resolution_hours": metrics.average_resolution_hours(pairs),
+        "resolved_returns": len(pairs),
+    }
+
+
 def returns_analytics_snapshot(
     *,
     actor_user: Any = None,
@@ -2505,12 +2593,14 @@ def returns_analytics_snapshot(
     total_credit_amount = sum(float(row.get("total_credit_amount") or 0) for row in header_records)
     total_weight_lb = sum(float(row.get("total_weight_lb") or 0) for row in header_records)
     total_packs = sum(int(row.get("total_packs") or 0) for row in header_records)
+    commercial = _returns_commercial_summary(headers, from_date=from_date, to_date=to_date)
     summary = {
         "total_returns": int(len(headers.index)) if not headers.empty else 0,
         "total_credit_amount": round(total_credit_amount, 2),
         "total_weight_lb": round(total_weight_lb, 3),
         "total_packs": int(total_packs),
             "supplier_credit_pct": round(float(frames["supplier_credit"]["supplier_credit_pct"].iloc[0]) * 100, 1) if not frames["supplier_credit"].empty else 0.0,
+        **commercial,
     }
     payload_out = {"summary": summary, "frames": frames}
     try:

@@ -14,6 +14,7 @@ from flask_login import current_user
 from app.cache import cache
 from app.services import analytics_utils as au
 from app.services import overview_v2 as ov2
+from app.services import metrics as metric_definitions
 from app.services.filters import FilterParams, filters_cache_key, normalize_filters
 from data.store import manifest_max_date, manifest_version
 
@@ -1953,6 +1954,8 @@ def _rolling_eval(
             "rmse_pct": None,
             "bias": None,
             "bias_pct": None,
+            "variance_pct": None,
+            "hit_rate_pct": None,
             "directional_accuracy": None,
             "validation_windows": 0,
             "resid_std": 0.0,
@@ -2009,6 +2012,8 @@ def _rolling_eval(
             "rmse_pct": None,
             "bias": None,
             "bias_pct": None,
+            "variance_pct": None,
+            "hit_rate_pct": None,
             "directional_accuracy": None,
             "validation_windows": 0,
             "resid_std": 0.0,
@@ -2020,15 +2025,15 @@ def _rolling_eval(
     err = pred_arr - actual_arr
     abs_err = np.abs(err)
     denom = np.abs(actual_arr) + np.abs(pred_arr)
-    nonzero = np.abs(actual_arr) > 1e-9
     mean_abs_actual = max(_safe_mean_abs(actual_arr), 1e-6)
     mae = _weighted_mean(abs_err, weight_arr)
     rmse = float(np.sqrt(_weighted_mean(np.square(err), weight_arr) or 0.0))
     smape = _weighted_mean((2.0 * np.abs(actual_arr - pred_arr) / np.where(denom == 0, 1.0, denom)) * 100.0, weight_arr) if np.any(denom) else 0.0
-    mape = _weighted_mean((np.abs((actual_arr[nonzero] - pred_arr[nonzero]) / actual_arr[nonzero])) * 100.0, weight_arr[nonzero]) if np.any(nonzero) else None
+    governed_accuracy = metric_definitions.forecast_accuracy_suite(actuals, preds, tolerance_pct=10.0)
+    mape = governed_accuracy.get("mape_pct")
     total_actual = float(np.sum(np.abs(actual_arr) * weight_arr))
     wape = float(np.sum(abs_err * weight_arr) / total_actual * 100.0) if total_actual > 0 else None
-    bias = _weighted_mean(err, weight_arr)
+    bias = governed_accuracy.get("bias")
     bias_pct = float(np.sum(err * weight_arr) / total_actual * 100.0) if total_actual > 0 else None
     direction_acc = float(np.mean(direction_hits)) if direction_hits else None
     return {
@@ -2041,6 +2046,8 @@ def _rolling_eval(
         "rmse_pct": (float(rmse) / mean_abs_actual * 100.0) if rmse is not None else None,
         "bias": bias,
         "bias_pct": bias_pct,
+        "variance_pct": governed_accuracy.get("variance_pct"),
+        "hit_rate_pct": governed_accuracy.get("hit_rate_pct"),
         "directional_accuracy": direction_acc,
         "validation_windows": int(len(direction_hits)),
         "resid_std": float(np.std(np.asarray(residuals, dtype=float), ddof=1)) if len(residuals) > 1 else 0.0,
@@ -3000,7 +3007,10 @@ def forecast_metric_v2(
         "wape": selected.get("wape"),
         "mae": selected.get("mae"),
         "rmse": selected.get("rmse"),
+        "bias": selected.get("bias"),
         "bias_pct": selected.get("bias_pct"),
+        "variance_pct": selected.get("variance_pct"),
+        "hit_rate_pct": selected.get("hit_rate_pct"),
         "directional_accuracy": selected.get("directional_accuracy"),
         "quality_score": selected.get("quality_score"),
     }

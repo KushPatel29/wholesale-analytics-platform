@@ -56,6 +56,30 @@
     </div>
   </div>
 
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <div class="text-muted small">Return Rate <span class="badge text-bg-light">logo / orders</span></div>
+        <div class="display-6">{{ '%.1f%%'|format(analytics.summary.get('return_rate_pct')) if analytics.summary.get('return_rate_pct') is not none else '—' }}</div>
+        <div class="small text-muted">{{ analytics.summary.get('total_returns', 0) }} returns across {{ analytics.summary.get('orders') if analytics.summary.get('orders') is not none else 'an unavailable order base' }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <div class="text-muted small">Return Cost Rate <span class="badge text-bg-light">net sales basis</span></div>
+        <div class="display-6">{{ '%.1f%%'|format(analytics.summary.get('return_cost_rate_pct')) if analytics.summary.get('return_cost_rate_pct') is not none else '—' }}</div>
+        <div class="small text-muted">Credit value ÷ net sales; withheld if gross-to-net inputs are incomplete.</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <div class="text-muted small">Average Resolution</div>
+        <div class="display-6">{{ '%.1f h'|format(analytics.summary.get('avg_resolution_hours')) if analytics.summary.get('avg_resolution_hours') is not none else '—' }}</div>
+        <div class="small text-muted">Opened to closed across {{ analytics.summary.get('resolved_returns', 0) }} resolved returns.</div>
+      </div></div>
+    </div>
+  </div>
+
   <div class="row g-4">
     <div class="col-xl-6">
       <div class="card shadow-sm border-0 mb-4">

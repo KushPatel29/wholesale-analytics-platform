@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable, Mapping, Sequence
@@ -483,7 +484,23 @@ def _parse_float(source: Any, keys: Iterable[str]) -> float | None:
 
 def _is_fiscal_preset(preset: Any) -> bool:
     token = str(preset or "").strip().lower()
-    return token in _FISCAL_PRESET_TOKENS
+    return token in _FISCAL_PRESET_TOKENS or bool(re.fullmatch(r"fy\d{4}", token))
+
+
+def _fixed_fiscal_year_range(token: str) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    """Return the canonical Oct-Sep range for a labelled fiscal year."""
+    match = re.fullmatch(r"fy(\d{4})", str(token or "").strip().lower())
+    if not match:
+        return None
+    end_year = int(match.group(1))
+    start_year = end_year if FISCAL_YEAR_START_MONTH == 1 else end_year - 1
+    start = pd.Timestamp(
+        year=start_year,
+        month=FISCAL_YEAR_START_MONTH,
+        day=FISCAL_YEAR_START_DAY,
+    )
+    end = (start + pd.DateOffset(years=1) - pd.Timedelta(days=1)).normalize()
+    return start, end
 
 
 def _normalize_date_type(value: Any, *, preset: Any = None) -> str | None:
@@ -679,6 +696,12 @@ def _preset_to_range(
     start: pd.Timestamp | None = None
     end: pd.Timestamp | None = None
     normalized_date_type = _normalize_date_type(date_type, preset=token)
+    fixed_fiscal_range = _fixed_fiscal_year_range(token)
+    if fixed_fiscal_range is not None:
+        start, end = fixed_fiscal_range
+        if start < _MIN_DEFAULT_START:
+            start = _MIN_DEFAULT_START
+        return start, end
     if _is_fiscal_preset(token) or normalized_date_type == FISCAL_DATE_TYPE:
         fiscal_periods = get_fiscal_periods(now)
         fiscal_period = fiscal_periods.get(token)
@@ -731,12 +754,6 @@ def _preset_to_range(
         end = (start + pd.DateOffset(months=3) - pd.Timedelta(days=1)).normalize()
     elif token in {"custom"}:
         return None, None
-    elif token == "fy2025":
-        start = pd.Timestamp(year=2024, month=4, day=1)
-        end = pd.Timestamp(year=2025, month=3, day=31)
-    elif token == "fy2024":
-        start = pd.Timestamp(year=2023, month=4, day=1)
-        end = pd.Timestamp(year=2024, month=3, day=31)
     elif token in {"all", "all_time", "__all__", "*"}:
         start, end = None, None
     else:
@@ -1366,8 +1383,8 @@ _PRESET_LABELS = {
     "current_fm": "Current FM",
     "previous_fm": "Previous FM",
     "fytd_comparison": "FYTD Comparison",
-    "fy2025": "FY 2025 (Apr-Mar)",
-    "fy2024": "FY 2024 (Apr-Mar)",
+    "fy2025": "FY 2025 (Oct 2024-Sep 2025)",
+    "fy2024": "FY 2024 (Oct 2023-Sep 2024)",
     "mtd": "Month to Date",
     "month_to_date": "Month to Date",
     "qtd": "Quarter to Date",

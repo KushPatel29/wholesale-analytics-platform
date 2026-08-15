@@ -45,6 +45,8 @@ def register_blueprints(app: Flask) -> None:
     from .blueprints.customers import bp as customers_bp
     from .blueprints.products import bp as products_bp
     from .blueprints.inventory import bp as inventory_bp
+    from .blueprints.finance import bp as finance_bp
+    from .blueprints.marketing import bp as marketing_bp
     from .blueprints.regions import bp as regions_bp
     from .blueprints.suppliers import bp as suppliers_bp
     from .blueprints.labor import bp as labor_bp
@@ -90,6 +92,8 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(customers_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(inventory_bp)
+    app.register_blueprint(finance_bp)
+    app.register_blueprint(marketing_bp)
     app.register_blueprint(regions_bp)
     app.register_blueprint(suppliers_bp)
     if bool(app.config.get("LABOR_ANALYTICS_ENABLED", True)):
@@ -305,6 +309,9 @@ def init_extensions(app: Flask) -> None:
             "/labor/": "labor/",
             "/salesreps/": "salesreps/",
             "/planning/": "planning/",
+            "/finance/": "finance/",
+            "/marketing/": "marketing/",
+            "/metrics/": "metrics/",
         }
         suffix = workspaces.get(request.path)
         if suffix is None:

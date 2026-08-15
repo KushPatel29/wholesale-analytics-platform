@@ -59,15 +59,26 @@ jobs:
           python manage.py init-auth-db
           python manage.py seed-demo-users
           python manage.py build-products-parquet || echo "products parquet skipped"
+          # Order matters. The finance layer reads monthly revenue and COGS out
+          # of the fact dataset above, and the marketing layer reads both the
+          # fact dataset (for new-customer counts) and the finance layer (for the
+          # marketing expense line its campaign spend must reconcile to).
+          python -m seed.generate_synthetic_finance
+          python -m seed.generate_synthetic_marketing
           ENV=development FLASK_ENV=development \
             python -m seed.generate_synthetic_returns --count 140 --replace
 
-      - name: Fail if the labor dataset is missing
-        # The symptom is a page that renders and says "n/a", so assert the file
-        # rather than trusting the build to notice.
+      - name: Fail if a seeded dataset is missing
+        # The symptom is always a page that renders and says "n/a" or "not
+        # built", so assert the files rather than trusting the build to notice.
+        # This guard exists because the Labor page shipped empty for weeks.
         run: |
           test -s cache/labor/fact_dataset/labor_demo.parquet \
             || (echo "labor parquet was not generated" && exit 1)
+          test -s cache/finance/fact_dataset/finance_demo.parquet \
+            || (echo "finance parquet was not generated" && exit 1)
+          test -s cache/marketing/fact_dataset/marketing_demo.parquet \
+            || (echo "marketing parquet was not generated" && exit 1)
 
       - name: Prerender every page and scope
         env:

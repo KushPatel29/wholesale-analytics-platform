@@ -16,6 +16,7 @@ from app.core.cache_manager import TTLValueCache
 from app.services import fact_schema as fs
 from app.services import fact_store
 from app.services import margin_rules
+from app.services import metrics
 
 
 def _safe_col(cols: set[str], *candidates: str) -> str | None:
@@ -711,7 +712,7 @@ def _segment_filter_value(segment_label: str) -> str:
 def _definition_payload() -> Dict[str, Any]:
     return {
         "kpis": {
-            "nrr": "Net Revenue Retention = current-window revenue from prior-window customers divided by prior-window revenue.",
+            "nrr": "Net Revenue Retention = (starting revenue + expansion - contraction - churned revenue) / starting revenue. New-account revenue is disclosed separately and excluded.",
             "grr": "Gross Revenue Retention = retained revenue from prior customers capped at prior spend, divided by prior-window revenue.",
             "growth_composition": "Composition of current-window customers split into New, Returning, and Reactivated.",
             "concentration": "Dependency on large customers using Top 1/Top 5 share and Herfindahl-Hirschman Index (HHI).",
@@ -736,8 +737,8 @@ def _definition_payload() -> Dict[str, Any]:
             "at_risk_revenue_stake": "At-risk revenue at stake = sum of prior-window revenue for At Risk / Can't Lose Them segments.",
         },
         "clv": {
-            "overview": "Expected value over selected horizon using observed order value, purchase frequency, and retention proxy.",
-            "formula": "CLV = (AOV × Orders/Year × BasisFactor) × HorizonYears × RetentionFactor × DiscountFactor.",
+            "overview": "Expected customer money value over a finite horizon. The default gross-profit basis embeds profit margin in the transaction value; revenue basis is explicitly a revenue-LTV proxy.",
+            "formula": "CLV = (Average transaction value × Transactions/year × Retention years) × Profit margin. Here Retention years = Horizon years × observed retention proxy × discount factor; gross-profit basis uses a 100% basis factor because margin is already embedded.",
             "recency": "Recency = days since last order in the selected window.",
             "frequency": "Frequency = distinct order count in lookback, normalized to monthly/yearly cadence.",
             "monetary_basis": "Monetary basis can be Revenue or Gross Profit (falls back to Revenue when cost coverage is low).",
@@ -1683,14 +1684,38 @@ def _clv_payload(
         retention_factor = np.clip((repeat_component + recency_component) / 2.0, 0.15, 1.0)
         churn_probability = 1.0 - retention_factor
 
-    annual_value = monetary_per_order * annual_orders
     horizon_years = max(0.25, float(settings["horizon_months"]) / 12.0)
     discount_rate = max(0.0, float(settings["discount_rate"]))
     discount_factor_h = 1.0 / ((1.0 + discount_rate) ** horizon_years) if discount_rate > 0 else 1.0
     discount_factor_12 = 1.0 / (1.0 + discount_rate) if discount_rate > 0 else 1.0
 
-    clv_12m = np.maximum(annual_value * retention_factor * discount_factor_12, 0.0)
-    clv_selected = np.maximum(annual_value * horizon_years * retention_factor * discount_factor_h, 0.0)
+    # Route the page through the governed standard CLV definition. On the
+    # default gross-profit basis, average transaction value is gross profit per
+    # order, so the profit-margin factor is 1.0. The finite forecast horizon,
+    # observed retention proxy, and discount factor together form expected
+    # retention years. Revenue basis remains an explicitly labelled revenue
+    # LTV proxy rather than silently pretending cost data exists.
+    clv_12m = np.asarray(
+        [
+            metrics.customer_lifetime_value(value, orders, retention * discount_factor_12, 1.0)
+            for value, orders, retention in zip(monetary_per_order, annual_orders, retention_factor)
+        ],
+        dtype="float64",
+    )
+    clv_selected = np.asarray(
+        [
+            metrics.customer_lifetime_value(
+                value,
+                orders,
+                horizon_years * retention * discount_factor_h,
+                1.0,
+            )
+            for value, orders, retention in zip(monetary_per_order, annual_orders, retention_factor)
+        ],
+        dtype="float64",
+    )
+    clv_12m = np.maximum(clv_12m, 0.0)
+    clv_selected = np.maximum(clv_selected, 0.0)
     clv_at_risk = np.maximum(clv_12m * churn_probability, 0.0)
 
     active["orders_per_year"] = annual_orders
@@ -2805,7 +2830,15 @@ def build_customers_bundle(
         }
 
     prior_total_revenue = _sum_numeric(merged.loc[prior_mask, "revenue_prior_window"])
-    retained_current_revenue = _sum_numeric(merged.loc[prior_mask, "revenue"])
+    starting_accounts = {
+        str(row.customer_id): _clean_float(row.revenue_prior_window)
+        for row in merged.loc[prior_mask, ["customer_id", "revenue_prior_window"]].itertuples(index=False)
+    }
+    ending_accounts = {
+        str(row.customer_id): _clean_float(row.revenue)
+        for row in merged.loc[current_mask, ["customer_id", "revenue"]].itertuples(index=False)
+    }
+    revenue_movement = metrics.revenue_movement(starting_accounts, ending_accounts)
     grr_numerator = 0.0
     if prior_total_revenue > 0:
         grr_numerator = float(
@@ -2816,7 +2849,8 @@ def build_customers_bundle(
                 )
             ).sum()
         )
-    nrr = (retained_current_revenue / prior_total_revenue) if prior_total_revenue else None
+    nrr_pct = revenue_movement.get("nrr_pct")
+    nrr = (float(nrr_pct) / 100.0) if nrr_pct is not None else None
     grr = (grr_numerator / prior_total_revenue) if prior_total_revenue else None
 
     prior_total_cost = _sum_numeric(merged.loc[prior_mask, "cost_prior_window"])
@@ -3036,8 +3070,18 @@ def build_customers_bundle(
 
     active_current = int(current_mask.sum())
     active_prior = int(prior_mask.sum())
-    arpa_current = (total_revenue / active_current) if active_current else 0.0
-    arpa_prior = (prior_total_revenue / active_prior) if active_prior else 0.0
+    arpa_current = metrics.average_revenue_per_account(total_revenue, active_current) or 0.0
+    arpa_prior = metrics.average_revenue_per_account(prior_total_revenue, active_prior) or 0.0
+    new_account_mask = current_mask & ~prior_mask
+    established_account_mask = current_mask & prior_mask
+    new_account_arpa = metrics.average_revenue_per_account(
+        _sum_numeric(merged.loc[new_account_mask, "revenue"]),
+        int(new_account_mask.sum()),
+    )
+    established_account_arpa = metrics.average_revenue_per_account(
+        _sum_numeric(merged.loc[established_account_mask, "revenue"]),
+        int(established_account_mask.sum()),
+    )
     delta_count_component = (active_current - active_prior) * arpa_prior
     delta_arpa_component = active_current * (arpa_current - arpa_prior)
     total_delta_revenue = total_revenue - prior_total_revenue
@@ -3216,6 +3260,13 @@ def build_customers_bundle(
             "prior_end": prior_end_ts.date().isoformat(),
         },
         "nrr": nrr,
+        "retention_rate_pct": revenue_movement.get("retention_rate_pct"),
+        "logo_churn_rate_pct": revenue_movement.get("logo_churn_rate_pct"),
+        "revenue_churn_rate_pct": revenue_movement.get("revenue_churn_rate_pct"),
+        "arpa": metrics.average_revenue_per_account(total_revenue, active_customers),
+        "new_account_arpa": new_account_arpa,
+        "established_account_arpa": established_account_arpa,
+        "revenue_movement": revenue_movement,
         "grr": grr,
         "growth_composition": growth_composition,
         "top1_share_pct": top1_share,

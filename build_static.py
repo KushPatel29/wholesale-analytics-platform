@@ -89,7 +89,11 @@ class Page:
 # rendered - which is why so few entries here have any APIs.
 PAGES: tuple[Page, ...] = (
     Page("overview", "Business Performance", "/overview/", "index.html",
-         apis=("/overview/api/bundle", "/api/overview/forecast"),
+         # `/marketing/api/bundle` is captured here too: the acquisition
+         # economics panel fills from a secondary fetch after the main payload
+         # renders, so without it the frozen page would show an empty panel and
+         # log a static miss.
+         apis=("/overview/api/bundle", "/api/overview/forecast", "/marketing/api/bundle"),
          api_args={"/api/overview/forecast": {
              "metric": "revenue", "horizon_months": "6", "granularity": "monthly",
              "include_current_month": "1", "v2": "1"}}),
@@ -127,6 +131,14 @@ PAGES: tuple[Page, ...] = (
          apis=("/api/salesreps/bundle",)),
     Page("planning", "Demand & Supply Planner", "/planning/", "planning/index.html",
          apis=("/api/stakeholder-report/bundle",)),
+    # Entity-level statements, so the page takes no filters and the scope
+    # presets below produce identical output for it - which is correct: a
+    # balance sheet does not change because someone picked a region.
+    Page("finance", "Finance", "/finance/", "finance/index.html",
+         apis=("/finance/api/bundle",)),
+    Page("marketing", "Marketing", "/marketing/", "marketing/index.html",
+         apis=("/marketing/api/bundle",)),
+    Page("metrics", "Metric Catalogue", "/metrics/", "metrics/index.html"),
 )
 
 # Presets offered by the date control in `app/templates/_filters.html`. Read
@@ -1230,9 +1242,13 @@ class Builder:
             def q(name: str) -> str:
                 return '"' + name.replace('"', '""') + '"'
 
+            # The browser cube is for cross-page offline exploration, whose
+            # finest useful time grain is month. Daily grain plus five entity
+            # dimensions is effectively a copy of the line fact and exceeded
+            # the measured browser-memory budget as the synthetic history grew.
             sql = f"""
                 SELECT
-                    CAST({q(date_col)} AS DATE) AS date,
+                    DATE_TRUNC('month', CAST({q(date_col)} AS DATE)) AS month,
                     CAST({q(customer_col)} AS VARCHAR) AS customer,
                     CAST({q(product_col)} AS VARCHAR) AS product,
                     CAST({q(supplier_col)} AS VARCHAR) AS supplier,
@@ -1250,11 +1266,25 @@ class Builder:
             """
             frame = fact_store.execute_sql_df(sql, tag="static_cube")
 
-        split = json.loads(frame.to_json(orient="split", date_format="iso", date_unit="s"))
+        # Dictionary-encode repeated dimension labels. The cube keeps every
+        # dimension and measure, while the payload stores compact integer keys
+        # instead of repeating customer/product/region strings hundreds of
+        # thousands of times.
+        dimension_columns = ["month", "customer", "product", "supplier", "region", "department"]
+        encoded_frame = frame.copy()
+        dimension_values: dict[str, list[str]] = {}
+        for column in dimension_columns:
+            codes, values = encoded_frame[column].astype("string").fillna("Unknown").factorize(sort=True)
+            encoded_frame[column] = codes
+            dimension_values[column] = [str(value) for value in values.tolist()]
+
+        split = json.loads(encoded_frame.to_json(orient="split", date_format="iso", date_unit="s"))
         payload = {
-            "schema": "northgate_fact_cube_v1",
-            "grain": ["date", "customer", "product", "supplier", "region", "department"],
+            "schema": "northgate_fact_cube_v2",
+            "encoding": "dictionary-v1",
+            "grain": ["month", "customer", "product", "supplier", "region", "department"],
             "measures": ["revenue", "cost", "profit", "units", "weight", "orders"],
+            "dimension_values": dimension_values,
             "columns": split["columns"],
             "data": split["data"],
         }
