@@ -1,0 +1,11 @@
+<nav class="decision-nav" aria-label="Decision and operations workspaces">
+  {% if can_permission('page.work.view') %}<a href="{{ url_for('decision_ops.index') }}" {% if workspace_key == 'actions' %}aria-current="page"{% endif %}>Action Center</a>{% endif %}
+  {% if can_permission('page.crm.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='crm') }}" {% if workspace_key == 'crm' %}aria-current="page"{% endif %}>CRM Pipeline</a>{% endif %}
+  {% if can_permission('page.orders.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='orders') }}" {% if workspace_key == 'orders' %}aria-current="page"{% endif %}>Orders</a>{% endif %}
+  {% if can_permission('page.procurement.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='procurement') }}" {% if workspace_key == 'procurement' %}aria-current="page"{% endif %}>Procurement</a>{% endif %}
+  {% if can_permission('page.finance_ops.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='finance') }}" {% if workspace_key == 'finance' %}aria-current="page"{% endif %}>Finance Ops</a>{% endif %}
+  {% if can_permission('page.inventory_ops.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='inventory') }}" {% if workspace_key == 'inventory' %}aria-current="page"{% endif %}>Inventory Ops</a>{% endif %}
+  {% if can_permission('page.master_data.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='master-data') }}" {% if workspace_key == 'master-data' %}aria-current="page"{% endif %}>Master Data</a>{% endif %}
+  {% if can_permission('page.service.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='service') }}" {% if workspace_key == 'service' %}aria-current="page"{% endif %}>Customer Service</a>{% endif %}
+  {% if can_permission('page.enterprise_admin.view') %}<a href="{{ url_for('decision_ops.workspace', workspace='enterprise') }}" {% if workspace_key == 'enterprise' %}aria-current="page"{% endif %}>Enterprise</a>{% endif %}
+</nav>

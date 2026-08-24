@@ -270,18 +270,10 @@ a:focus {
   box-shadow: 0 14px 35px rgba(17, 17, 17, 0.28);
 }
 
-/* The nav is `navbar-expand-xxl`, so it lays out horizontally from 1400px up -
-   but nine workspace links plus the theme toggle, notifications, admin and
-   logout need about 1,560px. Between those two numbers the bar ran off the
-   right edge and gave the whole document a horizontal scrollbar: measured
-   1,556px of content in a 1,440px viewport, with the theme toggle and the
-   notification bell sitting past the fold. 1440 and 1512 are two of the most
-   common laptop widths, so this was the default first impression.
-
-   Bootstrap sets `flex-wrap: nowrap` on an expanded navbar. Letting it wrap
-   costs a second row at those widths and nothing at all above ~1,560px, which
-   is a better trade than a page that scrolls sideways. */
-@media (min-width: 1400px) {
+/* The compact grouped nav is `navbar-expand-lg`, so it stays visible on normal
+   desktop widths while collapsing for tablet and mobile. The wrap is retained
+   as a defensive fit guard for translated/custom labels. */
+@media (min-width: 992px) {
   .navbar-wholesale > .container-fluid,
   .navbar-wholesale .navbar-collapse,
   .navbar-wholesale .navbar-nav {
@@ -6469,14 +6461,10 @@ body.theme-wa-future .products-hero .btn-outline-light:focus {
    silently lost - the same stacked-generation problem this stylesheet has had
    before. Matching its specificity and placing it last is what makes it apply.
 
-   Why it matters: the nav is `navbar-expand-xxl`, so from 1400px it lays out
-   horizontally, but brand (269px) + nine links (1,075px) + the right-hand
-   controls (142px) needed ~1,485px plus container padding. At 1440 and 1512 -
-   two of the most common laptop widths - the bar ran past the right edge and
-   gave the whole document a horizontal scrollbar on the first page a visitor
-   sees.
+   The grouped nav expands from 992px. Compact padding keeps the primary links,
+   analytics/operations menus, and account controls on one readable row.
    --------------------------------------------------------------------------- */
-@media (min-width: 1400px) {
+@media (min-width: 992px) {
   .theme-wa-future .navbar-wholesale .navbar-nav .nav-link,
   .navbar-wholesale .navbar-nav .nav-link {
     padding-inline: 0.45rem;
@@ -6522,6 +6510,27 @@ body.theme-wa-future .auth-demo__cta .auth-demo__cta-sub {
   color: var(--wa-text, #e6edf3);
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.wa-action-from-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--wa-hairline, rgba(148, 163, 184, 0.24));
+  border-left: 3px solid var(--wa-primary, #4da37e);
+  border-radius: 0.6rem;
+  color: var(--wa-text-dim, #9aa8b5);
+  background: color-mix(in srgb, var(--wa-surface, #17212b) 94%, transparent);
+  font-size: 0.8rem;
+}
+
+.wa-action-from-view strong { color: var(--wa-text, #e8eef4); }
+
+@media (max-width: 767.98px) {
+  .wa-action-from-view { align-items: stretch; flex-direction: column; }
 }
 .wa-live-banner__dot {
   flex: 0 0 auto;

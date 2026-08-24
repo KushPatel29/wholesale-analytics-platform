@@ -94,6 +94,15 @@ _PERMISSION_DEFINITIONS: list[dict[str, Any]] = [
         module="Notifications",
         description="View notifications and alert preferences",
     ),
+    _perm("page.work.view", "Action Center", "Page Access", module="Decision Operations", description="View the shared action and outcome ledger"),
+    _perm("page.crm.view", "CRM Pipeline", "Page Access", module="Decision Operations", description="View accounts, contacts, opportunities and CRM activity records"),
+    _perm("page.orders.view", "Orders & Fulfilment", "Page Access", module="Decision Operations", description="View order-to-cash records and fulfilment exceptions"),
+    _perm("page.procurement.view", "Procurement", "Page Access", module="Decision Operations", description="View procure-to-pay records and planning write-back"),
+    _perm("page.finance_ops.view", "Finance Operations", "Page Access", module="Decision Operations", description="View finance-operation records, close tasks and ledger source contracts"),
+    _perm("page.inventory_ops.view", "Inventory Operations", "Page Access", module="Decision Operations", description="View inventory-control records and execution exceptions"),
+    _perm("page.master_data.view", "Master Data", "Page Access", module="Decision Operations", description="View governed master-data changes and duplicate review"),
+    _perm("page.service.view", "Customer Service", "Page Access", module="Decision Operations", description="View cases, SLA queues, escalations and service interactions"),
+    _perm("page.enterprise_admin.view", "Enterprise Connections", "Page Access", module="Decision Operations", description="View enterprise source contracts and connector readiness"),
     _perm(
         "page.customers.drilldown.view",
         "Customer Drilldown",
@@ -341,6 +350,17 @@ _PERMISSION_DEFINITIONS: list[dict[str, Any]] = [
         module="Returns",
         description="Create return requests",
     ),
+    _perm("actions.create", "Create Actions", "Decision Workflow", module="Decision Operations", description="Create draft actions from governed signals"),
+    _perm("actions.manage", "Manage Actions", "Decision Workflow", module="Decision Operations", description="Assign, transition, approve and measure actions"),
+    _perm("crm.manage", "Manage CRM", "Decision Workflow", module="Decision Operations", description="Create and transition native CRM workflow records"),
+    _perm("orders.manage", "Manage Orders", "Decision Workflow", module="Decision Operations", description="Create and transition order and fulfilment workflow records"),
+    _perm("procurement.manage", "Manage Procurement", "Decision Workflow", module="Decision Operations", description="Create procurement records and planning draft-PO write-back"),
+    _perm("finance_ops.manage", "Manage Finance Operations", "Decision Workflow", module="Decision Operations", description="Create and transition governed finance-operation records"),
+    _perm("inventory_ops.manage", "Manage Inventory Operations", "Decision Workflow", module="Decision Operations", description="Create and transition inventory-control workflow records"),
+    _perm("master_data.manage", "Manage Master Data", "Decision Workflow", module="Decision Operations", description="Request and approve governed master-data changes"),
+    _perm("service.manage", "Manage Customer Service", "Decision Workflow", module="Decision Operations", description="Create and transition cases and service workflow records"),
+    _perm("integrations.manage", "Manage Integrations", "Decision Workflow", module="Decision Operations", description="Manage non-secret source-contract metadata and connector readiness"),
+    _perm("assistant.actions.draft", "Assistant Draft Actions", "Decision Workflow", module="Decision Operations", description="Allow the governed assistant to preview and create draft-only actions after confirmation"),
     _perm(
         "returns.approvals.view",
         "Approvals Queue",
@@ -642,6 +662,15 @@ PAGE_PERMISSION_KEYS: Set[str] = {
     "page.returns.view",
     "page.admin.view",
     "page.notifications.view",
+    "page.work.view",
+    "page.crm.view",
+    "page.orders.view",
+    "page.procurement.view",
+    "page.finance_ops.view",
+    "page.inventory_ops.view",
+    "page.master_data.view",
+    "page.service.view",
+    "page.enterprise_admin.view",
 }
 
 
@@ -828,6 +857,32 @@ _PLANNING_ACCESS: Set[str] = {
     "page.forecasting.view",
 }
 
+_DECISION_OPERATIONS_READ: Set[str] = {
+    "page.work.view",
+    "page.crm.view",
+    "page.orders.view",
+    "page.procurement.view",
+    "page.finance_ops.view",
+    "page.inventory_ops.view",
+    "page.master_data.view",
+    "page.service.view",
+    "page.enterprise_admin.view",
+}
+
+_DECISION_OPERATIONS_MANAGE: Set[str] = _DECISION_OPERATIONS_READ | {
+    "actions.create",
+    "actions.manage",
+    "crm.manage",
+    "orders.manage",
+    "procurement.manage",
+    "finance_ops.manage",
+    "inventory_ops.manage",
+    "master_data.manage",
+    "service.manage",
+    "integrations.manage",
+    "assistant.actions.draft",
+}
+
 
 # The public demo's role. Built by union rather than by listing keys, so a new
 # read permission added to any access group above reaches the demo login
@@ -848,6 +903,7 @@ DEMO_VIEWER_PERMISSION_KEYS: Set[str] = _merge_permissions(
     _LABOR_ACCESS,
     _SALESREPS_ACCESS,
     _PLANNING_ACCESS,
+    _DECISION_OPERATIONS_READ,
     # Cost, margin and profit unmasked: a BI portfolio whose margin columns all
     # read "—" demonstrates nothing.
     _SENSITIVE_FULL_ACCESS,
@@ -875,6 +931,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
         _SALESREPS_ACCESS,
         _SENSITIVE_FULL_ACCESS,
         ADMIN_RETURN_PERMISSION_KEYS,
+        _DECISION_OPERATIONS_MANAGE,
     ),
     "gm": _merge_permissions(
         _OWNER_GM_ADMIN_BASE,
@@ -888,6 +945,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
         _SALESREPS_ACCESS,
         _SENSITIVE_FULL_ACCESS,
         ADMIN_RETURN_PERMISSION_KEYS,
+        _DECISION_OPERATIONS_MANAGE,
     ),
     "sales_manager": _merge_permissions(
         _OVERVIEW_ACCESS,
@@ -910,6 +968,11 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
             "export.sensitive.unmasked",
         },
         MANAGER_RETURN_PERMISSION_KEYS,
+        {
+            "page.work.view", "actions.create", "actions.manage", "assistant.actions.draft",
+            "page.crm.view", "crm.manage", "page.orders.view", "orders.manage",
+            "page.service.view", "service.manage",
+        },
     ),
     "sales": _merge_permissions(
         _OVERVIEW_ACCESS,
@@ -937,9 +1000,19 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
             "page.notifications.view",
         },
         SALESREP_RETURN_PERMISSION_KEYS,
+        {
+            "page.work.view", "actions.create", "actions.manage", "assistant.actions.draft",
+            "page.crm.view", "crm.manage", "page.orders.view", "orders.manage",
+            "page.service.view", "service.manage",
+        },
     ),
     "warehouse": _merge_permissions(
         WAREHOUSE_RETURN_PERMISSION_KEYS,
+        {
+            "page.work.view", "actions.create", "actions.manage",
+            "page.orders.view", "orders.manage", "page.procurement.view", "procurement.manage",
+            "page.inventory_ops.view", "inventory_ops.manage",
+        },
     ),
     "production": _merge_permissions(
         _OVERVIEW_ACCESS,
@@ -956,6 +1029,11 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
         _LABOR_ACCESS,
         _SUPPLIERS_ACCESS,
         WAREHOUSE_RETURN_PERMISSION_KEYS,
+        {
+            "page.work.view", "actions.create", "actions.manage",
+            "page.procurement.view", "procurement.manage",
+            "page.inventory_ops.view", "inventory_ops.manage",
+        },
     ),
     "analyst": _merge_permissions(
         _OVERVIEW_ACCESS,
@@ -981,6 +1059,8 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
             "export.sensitive.unmasked",
         },
         _LABOR_ACCESS,
+        _DECISION_OPERATIONS_READ,
+        {"actions.create", "actions.manage", "assistant.actions.draft"},
     ),
     "viewer": _merge_permissions(
         _OVERVIEW_ACCESS,
@@ -994,6 +1074,7 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
             "feature.products.table.view",
             "feature.products.forecast.view",
         },
+        _DECISION_OPERATIONS_READ,
     ),
     "returns_only": set(RETURNS_ONLY_PERMISSION_KEYS),
 }
@@ -1384,6 +1465,37 @@ PERMISSION_EDITOR_MODULES: list[dict[str, Any]] = [
         ],
     },
 ]
+
+
+PERMISSION_EDITOR_MODULES.append(
+    {
+        "id": "decision_operations",
+        "label": "Decision & Operations",
+        "description": "Shared actions plus native CRM, order, procurement, finance, inventory, service, master-data, and source-contract workspaces.",
+        "items": [
+            _editor_item("page.work.view", "View Action Center", item_type="page", description="Allow the shared decision ledger."),
+            _editor_item("actions.create", "Create actions", item_type="feature", description="Create governed draft actions.", requires=("page.work.view",)),
+            _editor_item("actions.manage", "Manage actions", item_type="feature", description="Transition, approve, comment on and measure actions.", requires=("page.work.view",)),
+            _editor_item("assistant.actions.draft", "Assistant draft actions", item_type="feature", description="Preview and explicitly confirm draft-only assistant actions.", requires=("page.work.view", "actions.create")),
+            _editor_item("page.crm.view", "View CRM Pipeline", item_type="page", description="Allow CRM pipeline and account-planning records."),
+            _editor_item("crm.manage", "Manage CRM", item_type="feature", description="Create and transition CRM records.", requires=("page.crm.view",)),
+            _editor_item("page.orders.view", "View Orders", item_type="page", description="Allow order and fulfilment records."),
+            _editor_item("orders.manage", "Manage Orders", item_type="feature", description="Create and transition order records.", requires=("page.orders.view",)),
+            _editor_item("page.procurement.view", "View Procurement", item_type="page", description="Allow procurement and planning write-back records."),
+            _editor_item("procurement.manage", "Manage Procurement", item_type="feature", description="Create P2P records and planning draft POs.", requires=("page.procurement.view",)),
+            _editor_item("page.finance_ops.view", "View Finance Operations", item_type="page", description="Allow finance workflow and close records."),
+            _editor_item("finance_ops.manage", "Manage Finance Operations", item_type="feature", description="Create and transition finance-operation records.", requires=("page.finance_ops.view",)),
+            _editor_item("page.inventory_ops.view", "View Inventory Operations", item_type="page", description="Allow inventory control and exception records."),
+            _editor_item("inventory_ops.manage", "Manage Inventory Operations", item_type="feature", description="Create and transition inventory workflow records.", requires=("page.inventory_ops.view",)),
+            _editor_item("page.master_data.view", "View Master Data", item_type="page", description="Allow governed master-data changes."),
+            _editor_item("master_data.manage", "Manage Master Data", item_type="feature", description="Request and approve master-data changes.", requires=("page.master_data.view",)),
+            _editor_item("page.service.view", "View Customer Service", item_type="page", description="Allow service cases, queues and SLA records."),
+            _editor_item("service.manage", "Manage Customer Service", item_type="feature", description="Create and transition service records.", requires=("page.service.view",)),
+            _editor_item("page.enterprise_admin.view", "View Enterprise Connections", item_type="page", description="Allow source-contract and connector-readiness visibility."),
+            _editor_item("integrations.manage", "Manage Integrations", item_type="feature", description="Manage non-secret source-contract metadata.", requires=("page.enterprise_admin.view",)),
+        ],
+    }
+)
 
 
 PERMISSION_EDITOR_SENSITIVE_CONTROLS: list[dict[str, Any]] = [

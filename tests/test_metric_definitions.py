@@ -216,9 +216,26 @@ class TestTierAMetrics:
     def test_forecast_accuracy_suite(self):
         result = metrics.forecast_accuracy_suite([100, 200], [90, 220], tolerance_pct=10)
         assert result["variance_pct"] == metrics.variance_pct(300, 310)
+        assert result["wape_pct"] == 10.0
+        assert result["smape_pct"] == pytest.approx((2 * 10 / 190 + 2 * 20 / 420) / 2 * 100)
         assert result["mape_pct"] == 10.0
         assert result["bias"] == 5.0
+        assert result["bias_pct"] == pytest.approx(10 / 300 * 100)
         assert result["hit_rate_pct"] == 100.0
+
+    def test_forecast_wape_includes_zero_actual_error_without_dividing_by_zero(self):
+        result = metrics.forecast_accuracy_suite([0, 100], [50, 100])
+        assert result["wape_pct"] == 50.0
+        assert result["scored_periods"] == 2
+        assert result["mape_scored_periods"] == 1
+        assert result["zero_actual_periods"] == 1
+
+    def test_governed_metric_states_keep_missing_and_zero_distinct(self):
+        assert metrics.governed_metric_state(0, source_available=False)["state"] == "source_required"
+        assert metrics.governed_metric_state(0, source_available=True, sample_size=4)["label"] == "Insufficient data (n<5)"
+        assert metrics.governed_metric_state(0, source_available=True, sample_size=5)["state"] == "confirmed_zero"
+        assert metrics.governed_metric_state(None, source_available=True, sample_size=5)["state"] == "computation_error"
+        assert metrics.governed_metric_state(2.5, source_available=True, sample_size=5)["state"] == "measured"
 
     def test_customer_rates_and_movement(self):
         assert metrics.retention_rate(100, 95, 10) == 85.0
@@ -282,26 +299,51 @@ class TestTierAMetrics:
         assert metrics.quota_attainment(10, 0) is None
 
     def test_every_catalogue_entry_has_required_lineage(self):
-        required = {"name", "formula", "grain", "source_table", "owner_page", "basis", "status"}
+        required = {
+            "name",
+            "formula",
+            "grain",
+            "source_table",
+            "owner_page",
+            "basis",
+            "status",
+            "certification",
+            "model_name",
+        }
         for entry in metrics.metric_catalogue():
             assert required <= entry.keys()
             assert all(entry[field] for field in required)
+
+    def test_catalogue_is_loaded_from_dbt_metadata(self):
+        assert metrics.METRIC_CATALOGUE_PATH.name == "schema.yml"
+        assert metrics.METRIC_CATALOGUE_PATH.parent.name == "marts"
+        assert metrics.METRIC_CATALOGUE_PATH.exists()
+        assert len(metrics.metric_catalogue()) == 62
+
+    def test_every_withheld_metric_explains_its_missing_source(self):
+        withheld = [
+            entry for entry in metrics.metric_catalogue() if entry["certification"] == "Withheld"
+        ]
+        assert len(withheld) == 15
+        assert all(entry["missing_source"] for entry in withheld)
 
     def test_tier_c_is_explicitly_not_implemented(self):
         by_key = {entry["key"]: entry for entry in metrics.metric_catalogue()}
         for key in ("mrr", "survey_scores", "web_funnel", "hris_metrics", "scrap", "market_metrics"):
             assert by_key[key]["status"].startswith("Not implemented")
 
-    def test_marketing_efficiency_moved_out_of_tier_c_when_b2_was_built(self):
+    def test_marketing_efficiency_is_source_governed(self):
         """
-        CAC / CPL / ROMI were catalogued as "requires a marketing source" until
-        the campaign layer existed. Leaving that placeholder beside the live
-        metrics would have the catalogue contradicting the site.
+        CAC and CPL have the campaign inputs they need. ROMI does not have a
+        causal exposure or incrementality source, so company revenue movement
+        must not be represented as marketing return.
         """
         by_key = {entry["key"]: entry for entry in metrics.metric_catalogue()}
         assert "marketing_efficiency" not in by_key
-        for key in ("cac", "cpl", "romi"):
+        for key in ("cac", "cpl"):
             assert by_key[key]["status"] == "Implemented"
+        assert by_key["romi"]["status"].startswith("Not implemented")
+        assert "incrementality" in by_key["romi"]["source_table"].lower()
         # Lead response time genuinely still needs a CRM, and stays declared.
         assert by_key["lead_response_time"]["status"].startswith("Not implemented")
 
@@ -318,20 +360,6 @@ class TestAcquisitionMetrics:
 
     def test_cost_per_lead(self):
         assert metrics.cost_per_lead(440_000, 700) == pytest.approx(628.571428, rel=1e-6)
-
-    def test_romi_is_positive_when_growth_beats_spend(self):
-        # (2,000,000 - 400,000) / 400,000 * 100
-        assert metrics.return_on_marketing_investment(2_000_000, 400_000, 400_000) == 400.0
-
-    def test_romi_goes_negative_when_sales_fell(self):
-        """
-        The formula credits marketing with all sales movement, so a year revenue
-        fell reads as a catastrophic marketing return. That is the formula's
-        property, not a bug, and the page says so beside the number.
-        """
-        result = metrics.return_on_marketing_investment(-2_895_583, 439_813, 439_813)
-        assert result is not None and result < -700
-        assert result == pytest.approx((-2_895_583 - 439_813) / 439_813 * 100, rel=1e-9)
 
     def test_clv_to_cac_ratio(self):
         assert metrics.clv_to_cac_ratio(23_385.33, 17_655.0) == pytest.approx(1.3245, rel=1e-3)
@@ -352,11 +380,10 @@ class TestAcquisitionMetrics:
         assert metrics.cost_per_lead(50_000, 0) is None
         assert metrics.clv_to_cac_ratio(20_000, 0) is None
         assert metrics.cac_payback_months(18_000, 0) is None
-        assert metrics.return_on_marketing_investment(100, 100, 0) is None
 
     def test_every_acquisition_metric_is_catalogued(self):
         by_key = {entry["key"]: entry for entry in metrics.metric_catalogue()}
-        for key in ("cac", "cpl", "romi", "clv_cac", "cac_payback"):
+        for key in ("cac", "cpl", "clv_cac", "cac_payback"):
             assert key in by_key, f"{key} is not in the metric catalogue"
             assert by_key[key]["status"] == "Implemented"
 

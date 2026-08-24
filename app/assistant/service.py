@@ -1685,6 +1685,17 @@ def _choose_tools(
             add("get_returns_status_overview")
             add("get_returns_reason_patterns")
 
+    if any(token in text for token in ("create action", "create an action", "draft action", "turn this into an action")):
+        add(
+            "preview_action_draft",
+            {
+                "title": str(message or "")[:240],
+                "source_module": module,
+                "source_record_id": str(slots.selected_entity_name or ""),
+                "metric_key": str(slots.metric or ""),
+            },
+        )
+
     if question_type == "definition_help":
         add("get_metric_definition", {"metric": _extract_metric_hint(text)})
         add("search_business_glossary", {"query": text})

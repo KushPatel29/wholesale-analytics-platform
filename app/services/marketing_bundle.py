@@ -2,7 +2,7 @@
 The Marketing page payload.
 
 Like the Finance page, this is entity-level and takes no operational filters: a
-campaign has no protein category. And like Finance, every number comes out of
+campaign has no department category. And like Finance, every number comes out of
 `app.services.metrics`.
 
 The one number it does not own is CLV. The Customers page already computes a
@@ -140,30 +140,6 @@ def _average_clv() -> tuple[Optional[float], str]:
     return None, "CLV unavailable, so the ratio is not stated"
 
 
-def _sales_growth(fiscal_year: int) -> tuple[Optional[float], Optional[float], Optional[float]]:
-    """
-    Company revenue for the year and the one before it, from the finance layer.
-
-    ROMI needs a prior year, and the marketing layer deliberately starts at
-    FY2025 - so the comparison reaches back into finance months the campaign
-    layer does not cover.
-    """
-    files = sorted(FINANCE_DIR.glob("*.parquet"))
-    if not files:
-        return None, None, None
-    finance = pd.concat([pd.read_parquet(path) for path in files], ignore_index=True)
-    current = _f(finance.loc[finance["fiscal_year"] == fiscal_year, "revenue"].sum(min_count=1))
-    prior_frame = finance[finance["fiscal_year"] == fiscal_year - 1]
-    prior = _f(prior_frame["revenue"].sum(min_count=1))
-    # Comparing a 9-month year against a 12-month one would manufacture a
-    # collapse, so an incomplete prior year yields no growth figure at all.
-    current_months = int(finance.loc[finance["fiscal_year"] == fiscal_year, "month"].nunique())
-    prior_months = int(prior_frame["month"].nunique())
-    if current is None or prior is None or current_months != prior_months:
-        return None, current, prior
-    return current - prior, current, prior
-
-
 def _by_channel(frame: pd.DataFrame) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for channel, group in frame.groupby("channel", sort=False):
@@ -248,9 +224,6 @@ def build_marketing_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
     cac = metrics.customer_acquisition_cost(total_acquisition_spend, new_customers)
     cpl = metrics.cost_per_lead(marketing_spend, leads)
     average_clv, clv_basis = _average_clv()
-    growth, current_revenue, prior_revenue = _sales_growth(year)
-    romi = metrics.return_on_marketing_investment(growth, marketing_spend, marketing_spend)
-
     kpis = [
         {
             "key": "cac",
@@ -291,19 +264,6 @@ def build_marketing_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
             "basis": clv_basis,
             "note": None,
         },
-        {
-            "key": "romi",
-            "label": "ROMI",
-            "value": romi,
-            "unit": "percent",
-            "formula": "(Sales growth - Marketing cost) / Marketing investment * 100",
-            "basis": "Credits all company sales movement to marketing, as written",
-            "note": (
-                None
-                if growth is None or growth >= 0
-                else "Revenue fell this year for reasons campaigns do not drive"
-            ),
-        },
     ]
 
     return {
@@ -316,7 +276,7 @@ def build_marketing_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
             "grain": manifest.get("grain"),
             "scope": (
                 "Entity-level acquisition performance. Operational filters do not apply - a campaign "
-                "has no protein or region dimension."
+                "has no department or region dimension."
             ),
             "new_customer_basis": manifest.get("new_customer_basis"),
             "spend_basis": manifest.get("spend_basis"),
@@ -335,9 +295,6 @@ def build_marketing_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
             "qualified_leads": qualified,
             "new_customers": new_customers,
             "average_clv": average_clv,
-            "sales_growth": growth,
-            "current_revenue": current_revenue,
-            "prior_revenue": prior_revenue,
         },
         "kpis": kpis,
         "channels": channels,

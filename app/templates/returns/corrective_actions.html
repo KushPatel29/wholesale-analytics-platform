@@ -1,0 +1,18 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div><h1 class="h3 mb-1">Returns corrective actions</h1><p class="text-muted mb-0">Owned root-cause work with approval, resolution, and measured impact.</p></div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.root_causes') }}">Find a root cause</a>
+  </div>
+  <div class="d-flex flex-wrap gap-2 mb-3" aria-label="Filter corrective actions by status">
+    <a class="btn btn-sm {{ 'btn-primary' if not active_status else 'btn-outline-secondary' }}" href="{{ url_for('returns_portal.corrective_actions') }}">All</a>
+    {% for value in ['open', 'in_progress', 'pending_approval', 'approved', 'resolved', 'cancelled'] %}<a class="btn btn-sm {{ 'btn-primary' if active_status == value else 'btn-outline-secondary' }}" href="{{ url_for('returns_portal.corrective_actions', status=value) }}">{{ value|replace('_', ' ')|title }}</a>{% endfor %}
+  </div>
+  <div class="card shadow-sm border-0"><div class="card-body"><div class="table-responsive">
+    <table class="table align-middle mb-0"><caption class="visually-hidden">Returns corrective actions and workflow status</caption><thead><tr><th scope="col">Action</th><th scope="col">Cause</th><th scope="col">Owner</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Baseline</th><th scope="col">Outcome</th><th scope="col">Impact</th></tr></thead>
+      <tbody>{% for action in actions %}<tr><th scope="row"><a href="{{ url_for('returns_portal.corrective_action_detail', action_id=action.id) }}">{{ action.title }}</a></th><td>{{ action.cause_type|title }}: {{ action.cause_value }}</td><td>{{ action.owner_name }}</td><td>{{ action.due_date }}</td><td>{{ action.status|replace('_', ' ')|title }}</td><td>{{ ('%.2f%%'|format(action.baseline.rate_pct)) if action.baseline.rate_pct is not none else 'Source required' }}</td><td>{{ ('%.2f%%'|format(action.outcome.rate_pct)) if action.outcome.rate_pct is not none else 'Pending' }}</td><td>{{ action.realized_impact_amount|currency if action.realized_impact_amount is not none else 'Pending' }}</td></tr>{% else %}<tr><td colspan="8" class="text-muted">No corrective actions match this status. Open root-cause analysis to create one.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div></div></div>
+</section>
+{% endblock %}

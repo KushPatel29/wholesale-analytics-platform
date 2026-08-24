@@ -18,6 +18,7 @@ from app.core import rbac
 from app.core.access_policy import get_current_scope
 from app.core.exports import dataframes_to_xlsx_bytes, sanitize_filename
 from app.core.sensitive_data import mask_json_payload, sensitive_access_flags, sensitive_field_category
+from app.decision_ops import service as decision_ops_service
 from app.returns import service as returns_service
 from app.services import (
     bundle_service,
@@ -181,6 +182,7 @@ def _module_access(ctx: ToolContext) -> Dict[str, bool]:
         ),
         "admin": bool(rbac.can_view_page("admin", ctx.user)),
         "notifications": bool(rbac.can_view_page("notifications", ctx.user)),
+        "work": bool(rbac.user_has_permission(ctx.user, "page.work.view")),
     }
 
 
@@ -6844,6 +6846,57 @@ def get_recommended_followups(ctx: ToolContext, args: Dict[str, Any] | None = No
     )
 
 
+def preview_action_draft(ctx: ToolContext, args: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Prepare an action proposal; mutation stays behind the confirmed HTTP endpoint."""
+    args = dict(args or {})
+    if not rbac.user_has_permission(ctx.user, "assistant.actions.draft"):
+        return _forbidden(ctx, "Draft Action Preview", "Assistant draft-action access is not granted.", module="work")
+    entity = _selected_entity_blob(ctx)
+    source_record_id = args.get("source_record_id") or entity.get("id") or entity.get("label")
+    source_url = args.get("source_url") or ctx.raw_context.get("ref_path") or ctx.raw_context.get("url")
+    metric_key = args.get("metric_key") or ctx.raw_context.get("metric_key")
+    if not source_record_id or not source_url or not metric_key:
+        return _tool_response(
+            status="needs_context",
+            title="Draft Action Preview",
+            data={"required": ["source_record_id", "source_url", "metric_key"]},
+            ctx=ctx,
+            notes=["Select a measured record and certified metric before creating an action. No mutation occurred."],
+            next_actions=["Open the source insight, select its certified metric, then ask for a draft action again."],
+            citations=["decision_ops.assistant_action"],
+            module="work",
+        )
+    payload = {
+        "title": args.get("title") or f"Follow up on {source_record_id}",
+        "description": args.get("description") or "Draft proposed from the governed assistant; owner, due date and impact require review.",
+        "source_module": args.get("source_module") or ctx.page or "assistant",
+        "source_record_id": source_record_id,
+        "source_url": source_url,
+        "source_context": {"filters": _filters_source(ctx), "scope": _scope_used(ctx), "entity": entity},
+        "metric_key": metric_key,
+        "metric_label": args.get("metric_label"),
+        "baseline_value": args.get("baseline_value"),
+        "target_value": args.get("target_value"),
+        "expected_financial_impact": args.get("expected_financial_impact"),
+        "priority": args.get("priority") or "medium",
+        "confirmed": False,
+    }
+    try:
+        result = decision_ops_service.assistant_action(payload, actor=ctx.user)
+    except decision_ops_service.DecisionOpsError as exc:
+        return _tool_response(status="error", title="Draft Action Preview", data={}, ctx=ctx, notes=[str(exc)], module="work")
+    return _tool_response(
+        status="preview",
+        title="Draft Action Preview",
+        data=result,
+        ctx=ctx,
+        notes=["Preview only. The client must send the same governed payload with confirmed=true to create a draft."],
+        next_actions=["Review source, metric, owner, due date and expected impact, then explicitly confirm draft creation."],
+        citations=["decision_ops.assistant_action", str(source_url)],
+        module="work",
+    )
+
+
 ToolFn = Callable[[ToolContext, Dict[str, Any] | None], Dict[str, Any]]
 
 
@@ -6997,6 +7050,7 @@ TOOL_REGISTRY: Dict[str, ToolFn] = {
     "run_digest_schedule": run_digest_schedule,
     "delete_digest_schedule": delete_digest_schedule,
     "get_recommended_followups": get_recommended_followups,
+    "preview_action_draft": preview_action_draft,
 }
 
 

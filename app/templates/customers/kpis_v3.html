@@ -93,7 +93,9 @@
 
 <div id="CustomersMeta" data-page="customers" data-bundle-url="{{ url_for('bundles.customers_bundle') }}" class="d-none"></div>
 
-<ul class="nav nav-tabs mb-3" role="tablist" aria-label="Customers tabs">
+<h1 class="h3 mb-3">Customer Performance</h1>
+
+<ul class="nav nav-tabs mb-3">
   <li class="nav-item"><a class="nav-link active" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.rfm') }}">RFM</a></li>
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
@@ -293,7 +295,8 @@
         <h3 class="h6 mb-2">Segment Mix Change</h3>
         <div class="table-responsive">
           <table class="table table-sm mb-0 align-middle">
-            <thead><tr><th>Segment</th><th class="text-end">Cust</th><th class="text-end">Share</th></tr></thead>
+            <caption class="visually-hidden">Customer segment mix change between the current and comparison windows</caption>
+            <thead><tr><th scope="col">Segment</th><th scope="col" class="text-end">Cust</th><th scope="col" class="text-end">Share</th></tr></thead>
             <tbody>
               {% for row in drivers.get('segment_mix_change') or [] %}
               <tr>
@@ -450,6 +453,7 @@
 
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0 customer-table table-sticky-first" id="customerCommandTable">
+      <caption class="visually-hidden">Customer performance command table for the active filters</caption>
       <thead class="table-light position-sticky top-0">
         <tr>
           <th scope="col">Customer</th>
@@ -527,16 +531,16 @@
       </tbody>
       <tfoot class="table-light table-totals">
         <tr>
-          <th colspan="4" class="text-end">Totals for the 25 rows shown</th>
-          <th class="text-end">{{ fmt_currency(page_totals.get('revenue')) }}</th>
-          <th colspan="2"></th>
-          <th></th>
+          <th scope="row" colspan="4" class="text-end">Totals for the 25 rows shown</th>
+          <td class="text-end">{{ fmt_currency(page_totals.get('revenue')) }}</td>
+          <td colspan="2"></td>
+          <td></td>
           {% if show_costs %}
-          <th class="text-end">{{ fmt_currency(page_totals.get('profit')) }}</th>
-          <th colspan="5"></th>
+          <td class="text-end">{{ fmt_currency(page_totals.get('profit')) }}</td>
+          <td colspan="5"></td>
           {% endif %}
-          <th class="text-end">{{ fmt_int(page_totals.get('orders')) }}</th>
-          <th colspan="8"></th>
+          <td class="text-end">{{ fmt_int(page_totals.get('orders')) }}</td>
+          <td colspan="8"></td>
         </tr>
       </tfoot>
     </table>

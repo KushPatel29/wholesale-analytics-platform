@@ -23,6 +23,9 @@ coverage.xml
 
 node_modules/
 npm-debug.log*
+target/
+dbt_packages/
+.dbt-ci/.user.yml
 
 cache/
 logs/

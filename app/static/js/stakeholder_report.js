@@ -678,46 +678,58 @@ class ReportWorkspace {
     const head = forecast.headline || {};
     const rows = forecast.series || [];
     if (!rows.length) {
-      return this._empty('At least five complete months are needed to score the forecast without looking ahead.');
+      return this._empty('Forecast scoring needs at least five complete calendar months. The current partial month is excluded; broaden the date range to populate this section.');
     }
     const biasDirection = Number(head.bias) > 0 ? 'over-forecast' : Number(head.bias) < 0 ? 'under-forecast' : 'neutral';
     const scoreTable = (items, label) => items.length ? `
       <table class="plan-table">
         <caption class="plan-caption">${label}</caption>
-        <thead><tr><th>Name</th><th class="num">MAPE</th><th class="num">Variance</th><th class="num">Bias</th><th class="num">Hit rate</th><th class="num">Periods</th></tr></thead>
+        <thead><tr><th>Name</th><th class="num">WAPE</th><th class="num">SMAPE</th><th class="num">Signed bias</th><th class="num">Hit rate</th><th class="num">Periods</th></tr></thead>
         <tbody>${items.map(row => `
           <tr>
-            <td><span class="plan-label">${row.label || `${row.horizon_months}-month horizon`}</span></td>
-            <td class="num">${this._pct(row.mape_pct)}</td>
-            <td class="num">${this._pct(row.variance_pct)}</td>
+            <td><span class="plan-label">${row.label || `${row.horizon_weeks}-week horizon`}</span></td>
+            <td class="num">${this._pct(row.wape_pct)}</td>
+            <td class="num">${this._pct(row.smape_pct)}</td>
             <td class="num">${this._money(row.bias)}</td>
             <td class="num">${this._pct(row.hit_rate_pct)}</td>
             <td class="num">${row.scored_periods}</td>
           </tr>`).join('')}</tbody>
       </table>` : this._empty(`No ${label.toLowerCase()} scores are available for this scope.`);
 
+    const baseline = forecast.baseline || {};
+    const baselineComparison = baseline.available ? `
+      <p class="plan-lede">
+        <strong>${baseline.label}:</strong> ${this._pct(baseline.wape_pct)} WAPE versus
+        ${this._pct(baseline.model_wape_pct)} for the model on the same ${baseline.scored_periods} periods.
+        <strong>${baseline.comparison}</strong>
+      </p>` : this._empty(`${baseline.label || 'Naive-seasonal baseline'} unavailable. ${baseline.reason || 'Broaden the date range to include prior-year history.'}`);
+
     return `
       <div class="report-card">
         <p class="plan-lede">
           Rolling-origin backtest: each point is predicted using only history available at that origin.
-          Percentage errors exclude zero-actual periods; signed bias keeps them. The shaded region is a
+          WAPE is the executive headline; SMAPE is the bounded secondary diagnostic. Incomplete calendar
+          months and weeks are excluded. The shaded region is a
           <strong>+/-${head.tolerance_pct}% hit-tolerance band</strong>, not a confidence interval.
         </p>
         <div class="plan-kpis">
-          <div class="plan-kpi"><div class="plan-kpi__label">Variance</div><div class="plan-kpi__value">${this._pct(head.variance_pct)}</div><div class="plan-kpi__note">(Actual - forecast) / actual</div></div>
-          <div class="plan-kpi"><div class="plan-kpi__label">MAPE</div><div class="plan-kpi__value">${this._pct(head.mape_pct)}</div><div class="plan-kpi__note">Mean absolute percentage error</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">WAPE</div><div class="plan-kpi__value">${this._pct(head.wape_pct)}</div><div class="plan-kpi__note">Weighted absolute error · executive headline</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">SMAPE</div><div class="plan-kpi__value">${this._pct(head.smape_pct)}</div><div class="plan-kpi__note">Bounded symmetric error</div></div>
           <div class="plan-kpi"><div class="plan-kpi__label">Bias</div><div class="plan-kpi__value">${this._money(head.bias)}</div><div class="plan-kpi__note">Forecast - actual; ${biasDirection}</div></div>
           <div class="plan-kpi"><div class="plan-kpi__label">Hit rate</div><div class="plan-kpi__value">${this._pct(head.hit_rate_pct)}</div><div class="plan-kpi__note">Within +/-${head.tolerance_pct}% across ${head.scored_periods} periods</div></div>
+          <div class="plan-kpi"><div class="plan-kpi__label">MAPE · diagnostic only</div><div class="plan-kpi__value">${this._pct(head.mape_pct)}</div><div class="plan-kpi__note">Unreliable on low-volume series</div></div>
         </div>
         <div id="planForecastChart" class="plan-chart" role="img" aria-label="Actual sales against rolling-origin forecast and tolerance band"></div>
         <div class="plan-spacer"></div>
-        ${scoreTable(forecast.by_horizon || [], 'By forecast horizon')}
+        ${baselineComparison}
+        <div class="plan-spacer"></div>
+        ${scoreTable(forecast.by_horizon || [], 'Signed bias at 1, 4, and 8 weeks')}
         <div class="plan-spacer"></div>
         <div class="report-grid">
           <div>${scoreTable(forecast.by_sku || [], 'By SKU')}</div>
           <div>${scoreTable(forecast.by_region || [], 'By region')}</div>
         </div>
-        <p class="plan-footnote">${forecast.methodology?.model || ''} ${forecast.methodology?.zero_actuals || ''}</p>
+        <p class="plan-footnote">${forecast.methodology?.model || ''} ${forecast.methodology?.weekly_horizons || ''} ${forecast.methodology?.zero_actuals || ''} ${forecast.methodology?.mape || ''}</p>
       </div>
     `;
   }

@@ -2,7 +2,7 @@
 {# Not a blueprint base.html loads Plotly for, and this page draws three charts.
    The static build strips every <script> once it has frozen them to SVG. #}
 {% set needs_plotly = true %}
-{# Entity-level, like Finance: a campaign has no region or protein dimension, so
+{# Entity-level, like Finance: a campaign has no region or department dimension, so
    a global filter bar here would be a control that changes nothing. #}
 {% set hide_global_filters = true %}
 {% block title %}Marketing | Northgate Retail Analytics{% endblock %}
@@ -41,7 +41,12 @@
 
     <section class="finance-ratios" id="marketingKpis" aria-label="Acquisition metrics"></section>
 
-    <div class="finance-unavailable" id="marketingRomiCaveat" hidden></div>
+    <div class="finance-unavailable" id="marketingAttributionLimit">
+      <strong>ROMI intentionally withheld.</strong>
+      This dataset has campaign spend, leads, and acquired-account counts, but no exposure or
+      incrementality source. Company-wide revenue movement is not presented as causal marketing
+      return. <a href="{{ url_for('pages.metric_catalogue') }}">See the source requirement.</a>
+    </div>
 
     <section class="finance-grid mb-4">
       <article class="finance-card">

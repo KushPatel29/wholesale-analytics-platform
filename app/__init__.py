@@ -64,6 +64,7 @@ def register_blueprints(app: Flask) -> None:
     from .blueprints.notifications import bp as notifications_bp
     from .blueprints.drilldowns import bp as drilldowns_bp
     from .assistant.routes import bp as assistant_bp
+    from .decision_ops.blueprints import bp as decision_ops_bp
     from .auth.routes import bp as auth_bp
     from .returns.blueprints import (
         admin_bp as returns_admin_bp,
@@ -109,6 +110,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(events_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(drilldowns_bp)
+    app.register_blueprint(decision_ops_bp)
     if bool(app.config.get("AI_ENABLED", False)):
         app.register_blueprint(assistant_bp)
     app.register_blueprint(auth_bp)

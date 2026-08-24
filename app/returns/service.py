@@ -8,7 +8,7 @@ import hmac
 import json
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable, Optional
 from zoneinfo import ZoneInfo
@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from app.cache import cache
+from app.auth.models import User
 from app.core.exports import dataframe_to_csv_response, dataframes_to_xlsx_response
 from app.core.access_policy import get_current_scope, scope_for_user
 from app.services import fact_store, metrics
@@ -31,6 +32,8 @@ from .models import (
     ReturnAttachment,
     ReturnApproval,
     ReturnComment,
+    ReturnCorrectiveAction,
+    ReturnCorrectiveActionEvent,
     ReturnEvent,
     ReturnInspection,
     ReturnPolicyVersion,
@@ -2048,6 +2051,43 @@ def list_rmas(
         return out
 
 
+def paginate_rmas(
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    **filters: Any,
+) -> dict[str, Any]:
+    """Return one tracker page without changing the full-row export contract."""
+    try:
+        requested_size = int(page_size or 25)
+    except (TypeError, ValueError):
+        requested_size = 25
+    safe_size = min(100, max(10, requested_size))
+
+    rows = list_rmas(**filters)
+    total_rows = len(rows)
+    total_pages = max(1, (total_rows + safe_size - 1) // safe_size)
+    try:
+        requested_page = int(page or 1)
+    except (TypeError, ValueError):
+        requested_page = 1
+    safe_page = min(total_pages, max(1, requested_page))
+    start_index = (safe_page - 1) * safe_size
+    page_rows = rows[start_index : start_index + safe_size]
+
+    return {
+        "rows": page_rows,
+        "page": safe_page,
+        "page_size": safe_size,
+        "total_rows": total_rows,
+        "total_pages": total_pages,
+        "start_row": start_index + 1 if total_rows else 0,
+        "end_row": min(start_index + safe_size, total_rows),
+        "has_previous": safe_page > 1,
+        "has_next": safe_page < total_pages,
+    }
+
+
 def tracker_export_frame(
     *,
     status: str | None = None,
@@ -2156,6 +2196,7 @@ def _analytics_frames(
                 "date_submitted": pd.to_datetime(row.date_submitted or row.created_at),
                 "wh_approved_at": pd.to_datetime(row.wh_approved_at),
                 "mgr_approved_at": pd.to_datetime(row.mgr_approved_at),
+                "fin_cleared_at": pd.to_datetime(row.fin_cleared_at),
                 "closed_at": pd.to_datetime(
                     row.fin_cleared_at
                     or row.rejected_at
@@ -2179,12 +2220,16 @@ def _analytics_frames(
                 "product_code": row.product_code or row.sku or "",
                 "product_desc": row.product_desc or row.product_name or "",
                 "credit_amount": float(row.credit_amount or 0),
+                "qty": float(row.qty or 0),
                 "weight_lb": float(row.weight_lb or 0),
                 "reason_code": row.reason_code or "",
                 "reason_for_return": row.reason_for_return or row.reason_code or "",
                 "category": row.category or category_for_reason(row.reason_code, row.reason_for_return),
                 "follow_up_action": row.follow_up_action or "",
                 "supplier_credit": bool(row.supplier_credit),
+                "supplier_credit_observed": bool(
+                    loads_json(row.metadata_json, {}).get("supplier_credit_provided")
+                ),
             }
             for row in item_rows
         ]
@@ -2206,6 +2251,15 @@ def _analytics_frames(
             "approval_sla": empty,
             "supplier_credit": empty,
             "follow_up_breakdown": empty,
+            "return_rate_basis": empty,
+            "preventability": empty,
+            "reason_pareto": empty,
+            "sku_return_adjusted_margin": empty,
+            "time_to_return": empty,
+            "backlog_aging": empty,
+            "workflow_sla": empty,
+            "repeat_returners": empty,
+            "customer_value_impact": empty,
         }
 
     headers["week"] = headers["date_submitted"].dt.to_period("W").astype(str)
@@ -2305,20 +2359,32 @@ def _analytics_frames(
         top_skus = pd.DataFrame(columns=["product_code", "product_desc", "total_credit_amount", "return_count"])
         reason_breakdown = pd.DataFrame(columns=["reason_for_return", "reason_code", "total_credit_amount", "line_count"])
         category_breakdown = pd.DataFrame(columns=["category", "total_credit_amount", "line_count"])
-        supplier_credit = pd.DataFrame([{"supplier_credit_lines": 0, "total_lines": 0, "supplier_credit_pct": 0.0}])
+        supplier_credit = pd.DataFrame(
+            [{
+                "supplier_credit_lines": 0,
+                "observed_lines": 0,
+                "unobserved_lines": 0,
+                "total_lines": 0,
+                "supplier_credit_pct": None,
+            }]
+        )
         follow_up_breakdown = pd.DataFrame(columns=["follow_up_action", "line_count", "total_credit_amount"])
     else:
         sku_totals: dict[tuple[str, str], dict[str, Any]] = {}
         reason_totals: dict[tuple[str, str], dict[str, Any]] = {}
         category_totals: dict[str, dict[str, Any]] = {}
-        supplier_credit_lines = sum(1 for row in item_records if bool(row.get("supplier_credit")))
+        observed_credit_rows = [row for row in item_records if bool(row.get("supplier_credit_observed"))]
+        supplier_credit_lines = sum(1 for row in observed_credit_rows if bool(row.get("supplier_credit")))
+        observed_lines = len(observed_credit_rows)
         total_lines = len(item_records)
         supplier_credit = pd.DataFrame(
             [
                 {
                     "supplier_credit_lines": supplier_credit_lines,
+                    "observed_lines": observed_lines,
+                    "unobserved_lines": total_lines - observed_lines,
                     "total_lines": total_lines,
-                    "supplier_credit_pct": round((supplier_credit_lines / total_lines) if total_lines else 0.0, 4),
+                    "supplier_credit_pct": round(supplier_credit_lines / observed_lines, 4) if observed_lines else None,
                 }
             ]
         )
@@ -2447,17 +2513,18 @@ def _analytics_frames(
         [
             {
                 "metric": "Pending -> WH Approved",
-                "median_hours": round(float(approval_detail["pending_to_wh_hours"].dropna().median()), 2) if not approval_detail["pending_to_wh_hours"].dropna().empty else 0.0,
-                "p90_hours": round(float(approval_detail["pending_to_wh_hours"].dropna().quantile(0.9)), 2) if not approval_detail["pending_to_wh_hours"].dropna().empty else 0.0,
+                "median_hours": round(float(approval_detail["pending_to_wh_hours"].dropna().median()), 2) if not approval_detail["pending_to_wh_hours"].dropna().empty else None,
+                "p90_hours": round(float(approval_detail["pending_to_wh_hours"].dropna().quantile(0.9)), 2) if not approval_detail["pending_to_wh_hours"].dropna().empty else None,
             },
             {
                 "metric": "WH Approved -> Approved",
-                "median_hours": round(float(approval_detail["wh_to_mgr_hours"].dropna().median()), 2) if not approval_detail["wh_to_mgr_hours"].dropna().empty else 0.0,
-                "p90_hours": round(float(approval_detail["wh_to_mgr_hours"].dropna().quantile(0.9)), 2) if not approval_detail["wh_to_mgr_hours"].dropna().empty else 0.0,
+                "median_hours": round(float(approval_detail["wh_to_mgr_hours"].dropna().median()), 2) if not approval_detail["wh_to_mgr_hours"].dropna().empty else None,
+                "p90_hours": round(float(approval_detail["wh_to_mgr_hours"].dropna().quantile(0.9)), 2) if not approval_detail["wh_to_mgr_hours"].dropna().empty else None,
             },
         ]
     )
 
+    depth_frames = _returns_depth_frames(headers, items, from_date=from_date, to_date=to_date)
     return {
         "headers": headers,
         "volume_by_week": volume_by_week,
@@ -2473,7 +2540,240 @@ def _analytics_frames(
         "approval_sla": approval_sla,
         "supplier_credit": supplier_credit,
         "follow_up_breakdown": follow_up_breakdown,
+        **depth_frames,
     }
+
+
+def _returns_depth_frames(
+    headers: pd.DataFrame,
+    items: pd.DataFrame,
+    *,
+    from_date: str | None,
+    to_date: str | None,
+) -> dict[str, pd.DataFrame]:
+    """Build supported Returns depth from captured workflow and sales facts."""
+    names = (
+        "return_rate_basis",
+        "preventability",
+        "reason_pareto",
+        "sku_return_adjusted_margin",
+        "time_to_return",
+        "backlog_aging",
+        "workflow_sla",
+        "repeat_returners",
+        "customer_value_impact",
+    )
+    if headers.empty:
+        return {name: pd.DataFrame() for name in names}
+    submitted = pd.to_datetime(headers["date_submitted"], errors="coerce").dropna()
+    start = _coerce_date(from_date) or submitted.min().date()
+    end = _coerce_date(to_date) or submitted.max().date()
+    sales = _sales_window_basis(start, end, cause_type="reason", cause_value="all")
+    sales_orders, sales_units, sales_revenue = (
+        sales.get("order_count"),
+        sales.get("units"),
+        sales.get("revenue"),
+    )
+    returned_orders = int(headers["order_id"].dropna().astype(str).nunique())
+    returned_units = (
+        float(pd.to_numeric(items["qty"], errors="coerce").fillna(0).clip(lower=0).sum())
+        if not items.empty else 0.0
+    )
+    return_credit = (
+        float(pd.to_numeric(items["credit_amount"], errors="coerce").fillna(0).clip(lower=0).sum())
+        if not items.empty else 0.0
+    )
+    rate_basis = pd.DataFrame([
+        {
+            "basis": "Orders", "returned": returned_orders, "sales_base": sales_orders,
+            "rate_pct": metrics.return_rate(returned_orders, sales_orders),
+            "definition": "Distinct returned order IDs / distinct sales order IDs",
+        },
+        {
+            "basis": "Units", "returned": round(returned_units, 3), "sales_base": sales_units,
+            "rate_pct": round(returned_units / float(sales_units) * 100, 2) if sales_units not in (None, 0) else None,
+            "definition": "Captured returned quantity / shipped quantity",
+        },
+        {
+            "basis": "Revenue", "returned": round(return_credit, 2), "sales_base": sales_revenue,
+            "rate_pct": round(return_credit / float(sales_revenue) * 100, 2) if sales_revenue not in (None, 0) else None,
+            "definition": "Return credit value / sales revenue",
+        },
+    ])
+
+    preventability = pd.DataFrame()
+    reason_pareto = pd.DataFrame()
+    if not items.empty:
+        line_work = items.copy()
+        line_work["classification"] = line_work.apply(
+            lambda row: "Preventable" if is_preventable_return(
+                row.get("reason_code"), row.get("reason_for_return"), row.get("category")
+            ) else "Non-preventable",
+            axis=1,
+        )
+        joined = line_work.merge(headers[["rma_id", "order_id"]], on="rma_id", how="left")
+        preventability = joined.groupby("classification", dropna=False).agg(
+            return_orders=("order_id", "nunique"),
+            line_count=("rma_id", "size"),
+            credit_amount=("credit_amount", "sum"),
+        ).reset_index()
+        preventability["order_rate_pct"] = preventability["return_orders"].map(
+            lambda value: metrics.return_rate(value, sales_orders)
+        )
+        line_work["reason"] = (
+            line_work["reason_for_return"].replace("", pd.NA)
+            .fillna(line_work["reason_code"].replace("", "Unspecified"))
+        )
+        reason_pareto = line_work.groupby("reason", dropna=False).agg(
+            credit_amount=("credit_amount", "sum"), line_count=("rma_id", "size")
+        ).reset_index().sort_values(
+            ["credit_amount", "line_count", "reason"], ascending=[False, False, True]
+        ).reset_index(drop=True)
+        total_reason_credit = float(reason_pareto["credit_amount"].sum())
+        reason_pareto["share_pct"] = reason_pareto["credit_amount"].map(
+            lambda value: round(float(value) / total_reason_credit * 100, 1) if total_reason_credit else None
+        )
+        reason_pareto["cumulative_pct"] = reason_pareto["credit_amount"].cumsum().map(
+            lambda value: round(float(value) / total_reason_credit * 100, 1) if total_reason_credit else None
+        )
+
+    timing = headers.copy()
+    timing["order_date_parsed"] = pd.to_datetime(timing["order_date"], errors="coerce")
+    timing["days_to_return"] = (timing["date_submitted"] - timing["order_date_parsed"]).dt.days
+    valid_days = timing.loc[timing["days_to_return"].notna() & (timing["days_to_return"] >= 0), "days_to_return"]
+    timing_buckets = [(-1, 7, "0–7 days"), (7, 14, "8–14 days"), (14, 30, "15–30 days"), (30, 60, "31–60 days"), (60, float("inf"), "61+ days")]
+    time_to_return = pd.DataFrame([
+        {
+            "bucket": label,
+            "return_count": int(((valid_days > low) & (valid_days <= high)).sum()),
+            "share_pct": round(float(((valid_days > low) & (valid_days <= high)).sum()) / len(valid_days) * 100, 1) if len(valid_days) else None,
+        }
+        for low, high, label in timing_buckets
+    ])
+
+    open_rows = headers.loc[~headers["status"].isin({STATUS_COMPLETED, STATUS_REJECTED, STATUS_DENIED})].copy()
+    open_rows["age_days"] = (
+        pd.Timestamp(end) - pd.to_datetime(open_rows["date_submitted"], errors="coerce")
+    ).dt.days.clip(lower=0)
+    aging_buckets = [(-1, 2, "0–2 days"), (2, 7, "3–7 days"), (7, 14, "8–14 days"), (14, float("inf"), "15+ days")]
+    backlog_aging = pd.DataFrame([
+        {
+            "bucket": label,
+            "open_returns": int(((open_rows["age_days"] > low) & (open_rows["age_days"] <= high)).sum()),
+            "credit_exposure": round(float(open_rows.loc[(open_rows["age_days"] > low) & (open_rows["age_days"] <= high), "total_credit_amount"].sum()), 2),
+            "as_of": end.isoformat(),
+        }
+        for low, high, label in aging_buckets
+    ])
+
+    sla_specs = (
+        ("Warehouse approval", "date_submitted", "wh_approved_at", 24.0),
+        ("Manager approval", "wh_approved_at", "mgr_approved_at", 24.0),
+        ("Refund / finance clearance", "mgr_approved_at", "fin_cleared_at", 48.0),
+        ("End-to-end resolution", "date_submitted", "closed_at", 72.0),
+    )
+    sla_rows = []
+    for label, start_col, end_col, target_hours in sla_specs:
+        elapsed = (
+            (pd.to_datetime(headers[end_col], errors="coerce") - pd.to_datetime(headers[start_col], errors="coerce"))
+            .dt.total_seconds().div(3600).dropna()
+        )
+        elapsed = elapsed.loc[elapsed >= 0]
+        sla_rows.append({
+            "metric": label,
+            "target_hours": target_hours,
+            "completed_n": int(len(elapsed)),
+            "median_hours": round(float(elapsed.median()), 2) if len(elapsed) else None,
+            "p90_hours": round(float(elapsed.quantile(0.9)), 2) if len(elapsed) else None,
+            "attainment_pct": round(float((elapsed <= target_hours).mean()) * 100, 1) if len(elapsed) else None,
+        })
+    workflow_sla = pd.DataFrame(sla_rows)
+
+    customer = headers.groupby(["customer_id", "customer_name"], dropna=False).agg(
+        return_count=("rma_id", "size"), credit_amount=("total_credit_amount", "sum")
+    ).reset_index()
+    total_customer_credit = float(customer["credit_amount"].sum())
+    customer["credit_share_pct"] = customer["credit_amount"].map(
+        lambda value: round(float(value) / total_customer_credit * 100, 1) if total_customer_credit else None
+    )
+    repeat_returners = customer.loc[customer["return_count"] > 1].sort_values(
+        ["credit_amount", "return_count"], ascending=[False, False]
+    ).reset_index(drop=True)
+
+    sku_margin, customer_impact = _return_adjusted_value_frames(items, customer, start=start, end=end)
+    return {
+        "return_rate_basis": rate_basis,
+        "preventability": preventability,
+        "reason_pareto": reason_pareto,
+        "sku_return_adjusted_margin": sku_margin,
+        "time_to_return": time_to_return,
+        "backlog_aging": backlog_aging,
+        "workflow_sla": workflow_sla,
+        "repeat_returners": repeat_returners,
+        "customer_value_impact": customer_impact,
+    }
+
+
+def _return_adjusted_value_frames(
+    items: pd.DataFrame,
+    customer_returns: pd.DataFrame,
+    *,
+    start: date,
+    end: date,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return SKU margin and customer value inputs; withhold when cost coverage is absent."""
+    sku_margin = pd.DataFrame()
+    customer_impact = pd.DataFrame()
+    try:
+        columns = fact_store.list_columns()
+        revenue_col = next((name for name in ("Revenue", "GrossSales") if name in columns), None)
+        cost_col = "Cost" if "Cost" in columns else None
+        if not revenue_col or not cost_col:
+            return sku_margin, customer_impact
+        if "ProductId" in columns:
+            sales_sku = fact_store.execute_sql_df(
+                f"""SELECT CAST(ProductId AS VARCHAR) AS product_code,
+                           SUM(CAST({revenue_col} AS DOUBLE)) AS sales_revenue,
+                           SUM(CAST({cost_col} AS DOUBLE)) AS sales_cost
+                    FROM fact
+                    WHERE CAST(Date AS DATE) >= CAST(? AS DATE) AND CAST(Date AS DATE) <= CAST(? AS DATE)
+                    GROUP BY 1""",
+                [start.isoformat(), end.isoformat()],
+                tag="returns.analytics.adjusted_margin",
+            )
+            returned = items.groupby("product_code", dropna=False).agg(
+                return_credit=("credit_amount", "sum")
+            ).reset_index() if not items.empty else pd.DataFrame(columns=["product_code", "return_credit"])
+            sku_margin = sales_sku.merge(returned, on="product_code", how="left")
+            sku_margin["return_credit"] = sku_margin["return_credit"].fillna(0.0)
+            sku_margin["gross_margin_before_returns"] = sku_margin["sales_revenue"] - sku_margin["sales_cost"]
+            sku_margin["return_adjusted_margin"] = sku_margin["gross_margin_before_returns"] - sku_margin["return_credit"]
+            sku_margin["unprofitable_after_returns"] = sku_margin["return_adjusted_margin"] < 0
+            sku_margin = sku_margin.sort_values(["return_adjusted_margin", "return_credit"], ascending=[True, False])
+        if "CustomerId" in columns:
+            sales_customer = fact_store.execute_sql_df(
+                f"""SELECT CAST(CustomerId AS VARCHAR) AS customer_id,
+                           SUM(CAST({revenue_col} AS DOUBLE)) AS sales_revenue,
+                           SUM(CAST({cost_col} AS DOUBLE)) AS sales_cost
+                    FROM fact
+                    WHERE CAST(Date AS DATE) >= CAST(? AS DATE) AND CAST(Date AS DATE) <= CAST(? AS DATE)
+                    GROUP BY 1""",
+                [start.isoformat(), end.isoformat()],
+                tag="returns.analytics.customer_value_impact",
+            )
+            customer_impact = sales_customer.merge(customer_returns, on="customer_id", how="left")
+            customer_impact["credit_amount"] = customer_impact["credit_amount"].fillna(0.0)
+            customer_impact["gross_profit_before_returns"] = customer_impact["sales_revenue"] - customer_impact["sales_cost"]
+            customer_impact["gross_profit_after_returns"] = customer_impact["gross_profit_before_returns"] - customer_impact["credit_amount"]
+            customer_impact["value_reduction_pct"] = customer_impact.apply(
+                lambda row: round(float(row["credit_amount"]) / float(row["gross_profit_before_returns"]) * 100, 1)
+                if float(row["gross_profit_before_returns"] or 0) > 0 else None,
+                axis=1,
+            )
+            customer_impact = customer_impact.sort_values("credit_amount", ascending=False)
+    except Exception:
+        pass
+    return sku_margin.reset_index(drop=True), customer_impact.reset_index(drop=True)
 
 
 def _analytics_cache_key(
@@ -2594,12 +2894,39 @@ def returns_analytics_snapshot(
     total_weight_lb = sum(float(row.get("total_weight_lb") or 0) for row in header_records)
     total_packs = sum(int(row.get("total_packs") or 0) for row in header_records)
     commercial = _returns_commercial_summary(headers, from_date=from_date, to_date=to_date)
+    supplier_credit_row = (
+        frames["supplier_credit"].iloc[0].to_dict()
+        if not frames["supplier_credit"].empty
+        else {"supplier_credit_pct": None, "observed_lines": 0, "total_lines": 0}
+    )
+    supplier_credit_ratio = supplier_credit_row.get("supplier_credit_pct")
+    observed_credit_lines = int(supplier_credit_row.get("observed_lines") or 0)
+    total_credit_lines = int(supplier_credit_row.get("total_lines") or 0)
+    supplier_credit_pct = (
+        round(float(supplier_credit_ratio) * 100, 1)
+        if supplier_credit_ratio is not None and not pd.isna(supplier_credit_ratio)
+        else None
+    )
+    supplier_credit_state = metrics.governed_metric_state(
+        supplier_credit_pct,
+        source_available=observed_credit_lines > 0,
+        sample_size=observed_credit_lines,
+    )
+    supplier_credit_state.update(
+        {
+            "observed_lines": observed_credit_lines,
+            "unobserved_lines": max(0, total_credit_lines - observed_credit_lines),
+            "total_lines": total_credit_lines,
+            "required_source": "Supplier-credit applicability on each return line",
+        }
+    )
     summary = {
         "total_returns": int(len(headers.index)) if not headers.empty else 0,
         "total_credit_amount": round(total_credit_amount, 2),
         "total_weight_lb": round(total_weight_lb, 3),
         "total_packs": int(total_packs),
-            "supplier_credit_pct": round(float(frames["supplier_credit"]["supplier_credit_pct"].iloc[0]) * 100, 1) if not frames["supplier_credit"].empty else 0.0,
+        "supplier_credit_pct": supplier_credit_pct,
+        "supplier_credit_state": supplier_credit_state,
         **commercial,
     }
     payload_out = {"summary": summary, "frames": frames}
@@ -2629,6 +2956,611 @@ def returns_analytics_export_response(
         frame = next(iter(export_frames.values()))
         return dataframe_to_csv_response(frame, filename=f"returns_{next(iter(export_frames.keys()))}.csv")
     return dataframes_to_xlsx_response(export_frames, filename="returns_analytics.xlsx")
+
+
+CORRECTIVE_ACTION_TRANSITIONS: dict[str, set[str]] = {
+    "open": {"in_progress", "cancelled"},
+    "in_progress": {"pending_approval", "cancelled"},
+    "pending_approval": {"approved", "in_progress", "cancelled"},
+    "approved": {"resolved", "in_progress"},
+    "resolved": set(),
+    "cancelled": set(),
+}
+PREVENTABLE_RETURN_CATEGORIES = {"Production", "Warehouse"}
+PREVENTABLE_RETURN_REASON_CODES = {
+    "quality_issue",
+    "damaged",
+    "wrong_item",
+    "short_issue",
+    "vendor_return",
+}
+
+
+def is_preventable_return(
+    reason_code: Any,
+    reason_text: Any = None,
+    category: Any = None,
+) -> bool:
+    """Classify operationally preventable returns using a visible, stable rule."""
+    code = str(reason_code or "").strip().lower()
+    resolved_category = _normalize_reason_category(
+        category or category_for_reason(reason_code, reason_text)
+    )
+    return code in PREVENTABLE_RETURN_REASON_CODES or resolved_category in PREVENTABLE_RETURN_CATEGORIES
+
+
+def _confidence_for_sample(sample_size: int) -> str:
+    if int(sample_size) >= 20:
+        return "high"
+    if int(sample_size) >= 5:
+        return "medium"
+    return "low"
+
+
+def _default_returns_window(
+    *,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+) -> tuple[date, date]:
+    payload = _scope_for_actor(actor_user, scope=scope)
+    with get_session() as session:
+        latest = (
+            apply_scope_filters(session.query(func.max(ReturnRMA.date_submitted)), scope=payload)
+            .scalar()
+        )
+    window_end = (latest.date() if isinstance(latest, datetime) else latest) or date.today()
+    return window_end - timedelta(days=89), window_end
+
+
+def _cause_matches_item(cause_type: str, cause_value: str, item: ReturnRMAItem) -> bool:
+    wanted = str(cause_value or "").strip().casefold()
+    if cause_type == "reason":
+        values = (item.reason_code, item.reason_for_return)
+    elif cause_type == "category":
+        values = (item.category or category_for_reason(item.reason_code, item.reason_for_return),)
+    elif cause_type == "sku":
+        values = (item.product_code, item.sku)
+    elif cause_type == "supplier":
+        metadata = loads_json(item.metadata_json, {})
+        values = (metadata.get("supplier_id"), metadata.get("supplier_name"))
+    else:
+        return False
+    return any(str(value or "").strip().casefold() == wanted for value in values)
+
+
+def _sales_window_basis(
+    start: date,
+    end: date,
+    *,
+    cause_type: str,
+    cause_value: str,
+) -> dict[str, float | int | None]:
+    """Return governed sales denominators; missing columns stay missing instead of becoming zero."""
+    try:
+        columns = fact_store.list_columns()
+        revenue_col = next((name for name in ("Revenue", "GrossSales") if name in columns), None)
+        units_col = next((name for name in ("QuantityShipped", "QuantityOrdered") if name in columns), None)
+        where = ["CAST(Date AS DATE) >= CAST(? AS DATE)", "CAST(Date AS DATE) <= CAST(? AS DATE)"]
+        params: list[Any] = [start.isoformat(), end.isoformat()]
+        if cause_type == "sku" and "ProductId" in columns:
+            where.append("LOWER(CAST(ProductId AS VARCHAR)) = LOWER(CAST(? AS VARCHAR))")
+            params.append(cause_value)
+        elif cause_type == "supplier":
+            supplier_col = next((name for name in ("SupplierId", "SupplierName") if name in columns), None)
+            if supplier_col:
+                where.append(f"LOWER(CAST({supplier_col} AS VARCHAR)) = LOWER(CAST(? AS VARCHAR))")
+                params.append(cause_value)
+        revenue_expr = f"SUM(CAST({revenue_col} AS DOUBLE))" if revenue_col else "NULL::DOUBLE"
+        units_expr = f"SUM(CAST({units_col} AS DOUBLE))" if units_col else "NULL::DOUBLE"
+        frame = fact_store.execute_sql_df(
+            f"""
+            SELECT COUNT(DISTINCT OrderId) AS order_count,
+                   {units_expr} AS units,
+                   {revenue_expr} AS revenue
+            FROM fact
+            WHERE {' AND '.join(where)}
+            """,
+            params,
+            tag="returns.corrective_action.sales_basis",
+        )
+        if frame.empty:
+            return {"order_count": None, "units": None, "revenue": None}
+        raw = frame.iloc[0].to_dict()
+
+        def optional_float(value: Any) -> float | None:
+            try:
+                parsed = float(value)
+                return parsed if pd.notna(parsed) else None
+            except (TypeError, ValueError):
+                return None
+
+        order_count = optional_float(raw.get("order_count"))
+        return {
+            "order_count": int(order_count) if order_count is not None else None,
+            "units": optional_float(raw.get("units")),
+            "revenue": optional_float(raw.get("revenue")),
+        }
+    except Exception:
+        return {"order_count": None, "units": None, "revenue": None}
+
+
+def returns_cause_measurement(
+    *,
+    cause_type: str,
+    cause_value: str,
+    start_date: date | str,
+    end_date: date | str,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Measure one cause against order, unit, and revenue denominators for a fixed window."""
+    clean_type = str(cause_type or "").strip().lower()
+    clean_value = str(cause_value or "").strip()
+    start = _coerce_date(start_date)
+    end = _coerce_date(end_date)
+    if clean_type not in {"reason", "category", "sku", "supplier"}:
+        raise ReturnsError("Root-cause type must be reason, category, SKU, or supplier.")
+    if not clean_value:
+        raise ReturnsError("Root-cause value is required.")
+    if not start or not end or end < start:
+        raise ReturnsError("A valid measurement window is required.")
+    payload = _scope_for_actor(actor_user, scope=scope)
+    with get_session() as session:
+        header_rows = (
+            apply_scope_filters(session.query(ReturnRMA), scope=payload)
+            .filter(func.coalesce(ReturnRMA.date_submitted, ReturnRMA.created_at) >= datetime.combine(start, datetime.min.time()))
+            .filter(func.coalesce(ReturnRMA.date_submitted, ReturnRMA.created_at) <= datetime.combine(end, datetime.max.time()))
+            .all()
+        )
+        header_map = {int(row.id): row for row in header_rows}
+        item_rows = (
+            session.query(ReturnRMAItem)
+            .filter(ReturnRMAItem.rma_id.in_(list(header_map)))
+            .all()
+            if header_map
+            else []
+        )
+        matching = [item for item in item_rows if _cause_matches_item(clean_type, clean_value, item)]
+
+    returned_order_ids = {
+        str(header_map[int(item.rma_id)].order_id)
+        for item in matching
+        if int(item.rma_id) in header_map and header_map[int(item.rma_id)].order_id
+    }
+    return_count = len(returned_order_ids)
+    returned_units = round(sum(max(float(item.qty or 0), 0.0) for item in matching), 3)
+    credit_amount = round(sum(max(float(item.credit_amount or 0), 0.0) for item in matching), 2)
+    sales = _sales_window_basis(start, end, cause_type=clean_type, cause_value=clean_value)
+    orders = sales.get("order_count")
+    units = sales.get("units")
+    revenue = sales.get("revenue")
+    order_rate = metrics.return_rate(return_count, orders)
+    unit_rate = round(returned_units / float(units) * 100, 2) if units not in (None, 0) else None
+    revenue_rate = round(credit_amount / float(revenue) * 100, 2) if revenue not in (None, 0) else None
+    return {
+        "cause_type": clean_type,
+        "cause_value": clean_value,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "return_count": return_count,
+        "returned_units": returned_units,
+        "credit_amount": credit_amount,
+        "order_count": orders,
+        "sales_units": units,
+        "sales_revenue": revenue,
+        "order_rate_pct": order_rate,
+        "unit_rate_pct": unit_rate,
+        "revenue_rate_pct": revenue_rate,
+        "confidence_label": _confidence_for_sample(return_count),
+        "confidence_n": return_count,
+    }
+
+
+def returns_root_causes(
+    *,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> list[dict[str, Any]]:
+    """Rank explainable causes by credit impact and retain drill-through filter state."""
+    start, end = _default_returns_window(actor_user=actor_user, scope=scope)
+    start = _coerce_date(from_date) or start
+    end = _coerce_date(to_date) or end
+    snapshot = returns_analytics_snapshot(
+        actor_user=actor_user,
+        scope=scope,
+        from_date=start.isoformat(),
+        to_date=end.isoformat(),
+    )
+    return root_causes_from_frames(snapshot.get("frames") or {}, start=start, end=end)
+
+
+def root_causes_from_frames(
+    frames: dict[str, pd.DataFrame],
+    *,
+    start: date | str,
+    end: date | str,
+) -> list[dict[str, Any]]:
+    """Build the root-cause Pareto from an existing analytics snapshot."""
+    start_date = _coerce_date(start)
+    end_date = _coerce_date(end)
+    if not start_date or not end_date:
+        raise ReturnsError("A valid root-cause window is required.")
+    causes: list[dict[str, Any]] = []
+    specs = (
+        ("reason", "reason_breakdown", "reason_code", "reason_for_return"),
+        ("sku", "top_skus", "product_code", "product_desc"),
+    )
+    for cause_type, frame_name, value_key, label_key in specs:
+        frame = frames.get(frame_name)
+        if frame is None or frame.empty:
+            continue
+        for raw in frame.to_dict(orient="records"):
+            value = str(raw.get(value_key) or raw.get(label_key) or "").strip()
+            if not value:
+                continue
+            label = str(raw.get(label_key) or value).strip()
+            sample_size = int(raw.get("line_count") or raw.get("return_count") or 0)
+            causes.append(
+                {
+                    "cause_type": cause_type,
+                    "cause_value": value,
+                    "label": label,
+                    "credit_amount": round(float(raw.get("total_credit_amount") or 0), 2),
+                    "sample_size": sample_size,
+                    "confidence_label": _confidence_for_sample(sample_size),
+                    "preventable": (
+                        is_preventable_return(value, label)
+                        if cause_type == "reason"
+                        else True
+                    ),
+                    "from": start_date.isoformat(),
+                    "to": end_date.isoformat(),
+                }
+            )
+    causes.sort(key=lambda row: (-float(row["credit_amount"]), -int(row["sample_size"]), str(row["label"])))
+    total_impact = sum(float(row["credit_amount"]) for row in causes if row["cause_type"] == "reason")
+    running = 0.0
+    for row in causes:
+        if row["cause_type"] == "reason":
+            running += float(row["credit_amount"])
+            row["pareto_cumulative_pct"] = round(running / total_impact * 100, 1) if total_impact else None
+        else:
+            row["pareto_cumulative_pct"] = None
+    return causes
+
+
+def returns_root_cause_detail(
+    *,
+    cause_type: str,
+    cause_value: str,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> dict[str, Any]:
+    start, end = _default_returns_window(actor_user=actor_user, scope=scope)
+    start = _coerce_date(from_date) or start
+    end = _coerce_date(to_date) or end
+    measurement = returns_cause_measurement(
+        cause_type=cause_type,
+        cause_value=cause_value,
+        start_date=start,
+        end_date=end,
+        actor_user=actor_user,
+        scope=scope,
+    )
+    measurement["preventable"] = (
+        is_preventable_return(cause_value, cause_value)
+        if str(cause_type).lower() == "reason"
+        else True
+    )
+    measurement["classification_rule"] = (
+        "Preventable includes quality, damage, wrong-item, short/issue, and vendor-return reasons; "
+        "customer-choice returns are non-preventable."
+    )
+    return measurement
+
+
+def list_corrective_action_owners() -> list[dict[str, Any]]:
+    with get_session() as session:
+        rows = (
+            session.query(User)
+            .filter(User.is_active == True)  # noqa: E712
+            .order_by(User.first_name.asc(), User.last_name.asc(), User.username.asc())
+            .all()
+        )
+        return [{"id": int(row.id), "name": row.full_name, "role": row.role} for row in rows]
+
+
+def _add_corrective_action_event(
+    session: Any,
+    action: ReturnCorrectiveAction,
+    *,
+    event_type: str,
+    actor_user: Any = None,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    payload: Optional[dict[str, Any]] = None,
+) -> ReturnCorrectiveActionEvent:
+    row = ReturnCorrectiveActionEvent(
+        corrective_action_id=int(action.id),
+        event_type=event_type,
+        from_status=from_status,
+        to_status=to_status,
+        actor_user_id=_actor_id(actor_user),
+        payload_json=dumps_json(payload or {}),
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def _serialize_corrective_action(
+    row: ReturnCorrectiveAction,
+    *,
+    owner_name: str | None = None,
+    events: Optional[list[ReturnCorrectiveActionEvent]] = None,
+) -> dict[str, Any]:
+    payload = {
+        "id": int(row.id),
+        "cause_type": row.cause_type,
+        "cause_value": row.cause_value,
+        "title": row.title,
+        "description": row.description or "",
+        "owner_user_id": int(row.owner_user_id),
+        "owner_name": owner_name or f"User {int(row.owner_user_id)}",
+        "due_date": _serialize_temporal(row.due_date),
+        "status": row.status,
+        "source_filters": loads_json(row.source_filters_json, {}),
+        "baseline": {
+            "start": _serialize_temporal(row.baseline_start),
+            "end": _serialize_temporal(row.baseline_end),
+            "return_count": int(row.baseline_return_count or 0),
+            "order_count": row.baseline_order_count,
+            "rate_pct": row.baseline_rate_pct,
+            "credit_amount": float(row.baseline_credit_amount or 0),
+            "revenue": row.baseline_revenue,
+        },
+        "target_rate_pct": row.target_rate_pct,
+        "outcome": {
+            "start": _serialize_temporal(row.outcome_start),
+            "end": _serialize_temporal(row.outcome_end),
+            "return_count": row.outcome_return_count,
+            "order_count": row.outcome_order_count,
+            "rate_pct": row.outcome_rate_pct,
+            "credit_amount": row.outcome_credit_amount,
+            "revenue": row.outcome_revenue,
+        },
+        "realized_impact_amount": row.realized_impact_amount,
+        "confidence_label": row.confidence_label,
+        "confidence_n": int(row.confidence_n or 0),
+        "approval_notes": row.approval_notes or "",
+        "resolution_notes": row.resolution_notes or "",
+        "created_by_user_id": row.created_by_user_id,
+        "approved_by_user_id": row.approved_by_user_id,
+        "resolved_by_user_id": row.resolved_by_user_id,
+        "created_at": _serialize_temporal(row.created_at),
+        "updated_at": _serialize_temporal(row.updated_at),
+        "approved_at": _serialize_temporal(row.approved_at),
+        "resolved_at": _serialize_temporal(row.resolved_at),
+    }
+    if events is not None:
+        payload["events"] = [
+            {
+                "id": int(event.id),
+                "event_type": event.event_type,
+                "from_status": event.from_status,
+                "to_status": event.to_status,
+                "actor_user_id": event.actor_user_id,
+                "payload": loads_json(event.payload_json, {}),
+                "created_at": _serialize_temporal(event.created_at),
+            }
+            for event in events
+        ]
+    return payload
+
+
+def create_corrective_action(
+    *,
+    cause_type: str,
+    cause_value: str,
+    title: str,
+    owner_user_id: Any,
+    due_date: date | str,
+    baseline_start: date | str,
+    baseline_end: date | str,
+    description: str | None = None,
+    target_rate_pct: Any = None,
+    source_filters: Optional[dict[str, Any]] = None,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    clean_title = str(title or "").strip()
+    owner_id = _int_or_none(owner_user_id)
+    due = _coerce_date(due_date)
+    start = _coerce_date(baseline_start)
+    end = _coerce_date(baseline_end)
+    if not clean_title:
+        raise ReturnsError("Corrective-action title is required.")
+    if not owner_id or owner_id < 1:
+        raise ReturnsError("A valid owner is required.")
+    if not due:
+        raise ReturnsError("A due date is required.")
+    if not start or not end or end < start:
+        raise ReturnsError("A valid baseline window is required.")
+    baseline = returns_cause_measurement(
+        cause_type=cause_type,
+        cause_value=cause_value,
+        start_date=start,
+        end_date=end,
+        actor_user=actor_user,
+        scope=scope,
+    )
+    target = None
+    if target_rate_pct not in (None, ""):
+        try:
+            target = float(target_rate_pct)
+        except (TypeError, ValueError) as exc:
+            raise ReturnsError("Target return rate must be numeric.") from exc
+        if target < 0:
+            raise ReturnsError("Target return rate cannot be negative.")
+    elif baseline.get("order_rate_pct") is not None:
+        target = round(float(baseline["order_rate_pct"]) * 0.75, 2)
+    with get_session() as session:
+        row = ReturnCorrectiveAction(
+            cause_type=str(cause_type or "").strip().lower(),
+            cause_value=str(cause_value or "").strip(),
+            title=clean_title,
+            description=str(description or "").strip() or None,
+            owner_user_id=owner_id,
+            due_date=due,
+            status="open",
+            source_filters_json=dumps_json(source_filters or {}),
+            baseline_start=start,
+            baseline_end=end,
+            baseline_return_count=int(baseline["return_count"]),
+            baseline_order_count=baseline.get("order_count"),
+            baseline_rate_pct=baseline.get("order_rate_pct"),
+            baseline_credit_amount=float(baseline["credit_amount"]),
+            baseline_revenue=baseline.get("sales_revenue"),
+            target_rate_pct=target,
+            confidence_label=str(baseline["confidence_label"]),
+            confidence_n=int(baseline["confidence_n"]),
+            created_by_user_id=_actor_id(actor_user),
+        )
+        session.add(row)
+        session.flush()
+        _add_corrective_action_event(
+            session,
+            row,
+            event_type="created",
+            actor_user=actor_user,
+            to_status="open",
+            payload={"baseline": baseline, "target_rate_pct": target},
+        )
+        session.commit()
+        session.refresh(row)
+        return _serialize_corrective_action(row)
+
+
+def list_corrective_actions(
+    *,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    with get_session() as session:
+        query = session.query(ReturnCorrectiveAction)
+        if status:
+            query = query.filter(ReturnCorrectiveAction.status == str(status).strip().lower())
+        rows = query.order_by(ReturnCorrectiveAction.created_at.desc(), ReturnCorrectiveAction.id.desc()).limit(max(1, min(int(limit), 500))).all()
+        owner_ids = {int(row.owner_user_id) for row in rows}
+        owners = {
+            int(user.id): user.full_name
+            for user in session.query(User).filter(User.id.in_(owner_ids)).all()
+        } if owner_ids else {}
+        return [_serialize_corrective_action(row, owner_name=owners.get(int(row.owner_user_id))) for row in rows]
+
+
+def get_corrective_action(action_id: int) -> dict[str, Any] | None:
+    with get_session() as session:
+        row = session.get(ReturnCorrectiveAction, int(action_id))
+        if not row:
+            return None
+        owner = session.get(User, int(row.owner_user_id))
+        events = (
+            session.query(ReturnCorrectiveActionEvent)
+            .filter(ReturnCorrectiveActionEvent.corrective_action_id == int(row.id))
+            .order_by(ReturnCorrectiveActionEvent.created_at.asc(), ReturnCorrectiveActionEvent.id.asc())
+            .all()
+        )
+        return _serialize_corrective_action(row, owner_name=owner.full_name if owner else None, events=events)
+
+
+def transition_corrective_action(
+    action_id: int,
+    *,
+    target_status: str,
+    notes: str | None = None,
+    outcome_start: date | str | None = None,
+    outcome_end: date | str | None = None,
+    actor_user: Any = None,
+    scope: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    target = str(target_status or "").strip().lower()
+    with get_session() as session:
+        row = session.get(ReturnCorrectiveAction, int(action_id))
+        if not row:
+            raise ReturnsError("Corrective action not found.")
+        current = str(row.status or "open").strip().lower()
+        if target not in CORRECTIVE_ACTION_TRANSITIONS.get(current, set()):
+            raise InvalidTransitionError(f"Cannot move corrective action from {current} to {target}.")
+        event_payload: dict[str, Any] = {"notes": str(notes or "").strip()}
+        now = utcnow()
+        if target == "approved":
+            row.approved_by_user_id = _actor_id(actor_user)
+            row.approved_at = now
+            row.approval_notes = str(notes or "").strip() or None
+        if target == "resolved":
+            start = _coerce_date(outcome_start) or (row.baseline_end + timedelta(days=1))
+            end = _coerce_date(outcome_end) or date.today()
+            if end < start:
+                raise ReturnsError("Outcome window must end on or after it starts.")
+            outcome = returns_cause_measurement(
+                cause_type=row.cause_type,
+                cause_value=row.cause_value,
+                start_date=start,
+                end_date=end,
+                actor_user=actor_user,
+                scope=scope,
+            )
+            # get_session() is a scoped session. The measurement opens and
+            # closes that same scope, so re-attach the action before writing
+            # its outcome fields.
+            session.add(row)
+            row.outcome_start = start
+            row.outcome_end = end
+            row.outcome_return_count = int(outcome["return_count"])
+            row.outcome_order_count = outcome.get("order_count")
+            row.outcome_rate_pct = outcome.get("order_rate_pct")
+            row.outcome_credit_amount = float(outcome["credit_amount"])
+            row.outcome_revenue = outcome.get("sales_revenue")
+            expected_credit = None
+            if row.baseline_revenue not in (None, 0) and row.outcome_revenue is not None:
+                expected_credit = float(row.baseline_credit_amount or 0) / float(row.baseline_revenue) * float(row.outcome_revenue)
+            elif row.baseline_order_count not in (None, 0) and row.outcome_order_count is not None:
+                expected_credit = float(row.baseline_credit_amount or 0) / float(row.baseline_order_count) * float(row.outcome_order_count)
+            row.realized_impact_amount = (
+                round(expected_credit - float(row.outcome_credit_amount or 0), 2)
+                if expected_credit is not None
+                else None
+            )
+            row.resolved_by_user_id = _actor_id(actor_user)
+            row.resolved_at = now
+            row.resolution_notes = str(notes or "").strip() or None
+            event_payload["outcome"] = outcome
+            event_payload["expected_credit_at_baseline_rate"] = expected_credit
+            event_payload["realized_impact_amount"] = row.realized_impact_amount
+        row.status = target
+        row.updated_at = now
+        _add_corrective_action_event(
+            session,
+            row,
+            event_type="status_changed",
+            actor_user=actor_user,
+            from_status=current,
+            to_status=target,
+            payload=event_payload,
+        )
+        session.commit()
+        session.refresh(row)
+        return _serialize_corrective_action(row)
+
+
+def resolved_corrective_action_summary(*, limit: int = 3) -> list[dict[str, Any]]:
+    """Small Overview-ready contract for demonstrably closed Returns exceptions."""
+    return list_corrective_actions(status="resolved", limit=limit)
 
 
 def get_rma_detail(
@@ -2880,7 +3812,11 @@ def update_receiving_review(
                 item_payload = _serialize_item(item)
                 item_payload["received_weight_lb"] = item.received_weight_lb
                 item.credit_amount = _credit_amount_for_item(item_payload)
-            item.supplier_credit = _coerce_bool(payload.get("supplier_credit"))
+            if "supplier_credit" in payload:
+                item.supplier_credit = _coerce_bool(payload.get("supplier_credit"))
+                item_metadata = loads_json(item.metadata_json, {})
+                item_metadata["supplier_credit_provided"] = True
+                item.metadata_json = dumps_json(item_metadata)
             item.receiving_notes = str(payload.get("receiving_notes") or "").strip() or None
             session.add(item)
             changed_item_ids.append(int(item.id))
@@ -3182,7 +4118,12 @@ def create_rma(
                     item_condition=str(item.get("condition") or "").strip() or None,
                     notes=str(item.get("notes") or "").strip() or None,
                     receiving_notes=str(item.get("receiving_notes") or "").strip() or None,
-                    metadata_json=dumps_json(item.get("metadata") or {}),
+                    metadata_json=dumps_json(
+                        {
+                            **(item.get("metadata") or {}),
+                            "supplier_credit_provided": bool(item.get("supplier_credit_provided")),
+                        }
+                    ),
                 )
             )
         row.updated_at = utcnow()

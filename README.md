@@ -10,7 +10,8 @@ spinner, or data request on page load.
 
 **Interactive Flask app:** [wholesale-analytics-platform.onrender.com](https://wholesale-analytics-platform.onrender.com/)
 — one click on **Explore demo** and you are in, read-only, no signup. Use this
-tier for custom filter combinations, returns, and admin workflows. The login
+tier for custom filter combinations, the Action Center, operational workspaces,
+Returns, and administration. The login
 page also lists six scoped accounts; sign in as `rep.dana` to see every figure
 narrow to one rep's book. Because this tier sleeps when idle, use the instant
 demo above for the portfolio walkthrough.
@@ -54,11 +55,10 @@ SKUs, three fiscal years, ~95k order lines) because it lives on a 512 MB
 shared-CPU box, so its totals are smaller than the ones quoted below. The shape
 of the data, and every finding, is identical.
 
-**A note on column names.** The warehouse columns still carry the source
-system's vocabulary — `ProteinType` holds the department, `YieldPct` holds
-sell-through, `CostPerLb` holds cost per selling unit. Renaming a source
-system's columns to match a re-org is how you break every downstream report, so
-the columns stay and `seed/catalog.py` documents the mapping.
+**A note on column names.** The warehouse columns still carry legacy source
+names while the semantic layer exposes retail departments, sell-through, and
+cost per selling unit. Renaming source fields to match a re-org is how you
+break every downstream report, so `seed/catalog.py` owns the mapping.
 
 ```bash
 pip install -r requirements.txt
@@ -85,8 +85,12 @@ same pages narrow to one rep's accounts.
 
 **Dashboards:** Overview (executive), Customers (KPIs, RFM, CLV, cohorts),
 Products (with drilldown and forecasting), Suppliers, Regions, Sales Reps,
-Labor, Returns (RMA intake with two-step approval and PDF export), and an
-admin portal for users, roles and visibility.
+Labor, Returns (RMA intake, root-cause analysis, owned corrective actions,
+before/after impact measurement, two-step approval, and PDF export), and an
+admin portal for users, roles and visibility. The server-backed **Decision &
+Operations Hub** adds a shared Action Center plus CRM Pipeline, Orders &
+Fulfilment, Procurement, Finance Operations, Inventory Operations, Master Data,
+Customer Service, and Enterprise Connections workspaces.
 
 ---
 
@@ -99,7 +103,7 @@ partitioning on, so a date-filtered page only touches the days it needs.
 
 **Revenue is derived, never stored.** The fact table holds pack weights, pack
 counts, a unit-of-billing flag and per-unit prices. The view computes revenue
-as `pack_weight × price` for catch-weight items and `pack_units × price` for
+as `pack_weight × price` for variable-weight items and `pack_units × price` for
 everything else. Scale-weighed items are the whole problem in retail fresh — a
 ribeye is billed on the weight that actually shipped, a case of portioned
 chicken is not — and storing a revenue column would let the two definitions
@@ -109,6 +113,29 @@ drift apart.
 rather than a dozen chatty endpoints, and the JSON export path is the same
 builder. An export can't disagree with the screen because it isn't computed
 separately.
+
+**The decision loop is persisted, not mocked.** A preventable Returns cause
+drills through with its filters intact, becomes an owned corrective action,
+moves through an audited state machine, and can only resolve after the server
+measures the same cause before and after the intervention. Overview then shows
+the resolved exception and realized dollar impact. Planning uses the same
+principle for versioned base/upside/downside scenarios: manager approval writes
+scenario-linked replenishment recommendations rather than browser-only totals.
+The shared decision ledger extends that loop to every analytics view: signal,
+owner, approval, evidence, dependency, reminder/escalation, before/after KPI,
+and realized financial value are persisted with append-only events. Approved
+Planning recommendations can create an idempotent draft purchase order, and
+the governed assistant can preview an action then create only a draft after an
+explicit confirmation.
+
+**The ERP/CRM boundary is deliberate.** Northgate owns decisions, approvals,
+exceptions, CRM pipeline/account planning and selected native records. It does
+not pretend to be the legal book of record for GL posting, settlement, physical
+warehouse execution, payroll, tax, enterprise email/calendar, or SSO/SCIM.
+Those capabilities appear as explicit source contracts with expected grain,
+refresh mode, owner and connection state; unavailable sources say so instead
+of producing synthetic operational history. See
+[`docs/decision-operations-architecture.md`](docs/decision-operations-architecture.md).
 
 **Incremental refresh with upserts.** `etl/partition_writer.py` rewrites only
 the partitions a batch touches, normalises primary keys across the int/float/
@@ -127,8 +154,9 @@ and nothing touches the network.
 The reason is arithmetic rather than taste: a spun-down free instance costs
 30–50 seconds before any application code runs, and that latency cannot be
 optimised, only avoided. The static tier is what a reviewer lands on; the Flask
-app stays for filter combinations outside the presets, the returns workflow and
-admin, linked as "Open the live app".
+app stays for filter combinations outside the presets and every server-backed
+workflow. Both sides use the same grouped desktop navigation, theme handoff,
+and direct links to the decision ledger.
 
 ```bash
 python build_static.py --out dist            # every page × every preset
@@ -258,8 +286,9 @@ followed, **one vendor crosses into loss** through the final year, and the
 
 ## Metric definitions
 
-Every metric that appears on more than one page is defined once, in
-`app/services/metrics.py`, and imported. This is not tidiness: the demo
+Every metric that appears on more than one page is computed once in
+`app/services/metrics.py`, and its governed definition is loaded from the dbt
+metadata in `models/marts/schema.yml`. This is not tidiness: the demo
 previously showed `Active (30d): 0` beside a KPI card reading
 `ACTIVE CUSTOMERS 80`, three different answers to "what revenue is at risk"
 in one viewport, and an HHI of 197, 378 and 1,933 for the same company on three
@@ -285,16 +314,20 @@ before the server's today, so nothing could fall inside a 30-day window.
 ### The catalogue
 
 Those are the definitions that settled the contradictions above. There are now
-**42**, and the full list is a page on the site — [`/metrics/`][catalogue] —
+**62** — 47 implemented and 15 deliberately withheld — and the full list is a
+page on the site — [`/metrics/`][catalogue] —
 because a definition nobody can read is a definition nobody can check. Each row
-carries a formula, a grain, a source table, an owner page, and a **gross-or-net
-basis**, and each is pinned by a unit test with a hand-computed expected value.
+carries a formula, grain, source, Snowflake dbt mart, owner, **gross-or-net
+basis**, and certification tier. Implemented formulas are pinned by unit tests
+with hand-computed expected values; CI parses the dbt project and rejects
+catalogue/model drift.
 
 What the catalogue added beyond the originals:
 
-* **Forecast accuracy** on the Planner — variance %, MAPE, signed bias and hit
-  rate. The demand planner previously produced a forecast and never scored it,
-  which is the largest thing that was missing from this app.
+* **Forecast accuracy** on the Planner — WAPE as the executive headline,
+  SMAPE, diagnostic-only MAPE, signed bias at 1/4/8 weeks, hit rate, and an
+  explicit same-month-prior-year baseline comparison. Incomplete calendar
+  periods are excluded from the backtest.
 * **Net sales**, stated as an explicit gross → discounts → returns → net bridge
   on the Overview, so the basis of every other figure is answerable in one line.
 * **Customer economics** — retention and churn as *rates* rather than counts,
@@ -303,6 +336,10 @@ What the catalogue added beyond the originals:
 * **Retail and ops** — GMROI, sell-through, shrink, return rate, return cost
   rate, resolution time, quota attainment, revenue per employee and per paid
   hour, and employee turnover split voluntary/involuntary.
+* **Returns depth and closure** — distinct order, unit, and revenue rates;
+  preventability; reason Pareto; return-adjusted margin; aging and SLA evidence;
+  repeat-returner concentration; customer-value impact; and realized corrective-
+  action impact from measured before/after windows.
 * **A Finance page** — income statement, balance sheet, and the ratios that read
   them. Operating expenses, D&A, interest, tax and the balance sheet are seeded;
   revenue, gross sales, discounts and COGS are read from the sales fact, so the
@@ -311,20 +348,21 @@ What the catalogue added beyond the originals:
   reconciles to the Finance page's marketing expense line and new customers are
   counted by first order in the sales fact; only the channel split is modelled.
 
-Two of those deserve their caveats in public. **Inventory turnover** appears
+One of those deserves its caveat in public. **Inventory turnover** appears
 twice on purpose — a cost-basis multiple on Finance and the Inventory page's
 usage-based `52 ÷ weeks on hand` — because they are different measures that will
 not agree, so they carry separate catalogue keys and each states its basis on
-screen. And **ROMI** is implemented exactly as the standard formula writes it,
-which credits marketing with every dollar of company sales movement; revenue
-fell year-over-year for reasons campaigns do not drive, so it reads sharply
-negative and the page says why rather than quietly swapping in a friendlier
-denominator.
+screen. **ROMI is intentionally withheld**: the seed has campaign spend, leads,
+and acquired-account counts, but no exposure or incrementality source. Crediting
+marketing with company-wide revenue movement would be a causal claim the data
+cannot support.
 
 Metrics that would need a source system this business does not have — MRR, NPS,
-web-funnel measures, HRIS metrics, market share, lead response time — are in the
-catalogue too, marked **not implemented, with the system each would require**.
-Fabricating them would have been easier and worth less.
+web funnels, CRM pipeline, fulfilment events, procurement records, case SLAs,
+same-store history, attribution touchpoints, or governed compensation and
+engagement data — are in the catalogue too. Every withheld row includes a full
+paragraph naming the missing source contract. Fabricating them would have been
+easier and worth less.
 
 ### What it reads, on the published snapshot
 
@@ -344,13 +382,13 @@ number is asking to be taken on faith.
 | Inventory turnover | **8.1×** cost basis | The Inventory page's usage-based turns is a *different* measure |
 | CAC · payback | **$17,655 · 9.1 months** | Marketing plus an 18% acquisition share of selling |
 | CLV:CAC | **1.32×** | 12-month CLV — stricter than the lifetime basis the 3:1 rule assumes |
-| Forecast variance · bias | **−18.9% · +$881k** | Over-forecasting, at a 50% hit rate within ±10% |
+| Forecast scoring | **WAPE · SMAPE · signed bias** | Complete-period rolling-origin backtest; MAPE is diagnostic only |
 | Customer concentration | **HHI 30** | Labelled with its dimension, on the 0–10,000 scale |
 
-The forecast also publishes a **209% MAPE**, which is the least flattering number
-on the site and stays because it is true: MAPE divides by the actual, and at
-SKU-month grain the small denominators dominate it. That is precisely why hit
-rate, variance and signed bias are shown beside it rather than instead of it.
+MAPE remains visible as a diagnostic because sparse SKU series make its failure
+mode instructive, but it is no longer the headline. WAPE weights errors by
+actual revenue, SMAPE bounds the secondary diagnostic, and the page states
+plainly when the model does not beat the naive-seasonal baseline.
 
 [catalogue]: https://kushpatel29.github.io/wholesale-analytics-platform/metrics/
 
@@ -389,10 +427,10 @@ The honest list. Synthetic data can demonstrate some things and not others.
 * **`QuantityShipped` is shadowed by the DuckDB fact view** (it is a
   weight-converted unit count), so unit fill rate is derived from
   `BackorderQty` instead. Dividing the two columns gives a 306% fill rate.
-* **Warehouse columns keep the source system's names.** `ProteinType` holds the
-  department, `YieldPct` holds sell-through, `CostPerLb` holds cost per selling
-  unit. Renaming a source system's columns to match a re-org breaks every
-  downstream report; the mapping is documented in `seed/catalog.py` instead.
+* **Warehouse columns keep the source system's names.** The semantic layer maps
+  legacy fields to department, sell-through, and per-selling-unit cost. Renaming
+  source fields to match a re-org breaks every downstream report; the mapping
+  is documented in `seed/catalog.py` instead.
 * **The free-tier host sleeps after ~15 minutes idle.** A first request pays a
   container cold start on top of the query. Warm pages are fast; the first one
   is not.

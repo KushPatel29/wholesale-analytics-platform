@@ -1263,7 +1263,7 @@
     }
     if (statusKey === "needs_mapping" || row?.needs_protein_mapping) {
       return {
-        label: "Fix protein mapping",
+        label: "Fix department mapping",
         note: "The SKU needs a department rule mapping before minimum and target pricing guidance can be trusted.",
         view: { search: getSku(row), section: "table", mode: "analyst" },
       };
@@ -1271,7 +1271,7 @@
     if (belowMinimum) {
       return {
         label: "Recover minimum price now",
-        note: `${pricing.currentLabel} is below the minimum threshold for this protein rule, so pricing review is urgent before additional volume is chased.`,
+        note: `${pricing.currentLabel} is below the minimum threshold for this department rule, so pricing review is urgent before additional volume is chased.`,
         view: { quickFilters: ["below_minimum_margin"], section: "pricing", emphasis: "profit", mode: "analyst" },
       };
     }
@@ -1318,7 +1318,7 @@
       lines.push(`Selected from ${widget} under ${section || "Product Intelligence"} using ${metricText}.`);
     }
     if (String(row?.status_key || "").toLowerCase() === "needs_mapping") {
-      lines.push("Protein/category mapping is missing, so the SKU cannot be compared against the correct minimum and target pricing rules yet.");
+      lines.push("Department/category mapping is missing, so the SKU cannot be compared against the correct minimum and target pricing rules yet.");
     }
     if (row?.revenue_delta_pct != null && !Number.isNaN(Number(row.revenue_delta_pct))) {
       const delta = Number(row.revenue_delta_pct);

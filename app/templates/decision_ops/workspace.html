@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{{ workspace.label }} · Northgate{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-1') }}">{% endblock %}
+{% block content %}
+<div class="decision-shell">
+  <header class="decision-masthead">
+    <div>
+      <div class="decision-eyebrow">{{ workspace.eyebrow }}</div>
+      <h1>{{ workspace.label }}</h1>
+      <p>{{ workspace.description }}</p>
+    </div>
+    <div class="decision-rail" aria-label="Governed decision lifecycle">
+      <div class="decision-rail__step"><strong>Signal</strong><span>Certified metric or source record</span></div>
+      <div class="decision-rail__step"><strong>Owner</strong><span>Priority, due date and dependency</span></div>
+      <div class="decision-rail__step"><strong>Approval</strong><span>Controlled decision and evidence</span></div>
+      <div class="decision-rail__step"><strong>Outcome</strong><span>Before/after KPI and realized value</span></div>
+    </div>
+  </header>
+
+  <div class="decision-layout">
+    {% include "decision_ops/_nav.html" %}
+    <div class="decision-board">
+      {% set summary = listing.summary %}
+      <section class="decision-ledger" aria-label="Workspace summary">
+        {% if workspace_key == 'actions' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Open</span><strong class="decision-ledger__value">{{ summary.open }}</strong><small class="decision-ledger__note">owned actions</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Overdue</span><strong class="decision-ledger__value">{{ summary.overdue }}</strong><small class="decision-ledger__note">past due</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Approval</span><strong class="decision-ledger__value">{{ summary.pending_approval }}</strong><small class="decision-ledger__note">awaiting decision</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Blocked</span><strong class="decision-ledger__value">{{ summary.blocked }}</strong><small class="decision-ledger__note">dependency risk</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Expected</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.expected_impact) }}</strong><small class="decision-ledger__note">entered impact</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Realized</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.realized_impact) }}</strong><small class="decision-ledger__note">completed value</small></div>
+        {% elif workspace_key == 'crm' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Pipeline</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.pipeline_value or 0) }}</strong><small class="decision-ledger__note">open opportunity value</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Weighted</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.weighted_pipeline or 0) }}</strong><small class="decision-ledger__note">probability adjusted</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Commit</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.commit_value or 0) }}</strong><small class="decision-ledger__note">forecast category</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Win rate</span><strong class="decision-ledger__value">{{ '{:.0%}'.format(summary.win_rate) if summary.win_rate is not none else '—' }}</strong><small class="decision-ledger__note">closed decisions only</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Stalled</span><strong class="decision-ledger__value">{{ summary.stalled }}</strong><small class="decision-ledger__note">missing next step</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Coverage</span><strong class="decision-ledger__value">—</strong><small class="decision-ledger__note">quota source required</small></div>
+        {% else %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Records</span><strong class="decision-ledger__value">{{ summary.total or 0 }}</strong><small class="decision-ledger__note">governed envelopes</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Exceptions</span><strong class="decision-ledger__value">{{ summary.exceptions or 0 }}</strong><small class="decision-ledger__note">needs attention</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Approval</span><strong class="decision-ledger__value">{{ summary.pending_approval or 0 }}</strong><small class="decision-ledger__note">awaiting decision</small></div>
+          {% if workspace_key == 'orders' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Backlog</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.backlog_value or 0) }}</strong><small class="decision-ledger__note">open sales orders</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Holds</span><strong class="decision-ledger__value">{{ summary.holds or 0 }}</strong><small class="decision-ledger__note">credit or exception</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Partial</span><strong class="decision-ledger__value">{{ summary.partial_shipments or 0 }}</strong><small class="decision-ledger__note">partial shipments</small></div>
+          {% elif workspace_key == 'procurement' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Commitments</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.open_commitments or 0) }}</strong><small class="decision-ledger__note">open PO value</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Match</span><strong class="decision-ledger__value">{{ summary.match_exceptions or 0 }}</strong><small class="decision-ledger__note">three-way exceptions</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Write-back</span><strong class="decision-ledger__value">On</strong><small class="decision-ledger__note">approved plans → draft PO</small></div>
+          {% elif workspace_key == 'finance' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Close</span><strong class="decision-ledger__value">{{ summary.open_close_tasks or 0 }}</strong><small class="decision-ledger__note">open checklist tasks</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Reconcile</span><strong class="decision-ledger__value">{{ summary.unreconciled or 0 }}</strong><small class="decision-ledger__note">open bank work</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">13-week cash</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.cash_forecast or 0) }}</strong><small class="decision-ledger__note">entered forecast</small></div>
+          {% elif workspace_key == 'inventory' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Proposals</span><strong class="decision-ledger__value">{{ summary.open_proposals or 0 }}</strong><small class="decision-ledger__note">open reorder work</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Adjustments</span><strong class="decision-ledger__value">{{ summary.adjustments_pending or 0 }}</strong><small class="decision-ledger__note">pending approval</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Execution</span><strong class="decision-ledger__value">Gated</strong><small class="decision-ledger__note">WMS source contract</small></div>
+          {% elif workspace_key == 'service' %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Open cases</span><strong class="decision-ledger__value">{{ summary.open_cases or 0 }}</strong><small class="decision-ledger__note">unresolved</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">SLA risk</span><strong class="decision-ledger__value">{{ summary.sla_at_risk or 0 }}</strong><small class="decision-ledger__note">past service due</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Reopened</span><strong class="decision-ledger__value">{{ summary.reopened or 0 }}</strong><small class="decision-ledger__note">quality signal</small></div>
+          {% else %}
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Connected</span><strong class="decision-ledger__value">{{ source_contracts|selectattr('status', 'in', ['native', 'verified'])|list|length }}</strong><small class="decision-ledger__note">verified/native sources</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Source-gated</span><strong class="decision-ledger__value">{{ source_contracts|rejectattr('status', 'in', ['native', 'verified'])|list|length }}</strong><small class="decision-ledger__note">honest unavailable state</small></div>
+          <div class="decision-ledger__cell"><span class="decision-ledger__label">Credentials</span><strong class="decision-ledger__value">0</strong><small class="decision-ledger__note">stored in this ledger</small></div>
+          {% endif %}
+        {% endif %}
+      </section>
+
+      {% if workspace_key == 'crm' %}
+      <section class="decision-panel" aria-labelledby="pipeline-heading">
+        <div class="decision-panel__head"><h2 id="pipeline-heading">Opportunity stage board</h2><span class="decision-badge">Forecast categories retained</span></div>
+        <div class="decision-panel__body decision-pipeline">
+          {% for stage in workspace.pipeline_stages %}
+          <div class="decision-pipeline__stage">
+            <h3>{{ stage|replace('_', ' ') }}</h3>
+            {% for row in listing['items'] if row.record_type == 'opportunity' and row.status == stage %}
+            <a class="decision-pipeline__card" href="{{ url_for('decision_ops.record_detail', record_id=row.id) }}"><strong>{{ row.title }}</strong><span>{{ row.currency }} {{ '{:,.0f}'.format(row.amount or 0) }} · {{ row.probability_pct or 0 }}%</span></a>
+            {% else %}<span class="decision-ledger__note">No opportunities</span>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      <section class="decision-panel" aria-labelledby="queue-heading">
+        <div class="decision-panel__head">
+          <h2 id="queue-heading">{{ 'Accountable action queue' if workspace_key == 'actions' else 'Operational record ledger' }}</h2>
+          <span class="decision-badge">{{ listing.total }} total</span>
+        </div>
+        <div class="decision-panel__body">
+          {% if listing['items'] %}
+          <table class="decision-table">
+            <thead><tr><th>Record</th><th>Type / source</th><th>Status</th><th>Owner</th><th>Due / close</th><th>Value</th></tr></thead>
+            <tbody>
+            {% for row in listing['items'] %}
+              <tr>
+                <td><a href="{{ url_for('decision_ops.action_detail', work_item_id=row.id) if workspace_key == 'actions' else url_for('decision_ops.record_detail', record_id=row.id) }}">{{ row.title }}</a><div class="decision-ledger__note">{{ ('Action #' ~ row.id) if workspace_key == 'actions' else row.record_number }}</div></td>
+                <td>{{ row.source_module if workspace_key == 'actions' else row.record_type|replace('_', ' ') }}{% if row.source_record_id %}<div class="decision-ledger__note">{{ row.source_record_id }}</div>{% endif %}</td>
+                <td><span class="decision-badge {% if row.is_overdue %}decision-badge--risk{% endif %}">{{ row.status|replace('_', ' ') }}</span></td>
+                <td>{{ row.owner_user_id or 'Unassigned' }}</td>
+                <td>{{ (row.due_at or row.close_at or row.service_due_at or '—')|string|truncate(16, true, '') }}</td>
+                <td>{% set value = row.expected_financial_impact if workspace_key == 'actions' else row.amount %}{% if value is not none %}{{ row.currency }} {{ '{:,.0f}'.format(value) }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="decision-empty"><span class="decision-empty__mark" aria-hidden="true">◇</span><div><strong>No operational history has been invented.</strong>{{ 'Create the first draft action from a certified signal.' if workspace_key == 'actions' else 'Create a native workflow record, or connect the source contract below for system-of-record events.' }}</div></div>
+          {% endif %}
+        </div>
+      </section>
+
+      {% if can_manage and workspace_key != 'enterprise' %}
+      <section class="decision-panel" aria-labelledby="create-heading">
+        <div class="decision-panel__head"><h2 id="create-heading">Create governed draft</h2><span class="decision-badge">Audited</span></div>
+        <div class="decision-panel__body">
+          {% if workspace_key == 'procurement' and planning_scenario_id %}
+          <form class="mb-3" method="post" action="{{ url_for('decision_ops.planning_writeback', scenario_id=planning_scenario_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-primary btn-sm" type="submit">Create idempotent draft PO from approved scenario {{ planning_scenario_id }}</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('decision_ops.create_action') if workspace_key == 'actions' else url_for('decision_ops.create_record', workspace=workspace_key) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="decision-form-grid">
+              <div class="span-2"><label for="recordTitle">Title</label><input class="form-control" id="recordTitle" name="title" maxlength="240" value="{{ action_seed.title if action_seed is defined else '' }}" required></div>
+              {% if workspace_key == 'actions' %}
+              <div><label for="recordSource">Source module</label><select class="form-select" id="recordSource" name="source_module" required>{% for module in ['overview','products','inventory','customers','suppliers','salesreps','planning','returns','assistant'] %}<option value="{{ module }}" {% if action_seed is defined and module == action_seed.source_module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></div>
+              <div><label for="sourceRecord">Source record</label><input class="form-control" id="sourceRecord" name="source_record_id" value="{{ action_seed.source_record_id if action_seed is defined else '' }}" maxlength="180"></div>
+              <div><label for="metricKey">Certified metric key</label><input class="form-control" id="metricKey" name="metric_key" value="{{ action_seed.metric_key if action_seed is defined else '' }}" maxlength="160"></div>
+              <div><label for="sourceUrl">Source URL</label><input class="form-control" id="sourceUrl" name="source_url" value="{{ action_seed.source_url if action_seed is defined else '/work' }}" maxlength="500"></div>
+              <div><label for="baselineValue">Baseline KPI</label><input class="form-control" id="baselineValue" name="baseline_value" inputmode="decimal"></div>
+              <div><label for="targetValue">Target KPI</label><input class="form-control" id="targetValue" name="target_value" inputmode="decimal"></div>
+              <div><label for="metricUnit">Unit</label><input class="form-control" id="metricUnit" name="metric_unit" maxlength="32" placeholder="%, days, units"></div>
+              {% else %}
+              <div><label for="recordType">Record type</label><select class="form-select" id="recordType" name="record_type" required>{% for type in workspace.record_types %}<option value="{{ type }}">{{ type|replace('_', ' ')|title }}</option>{% endfor %}</select></div>
+              <div><label for="recordStatus">Starting status</label><select class="form-select" id="recordStatus" name="status">{% for status in workspace.statuses %}<option value="{{ status }}">{{ status|replace('_', ' ')|title }}</option>{% endfor %}</select></div>
+              <div><label for="accountRef">Account / customer</label><input class="form-control" id="accountRef" name="account_ref" maxlength="160"></div>
+              <div><label for="supplierRef">Supplier</label><input class="form-control" id="supplierRef" name="supplier_ref" maxlength="160"></div>
+              <div><label for="amountValue">Amount</label><input class="form-control" id="amountValue" name="amount" inputmode="decimal"></div>
+              {% if workspace_key == 'crm' %}
+              <div><label for="probabilityValue">Probability %</label><input class="form-control" id="probabilityValue" name="probability_pct" type="number" min="0" max="100"></div>
+              <div><label for="forecastCategory">Forecast category</label><select class="form-select" id="forecastCategory" name="forecast_category"><option value="pipeline">Pipeline</option><option value="best_case">Best case</option><option value="commit">Commit</option><option value="closed">Closed</option></select></div>
+              <div><label for="nextStep">Next step</label><input class="form-control" id="nextStep" name="next_step" maxlength="240"></div>
+              {% endif %}
+              {% endif %}
+              <div><label for="ownerUser">Owner user ID</label><input class="form-control" id="ownerUser" name="owner_user_id" type="number" min="1"></div>
+              <div><label for="priorityValue">Priority</label><select class="form-select" id="priorityValue" name="priority">{% for priority in ['low','medium','high','critical'] %}<option value="{{ priority }}" {% if priority == 'medium' %}selected{% endif %}>{{ priority|title }}</option>{% endfor %}</select></div>
+              <div><label for="dueValue">Due / close</label><input class="form-control" id="dueValue" name="{{ 'due_at' if workspace_key == 'actions' else 'close_at' }}" type="datetime-local"></div>
+              {% if workspace_key == 'actions' %}<div><label for="expectedImpact">Expected financial impact</label><input class="form-control" id="expectedImpact" name="expected_financial_impact" inputmode="decimal"></div>{% endif %}
+              <div class="span-3"><label for="recordDescription">Description / rationale</label><textarea class="form-control" id="recordDescription" name="description" rows="3" maxlength="4000"></textarea></div>
+              <div class="span-3"><button class="btn btn-primary" type="submit">Create draft</button></div>
+            </div>
+          </form>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if workspace_key == 'master-data' and can_manage %}
+      <section class="decision-panel" aria-labelledby="mdm-heading">
+        <div class="decision-panel__head"><h2 id="mdm-heading">Controlled data change</h2><span class="decision-badge">Duplicate review retained</span></div>
+        <div class="decision-panel__body">
+          <form method="post" action="{{ url_for('decision_ops.master_data_change') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="decision-form-grid"><div><label for="mdmType">Entity type</label><select class="form-select" id="mdmType" name="entity_type">{% for type in workspace.record_types %}<option value="{{ type }}">{{ type|replace('_',' ')|title }}</option>{% endfor %}</select></div><div><label for="mdmKey">Entity key</label><input class="form-control" id="mdmKey" name="entity_key" required></div><div><label for="mdmChange">Change type</label><select class="form-select" id="mdmChange" name="change_type"><option>create</option><option selected>update</option><option>merge</option><option>retire</option></select></div><div class="span-3"><label for="mdmAfter">Proposed values (JSON)</label><textarea class="form-control" id="mdmAfter" name="after" rows="3" required>{}</textarea></div><div class="span-3"><button class="btn btn-outline-primary" type="submit">Request controlled change</button></div></div>
+          </form>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if source_contracts %}
+      <section class="decision-panel" aria-labelledby="sources-heading">
+        <div class="decision-panel__head"><h2 id="sources-heading">Source contracts</h2><span class="decision-badge decision-badge--source">No synthetic operations</span></div>
+        <div class="decision-panel__body decision-contracts">
+          {% for contract in source_contracts %}
+          <article class="decision-contract">
+            <div class="decision-contract__top"><h3>{{ contract.display_name }}</h3><span class="decision-badge {% if contract.status not in ['native','verified'] %}decision-badge--source{% endif %}">{{ contract.status|replace('_',' ') }}</span></div>
+            <p>{{ contract.expected_grain }}</p><p><strong>Refresh:</strong> {{ contract.refresh_mode }}</p>
+            <details><summary>Capabilities and ownership</summary><p>{{ contract.capabilities|join(' · ') }}</p><p>System: {{ contract.system_name or 'Not configured' }} · Owner: {{ contract.owner or 'Unassigned' }}</p></details>
+            {% if workspace_key == 'enterprise' and can_manage and not contract.native %}
+            <details><summary>Update non-secret metadata</summary><form class="mt-2" method="post" action="{{ url_for('decision_ops.update_contract', contract_key=contract.contract_key) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label class="decision-ledger__label" for="status-{{ loop.index }}">Status</label><select class="form-select form-select-sm mb-2" id="status-{{ loop.index }}" name="status">{% for state in ['not_connected','discovery','configured','verified','degraded','disabled'] %}<option value="{{ state }}" {% if state == contract.status %}selected{% endif %}>{{ state|replace('_',' ')|title }}</option>{% endfor %}</select><input class="form-control form-control-sm mb-2" name="system_name" value="{{ contract.system_name or '' }}" placeholder="System name" aria-label="{{ contract.display_name }} system name"><input class="form-control form-control-sm mb-2" name="owner" value="{{ contract.owner or '' }}" placeholder="Business/technical owner" aria-label="{{ contract.display_name }} owner"><input class="form-control form-control-sm mb-2" name="base_url" value="{{ contract.base_url or '' }}" placeholder="HTTPS base URL (no secret)" aria-label="{{ contract.display_name }} base URL"><button class="btn btn-outline-primary btn-sm" type="submit">Save contract</button></form></details>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

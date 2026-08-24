@@ -2,6 +2,7 @@
 {% block title %}Customer RFM | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
+<h1 class="h3 mb-3">Customer RFM</h1>
 {% set rfm = rfm or {} %}
 {% set settings = rfm.get('settings') or {} %}
 {% set filters = rfm.get('filters') or {} %}
@@ -43,7 +44,7 @@
   {% endif %}
 {%- endmacro %}
 
-<ul class="nav nav-tabs mb-3" role="tablist">
+<ul class="nav nav-tabs mb-3">
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
   <li class="nav-item"><a class="nav-link active" href="{{ url_for('customers.rfm') }}">RFM</a></li>
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
@@ -156,15 +157,16 @@
   </div>
   <div class="table-responsive">
     <table id="segmentLeaderboardTable" class="table table-sm align-middle mb-0">
+      <caption class="visually-hidden">RFM segment leaderboard</caption>
       <thead class="table-light">
         <tr>
-          <th><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="segment" aria-label="Sort leaderboard by segment">Segment</button></th>
-          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="customers" aria-label="Sort leaderboard by customers">Customers</button></th>
-          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue" aria-label="Sort leaderboard by revenue">Revenue</button></th>
-          {% if show_costs %}<th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="profit" aria-label="Sort leaderboard by profit">Profit</button></th>{% endif %}
-          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="avg_orders" aria-label="Sort leaderboard by average orders">Avg orders</button></th>
-          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="median_recency_days" aria-label="Sort leaderboard by median recency">Median recency</button></th>
-          <th class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue_share_pct" aria-label="Sort leaderboard by share">Share %</button></th>
+          <th scope="col"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="segment" aria-label="Sort leaderboard by segment">Segment</button></th>
+          <th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="customers" aria-label="Sort leaderboard by customers">Customers</button></th>
+          <th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue" aria-label="Sort leaderboard by revenue">Revenue</button></th>
+          {% if show_costs %}<th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="profit" aria-label="Sort leaderboard by profit">Profit</button></th>{% endif %}
+          <th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="avg_orders" aria-label="Sort leaderboard by average orders">Avg orders</button></th>
+          <th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="median_recency_days" aria-label="Sort leaderboard by median recency">Median recency</button></th>
+          <th scope="col" class="text-end"><button class="btn btn-link btn-sm p-0 leaderboard-sort" type="button" data-sort="revenue_share_pct" aria-label="Sort leaderboard by share">Share %</button></th>
         </tr>
       </thead>
       <tbody>
@@ -216,6 +218,7 @@
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 rfm-matrix-table" aria-label="RFM matrix">
+            <caption class="visually-hidden">RFM recency and frequency matrix</caption>
             <thead class="table-light">
               <tr>
                 <th scope="col">R \ F</th>
@@ -399,19 +402,20 @@
   <div class="card-header bg-white"><h2 class="h6 mb-0">Top Customers</h2></div>
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0">
+      <caption class="visually-hidden">Top customers by RFM score</caption>
       <thead class="table-light">
         <tr>
-          <th title="Customer name and ID">Customer</th>
-          <th title="RFM segment assignment">Segment</th>
-          <th class="text-center" title="Recency score">R</th>
-          <th class="text-center" title="Frequency score">F</th>
-          <th class="text-center" title="Monetary score">M</th>
-          <th class="text-center" title="R+F+M">RFM</th>
-          <th class="text-end" title="Monetary value in lookback">Monetary</th>
-          <th class="text-end" title="Orders in lookback">Orders</th>
-          <th class="text-end" title="Days since last order">Days since last</th>
-          <th class="text-end">Last order</th>
-          <th class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
+          <th scope="col" title="Customer name and ID">Customer</th>
+          <th scope="col" title="RFM segment assignment">Segment</th>
+          <th scope="col" class="text-center" title="Recency score">R</th>
+          <th scope="col" class="text-center" title="Frequency score">F</th>
+          <th scope="col" class="text-center" title="Monetary score">M</th>
+          <th scope="col" class="text-center" title="R+F+M">RFM</th>
+          <th scope="col" class="text-end" title="Monetary value in lookback">Monetary</th>
+          <th scope="col" class="text-end" title="Orders in lookback">Orders</th>
+          <th scope="col" class="text-end" title="Days since last order">Days since last</th>
+          <th scope="col" class="text-end">Last order</th>
+          <th scope="col" class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
         </tr>
       </thead>
       <tbody>
@@ -447,22 +451,23 @@
   </div>
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0 full-rfm-table">
+      <caption class="visually-hidden">Customers in the active RFM selection</caption>
       <thead class="table-light position-sticky top-0">
         <tr>
-          <th title="Customer name and ID">Customer</th>
-          <th title="RFM segment assignment">Segment</th>
-          <th class="text-center" title="Recency score">R</th>
-          <th class="text-center" title="Frequency score">F</th>
-          <th class="text-center" title="Monetary score">M</th>
-          <th class="text-center" title="R+F+M">RFM total</th>
-          <th class="text-end" title="Monetary value in lookback">Monetary</th>
-          <th class="text-end" title="Revenue in lookback">Revenue</th>
-          {% if show_costs %}<th class="text-end" title="Profit in lookback">Profit</th>{% endif %}
-          <th class="text-end" title="Orders in lookback">Orders</th>
-          <th class="text-end" title="Days since last order">Days since last</th>
-          <th class="text-end">Last order</th>
-          <th class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
-          <th class="text-end" title="Percent change versus prior window">Δ Revenue %</th>
+          <th scope="col" title="Customer name and ID">Customer</th>
+          <th scope="col" title="RFM segment assignment">Segment</th>
+          <th scope="col" class="text-center" title="Recency score">R</th>
+          <th scope="col" class="text-center" title="Frequency score">F</th>
+          <th scope="col" class="text-center" title="Monetary score">M</th>
+          <th scope="col" class="text-center" title="R+F+M">RFM total</th>
+          <th scope="col" class="text-end" title="Monetary value in lookback">Monetary</th>
+          <th scope="col" class="text-end" title="Revenue in lookback">Revenue</th>
+          {% if show_costs %}<th scope="col" class="text-end" title="Profit in lookback">Profit</th>{% endif %}
+          <th scope="col" class="text-end" title="Orders in lookback">Orders</th>
+          <th scope="col" class="text-end" title="Days since last order">Days since last</th>
+          <th scope="col" class="text-end">Last order</th>
+          <th scope="col" class="text-end" title="Current minus prior-window revenue">Δ Revenue</th>
+          <th scope="col" class="text-end" title="Percent change versus prior window">Δ Revenue %</th>
         </tr>
       </thead>
       <tbody>

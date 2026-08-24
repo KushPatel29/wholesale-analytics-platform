@@ -2,6 +2,7 @@
 {% block title %}Customer Lifetime Value | Northgate Retail Analytics{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
+<h1 class="h3 mb-3">Customer Lifetime Value</h1>
 {% set clv = clv or {} %}
 {% set settings = clv.get('settings') or {} %}
 {% set filters_state = clv.get('filters') or {} %}
@@ -40,7 +41,7 @@
   {% endif %}
 {%- endmacro %}
 
-<ul class="nav nav-tabs mb-3" role="tablist">
+<ul class="nav nav-tabs mb-3">
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.kpis') }}">KPIs</a></li>
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.rfm') }}">RFM</a></li>
   <li class="nav-item"><a class="nav-link" href="{{ url_for('customers.cohorts') }}">Cohorts</a></li>
@@ -189,15 +190,16 @@
   </div>
   <div class="table-responsive">
     <table class="table table-sm align-middle mb-0">
+      <caption class="visually-hidden">Customer lifetime value segment leaderboard</caption>
       <thead class="table-light">
         <tr>
-          <th>Segment</th>
-          <th class="text-end">Customers</th>
-          <th class="text-end">Revenue</th>
-          {% if show_costs %}<th class="text-end">Profit</th>{% endif %}
-          <th class="text-end">Avg CLV</th>
-          <th class="text-end">Avg churn risk</th>
-          <th class="text-end">Share %</th>
+          <th scope="col">Segment</th>
+          <th scope="col" class="text-end">Customers</th>
+          <th scope="col" class="text-end">Revenue</th>
+          {% if show_costs %}<th scope="col" class="text-end">Profit</th>{% endif %}
+          <th scope="col" class="text-end">Avg CLV</th>
+          <th scope="col" class="text-end">Avg churn risk</th>
+          <th scope="col" class="text-end">Share %</th>
         </tr>
       </thead>
       <tbody>
@@ -228,15 +230,16 @@
   </div>
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0">
+      <caption class="visually-hidden">Top customers by selected lifetime value mode</caption>
       <thead class="table-light">
         <tr>
-          <th>Customer</th>
-          <th>Segment</th>
-          <th class="text-end">CLV (12m)</th>
-          <th class="text-end">CLV at Risk</th>
-          <th class="text-end">Revenue</th>
-          <th class="text-end">Margin %</th>
-          <th class="text-end">Growth Potential</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Segment</th>
+          <th scope="col" class="text-end">CLV (12m)</th>
+          <th scope="col" class="text-end">CLV at Risk</th>
+          <th scope="col" class="text-end">Revenue</th>
+          <th scope="col" class="text-end">Margin %</th>
+          <th scope="col" class="text-end">Growth Potential</th>
         </tr>
       </thead>
       <tbody>
@@ -422,22 +425,23 @@
   </div>
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0 clv-table-v2">
+      <caption class="visually-hidden">Customers in the active lifetime value selection</caption>
       <thead class="table-light position-sticky top-0">
         <tr>
-          <th title="Customer name and ID">Customer</th>
-          <th title="CLV segment">Segment</th>
-          <th class="text-end" title="12-month CLV estimate">CLV (12m)</th>
-          <th class="text-end" title="CLV weighted by churn probability">CLV at risk</th>
-          <th class="text-end" title="Revenue in selected window">Revenue</th>
-          {% if show_costs %}<th class="text-end" title="Gross profit in selected window">Gross Profit</th>{% endif %}
-          <th class="text-end" title="Gross margin percent">Margin %</th>
-          <th class="text-end" title="Average order value">AOV</th>
-          <th class="text-end" title="Annualized order frequency">Orders/year</th>
-          <th class="text-end" title="Days since last order">Recency</th>
-          <th class="text-end" title="Last order date">Last order</th>
-          <th class="text-end" title="Revenue delta versus prior window">Δ Revenue</th>
-          <th class="text-end" title="Revenue delta percent versus prior window">Δ Revenue %</th>
-          <th class="text-end" title="Action">Action</th>
+          <th scope="col" title="Customer name and ID">Customer</th>
+          <th scope="col" title="CLV segment">Segment</th>
+          <th scope="col" class="text-end" title="12-month CLV estimate">CLV (12m)</th>
+          <th scope="col" class="text-end" title="CLV weighted by churn probability">CLV at risk</th>
+          <th scope="col" class="text-end" title="Revenue in selected window">Revenue</th>
+          {% if show_costs %}<th scope="col" class="text-end" title="Gross profit in selected window">Gross Profit</th>{% endif %}
+          <th scope="col" class="text-end" title="Gross margin percent">Margin %</th>
+          <th scope="col" class="text-end" title="Average order value">AOV</th>
+          <th scope="col" class="text-end" title="Annualized order frequency">Orders/year</th>
+          <th scope="col" class="text-end" title="Days since last order">Recency</th>
+          <th scope="col" class="text-end" title="Last order date">Last order</th>
+          <th scope="col" class="text-end" title="Revenue delta versus prior window">Δ Revenue</th>
+          <th scope="col" class="text-end" title="Revenue delta percent versus prior window">Δ Revenue %</th>
+          <th scope="col" class="text-end" title="Action">Action</th>
         </tr>
       </thead>
       <tbody>

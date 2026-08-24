@@ -20,6 +20,8 @@
   {% set fmt = metric.format or 'text' %}
   {% if fmt == 'currency' %}
     {{ (metric.value|money) if metric.value is not none else 'n/a' }}
+  {% elif fmt == 'percent_points' %}
+    {{ (metric.value|pct) if metric.value is not none else 'n/a' }}
   {% elif fmt == 'percent' %}
     {{ ((metric.value * 100)|pct) if metric.value is not none else 'n/a' }}
   {% elif fmt == 'score' %}

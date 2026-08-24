@@ -23,6 +23,8 @@
 {% set state_form_method = 'post' if cohorts_state_v2_enabled else 'get' %}
 {% set control_keys = ['threshold','lookback_months','cohort_granularity','cohort_horizon','reactivation_window_days','at_risk_window_days','status','segmentation','table_search','table_page','dataset','format','cohort','month_index','search','page','page_size'] %}
 
+<h1 class="h3 mb-3">Customer Cohorts</h1>
+
 <ul class="nav nav-tabs mb-3 cohort-tabs">
   <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
   <li class="nav-item"><a class="nav-link" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
@@ -240,6 +242,10 @@
           </a>
         </div>
         <div id="churnRegionV2" style="height: 430px;"></div>
+        <div id="churnRegionEmpty" class="text-muted small py-3 d-none">
+          Regional churn needs at least five customers in an eligible region and a starting customer base in the active window.
+          Broaden the region filters, increase lookback, or lower the inactivity threshold to populate this chart.
+        </div>
       </div>
     </div>
   </div>
@@ -265,7 +271,7 @@
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="mb-0">Churn Segmentation</h5>
           <div class="d-flex gap-2 align-items-center">
-            <select id="segDimension" class="form-select form-select-sm">
+            <select id="segDimension" class="form-select form-select-sm" aria-label="Segmentation dimension">
               <option value="region" {% if (state.get('segmentation') or 'region') == 'region' %}selected{% endif %}>Region</option>
               {% if is_admin_scope %}
               <option value="sales_rep" {% if (state.get('segmentation') or 'region') == 'sales_rep' %}selected{% endif %}>Sales Rep</option>
@@ -295,11 +301,12 @@
         </div>
         <div class="table-responsive" style="max-height: 320px;">
           <table class="table table-sm align-middle mb-0">
+            <caption class="visually-hidden">Customers with the highest churn risk</caption>
             <thead>
               <tr>
-                <th>Customer</th>
-                <th class="text-end">Lost Rev</th>
-                <th class="text-end">Days</th>
+                <th scope="col">Customer</th>
+                <th scope="col" class="text-end">Lost Rev</th>
+                <th scope="col" class="text-end">Days</th>
               </tr>
             </thead>
             <tbody>
@@ -329,11 +336,12 @@
         <h5 class="mb-2">At-Risk Action List (Preview)</h5>
         <div class="table-responsive" style="max-height: 320px;">
           <table class="table table-sm align-middle mb-0">
+            <caption class="visually-hidden">At-risk customer action preview</caption>
             <thead>
               <tr>
-                <th>Customer</th>
-                <th class="text-end">Prev 90d</th>
-                <th class="text-end">Days</th>
+                <th scope="col">Customer</th>
+                <th scope="col" class="text-end">Prev 90d</th>
+                <th scope="col" class="text-end">Days</th>
               </tr>
             </thead>
             <tbody>
@@ -409,16 +417,17 @@
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle mb-0">
+        <caption class="visually-hidden">Customer cohort driver records for the active filters</caption>
         <thead>
           <tr>
-            <th>Customer</th>
-            <th>Region</th>
-            <th>Sales Rep</th>
-            <th>Status</th>
-            <th class="text-end">Days Since Last</th>
-            <th class="text-end">Prev 90d</th>
-            <th class="text-end">Last 90d</th>
-            <th class="text-end">Lost Rev Est.</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Region</th>
+            <th scope="col">Sales Rep</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="text-end">Days Since Last</th>
+            <th scope="col" class="text-end">Prev 90d</th>
+            <th scope="col" class="text-end">Last 90d</th>
+            <th scope="col" class="text-end">Lost Rev Est.</th>
           </tr>
         </thead>
         <tbody>
@@ -461,14 +470,15 @@
       <div class="modal-body">
         <div class="table-responsive">
           <table class="table table-sm table-striped align-middle mb-0">
+            <caption class="visually-hidden">Customers in the selected cohort retention cell</caption>
             <thead>
               <tr>
-                <th>Customer</th>
-                <th>Region</th>
-                <th>Sales Rep</th>
-                <th>Status</th>
-                <th class="text-end">Days Since Last</th>
-                <th class="text-end">Lost Rev Est.</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Region</th>
+                <th scope="col">Sales Rep</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="text-end">Days Since Last</th>
+                <th scope="col" class="text-end">Lost Rev Est.</th>
               </tr>
             </thead>
             <tbody id="cohortCellRows">
@@ -582,16 +592,17 @@
     document.getElementById('cohortHeatmapEmpty').classList.remove('d-none');
   }
 
-  const regionRows = segmentation.region_chart || segmentation.region || [];
+  const regionRows = (segmentation.region_chart || segmentation.region || []).filter(r => !r.rate_suppressed);
   const regionLabels = regionRows.map(r => r.segment);
   const regionCounts = regionRows.map(r => Number(r.churned_customers || 0));
-  const regionRates = regionRows.map(r => Number(r.churn_rate_pct || 0));
+  const regionRates = regionRows.map(r => r.display_churn_rate_pct == null ? null : Number(r.display_churn_rate_pct));
   const regionText = regionRows.map((r) => {
     const sampleNote = r.low_sample ? ` (low sample < ${r.low_sample_threshold || 10})` : '';
     return `${Number(r.churned_customers || 0)}/${Number(r.customers || 0)}${sampleNote}`;
   });
   const regionColors = regionRows.map(r => r.low_sample ? '#95a5a6' : '#c0392b');
-  Plotly.newPlot('churnRegionV2', [
+  if (regionRows.length) {
+    Plotly.newPlot('churnRegionV2', [
     {
       type: 'bar',
       name: 'Churned Customers',
@@ -623,7 +634,11 @@
       rangemode: 'tozero'
     },
     legend: {orientation: 'h'}
-  }, {responsive: true, displayModeBar: false});
+    }, {responsive: true, displayModeBar: false});
+  } else {
+    document.getElementById('churnRegionV2').style.display = 'none';
+    document.getElementById('churnRegionEmpty').classList.remove('d-none');
+  }
 
   const trendMonths = trend.months || [];
   const trendNew = trend.new_churn || [];
@@ -689,9 +704,9 @@
   };
 
   function renderSegChart(kind) {
-    const rows = segSets[kind] || [];
+    const rows = (segSets[kind] || []).filter(r => !r.rate_suppressed);
     const labels = rows.map(r => r.segment);
-    const values = rows.map(r => r.churn_rate_pct || 0);
+    const values = rows.map(r => r.display_churn_rate_pct == null ? null : Number(r.display_churn_rate_pct));
     Plotly.newPlot('churnSegmentationV2', [{
       type: 'bar',
       x: labels,

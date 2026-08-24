@@ -508,7 +508,7 @@
     <article class="ciw-surface ciw-card-body">
       <div class="ciw-toolbar mb-3">
         <div>
-          <h3 class="ciw-section-title">Protein, Product & Category Intelligence</h3>
+          <h3 class="ciw-section-title">Department, Product & Category Intelligence</h3>
           <p class="ciw-section-copy">{{ protein_data.get('narrative') or (product_intelligence or {}).get('narrative') }}</p>
         </div>
         <div class="ciw-action-row">
@@ -518,10 +518,10 @@
       </div>
 
       <div class="ciw-metric-grid mb-3">
-        {{ ui.metric_card({'label': 'Lead Protein', 'value': protein_summary.get('top_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('top_family_share_pct'), 'percent')|string ~ ' of current-window revenue') if protein_summary.get('top_family_share_pct') is not none else None}) }}
-        {{ ui.metric_card({'label': 'Top 5 Protein Share', 'value': protein_summary.get('top5_family_share_pct'), 'format': 'percent', 'detail': protein_summary.get('dependency_posture')}) }}
+        {{ ui.metric_card({'label': 'Lead Department', 'value': protein_summary.get('top_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('top_family_share_pct'), 'percent')|string ~ ' of current-window revenue') if protein_summary.get('top_family_share_pct') is not none else None}) }}
+        {{ ui.metric_card({'label': 'Top 5 Department Share', 'value': protein_summary.get('top5_family_share_pct'), 'format': 'percent', 'detail': protein_summary.get('dependency_posture')}) }}
         {{ ui.metric_card({'label': 'Department Families', 'value': protein_summary.get('family_count'), 'format': 'number', 'detail': 'Visible under current RBAC scope'}) }}
-        {{ ui.metric_card({'label': 'Fastest Growing Protein', 'value': protein_summary.get('fastest_growing_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('fastest_growing_family_delta_pct'), 'percent')|string ~ ' vs prior window') if protein_summary.get('fastest_growing_family_delta_pct') is not none else 'No growing family signal'}) }}
+        {{ ui.metric_card({'label': 'Fastest Growing Department', 'value': protein_summary.get('fastest_growing_family'), 'format': 'text', 'detail': (ui.fmt_value(protein_summary.get('fastest_growing_family_delta_pct'), 'percent')|string ~ ' vs prior window') if protein_summary.get('fastest_growing_family_delta_pct') is not none else 'No growing family signal'}) }}
       </div>
 
       <div class="ciw-focus-bar" aria-label="Filter product sections by department">
@@ -607,7 +607,7 @@
         <div class="ciw-surface-soft p-3">
           <div class="ciw-card-head">
             <div>
-              <h4>Margin Watch by Protein</h4>
+              <h4>Margin Watch by Department</h4>
               <div class="ciw-card-subtitle">Department families carrying margin leakage or cost pressure.</div>
             </div>
           </div>
@@ -626,7 +626,7 @@
                     <td><span class="badge rounded-pill" style="background-color: {{ status_color }}; color: var(--wa-text-inverse);">{{ row.get('target_status') or 'Status pending' }}</span></td>
                   </tr>
                 {% else %}
-                  <tr><td colspan="5" class="text-center text-muted py-3">No protein-family margin watchlist.</td></tr>
+                  <tr><td colspan="5" class="text-center text-muted py-3">No department margin watchlist.</td></tr>
                 {% endfor %}
               </tbody>
             </table>

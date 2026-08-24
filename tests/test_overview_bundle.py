@@ -302,10 +302,10 @@ def test_overview_page_renders_v3_when_flag_on(client, app):
     html = resp.get_data(as_text=True)
     assert 'data-overview-v3="1"' in html
     assert "Executive KPI command center" in html
-    assert "Business health summary rail" in html
+    assert "Strategic outcomes and operating context" in html
     assert "Morning narrative" in html
     assert "Investigation and follow-up rail" in html
-    assert "Open customer movers" in html
+    assert "Review customers" in html
     assert 'id="trendExportBtn"' in html
     assert 'id="filterCountChip"' in html
     assert 'id="comparisonBasisChip"' in html
@@ -313,7 +313,7 @@ def test_overview_page_renders_v3_when_flag_on(client, app):
     assert 'id="dataCutoffChip"' in html
     assert 'id="commandWindowNote"' in html
     assert 'id="heroPriorWindowChip"' in html
-    assert 'id="healthRevenueState"' in html
+    assert "Closed decision loop" in html
     assert html.count('id="packsCoverageChip"') == 1
     assert 'id="driversMoversLink"' in html
 

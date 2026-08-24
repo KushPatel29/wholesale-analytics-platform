@@ -14,7 +14,16 @@ from app.returns import blueprints as returns_blueprints
 from app.returns import orders as returns_orders
 from app.returns import service
 from app.returns import suggestions
-from app.returns.models import ReturnApproval, ReturnEvent, ReturnRMA, ReturnRMAItem, ReturnWebhookEvent, get_session
+from app.returns.models import (
+    ReturnApproval,
+    ReturnCorrectiveAction,
+    ReturnCorrectiveActionEvent,
+    ReturnEvent,
+    ReturnRMA,
+    ReturnRMAItem,
+    ReturnWebhookEvent,
+    get_session,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -181,6 +190,156 @@ def test_returns_index_supports_both_slash_variants(app, monkeypatch):
     assert resp_slash.status_code == 200
     assert b"All Returns" in resp.data
     assert b"Returns" in resp.data
+
+
+def test_returns_tracker_paginates_without_truncating_export_source(monkeypatch):
+    source_rows = [{"id": index} for index in range(1, 62)]
+    calls: list[dict[str, object]] = []
+
+    def _list_rmas(**filters):
+        calls.append(filters)
+        return source_rows
+
+    monkeypatch.setattr(service, "list_rmas", _list_rmas)
+
+    result = service.paginate_rmas(page=2, page_size=25, status="all")
+
+    assert [row["id"] for row in result["rows"]] == list(range(26, 51))
+    assert result == {
+        "rows": source_rows[25:50],
+        "page": 2,
+        "page_size": 25,
+        "total_rows": 61,
+        "total_pages": 3,
+        "start_row": 26,
+        "end_row": 50,
+        "has_previous": True,
+        "has_next": True,
+    }
+    assert calls == [{"status": "all"}]
+
+
+def test_returns_corrective_action_closes_with_measured_outcome(app):
+    scope = {"is_admin": True, "scope_mode": "all"}
+    actor = _make_user(role="manager", user_id=42)
+    reason = "corrective_action_test_reason"
+    with get_session() as session:
+        rma = ReturnRMA(
+            customer_id="C-ACTION-TEST",
+            customer_name="Action Test Customer",
+            order_id="ORD-1",
+            order_date=pd.Timestamp("2025-01-05").date(),
+            date_submitted=pd.Timestamp("2025-01-10").to_pydatetime(),
+            status=service.STATUS_COMPLETED,
+            total_credit_amount=20.0,
+        )
+        session.add(rma)
+        session.flush()
+        session.add(ReturnRMAItem(
+            rma_id=int(rma.id),
+            product_code="SKU-1",
+            sku="SKU-1",
+            qty=2.0,
+            credit_amount=20.0,
+            reason_code=reason,
+            reason_for_return=reason,
+            category="Warehouse",
+        ))
+        session.commit()
+        rma_id = int(rma.id)
+
+    action = service.create_corrective_action(
+        cause_type="reason",
+        cause_value=reason,
+        title="Eliminate action-test defect",
+        owner_user_id=42,
+        due_date="2025-02-15",
+        baseline_start="2025-01-01",
+        baseline_end="2025-01-15",
+        target_rate_pct=75,
+        source_filters={"from": "2025-01-01", "to": "2025-01-15"},
+        actor_user=actor,
+        scope=scope,
+    )
+    assert action["baseline"]["return_count"] == 1
+    assert action["baseline"]["rate_pct"] == 100.0
+    assert action["confidence_label"] == "low"
+
+    for target in ("in_progress", "pending_approval", "approved"):
+        action = service.transition_corrective_action(
+            action["id"], target_status=target, actor_user=actor, scope=scope
+        )
+    action = service.transition_corrective_action(
+        action["id"],
+        target_status="resolved",
+        notes="Validated in the outcome window.",
+        outcome_start="2025-01-01",
+        outcome_end="2025-01-15",
+        actor_user=actor,
+        scope=scope,
+    )
+    assert action["status"] == "resolved"
+    assert action["outcome"]["rate_pct"] == 100.0
+    assert action["realized_impact_amount"] == 0.0
+    detail = service.get_corrective_action(action["id"])
+    assert detail is not None
+    assert [event["to_status"] for event in detail["events"]] == [
+        "open", "in_progress", "pending_approval", "approved", "resolved"
+    ]
+
+    with get_session() as session:
+        session.query(ReturnCorrectiveActionEvent).filter(
+            ReturnCorrectiveActionEvent.corrective_action_id == int(action["id"])
+        ).delete(synchronize_session=False)
+        session.query(ReturnCorrectiveAction).filter(
+            ReturnCorrectiveAction.id == int(action["id"])
+        ).delete(synchronize_session=False)
+        session.query(ReturnRMAItem).filter(ReturnRMAItem.rma_id == rma_id).delete(synchronize_session=False)
+        session.query(ReturnRMA).filter(ReturnRMA.id == rma_id).delete(synchronize_session=False)
+        session.commit()
+
+
+def test_returns_depth_keeps_rate_bases_and_sla_missingness_distinct(monkeypatch):
+    headers = pd.DataFrame([{
+        "rma_id": 1,
+        "order_id": "ORD-1",
+        "customer_id": "C-1",
+        "customer_name": "Customer One",
+        "status": service.STATUS_PENDING,
+        "order_date": "2025-01-05",
+        "date_submitted": pd.Timestamp("2025-01-10"),
+        "wh_approved_at": pd.NaT,
+        "mgr_approved_at": pd.NaT,
+        "fin_cleared_at": pd.NaT,
+        "closed_at": pd.NaT,
+        "total_credit_amount": 20.0,
+    }])
+    items = pd.DataFrame([{
+        "rma_id": 1,
+        "product_code": "SKU-1",
+        "qty": 2.0,
+        "credit_amount": 20.0,
+        "reason_code": "damaged",
+        "reason_for_return": "Damaged",
+        "category": "Warehouse",
+    }])
+    monkeypatch.setattr(
+        service,
+        "_sales_window_basis",
+        lambda *_args, **_kwargs: {"order_count": 10, "units": 100.0, "revenue": 1000.0},
+    )
+    monkeypatch.setattr(
+        service,
+        "_return_adjusted_value_frames",
+        lambda *_args, **_kwargs: (pd.DataFrame(), pd.DataFrame()),
+    )
+    frames = service._returns_depth_frames(headers, items, from_date="2025-01-01", to_date="2025-01-15")
+    rate_rows = frames["return_rate_basis"].set_index("basis")
+    assert rate_rows.loc["Orders", "rate_pct"] == 10.0
+    assert rate_rows.loc["Units", "rate_pct"] == 2.0
+    assert rate_rows.loc["Revenue", "rate_pct"] == 2.0
+    assert frames["preventability"].iloc[0]["classification"] == "Preventable"
+    assert frames["workflow_sla"]["attainment_pct"].isna().all()
 
 
 def test_returns_index_forbidden_without_permission(app, monkeypatch):

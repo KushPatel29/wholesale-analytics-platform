@@ -1034,57 +1034,46 @@
     font-size: 0.82rem;
     color: var(--wa-text-dim);
   }
-  #overviewPage .overview-routebar {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 1rem;
-    margin: 0 0 1rem;
-    padding: 0.68rem 0.78rem;
-    border: 1px solid var(--wa-hairline);
-    border-left: 3px solid var(--overview-accent);
-    border-radius: 0.85rem;
-    background: var(--wa-surface);
-    box-shadow: var(--wa-shadow-sm);
+  #overviewPage .overview-inline-disclosure {
+    margin-top: 0.8rem;
+    border-top: 1px solid var(--wa-hairline);
+    padding-top: 0.7rem;
   }
-  #overviewPage .overview-routebar__label {
-    padding-right: 0.9rem;
-    border-right: 1px solid var(--wa-hairline);
-    color: var(--wa-text-dim);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  #overviewPage .overview-routebar__links {
-    display: flex;
-    gap: 0.35rem;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: thin;
-  }
-  #overviewPage .overview-routebar a {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.38rem;
-    padding: 0.38rem 0.62rem;
-    border-radius: 0.52rem;
-    color: var(--wa-text);
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  #overviewPage .overview-routebar a span {
+  #overviewPage :is(.overview-inline-disclosure, .overview-disclosure) > summary {
+    cursor: pointer;
     color: var(--overview-accent);
-    font-size: 0.66rem;
-    font-variant-numeric: tabular-nums;
+    font-weight: 750;
   }
-  #overviewPage .overview-routebar a:hover,
-  #overviewPage .overview-routebar a:focus-visible {
+  #overviewPage :is(.overview-inline-disclosure, .overview-disclosure) > summary:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--overview-accent) 32%, transparent);
+    outline-offset: 4px;
+  }
+  #overviewPage .overview-disclosure {
+    overflow: clip;
+  }
+  #overviewPage .overview-disclosure > summary {
+    padding: 1rem 1.1rem;
+    list-style-position: inside;
+  }
+  #overviewPage .overview-disclosure > summary span {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+  }
+  #overviewPage .overview-disclosure > summary small {
+    color: var(--wa-text-dim);
+    font-weight: 500;
+  }
+  #overviewPage .overview-disclosure[open] > summary {
+    border-bottom: 1px solid var(--wa-hairline);
     background: var(--wa-info-wash);
-    color: var(--wa-text-strong);
+  }
+  #overviewPage .overview-disclosure-body {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
   }
   #overviewPage :is(#executiveScorecardCard, #trendDriversSection, #moversRiskSection, #outlookShapeSection, #trustActionSection) {
     scroll-margin-top: 5.5rem;
@@ -1105,16 +1094,6 @@
         "signals";
     }
   }
-  @media (max-width: 767.98px) {
-    #overviewPage .overview-routebar {
-      grid-template-columns: 1fr;
-      gap: 0.45rem;
-    }
-    #overviewPage .overview-routebar__label {
-      padding-right: 0;
-      border-right: 0;
-    }
-  }
 </style>
 
 <div id="overviewPage"
@@ -1131,6 +1110,25 @@
      data-version="{{ version }}"
      data-overview-v2="1"
      data-overview-v3="1">
+
+  {% if can_permission('page.returns.view') %}
+  <section class="overview-panel mb-3" aria-label="Resolved Returns exception">
+    <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+      <div><div class="panel-eyebrow">Closed decision loop</div><div class="panel-title fw-semibold">Resolved Returns exception</div></div>
+      <a class="action-link" href="{{ url_for('returns_portal.corrective_actions', status='resolved') }}"><i class="bi bi-arrow-up-right"></i>Open corrective actions</a>
+    </div>
+    <div class="panel-body">
+      {% for action in resolved_returns_actions %}
+      <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+        <div><strong>{{ action.title }}</strong><div class="small text-muted">{{ action.cause_type|title }}: {{ action.cause_value }} · owner {{ action.owner_name }} · resolved {{ action.resolved_at }}</div><div class="small mt-1">Preventable-return rate moved from {{ ('%.2f%%'|format(action.baseline.rate_pct)) if action.baseline.rate_pct is not none else 'source required' }} to {{ ('%.2f%%'|format(action.outcome.rate_pct)) if action.outcome.rate_pct is not none else 'source required' }}.</div></div>
+        <div class="text-lg-end"><div class="hero-label">Realized credit impact</div><div class="h3 mb-0">{{ action.realized_impact_amount|currency if action.realized_impact_amount is not none else 'Source required' }}</div><div class="small text-muted">Expected at baseline burden minus actual outcome credit</div></div>
+      </div>
+      {% else %}
+      <p class="mb-0 text-muted">No corrective action has completed an approved before/after measurement yet. <a href="{{ url_for('returns_portal.index') }}">Open Returns</a> to review the workflow and, when analytics is enabled, create the first owned loop.</p>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   <section class="overview-hero">
     <div class="hero-main">
@@ -1255,59 +1253,6 @@
 
   <div id="overviewBanner" class="alert alert-warning d-none py-2 px-3 mb-3" role="alert"></div>
 
-  <section class="overview-health-rail overview-shell-card">
-    <div class="section-shell-header">
-      <div class="panel-eyebrow">Business health summary rail</div>
-      <h2 class="panel-title">Five-second executive scan</h2>
-      <div class="section-shell-copy">Plain-English status cards translate the current business window into operating condition, risk posture, and trust confidence before users read the deeper analysis.</div>
-    </div>
-    <div class="section-shell-body">
-      <div class="health-rail-grid">
-        <article class="health-scan-card" id="healthRevenueCard" data-tone="neutral">
-          <div class="health-scan-label">Revenue trend</div>
-          <div class="health-scan-value" id="healthRevenueState">Unavailable</div>
-          <div class="health-scan-detail" id="healthRevenueDetail">Assessing current trading direction.</div>
-        </article>
-        <article class="health-scan-card" id="healthProfitCard" data-tone="neutral">
-          <div class="health-scan-label">Profit status</div>
-          <div class="health-scan-value" id="healthProfitState">Unavailable</div>
-          <div class="health-scan-detail" id="healthProfitDetail">Checking protected finance outputs.</div>
-        </article>
-        <article class="health-scan-card" id="healthMarginCard" data-tone="neutral">
-          <div class="health-scan-label">Margin condition</div>
-          <div class="health-scan-value" id="healthMarginState">Unavailable</div>
-          <div class="health-scan-detail" id="healthMarginDetail">Evaluating quality of gross margin.</div>
-        </article>
-        <article class="health-scan-card" id="healthMovementCard" data-tone="neutral">
-          <div class="health-scan-label">Customer movement</div>
-          <div class="health-scan-value" id="healthMovementState">Unavailable</div>
-          <div class="health-scan-detail" id="healthMovementDetail">Reviewing expansion versus churn signals.</div>
-        </article>
-        <article class="health-scan-card" id="healthRiskCard" data-tone="neutral">
-          <div class="health-scan-label">Risk alert</div>
-          <div class="health-scan-value" id="healthRiskState">Unavailable</div>
-          <div class="health-scan-detail" id="healthRiskDetail">Measuring concentration and margin exposure.</div>
-        </article>
-        <article class="health-scan-card" id="healthTrustCard" data-tone="neutral">
-          <div class="health-scan-label">Data confidence</div>
-          <div class="health-scan-value" id="healthTrustState">Unavailable</div>
-          <div class="health-scan-detail" id="healthTrustDetail">Validating cost, pack, and mapping coverage.</div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <nav class="overview-routebar" aria-label="Business performance decision path">
-    <div class="overview-routebar__label">Decision path</div>
-    <div class="overview-routebar__links">
-      <a href="#executiveScorecardCard"><span>01</span>Outcomes</a>
-      <a href="#trendDriversSection"><span>02</span>Drivers</a>
-      <a href="#moversRiskSection"><span>03</span>Movement &amp; risk</a>
-      <a href="#outlookShapeSection"><span>04</span>Outlook</a>
-      <a href="#trustActionSection"><span>05</span>Trust &amp; action</a>
-    </div>
-  </nav>
-
   <div class="overview-main-flow">
     <section class="overview-panel" id="executiveScorecardCard">
       <div class="panel-header">
@@ -1369,6 +1314,10 @@
                 <div class="label">Profit / Lb</div>
                 <div class="value" id="scoreProfitPerLb">-</div>
               </article>
+            </div>
+            <details class="overview-inline-disclosure">
+              <summary>More customer and risk KPIs</summary>
+              <div class="command-secondary-grid mt-3">
               <article class="hero-side-metric">
                 <div class="label">New customer share</div>
                 <div class="value" id="scoreNewShare">-</div>
@@ -1391,7 +1340,8 @@
               <article class="hero-side-metric"><div class="label">NRR</div><div class="value" id="scoreNrr">-</div></article>
               <article class="hero-side-metric"><div class="label">ARPA</div><div class="value" id="scoreArpa">-</div></article>
               <article class="hero-side-metric"><div class="label">New / established ARPA</div><div class="value" id="scoreArpaCohorts">-</div></article>
-            </div>
+              </div>
+            </details>
           </div>
 
           <aside class="command-side-card">
@@ -1420,6 +1370,11 @@
       </div>
     </section>
 
+    <details class="overview-disclosure overview-shell-card" id="supportingMetricsDisclosure">
+      <summary>
+        <span><strong>Supporting KPI and reconciliation detail</strong><small>Gross-to-net bridge, acquisition economics, and operating-scale diagnostics</small></span>
+      </summary>
+      <div class="overview-disclosure-body">
     <section class="overview-panel" id="salesReconciliationCard">
       <div class="panel-header">
         <div class="panel-eyebrow">Revenue basis</div>
@@ -1463,6 +1418,8 @@
     </section>
 
     {% include "overview/_overview_kpis.html" %}
+      </div>
+    </details>
 
     <section class="overview-panel" id="executiveBriefingCard">
       <div class="panel-header">
@@ -1537,6 +1494,11 @@
       </div>
     </section>
 
+    <details class="overview-disclosure overview-shell-card" id="diagnosticWorkspacesDisclosure">
+      <summary>
+        <span><strong>Detailed diagnostic workspaces</strong><small>Trends, commercial movement, outlook, concentration, data trust, and module handoffs</small></span>
+      </summary>
+      <div class="overview-disclosure-body">
     <section class="overview-section-shell" id="trendDriversSection">
       <div class="section-shell-header">
         <div class="panel-eyebrow">Trend and performance diagnostics</div>
@@ -1616,13 +1578,7 @@
                 <div class="panel-subtitle">Each major signal should lead to a valid module handoff, governed drilldown, or trust remediation step.</div>
               </div>
               <div class="panel-body">
-                <div class="action-rail-feature">
-                  <div class="action-rail-label">Recommended next action</div>
-                  <h3 id="actionRailTopTitle">No recommended next action</h3>
-                  <p id="actionRailTopDetail">No additional follow-up is currently available for this window.</p>
-                  <a id="actionRailTopLink" class="action-inline-link d-none" href="#">Open investigation <i class="bi bi-arrow-right"></i></a>
-                </div>
-                <ul class="action-rail-list mt-3">
+                <ul class="action-rail-list">
                   <li><span>Trend diagnostic workspace</span><a href="#trendDiagnosticsCard" class="action-inline-link">Open trends</a></li>
                   <li><span>Margin-risk watchlist</span><a href="#riskWatchlistCard" class="action-inline-link">Review risk</a></li>
                   <li><span>Data issue remediation</span><a href="#dataHealthSection" class="action-inline-link">Open trust center</a></li>
@@ -1654,6 +1610,8 @@
         </div>
       </div>
     </section>
+      </div>
+    </details>
   </div>
 
   <div id="overviewEmpty" class="alert alert-info d-none mt-3" role="alert">
@@ -1663,5 +1621,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js', v='20260815-metrics-gap-1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/overview.js', v='20260825-progressive-1') }}" defer></script>
 {% endblock %}

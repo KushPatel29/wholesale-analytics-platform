@@ -367,6 +367,13 @@ def _query_workforce_metrics(filters: LaborFilters, current_summary: Mapping[str
             FROM scoped
             GROUP BY 1
         ),
+        headcount AS (
+            SELECT
+                ARG_MIN(employees, labor_date) AS start_employees,
+                ARG_MAX(employees, labor_date) AS end_employees,
+                AVG(employees) AS average_daily_employees
+            FROM daily
+        ),
         exits AS (
             SELECT
                 COUNT(DISTINCT CASE
@@ -394,10 +401,13 @@ def _query_workforce_metrics(filters: LaborFilters, current_summary: Mapping[str
             WHERE separation_date IS NOT NULL
         )
         SELECT
-            (SELECT AVG(employees) FROM daily) AS average_employees,
+            headcount.start_employees,
+            headcount.end_employees,
+            headcount.average_daily_employees,
+            (headcount.start_employees + headcount.end_employees) / 2.0 AS average_employees,
             exits.*,
             source_support.sourced_events
-        FROM exits CROSS JOIN source_support
+        FROM exits CROSS JOIN source_support CROSS JOIN headcount
         """,
         [
             *params,
@@ -409,6 +419,9 @@ def _query_workforce_metrics(filters: LaborFilters, current_summary: Mapping[str
     )
     row = workforce.iloc[0].to_dict() if not workforce.empty else {}
     average_employees = _li_safe_float(row.get("average_employees"))
+    start_employees = _li_safe_float(row.get("start_employees"))
+    end_employees = _li_safe_float(row.get("end_employees"))
+    average_daily_employees = _li_safe_float(row.get("average_daily_employees"))
     sourced_events = int(row.get("sourced_events") or 0)
     separations = int(row.get("separations") or 0) if sourced_events else None
     typed_separations = int(row.get("typed_separations") or 0) if sourced_events else None
@@ -451,15 +464,22 @@ def _query_workforce_metrics(filters: LaborFilters, current_summary: Mapping[str
 
     total_paid_hours = current_summary.get("total_paid_hours")
     separation_types_complete = bool(separations is not None and typed_separations == separations)
+    voluntary_separations = int(row.get("voluntary_separations") or 0) if separation_types_complete else None
+    involuntary_separations = int(row.get("involuntary_separations") or 0) if separation_types_complete else None
     return {
         "revenue": revenue,
         "revenue_per_employee": metrics.revenue_per_employee(revenue, average_employees),
         "revenue_per_paid_hour": metrics.revenue_per_paid_hour(revenue, total_paid_hours),
+        "start_employees": start_employees,
+        "end_employees": end_employees,
         "average_employees": average_employees,
+        "average_daily_employees": average_daily_employees,
         "separations": separations,
+        "voluntary_separations": voluntary_separations,
+        "involuntary_separations": involuntary_separations,
         "turnover_rate_pct": metrics.employee_turnover_rate(separations, average_employees),
-        "voluntary_turnover_rate_pct": metrics.employee_turnover_rate(row.get("voluntary_separations"), average_employees) if separation_types_complete else None,
-        "involuntary_turnover_rate_pct": metrics.employee_turnover_rate(row.get("involuntary_separations"), average_employees) if separation_types_complete else None,
+        "voluntary_turnover_rate_pct": metrics.employee_turnover_rate(voluntary_separations, average_employees),
+        "involuntary_turnover_rate_pct": metrics.employee_turnover_rate(involuntary_separations, average_employees),
         "separation_source_available": bool(sourced_events),
         "separation_types_available": separation_types_complete,
         "productivity_basis": productivity_basis,
@@ -2672,6 +2692,12 @@ def _li_build_scorecard_groups(analysis: Mapping[str, Any]) -> list[dict[str, An
     overall = analysis['overall']
     premium_delta = _li_delta_pct(current_summary.get('premium_cost'), prior_summary.get('premium_cost'))
     absence_delta = _li_delta_pct(current_summary.get('absence_cost'), prior_summary.get('absence_cost'))
+    turnover_basis = (
+        f"{overall.get('separations')} separations / {float(overall.get('average_employees')):.1f} average headcount; "
+        "period rate, not annualized."
+        if overall.get('separations') is not None and overall.get('average_employees') is not None
+        else 'Shown as unavailable when the source has no explicit separation events.'
+    )
     return [
         {
             'title': 'Cost & Hours',
@@ -2702,12 +2728,12 @@ def _li_build_scorecard_groups(analysis: Mapping[str, Any]) -> list[dict[str, An
             'description': 'Workforce size, governed productivity, and explicit employee lifecycle outcomes.',
             'metrics': [
                 _li_metric('Active Employees', current_summary.get('active_employees'), 'integer', 'Distinct employee_key values represented by the current filters.'),
-                _li_metric('Average Employees', overall.get('average_employees'), 'number', 'Average daily distinct employees represented during the selected period.'),
+                _li_metric('Average Employees', overall.get('average_employees'), 'number', 'Opening plus closing headcount divided by two for the selected period.'),
                 _li_metric('Revenue / Employee', overall.get('revenue_per_employee'), 'currency', 'Transaction sales in the selected period divided by average daily employees.', tone='primary', note=overall.get('productivity_basis')),
                 _li_metric('Revenue / Paid Hour', overall.get('revenue_per_paid_hour'), 'currency', 'Transaction sales in the selected period divided by scoped paid hours.', tone='primary', note=overall.get('productivity_basis')),
-                _li_metric('Employee Turnover', overall.get('turnover_rate_pct'), 'percent', 'Distinct separations in the period divided by average daily employees.', tone='warning', note='Shown as n/a when the source has no explicit separation events.'),
-                _li_metric('Voluntary Turnover', overall.get('voluntary_turnover_rate_pct'), 'percent', 'Voluntary separations divided by average daily employees.', tone='warning', note='Shown only when every scoped separation has a source type.'),
-                _li_metric('Involuntary Turnover', overall.get('involuntary_turnover_rate_pct'), 'percent', 'Involuntary separations divided by average daily employees.', tone='warning', note='Shown only when every scoped separation has a source type.'),
+                _li_metric('Employee Turnover', overall.get('turnover_rate_pct'), 'percent_points', 'Distinct separations in the period divided by average opening/closing headcount.', tone='warning', note=turnover_basis),
+                _li_metric('Voluntary Turnover', overall.get('voluntary_turnover_rate_pct'), 'percent_points', 'Voluntary separations divided by average opening/closing headcount.', tone='warning', note='Shown only when every scoped separation has a source type; period rate, not annualized.'),
+                _li_metric('Involuntary Turnover', overall.get('involuntary_turnover_rate_pct'), 'percent_points', 'Involuntary separations divided by average opening/closing headcount.', tone='warning', note='Shown only when every scoped separation has a source type; period rate, not annualized.'),
                 _li_metric('Active Departments', current_summary.get('active_departments'), 'integer', 'Distinct department_key values represented by the current filters.'),
                 _li_metric('Transaction Rows', current_summary.get('transaction_count'), 'integer', 'Underlying labor transaction rows included by the active filters.'),
                 _li_metric('Worker Concentration', overall.get('worker_concentration_top5_share'), 'percent', 'Share of scoped labor cost carried by the top five workers.', tone='warning'),
@@ -3299,6 +3325,11 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
         'revenue_per_employee': overall.get('revenue_per_employee'),
         'revenue_per_paid_hour': overall.get('revenue_per_paid_hour'),
         'turnover_rate_pct': overall.get('turnover_rate_pct'),
+        'turnover_basis': (
+            f"{overall.get('separations')} separations / {float(overall.get('average_employees')):.1f} average headcount; period rate, not annualized"
+            if overall.get('separations') is not None and overall.get('average_employees') is not None
+            else 'Explicit separations / average opening and closing headcount'
+        ),
     }
 
     kpis = {
@@ -3318,7 +3349,12 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
         'revenue_per_employee': overall.get('revenue_per_employee'),
         'revenue_per_paid_hour': overall.get('revenue_per_paid_hour'),
         'average_employees': overall.get('average_employees'),
+        'start_employees': overall.get('start_employees'),
+        'end_employees': overall.get('end_employees'),
+        'average_daily_employees': overall.get('average_daily_employees'),
         'separations': overall.get('separations'),
+        'voluntary_separations': overall.get('voluntary_separations'),
+        'involuntary_separations': overall.get('involuntary_separations'),
         'turnover_rate_pct': overall.get('turnover_rate_pct'),
         'voluntary_turnover_rate_pct': overall.get('voluntary_turnover_rate_pct'),
         'involuntary_turnover_rate_pct': overall.get('involuntary_turnover_rate_pct'),

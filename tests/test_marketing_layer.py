@@ -209,14 +209,9 @@ class TestBundle:
         assert by_key["cac_payback"]["value"] is None
         assert "unavailable" in by_key["clv_cac"]["basis"].lower()
 
-    def test_romi_is_reported_with_its_caveat_when_sales_fell(self, bundle):
-        romi = next(k for k in bundle["kpis"] if k["key"] == "romi")
-        growth = bundle["totals"]["sales_growth"]
-        if growth is None:
-            pytest.skip("no comparable prior year")
-        if growth < 0:
-            assert romi["value"] is not None and romi["value"] < 0
-            assert romi["note"], "a negative ROMI must carry its explanation"
+    def test_romi_is_not_exposed_as_a_marketing_kpi(self, bundle):
+        assert "romi" not in {kpi["key"] for kpi in bundle["kpis"]}
+        assert "sales_growth" not in bundle["totals"]
 
     def test_channel_rows_sum_to_the_totals(self, bundle):
         totals = bundle["totals"]
@@ -248,6 +243,7 @@ class TestMarketingRoutes:
         body = response.get_data(as_text=True)
         assert "MarketingApp" in body
         assert "marketing.js" in body
+        assert "ROMI intentionally withheld" in body
 
     def test_an_unknown_fiscal_year_falls_back(self, client):
         payload = client.get("/marketing/api/bundle?fy=1999").get_json()

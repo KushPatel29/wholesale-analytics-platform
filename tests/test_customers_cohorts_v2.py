@@ -190,6 +190,9 @@ def test_cohorts_v2_low_sample_region_flag_and_export_suffix(seed_customers_coho
     east_row = next(r for r in region_rows if str(r.get("segment")) == "East")
     assert east_row.get("low_sample") is True
     assert float(east_row.get("churn_rate_pct") or 0.0) == pytest.approx(100.0, rel=1e-6)
+    assert east_row.get("rate_suppressed") is True
+    assert east_row.get("display_churn_rate_pct") is None
+    assert east_row.get("metric_state") == "insufficient_data"
 
     export_df, stem = customers_cohorts_v2.build_export_dataset(filters, _scope_all(), args, "churn_region")
     assert stem == "churn_by_region_t90_lb24_month_h6"

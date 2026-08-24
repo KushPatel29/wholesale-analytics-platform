@@ -249,8 +249,6 @@
 
     const selected = payload.selected || {};
     const basis = payload.basis || {};
-    const totals = payload.totals || {};
-
     text("marketingScope", basis.scope || "");
     text(
       "marketingWindow",
@@ -269,19 +267,6 @@
     renderKpis(payload.kpis);
     renderChannels(payload.channels);
     renderMonthly(payload.monthly);
-
-    // ROMI's sign is a property of the formula, not a data problem. Say so
-    // where the reader meets it rather than letting a -758% stand unexplained.
-    const romi = (payload.kpis || []).find((k) => k.key === "romi");
-    const caveat = document.getElementById("marketingRomiCaveat");
-    if (caveat && romi && num(romi.value) != null && romi.value < 0) {
-      caveat.hidden = false;
-      caveat.innerHTML =
-        "<strong>On the ROMI figure.</strong> The formula credits marketing with every dollar of " +
-        `company sales movement. Revenue moved ${money(totals.sales_growth)} year on year for reasons ` +
-        "the campaign layer does not drive, so the measure reads sharply negative. The acquisition " +
-        "metrics above describe campaign performance; this one describes the company.";
-    }
 
     text(
       "marketingProvenance",

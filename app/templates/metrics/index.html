@@ -13,6 +13,10 @@
   .metric-catalogue__status { display: inline-flex; border-radius: 999px; padding: .2rem .55rem; font-size: .7rem; font-weight: 750; white-space: nowrap; }
   .metric-catalogue__status--live { background: #d9f0e5; color: #14513d; }
   .metric-catalogue__status--held { background: #f2eee7; color: #725b39; }
+  .metric-catalogue__tier { border-left: 3px solid #27735b; }
+  .metric-catalogue__tier code { color: #1f5c48; }
+  .metric-catalogue__withheld { border-left: 3px solid #a47b3f; }
+  .metric-catalogue__withheld p { max-width: 78ch; }
 </style>
 {% endblock %}
 
@@ -23,7 +27,7 @@
       <div class="col-lg-8">
         <div class="metric-catalogue__eyebrow mb-2">Governed definitions</div>
         <h1 class="display-6 mb-2">Metric catalogue</h1>
-        <p class="text-muted mb-2">The formula, grain, lineage, owner, and revenue basis behind every commercial metric added to this demo. Missing source systems are documented here, never represented by fabricated zeroes.</p>
+        <p class="text-muted mb-2">The formula, grain, lineage, owner, certification, and revenue basis behind every commercial metric added to this demo. This page is generated directly from the dbt model metadata in <code>models/marts/schema.yml</code>, so the app and warehouse definitions cannot drift.</p>
         {# The source-table column names sales_fact, finance_month and
            marketing_campaign, which reads as production lineage unless the page
            says otherwise. #}
@@ -40,10 +44,36 @@
     </div>
   </section>
 
+  <section class="row g-3 mb-4" aria-labelledby="certificationTitle">
+    <div class="col-12"><h2 class="h4 mb-0" id="certificationTitle">Certification tiers and lineage</h2></div>
+    <div class="col-md-4">
+      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
+        <h3 class="h6">Certified</h3>
+        <p class="small text-muted mb-0">Cross-page decision metrics with shared formula tests and reconciliation gates.</p>
+      </div></article>
+    </div>
+    <div class="col-md-4">
+      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
+        <h3 class="h6">Verified</h3>
+        <p class="small text-muted mb-0">Governed page metrics with a declared grain, owner, basis, and dbt model.</p>
+      </div></article>
+    </div>
+    <div class="col-md-4">
+      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
+        <h3 class="h6">Diagnostic / source-gated / withheld</h3>
+        <p class="small text-muted mb-0">Interpretive measures carry caveats; absent sources produce an explanation, never a fabricated value.</p>
+      </div></article>
+    </div>
+    <div class="col-12">
+      <p class="small text-muted mb-0">Lineage follows <code>source()</code> → staging <code>ref()</code> → governed mart → catalogue → application surface. The complete dependency graph is maintained in <code>docs/metric-lineage.md</code>.</p>
+    </div>
+  </section>
+
   <section class="card border-0 shadow-sm overflow-hidden">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 metric-catalogue__table">
-        <thead><tr><th>Metric</th><th>Definition</th><th>Grain</th><th>Source</th><th>Owner</th><th>Basis</th><th>Status</th></tr></thead>
+        <caption class="visually-hidden">Governed metric definitions, lineage, certification, and implementation status</caption>
+        <thead><tr><th scope="col">Metric</th><th scope="col">Definition</th><th scope="col">Grain</th><th scope="col">Source</th><th scope="col">dbt mart</th><th scope="col">Owner</th><th scope="col">Basis</th><th scope="col">Certification</th><th scope="col">Status</th></tr></thead>
         <tbody>
         {% for metric in metrics %}
           <tr>
@@ -51,13 +81,34 @@
             <td class="metric-catalogue__formula">{{ metric.formula }}</td>
             <td>{{ metric.grain }}</td>
             <td><code>{{ metric.source_table }}</code></td>
+            <td><code>{{ metric.model_name }}</code></td>
             <td>{{ metric.owner_page }}</td>
             <td>{{ metric.basis }}</td>
+            <td><span class="metric-catalogue__status {{ 'metric-catalogue__status--held' if metric.certification == 'Withheld' else 'metric-catalogue__status--live' }}">{{ metric.certification }}</span></td>
             <td><span class="metric-catalogue__status {{ 'metric-catalogue__status--live' if metric.status == 'Implemented' else 'metric-catalogue__status--held' }}">{{ metric.status }}</span></td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <section class="mt-4" aria-labelledby="withheldTitle">
+    <div class="mb-3">
+      <div class="metric-catalogue__eyebrow mb-2">Source-gated by design</div>
+      <h2 class="h4 mb-1" id="withheldTitle">Why {{ documented_only }} requested metrics are withheld</h2>
+      <p class="text-muted mb-0">Each definition states the exact source contract needed before it can become decision-grade.</p>
+    </div>
+    <div class="row g-3">
+      {% for metric in metrics if metric.certification == 'Withheld' %}
+      <div class="col-lg-6">
+        <article class="card h-100 border-0 shadow-sm metric-catalogue__withheld"><div class="card-body">
+          <h3 class="h6 mb-2">{{ metric.name }}</h3>
+          <p class="small text-muted mb-2">{{ metric.missing_source }}</p>
+          <div class="small"><strong>Required lineage:</strong> <code>{{ metric.source_table }}</code></div>
+        </div></article>
+      </div>
+      {% endfor %}
     </div>
   </section>
 </main>

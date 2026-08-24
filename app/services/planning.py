@@ -51,6 +51,7 @@ CONCENTRATION_WARN_PCT = 45.0
 MIN_ROWS_FOR_RATE = 25
 FORECAST_TOLERANCE_PCT = 10.0
 FORECAST_MIN_TRAINING_MONTHS = 4
+FORECAST_MIN_TRAINING_WEEKS = 8
 
 
 def _money(value: float) -> str:
@@ -404,55 +405,135 @@ def _department_column(frame: pd.DataFrame) -> str:
     return "ProteinType"
 
 
-def _monthly_revenue(frame: pd.DataFrame, group_column: str | None = None) -> pd.DataFrame:
+def _period_revenue(
+    frame: pd.DataFrame,
+    *,
+    frequency: str,
+    period_column: str,
+    group_column: str | None = None,
+) -> pd.DataFrame:
     if frame.empty or "Date" not in frame.columns:
-        return pd.DataFrame(columns=["month", "actual"])
+        return pd.DataFrame(columns=[period_column, "actual"])
     revenue_col = au.revenue_column(frame)
     if revenue_col not in frame.columns:
-        return pd.DataFrame(columns=["month", "actual"])
+        return pd.DataFrame(columns=[period_column, "actual"])
     working = frame[["Date", revenue_col] + ([group_column] if group_column and group_column in frame.columns else [])].copy()
     working["Date"] = pd.to_datetime(working["Date"], errors="coerce")
     working["actual"] = au.to_numeric_safe(working[revenue_col])
     working = working.dropna(subset=["Date"])
-    working["month"] = working["Date"].dt.to_period("M")
-    groupers = ([group_column] if group_column and group_column in working.columns else []) + ["month"]
+    if working.empty:
+        return pd.DataFrame(columns=[period_column, "actual"])
+    observed_through = working["Date"].max().normalize()
+    working[period_column] = working["Date"].dt.to_period(frequency)
+    # A four-day July is not a month and a six-day week is not a week. Only
+    # periods whose calendar end is observed are eligible for backtesting.
+    complete = working[period_column].map(lambda value: value.end_time.normalize() <= observed_through)
+    working = working[complete]
+    groupers = ([group_column] if group_column and group_column in working.columns else []) + [period_column]
     return working.groupby(groupers, dropna=False)["actual"].sum().reset_index()
 
 
-def _rolling_origin_rows(monthly: pd.DataFrame, horizon: int = 1) -> List[Dict[str, Any]]:
-    """Honest backtest: each forecast sees only months available at its origin."""
-    if monthly.empty:
+def _monthly_revenue(frame: pd.DataFrame, group_column: str | None = None) -> pd.DataFrame:
+    return _period_revenue(frame, frequency="M", period_column="month", group_column=group_column)
+
+
+def _weekly_revenue(frame: pd.DataFrame) -> pd.DataFrame:
+    return _period_revenue(frame, frequency="W-SUN", period_column="week")
+
+
+def _rolling_origin_period_rows(
+    periods: pd.DataFrame,
+    *,
+    period_column: str,
+    horizon: int,
+    min_training_periods: int,
+    seasonal_lag: int,
+    trailing_window: int,
+    horizon_key: str,
+    seasonal_label: str,
+    trailing_label: str,
+) -> List[Dict[str, Any]]:
+    """Honest backtest: every prediction sees only data at its origin."""
+    if periods.empty:
         return []
-    series = monthly.groupby("month")["actual"].sum().sort_index()
-    if len(series) <= FORECAST_MIN_TRAINING_MONTHS + horizon - 1:
+    series = periods.groupby(period_column)["actual"].sum().sort_index()
+    if len(series) <= min_training_periods + horizon - 1:
         return []
-    months = list(series.index)
-    actuals = [float(series.loc[month]) for month in months]
+    period_values = list(series.index)
+    actuals = [float(series.loc[period]) for period in period_values]
     rows: List[Dict[str, Any]] = []
-    for target_index in range(FORECAST_MIN_TRAINING_MONTHS + horizon - 1, len(months)):
+    for target_index in range(min_training_periods + horizon - 1, len(period_values)):
         origin_index = target_index - horizon
-        seasonal_index = target_index - 12
+        seasonal_index = target_index - seasonal_lag
         if seasonal_index >= 0 and seasonal_index <= origin_index:
             forecast = actuals[seasonal_index]
-            method = "same month prior year"
+            method = seasonal_label
         else:
-            training = actuals[max(0, origin_index - 2): origin_index + 1]
+            training = actuals[max(0, origin_index - trailing_window + 1): origin_index + 1]
             if not training:
                 continue
             forecast = sum(training) / len(training)
-            method = "trailing 3-month mean"
+            method = trailing_label
         actual = actuals[target_index]
         tolerance = FORECAST_TOLERANCE_PCT / 100.0
         rows.append(
             {
-                "period": str(months[target_index]),
+                "period": str(period_values[target_index]),
                 "actual": actual,
                 "forecast": forecast,
                 "lower": forecast * (1.0 - tolerance),
                 "upper": forecast * (1.0 + tolerance),
                 "variance_pct": metrics.variance_pct(actual, forecast),
-                "horizon_months": horizon,
+                horizon_key: horizon,
                 "method": method,
+            }
+        )
+    return rows
+
+
+def _rolling_origin_rows(monthly: pd.DataFrame, horizon: int = 1) -> List[Dict[str, Any]]:
+    """Honest backtest: each forecast sees only months available at its origin."""
+    return _rolling_origin_period_rows(
+        monthly,
+        period_column="month",
+        horizon=horizon,
+        min_training_periods=FORECAST_MIN_TRAINING_MONTHS,
+        seasonal_lag=12,
+        trailing_window=3,
+        horizon_key="horizon_months",
+        seasonal_label="same month prior year",
+        trailing_label="trailing 3-month mean",
+    )
+
+
+def _weekly_rolling_origin_rows(weekly: pd.DataFrame, horizon: int) -> List[Dict[str, Any]]:
+    return _rolling_origin_period_rows(
+        weekly,
+        period_column="week",
+        horizon=horizon,
+        min_training_periods=FORECAST_MIN_TRAINING_WEEKS,
+        seasonal_lag=52,
+        trailing_window=4,
+        horizon_key="horizon_weeks",
+        seasonal_label="same week prior year",
+        trailing_label="trailing 4-week mean",
+    )
+
+
+def _seasonal_naive_rows(monthly: pd.DataFrame) -> List[Dict[str, Any]]:
+    """One-step same-month-last-year baseline on periods where it is possible."""
+    if monthly.empty:
+        return []
+    series = monthly.groupby("month")["actual"].sum().sort_index()
+    periods = list(series.index)
+    actuals = [float(series.loc[period]) for period in periods]
+    rows: List[Dict[str, Any]] = []
+    for target_index in range(12, len(periods)):
+        rows.append(
+            {
+                "period": str(periods[target_index]),
+                "actual": actuals[target_index],
+                "forecast": actuals[target_index - 12],
             }
         )
     return rows
@@ -483,7 +564,7 @@ def _forecast_by_dimension(frame: pd.DataFrame, column: str, *, limit: int = 10)
         result["actual"] = sum(float(row["actual"]) for row in rows)
         result["forecast"] = sum(float(row["forecast"]) for row in rows)
         results.append(result)
-    results.sort(key=lambda row: (row.get("mape_pct") is None, -(row.get("actual") or 0)))
+    results.sort(key=lambda row: (row.get("wape_pct") is None, -(row.get("actual") or 0)))
     return results
 
 
@@ -491,23 +572,61 @@ def build_forecast_accuracy(frame: pd.DataFrame) -> Dict[str, Any]:
     """Rolling-origin forecast scorecard with no future-data leakage."""
     monthly = _monthly_revenue(frame)
     series = _rolling_origin_rows(monthly, horizon=1)
+    headline = _score_rows(series)
+    weekly = _weekly_revenue(frame)
     horizons = []
-    for horizon in (1, 2, 3):
-        rows = _rolling_origin_rows(monthly, horizon=horizon)
-        horizons.append({"horizon_months": horizon, **_score_rows(rows)})
+    for horizon in (1, 4, 8):
+        rows = _weekly_rolling_origin_rows(weekly, horizon=horizon)
+        horizons.append({"horizon_weeks": horizon, **_score_rows(rows)})
+
+    baseline_rows = _seasonal_naive_rows(monthly)
+    if baseline_rows:
+        baseline_score = _score_rows(baseline_rows)
+        comparable_periods = {row["period"] for row in baseline_rows}
+        comparable_model = _score_rows([row for row in series if row["period"] in comparable_periods])
+        model_wape = comparable_model.get("wape_pct")
+        baseline_wape = baseline_score.get("wape_pct")
+        beats_baseline = bool(
+            model_wape is not None
+            and baseline_wape is not None
+            and model_wape < baseline_wape - 1e-9
+        )
+        baseline = {
+            "available": True,
+            "label": "Naive seasonal: same month prior year",
+            **baseline_score,
+            "model_wape_pct": model_wape,
+            "model_beats_baseline": beats_baseline,
+            "comparison": (
+                "The model beats the naive-seasonal baseline on comparable periods."
+                if beats_baseline
+                else "The model does not beat the naive-seasonal baseline on comparable periods."
+            ),
+        }
+    else:
+        baseline = {
+            "available": False,
+            "label": "Naive seasonal: same month prior year",
+            "reason": "At least 13 complete months in the active scope are required for a prior-year baseline.",
+            "model_beats_baseline": None,
+        }
     product_column = next((c for c in ("SKU", "ProductName", "ProductId") if c in frame.columns), "SKU")
     region_column = next((c for c in ("RegionName", "Region", "State") if c in frame.columns), "RegionName")
     return {
-        "headline": _score_rows(series),
+        "headline": headline,
         "series": series,
         "by_horizon": horizons,
+        "baseline": baseline,
         "by_sku": _forecast_by_dimension(frame, product_column),
         "by_region": _forecast_by_dimension(frame, region_column),
         "methodology": {
             "backtest": "Rolling origin; each prediction uses only data available at its forecast origin.",
             "model": "Same month prior year when available; otherwise trailing 3-month mean.",
+            "weekly_horizons": "Signed bias is scored at 1, 4, and 8 weeks using a trailing 4-week mean until prior-year weekly history is available.",
             "error_band": f"+/-{FORECAST_TOLERANCE_PCT:.0f}% hit-tolerance band around forecast.",
-            "zero_actuals": "Excluded from percentage errors and hit-rate; retained in signed bias.",
+            "complete_periods": "Incomplete calendar months and weeks are excluded from scoring.",
+            "zero_actuals": "Zero actuals are included in WAPE, SMAPE, and signed bias; excluded from MAPE and hit-rate.",
+            "mape": "MAPE is diagnostic only and is unreliable on low-volume series.",
         },
     }
 

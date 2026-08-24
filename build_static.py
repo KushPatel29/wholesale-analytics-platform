@@ -248,8 +248,9 @@ SHIM = """
   StaticXHR.LOADING = 3; StaticXHR.DONE = 4;
   window.XMLHttpRequest = StaticXHR;
 
-  /* Writes are inert here, but they must not look broken: the returns workflow
-     and "save view" controls should decline politely rather than throw. */
+  /* Writes are inert here, but they must not look broken: server-backed
+     actions/operations and "save view" controls decline politely rather than
+     throw. */
   window.__STATIC_SITE__ = true;
 })();
 """
@@ -275,7 +276,7 @@ STATIC_BANNER = """
   <strong>Prerendered snapshot.</strong>
   Every figure below was computed at build time from the synthetic dataset.
   <a href="__LIVE_URL__" rel="noopener" data-wa-live-link>Open the live app</a>
-  for filter combinations outside the presets, the returns workflow, and admin
+  for custom filters and the shared actions, operations, returns, and admin ledger
   &mdash; <span class="static-demo-banner__warn">it runs on a free instance and
   can take ~20s to wake</span>.
 </div>
@@ -333,6 +334,27 @@ STATIC_RUNTIME = r"""
           }).finally(function () { button.disabled = false; });
       });
     });
+    if (document.documentElement.dataset.staticAnchorTabsBound !== "1") {
+      document.documentElement.dataset.staticAnchorTabsBound = "1";
+      document.addEventListener("click", function (event) {
+        var anchor = event.target.closest && event.target.closest('a[href^="#"]');
+        if (!anchor) return;
+        var target = decodeURIComponent(String(anchor.getAttribute("href") || "").slice(1));
+        if (!target || document.getElementById(target)) return;
+        var button = Array.prototype.find.call(
+          document.querySelectorAll("[data-static-tab][data-static-targets]"),
+          function (item) {
+            return String(item.dataset.staticTargets || "").split(" ").indexOf(target) !== -1;
+          }
+        );
+        if (!button) return;
+        event.preventDefault();
+        button.click();
+        setTimeout(function () {
+          button.closest("[data-static-tabs]")?.scrollIntoView({block:"start", behavior:"smooth"});
+        }, 0);
+      });
+    }
   }
 
   function fragmentUrl(preset) {
@@ -1107,22 +1129,22 @@ REMOTE_ASSETS: dict[str, str] = {
         "static/vendor/maplibre/maplibre-gl.css",
 }
 
-# Sections are no longer split into tabs.
-#
-# The tabs existed to hold three build budgets - 100 KB, 1,499 nodes, 3,999px -
-# by moving everything past the first few sections behind a button. For a public
-# demo that trade is backwards: a reviewer gives the page a minute, and analysis
-# behind a tab is analysis they never see. Sales Reps was publishing four
-# visible sections above seventeen tabs.
-#
-# A full page costs height, not latency. Every chart is already a frozen SVG,
-# every payload is inlined, and nothing fetches - so the extra sections are more
-# HTML in the same single response, not more round trips. The budgets in
-# `scripts/check_static_build.py` move to match, and the one page that was
-# genuinely too heavy was heavy for an unrelated reason: 304.9 KB of dead
-# `data-drilldown-payload` attributes, now scrubbed in the freeze pass.
-SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {}
-DRILLDOWN_SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {}
+# Keep the initial DOM below the published 1,800-node budget. Secondary sections
+# are frozen at build time, moved into local HTML fragments, and opened by the
+# tiny static runtime. No analytical calculation or API request happens on
+# interaction. In-page links are mapped to their owning detail tab above, so
+# progressive disclosure does not create dead navigation.
+SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
+    "products": ("#products-main > section", 2),
+    "labor": ("#LaborPage > section", 3),
+    "salesreps": ("#SalesRepsApp > section", 4),
+}
+DRILLDOWN_SECTION_RULES: dict[str, tuple[str, int | tuple[int, ...]]] = {
+    "products": (".product-drilldown-v2 > section", 3),
+    "regions": (".region-drilldown-v2 > section", 3),
+    "customers": (".ciw-page > section", 3),
+    "suppliers": (".supplier-drilldown-v2 > section", 3),
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2050,6 +2072,8 @@ class Builder:
                         const button = document.createElement('button');
                         button.type = 'button'; button.role = 'tab';
                         button.dataset.staticTab = template.id;
+                        button.dataset.staticTargets = [section, ...section.querySelectorAll('[id]')]
+                          .map((node) => node.id).filter(Boolean).join(' ');
                         button.setAttribute('aria-selected', 'false');
                         button.textContent = label;
                         list.append(button);
@@ -2142,6 +2166,7 @@ class Builder:
                     '#filtersBody,#filtersForm,.filters-form,form[id$="_proxy_form"]'
                   ).forEach(el => el.remove());
                   document.getElementById('savedViewsSection')?.remove();
+                  document.querySelectorAll('[data-live-only]').forEach(el => el.remove());
                   document.querySelectorAll('#js-plotly-tester,.plotly-notifier').forEach(el => el.remove());
                   /* The live map has seven WebGL modes, zoom buttons and a
                      click-to-filter reset. The public build keeps an exact

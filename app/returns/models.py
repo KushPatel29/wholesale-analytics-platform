@@ -182,6 +182,81 @@ class ReturnEvent(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP"))
 
 
+class ReturnCorrectiveAction(Base):
+    """Owned, auditable response to a measured returns root cause."""
+
+    __tablename__ = "return_corrective_actions"
+    __table_args__ = (
+        Index("ix_return_corrective_actions_status_due", "status", "due_date"),
+        Index("ix_return_corrective_actions_owner_status", "owner_user_id", "status"),
+        Index("ix_return_corrective_actions_cause", "cause_type", "cause_value"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cause_type = Column(String(32), nullable=False)
+    cause_value = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner_user_id = Column(Integer, nullable=False, index=True)
+    due_date = Column(Date, nullable=False)
+    status = Column(String(32), nullable=False, default="open", server_default=text("'open'"))
+    source_filters_json = Column(Text, nullable=False, default="{}", server_default=text("'{}'"))
+    baseline_start = Column(Date, nullable=False)
+    baseline_end = Column(Date, nullable=False)
+    baseline_return_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    baseline_order_count = Column(Integer, nullable=True)
+    baseline_rate_pct = Column(Float, nullable=True)
+    baseline_credit_amount = Column(Float, nullable=False, default=0.0, server_default=text("0"))
+    baseline_revenue = Column(Float, nullable=True)
+    target_rate_pct = Column(Float, nullable=True)
+    outcome_start = Column(Date, nullable=True)
+    outcome_end = Column(Date, nullable=True)
+    outcome_return_count = Column(Integer, nullable=True)
+    outcome_order_count = Column(Integer, nullable=True)
+    outcome_rate_pct = Column(Float, nullable=True)
+    outcome_credit_amount = Column(Float, nullable=True)
+    outcome_revenue = Column(Float, nullable=True)
+    realized_impact_amount = Column(Float, nullable=True)
+    confidence_label = Column(String(32), nullable=False, default="low", server_default=text("'low'"))
+    confidence_n = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    approval_notes = Column(Text, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, nullable=True)
+    approved_by_user_id = Column(Integer, nullable=True)
+    resolved_by_user_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP"))
+    approved_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class ReturnCorrectiveActionEvent(Base):
+    """Immutable audit trail for a corrective action lifecycle."""
+
+    __tablename__ = "return_corrective_action_events"
+    __table_args__ = (
+        Index(
+            "ix_return_corrective_action_events_action_created",
+            "corrective_action_id",
+            "created_at",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    corrective_action_id = Column(
+        Integer,
+        ForeignKey("return_corrective_actions.id"),
+        nullable=False,
+        index=True,
+    )
+    event_type = Column(String(64), nullable=False)
+    from_status = Column(String(32), nullable=True)
+    to_status = Column(String(32), nullable=True)
+    actor_user_id = Column(Integer, nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}", server_default=text("'{}'"))
+    created_at = Column(DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP"))
+
+
 class ReturnApproval(Base):
     __tablename__ = "return_approvals"
     __table_args__ = (

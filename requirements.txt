@@ -1,6 +1,7 @@
 Flask>=3.1
 APScheduler>=3.11
 python-dotenv>=1.0
+PyYAML>=6.0
 Flask-Login>=0.6
 Flask-WTF>=1.2
 Flask-Limiter>=4.0

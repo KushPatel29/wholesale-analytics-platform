@@ -762,6 +762,80 @@
     </div>
   </div>
 
+  <section class="report-container pb-0" id="planningScenarios" aria-labelledby="planningScenariosTitle" data-live-only>
+    <div class="section-header">
+      <div><span class="section-eyebrow">Approved write-back workflow</span><h2 class="section-title" id="planningScenariosTitle">Planning scenarios</h2></div>
+    </div>
+    <div class="report-grid mb-4">
+      <div class="report-card">
+        <h3 class="h5">Create base / upside / downside version</h3>
+        <p class="small text-muted">Assumptions are editable. Each save creates an immutable version and recalculates proposed replenishment from the latest 90 days of demand.</p>
+        <form method="post" action="{{ url_for('stakeholder_report.create_scenario') }}" class="row g-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-8"><label class="form-label" for="scenarioName">Scenario name</label><input class="form-control" id="scenarioName" name="name" required placeholder="FY27 demand plan"></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioPreset">Starting case</label><select class="form-select" id="scenarioPreset" name="preset">{% for key in scenario_presets %}<option value="{{ key }}">{{ key|title }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioGrowth">Demand growth %</label><input class="form-control" id="scenarioGrowth" name="demand_growth_pct" type="number" min="-50" max="200" step="0.1" value="0"></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioLead">Lead time days</label><input class="form-control" id="scenarioLead" name="lead_time_days" type="number" min="1" max="180" step="1" value="14"></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioSafety">Safety-stock days</label><input class="form-control" id="scenarioSafety" name="safety_stock_days" type="number" min="0" max="90" step="1" value="7"></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioService">Target service level %</label><input class="form-control" id="scenarioService" name="service_level_pct" type="number" min="80" max="99.9" step="0.1" value="95"></div>
+          <div class="col-md-4"><label class="form-label" for="scenarioBudget">Budget limit (optional)</label><input class="form-control" id="scenarioBudget" name="budget_limit" type="number" min="0" step="100"></div>
+          <div class="col-12"><button class="btn btn-primary" type="submit">Calculate draft scenario</button></div>
+        </form>
+      </div>
+      <div class="report-card">
+        <h3 class="h5">Approval contract</h3>
+        <ol class="small text-muted mb-2">
+          <li>Analyst creates a version with explicit demand, lead-time, safety-stock, service, and budget assumptions.</li>
+          <li>Draft recommendations remain proposals until submitted and approved.</li>
+          <li>Approval writes SKU and quantity rows to the replenishment recommendation table with approver and scenario lineage.</li>
+        </ol>
+        <p class="small mb-0"><strong>No silent overwrite:</strong> editing a scenario creates the next version; an approved version is immutable.</p>
+      </div>
+    </div>
+
+    <div class="report-card mb-4">
+      <div class="d-flex justify-content-between align-items-center gap-2 mb-3"><h3 class="h5 mb-0">Scenario versions</h3><span class="badge text-bg-light border">{{ scenarios|length }} versions</span></div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <caption class="visually-hidden">Versioned planning scenarios and approval status</caption>
+          <thead><tr><th scope="col">Scenario</th><th scope="col">Case assumptions</th><th scope="col">Proposed replenishment</th><th scope="col">Status</th><th scope="col">Workflow</th></tr></thead>
+          <tbody>
+            {% for scenario in scenarios %}
+            <tr>
+              <th scope="row">{{ scenario.name }} <span class="badge text-bg-light border">v{{ scenario.version }}</span></th>
+              <td>
+                Growth {{ scenario.assumptions.demand_growth_pct }}% · lead {{ scenario.assumptions.lead_time_days|int }}d · safety {{ scenario.assumptions.safety_stock_days|int }}d · service {{ scenario.assumptions.service_level_pct }}%
+                {% if scenario.assumptions.budget_limit is not none %}<br><span class="small text-muted">Budget {{ scenario.assumptions.budget_limit|currency }}</span>{% endif %}
+              </td>
+              <td>
+                {% set result_summary = scenario.results.get('summary') or {} %}
+                {% if scenario.results.get('source_state') == 'measured' %}{{ result_summary.get('sku_count', 0) }} SKUs · {{ result_summary.get('recommended_units', 0)|round(1) }} units{% if result_summary.get('estimated_cost') is not none %} · {{ result_summary.get('estimated_cost')|currency }}{% endif %}{% else %}<span class="text-danger">{{ scenario.results.get('source_message') or 'Source required' }}</span>{% endif %}
+                {% if scenario.status == 'approved' %}<br><span class="small text-success">{{ scenario.recommendation_count }} approved rows written back</span>{% endif %}
+              </td>
+              <td><span class="badge text-bg-light border">{{ scenario.status|replace('_', ' ')|title }}</span></td>
+              <td>
+                {% if scenario.status == 'draft' %}
+                <div class="d-flex flex-wrap gap-2">
+                  <form method="post" action="{{ url_for('stakeholder_report.submit_scenario', scenario_id=scenario.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-primary" type="submit">Submit</button></form>
+                  <details><summary class="btn btn-sm btn-outline-secondary">New version</summary><form method="post" action="{{ url_for('stakeholder_report.version_scenario', scenario_id=scenario.id) }}" class="mt-2 p-2 border rounded" style="min-width: 16rem"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label class="form-label small" for="growth{{ scenario.id }}">Demand growth %</label><input class="form-control form-control-sm mb-2" id="growth{{ scenario.id }}" name="demand_growth_pct" type="number" step="0.1" value="{{ scenario.assumptions.demand_growth_pct }}"><label class="form-label small" for="budget{{ scenario.id }}">Budget</label><input class="form-control form-control-sm mb-2" id="budget{{ scenario.id }}" name="budget_limit" type="number" step="100" value="{{ scenario.assumptions.budget_limit or '' }}"><button class="btn btn-sm btn-outline-primary" type="submit">Create next version</button></form></details>
+                </div>
+                {% elif scenario.status == 'pending_approval' and current_user.role in ['admin', 'owner', 'gm', 'manager'] %}
+                <div class="d-flex flex-wrap gap-2"><form method="post" action="{{ url_for('stakeholder_report.decide_scenario', scenario_id=scenario.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="decision" value="approved"><button class="btn btn-sm btn-success" type="submit">Approve and write back</button></form><form method="post" action="{{ url_for('stakeholder_report.decide_scenario', scenario_id=scenario.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="decision" value="rejected"><button class="btn btn-sm btn-outline-danger" type="submit">Reject</button></form></div>
+                {% elif scenario.status == 'pending_approval' %}<span class="small text-muted">Manager approval pending</span>
+                {% elif scenario.status == 'approved' and can_permission('procurement.manage') %}
+                <form method="post" action="{{ url_for('decision_ops.planning_writeback', scenario_id=scenario.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-primary" type="submit">Create draft PO</button></form>
+                {% else %}<span class="small text-muted">{{ scenario.decision_notes or 'Workflow complete' }}</span>{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted">No scenarios yet. Create a measured draft above.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <div class="report-container">
     <div class="workspace-layout">
       <!-- Sidebar Nav -->
@@ -791,5 +865,24 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260815-metrics-gap-1"></script>
+<script>
+(() => {
+  const presets = {{ scenario_presets|tojson }};
+  const select = document.getElementById('scenarioPreset');
+  const fields = {
+    demand_growth_pct: document.getElementById('scenarioGrowth'),
+    lead_time_days: document.getElementById('scenarioLead'),
+    safety_stock_days: document.getElementById('scenarioSafety'),
+    service_level_pct: document.getElementById('scenarioService'),
+    budget_limit: document.getElementById('scenarioBudget')
+  };
+  select?.addEventListener('change', () => {
+    const values = presets[select.value] || presets.base || {};
+    Object.entries(fields).forEach(([key, input]) => {
+      if (input) input.value = values[key] ?? '';
+    });
+  });
+})();
+</script>
+<script src="{{ url_for('static', filename='js/stakeholder_report.js') }}?v=20260825-forecast-credibility-1"></script>
 {% endblock %}

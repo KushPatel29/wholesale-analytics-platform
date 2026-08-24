@@ -49,7 +49,7 @@
       <div class="flex-grow-1">
         <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
           <div class="hero-badge"><i class="bi bi-box-seam"></i></div>
-          <h2 class="fw-bold mb-0">Product Performance & Pricing</h2>
+          <h1 class="fw-bold mb-0">Product Performance & Pricing</h1>
           <span id="costModeBadge" class="badge text-bg-warning text-dark d-none">Sales-only mode</span>
           <span id="heroPostureBadge" class="badge rounded-pill text-bg-light text-dark d-none"></span>
         </div>
@@ -1340,6 +1340,7 @@
 
             <div class="table-responsive">
               <table id="productTable" class="table table-striped table-hover align-middle {% if product_intelligence_v2 %}products-table-v2{% endif %}">
+                <caption class="visually-hidden">Product performance, margin, demand, and action table for the active filters</caption>
                 {% if product_intelligence_v2 %}
                 <thead class="table-light sticky-top">
                   <tr>

@@ -37,7 +37,7 @@
       <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
         <div class="sr-hero-copy">
           <p class="text-uppercase text-muted small mb-1">Sales Intelligence</p>
-          <h2 class="fw-bold mb-1">Sales Executive Dashboard</h2>
+          <h1 class="fw-bold mb-1">Sales Executive Dashboard</h1>
           <p class="text-muted mb-2">
             Revenue, profitability, account health, and territory performance — all under the current ownership lens.
             Period comparisons reflect today’s rep structure for consistent, actionable attribution.
@@ -397,6 +397,7 @@
         </div>
         <div class="card-body">
           <table class="table table-sm align-middle mb-0">
+            <caption class="visually-hidden">Sales ownership coverage and exception counts</caption>
             <thead class="table-light">
               <tr>
                 <th scope="col">Bucket</th>
@@ -618,6 +619,7 @@
               <input id="srCustomerSearch" type="text"
                      class="form-control form-control-sm"
                      placeholder="&#128269; Search customers, owners, or territories..."
+                     aria-label="Search customers, owners, or territories"
                      style="max-width:340px">
               <button id="btnExportCustCSV"
                       class="btn btn-sm btn-outline-secondary ms-auto">
@@ -640,6 +642,7 @@
           </div>
           <div class="sr-top-customers-wrap" id="srTopCustomersWrap">
             <table class="table table-sm align-middle mb-0" id="srTopCustomersTable">
+              <caption class="visually-hidden">Top and at-risk customers for the selected sales representative</caption>
               <thead class="table-light">
                 <tr>
                   <th scope="col" class="sortable" data-top-customers-sort="customer_name" tabindex="0">Customer</th>
@@ -717,7 +720,7 @@
     <div>
       <p class="sr-section-kicker mb-1">Department / Product Intelligence</p>
       <h3 class="mb-1">Department Mix, Margin Performance, And Contribution Detail</h3>
-      <p class="text-muted mb-0" id="srSectionProteinSubtitle">Category performance, mix shifts, and protein-level details tied back to customers and owner portfolios.</p>
+      <p class="text-muted mb-0" id="srSectionProteinSubtitle">Category performance, mix shifts, and department-level details tied back to customers and owner portfolios.</p>
     </div>
   </section>
 
@@ -741,6 +744,7 @@
         </div>
         <div class="card-body sr-scroll-card">
           <table class="table table-sm align-middle mb-0">
+            <caption class="visually-hidden">Sales performance by department</caption>
             <thead class="table-light">
               <tr>
                 <th scope="col" class="sortable" data-protein-sort="protein_family" tabindex="0">Department</th>
@@ -752,7 +756,7 @@
               </tr>
             </thead>
             <tbody id="srProteinTableBody">
-              <tr><td colspan="6" class="text-muted">Loading protein performance...</td></tr>
+              <tr><td colspan="6" class="text-muted">Loading department performance...</td></tr>
             </tbody>
           </table>
         </div>
@@ -857,6 +861,7 @@
 
     <div class="table-responsive sr-table-wrap" id="srTableWrap">
       <table class="table table-sm table-hover table-striped align-middle mb-0" id="srTable">
+        <caption class="visually-hidden">Sales representative performance command table for the active filters</caption>
         <thead class="table-light sticky-header">
           <tr>
             <th scope="col" class="col-select text-center"><input type="checkbox" id="srSelectAll" class="form-check-input" title="Select top 4 reps for comparison" aria-label="Select top 4 reps"></th>

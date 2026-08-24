@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Action {{ item.id }} · Northgate{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-1') }}">{% endblock %}
+{% block content %}
+<div class="decision-shell">
+  <header class="decision-masthead">
+    <div><div class="decision-eyebrow">Action #{{ item.id }} · {{ item.source_module }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional rationale entered.' }}</p></div>
+    <div class="decision-rail" aria-label="Action context">
+      <div class="decision-rail__step"><strong>Signal</strong><span>{{ item.metric_label or item.metric_key or 'Source record retained' }}</span></div>
+      <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
+      <div class="decision-rail__step"><strong>Approval</strong><span>{{ item.approval_status|replace('_',' ')|title }}</span></div>
+      <div class="decision-rail__step"><strong>Outcome</strong><span>{{ item.outcome_value if item.outcome_value is not none else 'Not measured yet' }}</span></div>
+    </div>
+  </header>
+  <div class="decision-layout">
+    {% set workspace_key = 'actions' %}{% include "decision_ops/_nav.html" %}
+    <div class="decision-board">
+      <section class="decision-ledger" aria-label="Action measures">
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Status</span><strong class="decision-ledger__value">{{ item.status|replace('_',' ')|title }}</strong><small class="decision-ledger__note">current state</small></div>
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Due</span><strong class="decision-ledger__value">{{ (item.due_at or '—')|string|truncate(11, true, '') }}</strong><small class="decision-ledger__note">{{ 'overdue' if item.is_overdue else 'target date' }}</small></div>
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Baseline</span><strong class="decision-ledger__value">{{ item.baseline_value if item.baseline_value is not none else '—' }}</strong><small class="decision-ledger__note">{{ item.metric_unit or 'KPI' }}</small></div>
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Target</span><strong class="decision-ledger__value">{{ item.target_value if item.target_value is not none else '—' }}</strong><small class="decision-ledger__note">{{ item.metric_unit or 'KPI' }}</small></div>
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Expected</span><strong class="decision-ledger__value">{{ item.currency }} {{ '{:,.0f}'.format(item.expected_financial_impact) if item.expected_financial_impact is not none else '—' }}</strong><small class="decision-ledger__note">entered impact</small></div>
+        <div class="decision-ledger__cell"><span class="decision-ledger__label">Realized</span><strong class="decision-ledger__value">{{ item.currency }} {{ '{:,.0f}'.format(item.realized_financial_impact) if item.realized_financial_impact is not none else '—' }}</strong><small class="decision-ledger__note">measured value</small></div>
+      </section>
+
+      {% if item.source_url %}<div class="alert alert-secondary mt-3" role="note"><strong>Source retained:</strong> <a href="{{ item.source_url }}">{{ item.source_record_id or item.source_url }}</a>{% if item.metric_key %} · certified metric <code>{{ item.metric_key }}</code>{% endif %}</div>{% endif %}
+
+      {% if can_manage and item.status not in ['completed','cancelled'] %}
+      <section class="decision-panel" aria-labelledby="transition-heading"><div class="decision-panel__head"><h2 id="transition-heading">Advance the decision</h2><span class="decision-badge">Audited transition</span></div><div class="decision-panel__body"><form method="post" action="{{ url_for('decision_ops.transition_action', work_item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="decision-form-grid"><div><label for="transitionStatus">Next status</label><select class="form-select" id="transitionStatus" name="status">{% for status in statuses if status != item.status %}<option value="{{ status }}">{{ status|replace('_',' ')|title }}</option>{% endfor %}</select></div><div><label for="outcomeValue">Outcome KPI</label><input class="form-control" id="outcomeValue" name="outcome_value" inputmode="decimal" value="{{ item.outcome_value if item.outcome_value is not none else '' }}"></div><div><label for="realizedImpact">Realized financial impact</label><input class="form-control" id="realizedImpact" name="realized_financial_impact" inputmode="decimal" value="{{ item.realized_financial_impact if item.realized_financial_impact is not none else '' }}"></div><div class="span-3"><label for="transitionNotes">Decision notes</label><textarea class="form-control" id="transitionNotes" name="notes" rows="2" maxlength="4000"></textarea></div><div class="span-3"><button class="btn btn-primary" type="submit">Record transition</button></div></div></form></div></section>
+      {% endif %}
+
+      <div class="row g-3 mt-0">
+        <div class="col-lg-7"><section class="decision-panel h-100" aria-labelledby="timeline-heading"><div class="decision-panel__head"><h2 id="timeline-heading">Immutable timeline</h2><span class="decision-badge">{{ item.events|length }} events</span></div><div class="decision-panel__body decision-timeline">{% for event in item.events %}<div class="decision-timeline__event"><strong>{{ event.event_type|replace('_',' ')|title }}</strong>{% if event.from_status or event.to_status %}<small>{{ event.from_status or 'created' }} → {{ event.to_status or '—' }}</small>{% endif %}<small>{{ event.created_at }} · user {{ event.actor_user_id or 'system' }}</small></div>{% endfor %}</div></section></div>
+        <div class="col-lg-5"><section class="decision-panel h-100" aria-labelledby="collab-heading"><div class="decision-panel__head"><h2 id="collab-heading">Evidence & collaboration</h2></div><div class="decision-panel__body">
+          {% for comment in item.comments %}<p class="small"><strong>User {{ comment.author_user_id or 'system' }}:</strong> {{ comment.body }}<br><span class="decision-ledger__note">{{ comment.created_at }}</span></p>{% else %}<p class="decision-ledger__note">No comments yet.</p>{% endfor %}
+          {% for attachment in item.attachments %}<p class="small"><a href="{{ attachment.uri }}">{{ attachment.display_name }}</a></p>{% else %}<p class="decision-ledger__note">No evidence links yet.</p>{% endfor %}
+          {% if item.dependencies %}<p class="small"><strong>Depends on:</strong> {% for dep in item.dependencies %}<a href="{{ url_for('decision_ops.action_detail', work_item_id=dep) }}">#{{ dep }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+          {% if can_manage %}<hr><form method="post" action="{{ url_for('decision_ops.comment_action', work_item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label class="decision-ledger__label" for="commentBody">Add comment</label><textarea class="form-control form-control-sm my-2" id="commentBody" name="body" maxlength="4000" required></textarea><button class="btn btn-outline-primary btn-sm" type="submit">Add comment</button></form><hr><form method="post" action="{{ url_for('decision_ops.attach_action_evidence', work_item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label class="decision-ledger__label" for="evidenceName">Link evidence</label><input class="form-control form-control-sm my-2" id="evidenceName" name="display_name" maxlength="240" placeholder="Evidence name" required><input class="form-control form-control-sm mb-2" name="uri" maxlength="800" placeholder="https://… or /internal/path" required><button class="btn btn-outline-primary btn-sm" type="submit">Link evidence</button></form><hr><form method="post" action="{{ url_for('decision_ops.add_action_dependency', work_item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label class="decision-ledger__label" for="dependencyId">Add dependency</label><input class="form-control form-control-sm my-2" id="dependencyId" name="depends_on_work_item_id" type="number" min="1" required><button class="btn btn-outline-primary btn-sm" type="submit">Add dependency</button></form>{% endif %}
+        </div></section></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

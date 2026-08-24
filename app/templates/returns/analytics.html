@@ -47,7 +47,28 @@
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <div class="text-muted small">Supplier Credit %</div>
-              <div class="display-6">{{ '%.1f'|format(analytics.summary.supplier_credit_pct or 0) }}%</div>
+              {% set supplier_state = analytics.summary.get('supplier_credit_state') or {'state': 'measured'} %}
+              {% if supplier_state.get('state') == 'source_required' %}
+                <div class="h4 mb-1">Source required</div>
+                <div class="small text-muted">
+                  Supplier-credit applicability is not captured on eligible return lines.
+                  <a href="{{ url_for('returns_portal.create') }}">Capture it on each return line</a> to populate this metric.
+                </div>
+              {% elif supplier_state.get('state') == 'insufficient_data' %}
+                <div class="h4 mb-1">Insufficient data (n&lt;5)</div>
+                <div class="small text-muted">{{ supplier_state.get('observed_lines', 0) }} eligible lines are captured; five are required.</div>
+              {% elif supplier_state.get('state') == 'computation_error' %}
+                <div class="h4 mb-1 text-danger">Metric error</div>
+                <div class="small text-muted">The source is present, but the percentage could not be computed.</div>
+              {% else %}
+                <div class="display-6">{{ '%.1f'|format(analytics.summary.supplier_credit_pct) }}%</div>
+                {% if supplier_state.get('state') == 'confirmed_zero' %}
+                  <span class="badge text-bg-light border" title="The denominator is populated and no eligible line has supplier credit.">
+                    Confirmed zero
+                  </span>
+                {% endif %}
+                <div class="small text-muted">{{ supplier_state.get('observed_lines', '—') }} captured return lines in the denominator.</div>
+              {% endif %}
             </div>
             <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.analytics', dataset='supplier_credit', export='xlsx', from=filters.from, to=filters.to) }}">Export data</a>
           </div>
@@ -81,6 +102,146 @@
   </div>
 
   <div class="row g-4">
+    <div class="col-12">
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+            <div>
+              <h2 class="h5 mb-1">Preventable-return root causes</h2>
+              <p class="small text-muted mb-0">Ranked by return-credit impact. Confidence reflects the number of captured return lines, not causal certainty.</p>
+            </div>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('returns_portal.root_causes', from=filters.from, to=filters.to) }}">Open root-cause analysis</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <caption class="visually-hidden">Highest-impact returns root causes with drill-through links</caption>
+              <thead><tr><th scope="col">Cause</th><th scope="col">Type</th><th scope="col">Credit impact</th><th scope="col">Confidence</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+              <tbody>
+                {% for row in preview.root_causes %}
+                <tr>
+                  <th scope="row">{{ row.label }}</th>
+                  <td>{{ row.cause_type|title }}</td>
+                  <td>{{ row.credit_amount|currency }}</td>
+                  <td><span class="badge text-bg-light border">{{ row.confidence_label|title }} (n={{ row.sample_size }})</span></td>
+                  <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('returns_portal.root_cause_detail', type=row.cause_type, value=row.cause_value, from=row.from, to=row.to) }}">Explain and act</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted">No captured return reasons or SKUs are available in this window. Record line-level reasons to populate the analysis.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h2 class="h5 mb-1">Corrective-action workflow</h2>
+              <p class="small text-muted mb-0">Owned work moves through approval and closes only with a measured before/after outcome.</p>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('returns_portal.corrective_actions') }}">View all actions</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <caption class="visually-hidden">Most recent returns corrective actions</caption>
+              <thead><tr><th scope="col">Action</th><th scope="col">Owner</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Measured impact</th></tr></thead>
+              <tbody>
+                {% for action in preview.corrective_actions %}
+                <tr>
+                  <th scope="row"><a href="{{ url_for('returns_portal.corrective_action_detail', action_id=action.id) }}">{{ action.title }}</a></th>
+                  <td>{{ action.owner_name }}</td>
+                  <td>{{ action.due_date }}</td>
+                  <td><span class="badge text-bg-light border">{{ action.status|replace('_', ' ')|title }}</span></td>
+                  <td>{{ action.realized_impact_amount|currency if action.realized_impact_amount is not none else 'Pending outcome' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted">No corrective actions yet. Open a root cause above to create the first owned action.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-2 mb-2">
+        <div><h2 class="h4 mb-1">Returns decision metrics</h2><p class="small text-muted mb-0">Order, unit, and revenue rates intentionally use different denominators; their gap is diagnostic.</p></div>
+        <a class="btn btn-sm btn-outline-success" href="{{ url_for('returns_portal.analytics', export='xlsx', from=filters.from, to=filters.to) }}">Export governed frames</a>
+      </div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Return rate by basis</h3>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Return rates using order, unit, and revenue denominators</caption><thead><tr><th scope="col">Basis</th><th scope="col">Rate</th><th scope="col">Numerator</th><th scope="col">Denominator</th></tr></thead><tbody>
+          {% for row in preview.return_rate_basis %}<tr><th scope="row">{{ row.basis }}</th><td>{{ ('%.2f%%'|format(row.rate_pct)) if row.rate_pct is not none else 'Source required' }}</td><td>{{ row.returned }}</td><td>{{ row.sales_base if row.sales_base is not none else 'Source required' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">No return and sales window overlap is available.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Preventable versus non-preventable</h3><p class="small text-muted">Preventable: quality, damage, wrong item, short/issue, vendor return. Customer-choice returns are non-preventable.</p>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Preventable and non-preventable returns</caption><thead><tr><th scope="col">Class</th><th scope="col">Order rate</th><th scope="col">Orders</th><th scope="col">Credit</th></tr></thead><tbody>
+          {% for row in preview.preventability %}<tr><th scope="row">{{ row.classification }}</th><td>{{ ('%.2f%%'|format(row.order_rate_pct)) if row.order_rate_pct is not none else 'Source required' }}</td><td>{{ row.return_orders }}</td><td>{{ row.credit_amount|currency }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">Line-level reason capture is required for classification.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Reason Pareto by dollar impact</h3>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Return reason credit impact and cumulative Pareto share</caption><thead><tr><th scope="col">Reason</th><th scope="col">Credit</th><th scope="col">Share</th><th scope="col">Cumulative</th></tr></thead><tbody>
+          {% for row in preview.reason_pareto %}<tr><th scope="row">{{ row.reason }}</th><td>{{ row.credit_amount|currency }}</td><td>{{ '%.1f%%'|format(row.share_pct) if row.share_pct is not none else '—' }}</td><td>{{ '%.1f%%'|format(row.cumulative_pct) if row.cumulative_pct is not none else '—' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">Capture return reasons and credit value to populate the Pareto.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Return-adjusted margin by SKU</h3><p class="small text-muted">Sales revenue − sales cost − captured return credit. Products below zero are unprofitable after returns.</p>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Products ranked by return-adjusted margin</caption><thead><tr><th scope="col">SKU</th><th scope="col">Before returns</th><th scope="col">Return credit</th><th scope="col">After returns</th></tr></thead><tbody>
+          {% for row in preview.sku_return_adjusted_margin %}<tr><th scope="row">{{ row.product_code }}</th><td>{{ row.gross_margin_before_returns|currency }}</td><td>{{ row.return_credit|currency }}</td><td><span class="{{ 'text-danger fw-semibold' if row.unprofitable_after_returns else '' }}">{{ row.return_adjusted_margin|currency }}</span>{% if row.unprofitable_after_returns %}<span class="visually-hidden"> Unprofitable after returns</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">SKU-level revenue and cost coverage is required.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Time to return and backlog aging</h3>
+        <div class="row"><div class="col-md-6"><div class="small text-muted mb-1">Order to return</div><div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Time-to-return distribution</caption><thead><tr><th scope="col">Age</th><th scope="col">Returns</th><th scope="col">Share</th></tr></thead><tbody>{% for row in preview.time_to_return %}<tr><th scope="row">{{ row.bucket }}</th><td>{{ row.return_count }}</td><td>{{ ('%.1f%%'|format(row.share_pct)) if row.share_pct is not none else 'Insufficient data' }}</td></tr>{% endfor %}</tbody></table></div></div>
+        <div class="col-md-6"><div class="small text-muted mb-1">Open backlog at data cutoff</div><div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Open returns backlog aging</caption><thead><tr><th scope="col">Age</th><th scope="col">Open</th><th scope="col">Credit exposure</th></tr></thead><tbody>{% for row in preview.backlog_aging %}<tr><th scope="row">{{ row.bucket }}</th><td>{{ row.open_returns }}</td><td>{{ row.credit_exposure|currency }}</td></tr>{% endfor %}</tbody></table></div></div></div>
+      </div></div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Approval, refund, and resolution SLA</h3>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Returns workflow service-level attainment</caption><thead><tr><th scope="col">Step</th><th scope="col">Target</th><th scope="col">Median</th><th scope="col">P90</th><th scope="col">Attainment</th></tr></thead><tbody>
+          {% for row in preview.workflow_sla %}<tr><th scope="row">{{ row.metric }}</th><td>≤{{ row.target_hours|int }}h</td><td>{{ ('%.1fh'|format(row.median_hours)) if row.median_hours is not none else 'Insufficient data' }}</td><td>{{ ('%.1fh'|format(row.p90_hours)) if row.p90_hours is not none else 'Insufficient data' }}</td><td>{{ ('%.1f%%'|format(row.attainment_pct)) if row.attainment_pct is not none else 'Insufficient data' }}{% if row.completed_n %}<span class="small text-muted"> (n={{ row.completed_n }})</span>{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Repeat-returner concentration</h3><p class="small text-muted">Use for investigation, not accusation: legitimate high-volume customers can be false positives.</p>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Customers with multiple returns and their credit concentration</caption><thead><tr><th scope="col">Customer</th><th scope="col">Returns</th><th scope="col">Credit</th><th scope="col">Share</th></tr></thead><tbody>
+          {% for row in preview.repeat_returners %}<tr><th scope="row">{{ row.customer_name or row.customer_id }}</th><td>{{ row.return_count }}</td><td>{{ row.credit_amount|currency }}</td><td>{{ ('%.1f%%'|format(row.credit_share_pct)) if row.credit_share_pct is not none else '—' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">No customer has multiple captured returns in this window.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card shadow-sm border-0 h-100"><div class="card-body">
+        <h3 class="h5">Margin and CLV-input impact</h3><p class="small text-muted">Return credit reduces selected-window gross profit dollar-for-dollar. This is the gross-profit input to CLV, not a separate lifetime forecast.</p>
+        <div class="table-responsive"><table class="table table-sm mb-0"><caption class="visually-hidden">Customer gross-profit value before and after return credits</caption><thead><tr><th scope="col">Customer</th><th scope="col">Credit</th><th scope="col">Profit after returns</th><th scope="col">Value reduction</th></tr></thead><tbody>
+          {% for row in preview.customer_value_impact %}<tr><th scope="row">{{ row.customer_name or row.customer_id }}</th><td>{{ row.credit_amount|currency }}</td><td>{{ row.gross_profit_after_returns|currency }}</td><td>{{ ('%.1f%%'|format(row.value_reduction_pct)) if row.value_reduction_pct is not none else 'Source required' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">Customer revenue and cost coverage is required.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+
     <div class="col-xl-6">
       <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
@@ -93,12 +254,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>Week</th><th>Count</th></tr></thead>
+              <caption class="visually-hidden">Weekly returns volume</caption>
+              <thead><tr><th scope="col">Week</th><th scope="col">Count</th></tr></thead>
               <tbody>
                 {% for row in preview.volume_by_week %}
                 <tr><td>{{ row.week }}</td><td>{{ row.return_count }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                <tr><td class="text-muted" colspan="2">No returns were recorded in this window. <a href="{{ url_for('returns_portal.analytics') }}">Reset the date filter</a> or <a href="{{ url_for('returns_portal.create') }}">record a return</a>.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -114,12 +276,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>Customer</th><th>Credit</th><th>Returns</th></tr></thead>
+              <caption class="visually-hidden">Customers ranked by return credit</caption>
+              <thead><tr><th scope="col">Customer</th><th scope="col">Credit</th><th scope="col">Returns</th></tr></thead>
               <tbody>
                 {% for row in preview.top_customers %}
                 <tr><td>{{ row.customer_name or row.customer_id }}</td><td>{{ row.total_credit_amount|currency }}</td><td>{{ row.return_count }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                <tr><td class="text-muted" colspan="3">No customer credit is available for this window. Broaden the dates or <a href="{{ url_for('returns_portal.index') }}">review return records</a>.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -135,12 +298,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>Status</th><th>Count</th></tr></thead>
+              <caption class="visually-hidden">Returns approval funnel by status</caption>
+              <thead><tr><th scope="col">Status</th><th scope="col">Count</th></tr></thead>
               <tbody>
                 {% for row in preview.approval_funnel %}
                 <tr><td>{{ row.status_label }}</td><td>{{ row.return_count }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                <tr><td class="text-muted" colspan="2">No returns entered the approval funnel in this window. <a href="{{ url_for('returns_portal.index') }}">Check the tracker</a> or broaden the date filter.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -156,12 +320,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>Metric</th><th>Median (hrs)</th><th>P90 (hrs)</th></tr></thead>
+              <caption class="visually-hidden">Returns approval service-level timing</caption>
+              <thead><tr><th scope="col">Metric</th><th scope="col">Median (hrs)</th><th scope="col">P90 (hrs)</th></tr></thead>
               <tbody>
                 {% for row in preview.approval_sla %}
-                <tr><td>{{ row.metric }}</td><td>{{ row.median_hours }}</td><td>{{ row.p90_hours }}</td></tr>
+                <tr><td>{{ row.metric }}</td><td>{{ row.median_hours if row.median_hours is not none else 'Insufficient data' }}</td><td>{{ row.p90_hours if row.p90_hours is not none else 'Insufficient data' }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                <tr><td class="text-muted" colspan="3">Approval timing needs completed approval transitions. Process pending returns or broaden the date window.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -182,12 +347,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>Week</th><th>Total Credit</th></tr></thead>
+              <caption class="visually-hidden">Weekly approved return credit</caption>
+              <thead><tr><th scope="col">Week</th><th scope="col">Total Credit</th></tr></thead>
               <tbody>
                 {% for row in preview.credit_by_week %}
                 <tr><td>{{ row.week }}</td><td>{{ row.total_credit_amount|currency }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="2">No data.</td></tr>
+                <tr><td class="text-muted" colspan="2">No approved credit was issued in this window. <a href="{{ url_for('returns_portal.index', status='approved') }}">Review approved returns</a> or broaden the dates.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -203,12 +369,13 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
-              <thead><tr><th>SKU</th><th>Credit</th><th>Lines</th></tr></thead>
+              <caption class="visually-hidden">Products ranked by return credit</caption>
+              <thead><tr><th scope="col">SKU</th><th scope="col">Credit</th><th scope="col">Lines</th></tr></thead>
               <tbody>
                 {% for row in preview.top_skus %}
                 <tr><td>{{ row.product_code }}</td><td>{{ row.total_credit_amount|currency }}</td><td>{{ row.return_count }}</td></tr>
                 {% else %}
-                <tr><td class="text-muted" colspan="3">No data.</td></tr>
+                <tr><td class="text-muted" colspan="3">No product credit lines are available for this window. Broaden the dates or <a href="{{ url_for('returns_portal.index') }}">review return line capture</a>.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -229,7 +396,7 @@
                 {% for row in preview.reason_breakdown %}
                 <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.reason_for_return or row.reason_code }}</span><span>{{ row.total_credit_amount|currency }}</span></li>
                 {% else %}
-                <li class="list-group-item px-0 text-muted">No data.</li>
+                <li class="list-group-item px-0 text-muted">No reasons were captured in this window. Review return lines and record a reason.</li>
                 {% endfor %}
               </ul>
             </div>
@@ -239,7 +406,7 @@
                 {% for row in preview.category_breakdown %}
                 <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.category }}</span><span>{{ row.total_credit_amount|currency }}</span></li>
                 {% else %}
-                <li class="list-group-item px-0 text-muted">No data.</li>
+                <li class="list-group-item px-0 text-muted">No categories were captured in this window. Review return lines and assign a category.</li>
                 {% endfor %}
               </ul>
             </div>
@@ -257,7 +424,7 @@
             {% for row in preview.follow_up_breakdown %}
             <li class="list-group-item px-0 d-flex justify-content-between"><span>{{ row.follow_up_action }}</span><span>{{ row.line_count }}</span></li>
             {% else %}
-            <li class="list-group-item px-0 text-muted">No data.</li>
+            <li class="list-group-item px-0 text-muted">No warehouse follow-up actions were captured. Review received returns and assign the next action.</li>
             {% endfor %}
           </ul>
         </div>

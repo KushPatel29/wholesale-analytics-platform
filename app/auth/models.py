@@ -401,6 +401,8 @@ def init_auth_db() -> None:
     # resilient and let explicit IF NOT EXISTS migrations below converge schema.
     from . import notifications_models as _notifications_models  # noqa: F401
     from app.returns import models as _returns_models  # noqa: F401
+    from app import planning_scenario_models as _planning_scenario_models  # noqa: F401
+    from app.decision_ops import models as _decision_ops_models  # noqa: F401
 
     try:
         Base.metadata.create_all(ENGINE, checkfirst=True)
@@ -408,6 +410,18 @@ def init_auth_db() -> None:
         msg = str(exc).lower()
         if "already exists" in msg and "index" in msg:
             _LOG.warning("Auth DB create_all index already exists; continuing with safe migrations: %s", exc)
+            # SQLite can retain a legacy index whose name now collides with an
+            # index declared on another existing table. SQLAlchemy aborts the
+            # whole metadata pass at that point, which previously meant every
+            # table ordered after the collision (including new bounded
+            # contexts) was silently missing. Create each still-missing table
+            # independently; checkfirst skips existing tables and preserves all
+            # user data.
+            for table in Base.metadata.sorted_tables:
+                try:
+                    table.create(ENGINE, checkfirst=True)
+                except Exception as table_exc:  # pragma: no cover - legacy DB convergence
+                    _LOG.warning("Auth DB table convergence skipped '%s': %s", table.name, table_exc)
         else:
             raise
 

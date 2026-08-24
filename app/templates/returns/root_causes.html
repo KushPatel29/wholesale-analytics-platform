@@ -1,0 +1,48 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Returns root-cause analysis</h1>
+      <p class="text-muted mb-0">Credit-impact Pareto with filter-preserving drill-through and explicit evidence strength.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.analytics', from=filters.from, to=filters.to) }}">Back to analytics</a>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4"><div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3"><label class="form-label" for="rootFrom">From</label><input class="form-control" id="rootFrom" name="from" type="date" value="{{ filters.from }}"></div>
+      <div class="col-md-3"><label class="form-label" for="rootTo">To</label><input class="form-control" id="rootTo" name="to" type="date" value="{{ filters.to }}"></div>
+      <div class="col-md-6 d-flex gap-2"><button class="btn btn-primary" type="submit">Apply window</button><a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.root_causes') }}">Reset</a></div>
+    </form>
+  </div></div>
+
+  <div class="alert alert-light border" role="note">
+    <strong>Classification rule:</strong> quality, damage, wrong-item, short/issue, and vendor-return reasons are preventable; customer-choice returns are non-preventable. Confidence is sample-size evidence (low n&lt;5, medium n=5–19, high n≥20), not proof of causality.
+  </div>
+
+  <div class="card shadow-sm border-0"><div class="card-body">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <caption class="visually-hidden">Returns causes ranked by credit impact</caption>
+        <thead><tr><th scope="col">Cause</th><th scope="col">Type</th><th scope="col">Preventable</th><th scope="col">Credit impact</th><th scope="col">Pareto</th><th scope="col">Evidence</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+        <tbody>
+          {% for row in causes %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            <td>{{ row.cause_type|title }}</td>
+            <td>{{ 'Yes' if row.preventable else 'No' }}</td>
+            <td>{{ row.credit_amount|currency }}</td>
+            <td>{{ ('%.1f%%'|format(row.pareto_cumulative_pct)) if row.pareto_cumulative_pct is not none else 'SKU view' }}</td>
+            <td><span class="badge text-bg-light border">{{ row.confidence_label|title }} (n={{ row.sample_size }})</span></td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('returns_portal.root_cause_detail', type=row.cause_type, value=row.cause_value, from=row.from, to=row.to) }}">Drill through</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-muted">No root causes are measurable in this window. Capture return-line reason, SKU, and credit fields or broaden the date range.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div></div>
+</section>
+{% endblock %}

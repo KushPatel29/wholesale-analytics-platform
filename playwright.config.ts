@@ -19,7 +19,7 @@ export default defineConfig({
     command: `${process.env.PYTHON || 'python3'} tests/playwright/theme_audit_boot.py`,
     url: baseURL,
     timeout: 180_000,
-    reuseExistingServer: false,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     stdout: 'pipe',
     stderr: 'pipe',
   },

@@ -837,6 +837,12 @@ def overview_landing():
         "overview_forecast_v2_enabled": overview_forecast_v2_enabled,
         "overview_movers_fast_enabled": overview_movers_fast_enabled,
     }
+    try:
+        from app.returns import service as returns_service
+
+        template_ctx["resolved_returns_actions"] = returns_service.resolved_corrective_action_summary(limit=1)
+    except Exception:
+        template_ctx["resolved_returns_actions"] = []
     if overview_v2_enabled and not overview_v2_classic_enabled:
         # The V3 shell is the production-grade Overview experience. Keep the
         # classic V2 template behind an explicit fallback flag only.

@@ -232,6 +232,66 @@ def apply_returns_migrations(conn: Any, safe_exec: Callable[[Any, str, str], Non
         """,
         "returns.ensure.return_webhook_events",
     )
+    safe_exec(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS return_corrective_actions (
+            id INTEGER PRIMARY KEY,
+            cause_type VARCHAR(32) NOT NULL,
+            cause_value VARCHAR(255) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            owner_user_id INTEGER NOT NULL,
+            due_date DATE NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'open',
+            source_filters_json TEXT NOT NULL DEFAULT '{}',
+            baseline_start DATE NOT NULL,
+            baseline_end DATE NOT NULL,
+            baseline_return_count INTEGER NOT NULL DEFAULT 0,
+            baseline_order_count INTEGER,
+            baseline_rate_pct DOUBLE,
+            baseline_credit_amount DOUBLE NOT NULL DEFAULT 0,
+            baseline_revenue DOUBLE,
+            target_rate_pct DOUBLE,
+            outcome_start DATE,
+            outcome_end DATE,
+            outcome_return_count INTEGER,
+            outcome_order_count INTEGER,
+            outcome_rate_pct DOUBLE,
+            outcome_credit_amount DOUBLE,
+            outcome_revenue DOUBLE,
+            realized_impact_amount DOUBLE,
+            confidence_label VARCHAR(32) NOT NULL DEFAULT 'low',
+            confidence_n INTEGER NOT NULL DEFAULT 0,
+            approval_notes TEXT,
+            resolution_notes TEXT,
+            created_by_user_id INTEGER,
+            approved_by_user_id INTEGER,
+            resolved_by_user_id INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            approved_at DATETIME,
+            resolved_at DATETIME
+        )
+        """,
+        "returns.ensure.return_corrective_actions",
+    )
+    safe_exec(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS return_corrective_action_events (
+            id INTEGER PRIMARY KEY,
+            corrective_action_id INTEGER NOT NULL,
+            event_type VARCHAR(64) NOT NULL,
+            from_status VARCHAR(32),
+            to_status VARCHAR(32),
+            actor_user_id INTEGER,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "returns.ensure.return_corrective_action_events",
+    )
 
     def _table_columns(table_name: str) -> set[str]:
         try:
@@ -321,6 +381,10 @@ def apply_returns_migrations(conn: Any, safe_exec: Callable[[Any, str, str], Non
     safe_exec(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_return_policy_versions_version ON return_policy_versions(version)", "returns.index.return_policy_versions_version")
     safe_exec(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_return_webhook_events_idempotency ON return_webhook_events(idempotency_key)", "returns.index.return_webhook_events_idempotency")
     safe_exec(conn, "CREATE INDEX IF NOT EXISTS ix_return_webhook_events_status ON return_webhook_events(status)", "returns.index.return_webhook_events_status")
+    safe_exec(conn, "CREATE INDEX IF NOT EXISTS ix_return_corrective_actions_status_due ON return_corrective_actions(status, due_date)", "returns.index.corrective_actions_status_due")
+    safe_exec(conn, "CREATE INDEX IF NOT EXISTS ix_return_corrective_actions_owner_status ON return_corrective_actions(owner_user_id, status)", "returns.index.corrective_actions_owner_status")
+    safe_exec(conn, "CREATE INDEX IF NOT EXISTS ix_return_corrective_actions_cause ON return_corrective_actions(cause_type, cause_value)", "returns.index.corrective_actions_cause")
+    safe_exec(conn, "CREATE INDEX IF NOT EXISTS ix_return_corrective_action_events_action_created ON return_corrective_action_events(corrective_action_id, created_at)", "returns.index.corrective_action_events_action_created")
 
     default_rules = {
         "auto_approve_reason_codes": ["damaged", "wrong_item"],

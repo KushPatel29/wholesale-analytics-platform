@@ -328,7 +328,7 @@
         <div class="suppliers-posture-card">
           <div class="suppliers-posture-label">Posture</div>
           <div class="suppliers-posture-value">No supplier posture available</div>
-          <div class="suppliers-posture-note">Portfolio shape, activity rhythm, protein exposure, and trust will appear here when supplier data is available.</div>
+          <div class="suppliers-posture-note">Portfolio shape, activity rhythm, department exposure, and trust will appear here when supplier data is available.</div>
         </div>`;
     } else {
       els.postureCards.innerHTML = cards
@@ -382,7 +382,7 @@
       `80% of revenue sits in ${int0(kpis.suppliers_for_80_pct)} suppliers`,
       `Missing-cost revenue ${money0(kpis.missing_cost_revenue)}`,
       `At-risk suppliers ${int0(summary.at_risk_suppliers)}`,
-      `Leading protein ${(summary.top_protein_family || "—")} ${pct1(summary.top_protein_share_pct)}`,
+      `Leading department ${(summary.top_protein_family || "—")} ${pct1(summary.top_protein_share_pct)}`,
     ];
     els.chips.innerHTML = chips.map((text) => `<span class="suppliers-chip">${escapeHtml(text)}</span>`).join("");
   };
@@ -532,11 +532,11 @@
 
     renderCallouts([
       `<strong>Commercial readout.</strong> ${int0(kpis.active_suppliers)} suppliers produced ${money0(kpis.total_revenue)} in revenue and ${showCosts ? `${money0(kpis.total_profit)} in covered profit` : "sales-only results"} under the active scope.`,
-      `<strong>Concentration posture.</strong> Top supplier share is ${pct1(kpis.concentration_top1_share)} and the top five suppliers carry ${pct1(kpis.concentration_top5_share)} of visible revenue. ${int0((dependency.summary || {}).high_dependency_suppliers)} suppliers are materially concentrated in one protein or SKU family.`,
+      `<strong>Concentration posture.</strong> Top supplier share is ${pct1(kpis.concentration_top1_share)} and the top five suppliers carry ${pct1(kpis.concentration_top5_share)} of visible revenue. ${int0((dependency.summary || {}).high_dependency_suppliers)} suppliers are materially concentrated in one department or SKU family.`,
       `<strong>Portfolio shape.</strong> ${int0(topSegment.suppliers)} suppliers sit in ${topSegment.segment || "the leading"} segment, while ${int0(kpis.at_risk_suppliers)} suppliers have been inactive for at least 90 days. Department leadership currently sits in ${topProtein || "the top visible family"}.`,
     ]);
 
-    setText(els.proteinNarrative, protein.narrative || "Protein-family contribution summary unavailable.");
+    setText(els.proteinNarrative, protein.narrative || "Department contribution summary unavailable.");
     setText(
       els.dependencyNarrative,
       `Revenue HHI ${int0((dependency.summary || {}).hhi)} · covered profit top 5 ${pct1((dependency.summary || {}).profit_top5_share)} · ${int0((dependency.summary || {}).suppliers_for_80_pct)} suppliers drive 80% of revenue.`
@@ -701,7 +701,7 @@
   const renderProteinChart = (protein = {}) => {
     const rows = asArr(protein.mix).slice(0, 8);
     if (!rows.length) {
-      setChartEmpty("supProteinChart", "Protein-family mix is unavailable for the current supplier scope.");
+      setChartEmpty("supProteinChart", "Department mix is unavailable for the current supplier scope.");
       return;
     }
     renderPlot("supProteinChart", [
@@ -1058,7 +1058,7 @@
     setText(els.tableStatus, `${int0(shown)} of ${int0(state.totalRows)} suppliers shown`);
     const summary = table.summary || {};
     const quickLabel = QUICK_FILTER_LABELS[state.quickFilter] || QUICK_FILTER_LABELS.all;
-    const proteinTxt = state.proteinFilter ? ` Protein focus is ${state.proteinFilter}.` : "";
+    const proteinTxt = state.proteinFilter ? ` Department focus is ${state.proteinFilter}.` : "";
     setText(
       els.tableNarrative,
       `${quickLabel} currently represent ${money0(summary.revenue)} in revenue across ${int0(summary.supplier_count)} suppliers.${proteinTxt} Missing-cost exposure in this slice is ${money0(summary.missing_cost_revenue)}.`
@@ -1112,8 +1112,8 @@
     setText(
       els.proteinFocus,
       state.proteinFilter
-        ? `Protein focus: ${state.proteinFilter}. Clear protein focus to return to the full supplier command table.`
-        : "No protein focus selected."
+        ? `Department focus: ${state.proteinFilter}. Clear department focus to return to the full supplier command table.`
+        : "No department focus selected."
     );
   };
 

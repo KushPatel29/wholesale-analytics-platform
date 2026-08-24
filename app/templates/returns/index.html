@@ -7,7 +7,7 @@
       <p class="text-muted mb-0">Returns Tracker with scoped filters, full-row exports, and the Excel replacement column set.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      {% if can_permission('returns.create') or can_permission('page.returns.customer_portal') or can_permission('admin.returns.manage') %}
+      {% if can_permission('returns.create') or can_permission('admin.returns.manage') %}
       <a class="btn btn-primary" href="{{ url_for('returns_portal.create') }}">New Return</a>
       {% endif %}
       {% if can_permission('returns.approvals.view') or can_permission('returns.warehouse.receive') or can_permission('returns.ops.queue.view') or can_permission('admin.returns.manage') %}
@@ -90,7 +90,15 @@
           <label class="form-label" for="toDate">To</label>
           <input class="form-control" id="toDate" name="to" type="date" value="{{ filters.to }}">
         </div>
-        <div class="col-md-8 d-flex flex-wrap gap-2">
+        <div class="col-md-2">
+          <label class="form-label" for="pageSize">Rows per page</label>
+          <select class="form-select" id="pageSize" name="page_size">
+            {% for size in [25, 50, 100] %}
+            <option value="{{ size }}" {% if filters.page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 d-flex flex-wrap gap-2">
           <button class="btn btn-primary" type="submit">Apply</button>
           <button class="btn btn-outline-success" type="submit" name="export" value="xlsx">Export XLSX</button>
           <button class="btn btn-outline-secondary" type="submit" name="export" value="csv">Export CSV</button>
@@ -100,45 +108,58 @@
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-      <form method="get" class="row g-3">
-        {# ... existing filters ... #}
-      </form>
-      <div id="bulkActionsRow" class="mt-3 d-none">
-        <div class="d-flex align-items-center gap-3 p-2 bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded">
-          <span class="fw-bold text-primary small"><span id="selectedCount">0</span> returns selected</span>
-          <div class="vr"></div>
-          <button class="btn btn-sm btn-outline-primary" type="button" id="bulkExportSage">Batch Sage Export</button>
-          {% if can_finance or can_mgr_approve %}
-          <button class="btn btn-sm btn-outline-success" type="button" id="bulkMarkComplete">Batch Close</button>
-          {% endif %}
-        </div>
-      </div>
+  <div id="bulkActionsRow" class="mb-3 d-none position-sticky top-0" style="z-index: 10;">
+    <div class="d-flex flex-wrap align-items-center gap-3 p-2 bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded shadow-sm">
+      <span class="fw-bold text-primary small"><span id="selectedCount">0</span> returns selected on this page</span>
+      <div class="vr"></div>
+      <button class="btn btn-sm btn-outline-primary" type="button" id="bulkExportSage">Batch Sage Export</button>
+      {% if can_finance or can_mgr_approve %}
+      <button class="btn btn-sm btn-outline-success" type="button" id="bulkMarkComplete">Batch Close</button>
+      {% endif %}
     </div>
+  </div>
+
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+    <p class="text-muted small mb-0" aria-live="polite">
+      Showing {{ pagination.start_row }}–{{ pagination.end_row }} of {{ pagination.total_rows }} returns.
+    </p>
+    {% if pagination.total_pages > 1 %}
+    <nav aria-label="Returns pages">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_previous %}disabled{% endif %}">
+          <a class="page-link" href="{{ pagination.previous_url or '#' }}" {% if not pagination.has_previous %}aria-disabled="true" tabindex="-1"{% endif %}>Previous</a>
+        </li>
+        <li class="page-item disabled"><span class="page-link">Page {{ pagination.page }} of {{ pagination.total_pages }}</span></li>
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link" href="{{ pagination.next_url or '#' }}" {% if not pagination.has_next %}aria-disabled="true" tabindex="-1"{% endif %}>Next</a>
+        </li>
+      </ul>
+    </nav>
+    {% endif %}
   </div>
 
   <div class="card shadow-sm border-0">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0" id="returnsTable">
-        <thead class="table-light">
+        <caption class="visually-hidden">Returns matching the current filters</caption>
+        <thead class="table-light position-sticky top-0">
           <tr>
-            <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll"></th>
-            <th>RMA #</th>
-            <th>Company</th>
-            <th>Customer</th>
-            <th>Order #</th>
-            <th>Rep</th>
-            <th>Status</th>
-            <th>Total Credit</th>
-            <th>Approver</th>
-            <th>Last Updated</th>
+            <th scope="col" style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll" aria-label="Select all returns on this page"></th>
+            <th scope="col">RMA #</th>
+            <th scope="col">Company</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Order #</th>
+            <th scope="col">Rep</th>
+            <th scope="col">Status</th>
+            <th scope="col">Total Credit</th>
+            <th scope="col">Approver</th>
+            <th scope="col">Last Updated</th>
           </tr>
         </thead>
         <tbody>
           {% for row in rmas %}
           <tr data-rma-id="{{ row.id }}">
-            <td><input type="checkbox" class="form-check-input row-select" value="{{ row.id }}"></td>
+            <td><input type="checkbox" class="form-check-input row-select" value="{{ row.id }}" aria-label="Select return {{ row.rma_number }}"></td>
             <td class="fw-semibold"><a class="link-dark text-decoration-none" href="{{ url_for('returns_portal.detail', rma_id=row.id) }}">{{ row.rma_number }}</a></td>
             <td><span class="small text-muted">{{ row.company or '-' }}</span></td>
             <td>{{ row.customer_name or row.customer_id }}</td>
@@ -151,7 +172,9 @@
           </tr>
           {% else %}
           <tr>
-            <td class="text-muted" colspan="10">No returns match the current filters.</td>
+            <td class="text-muted py-4" colspan="10">
+              No returns match this filter set. Broaden the date or status filters or <a href="{{ url_for('returns_portal.index') }}">reset the tracker</a>{% if can_permission('returns.create') or can_permission('admin.returns.manage') %}, or <a href="{{ url_for('returns_portal.create') }}">record a new return</a>{% endif %}.
+            </td>
           </tr>
           {% endfor %}
         </tbody>

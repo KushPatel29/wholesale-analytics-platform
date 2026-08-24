@@ -19,7 +19,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
         <div>
           <div class="text-uppercase small fw-semibold text-primary mb-2">Regional Command Center</div>
-          <h2 class="mb-1">Regions Performance</h2>
+          <h1 class="mb-1">Regions Performance</h1>
           <p class="regions-v2-hero-subtitle mb-0">Revenue, profit, concentration, retention, and momentum across the active filtered regions.</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
@@ -166,7 +166,7 @@
               <div class="small text-muted">Horizontal ranking for fast comparison across long region names.</div>
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-              <select id="regionsV2TopN" class="form-select form-select-sm">
+              <select id="regionsV2TopN" class="form-select form-select-sm" aria-label="Number of regions to compare">
                 <option value="10">Top 10</option>
                 <option value="15" selected>Top 15</option>
                 <option value="25">Top 25</option>
@@ -193,12 +193,13 @@
           <div class="card-body">
             <div class="table-responsive regions-v2-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Operational mix by region</caption>
                 <thead class="table-light">
                   <tr>
-                    <th>Region</th>
-                    <th class="text-end">Ship Mix</th>
-                    <th class="text-end">Suppliers</th>
-                    <th class="text-end">Products</th>
+                    <th scope="col">Region</th>
+                    <th scope="col" class="text-end">Ship Mix</th>
+                    <th scope="col" class="text-end">Suppliers</th>
+                    <th scope="col" class="text-end">Products</th>
                   </tr>
                 </thead>
                 <tbody id="regionsV2OperationsBody">
@@ -267,17 +268,18 @@
       <div class="card-body">
         <div class="table-responsive regions-v2-tall-table">
           <table class="table table-sm table-hover align-middle mb-0" id="regionsV2MomentumTable">
+            <caption class="visually-hidden">Regional revenue and profit momentum</caption>
             <thead class="table-light sticky-top">
               <tr>
-                <th class="sortable" data-momentum-sort="region">Region</th>
-                <th class="text-end sortable" data-momentum-sort="revenue_current">Revenue Current</th>
-                <th class="text-end sortable" data-momentum-sort="revenue_prior">Revenue Prior</th>
-                <th class="text-end sortable" data-momentum-sort="delta_revenue">Δ Revenue $</th>
-                <th class="text-end sortable" data-momentum-sort="delta_revenue_pct">Δ Revenue %</th>
-                <th class="text-end sortable" data-momentum-sort="delta_orders">Orders Δ</th>
-                <th class="text-end sortable" data-momentum-sort="delta_customers">Customers Δ</th>
-                <th class="text-end sortable" data-momentum-sort="profit_delta">Profit Δ</th>
-                <th class="text-end sortable" data-momentum-sort="margin_delta_pp">Margin Δ (pp)</th>
+                <th scope="col" class="sortable" data-momentum-sort="region">Region</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="revenue_current">Revenue Current</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="revenue_prior">Revenue Prior</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="delta_revenue">Δ Revenue $</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="delta_revenue_pct">Δ Revenue %</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="delta_orders">Orders Δ</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="delta_customers">Customers Δ</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="profit_delta">Profit Δ</th>
+                <th scope="col" class="text-end sortable" data-momentum-sort="margin_delta_pp">Margin Δ (pp)</th>
               </tr>
             </thead>
             <tbody id="regionsV2MomentumBody">
@@ -304,7 +306,7 @@
               <h5 class="mb-0">Regional Profitability</h5>
               <div class="small text-muted">Switch between revenue, profit, margin %, and AOV.</div>
             </div>
-            <select id="regionsV2ProfitMetric" class="form-select form-select-sm">
+            <select id="regionsV2ProfitMetric" class="form-select form-select-sm" aria-label="Profitability metric">
               <option value="revenue">Revenue</option>
               <option value="profit">Profit</option>
               <option value="margin_pct">Margin %</option>
@@ -326,12 +328,13 @@
           <div class="card-body">
             <div class="table-responsive regions-v2-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Regional unit economics highlights</caption>
                 <thead class="table-light">
                   <tr>
-                    <th>Region</th>
-                    <th class="text-end">Rev / Cust</th>
-                    <th class="text-end">Profit / Order</th>
-                    <th class="text-end">Rev / Unit</th>
+                    <th scope="col">Region</th>
+                    <th scope="col" class="text-end">Rev / Cust</th>
+                    <th scope="col" class="text-end">Profit / Order</th>
+                    <th scope="col" class="text-end">Rev / Unit</th>
                   </tr>
                 </thead>
                 <tbody id="regionsV2UnitBody">
@@ -363,12 +366,13 @@
             <div class="small text-muted mb-2" id="regionsV2ConcentrationSummary">Loading concentration summary...</div>
             <div class="table-responsive regions-v2-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Regional concentration and dependency</caption>
                 <thead class="table-light">
                   <tr>
-                    <th>Region</th>
-                    <th class="text-end">Top Cust %</th>
-                    <th class="text-end">Top Prod %</th>
-                    <th class="text-end">Top Supp %</th>
+                    <th scope="col">Region</th>
+                    <th scope="col" class="text-end">Top Cust %</th>
+                    <th scope="col" class="text-end">Top Prod %</th>
+                    <th scope="col" class="text-end">Top Supp %</th>
                   </tr>
                 </thead>
                 <tbody id="regionsV2ConcentrationBody">
@@ -415,13 +419,14 @@
           <div class="card-body">
             <div class="table-responsive regions-v2-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Customer retention health by region</caption>
                 <thead class="table-light">
                   <tr>
-                    <th>Region</th>
-                    <th class="text-end">Repeat %</th>
-                    <th class="text-end">Churn %</th>
-                    <th class="text-end">30d / 90d Active</th>
-                    <th class="text-end">New %</th>
+                    <th scope="col">Region</th>
+                    <th scope="col" class="text-end">Repeat %</th>
+                    <th scope="col" class="text-end">Churn %</th>
+                    <th scope="col" class="text-end">30d / 90d Active</th>
+                    <th scope="col" class="text-end">New %</th>
                   </tr>
                 </thead>
                 <tbody id="regionsV2RetentionBody">
@@ -441,13 +446,14 @@
           <div class="card-body">
             <div class="table-responsive regions-v2-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Regional concentration and risk priorities</caption>
                 <thead class="table-light">
                   <tr>
-                    <th>Region</th>
-                    <th>Risk</th>
-                    <th>Summary</th>
-                    <th class="text-end">Δ Revenue</th>
-                    <th>Quality</th>
+                    <th scope="col">Region</th>
+                    <th scope="col">Risk</th>
+                    <th scope="col">Summary</th>
+                    <th scope="col" class="text-end">Δ Revenue</th>
+                    <th scope="col">Quality</th>
                   </tr>
                 </thead>
                 <tbody id="regionsV2RiskBody">
@@ -482,7 +488,7 @@
           <div class="d-flex flex-wrap gap-2 align-items-center">
             <div class="input-group input-group-sm">
               <span class="input-group-text bg-white">Search</span>
-              <input id="regionsV2Search" type="search" class="form-control" placeholder="Search region...">
+              <input id="regionsV2Search" type="search" class="form-control" placeholder="Search region..." aria-label="Search regions">
               <button id="regionsV2SearchClear" type="button" class="btn btn-outline-secondary">Clear</button>
             </div>
             <a id="regionsV2TableCsv" class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.export_overview', format='csv') }}">Table CSV</a>
@@ -493,24 +499,25 @@
       <div class="card-body pt-2">
         <div class="table-responsive regions-v2-table-wrap">
           <table class="table table-sm table-hover align-middle mb-0" id="regionsV2Table">
+            <caption class="visually-hidden">Regional performance command table for the active filters</caption>
             <thead class="table-light sticky-top">
               <tr>
-                <th class="sortable" data-sort="region">Region</th>
-                <th class="text-end sortable" data-sort="customers">Customers</th>
-                <th class="text-end sortable" data-sort="orders">Orders</th>
-                <th class="text-end sortable" data-sort="revenue">Revenue</th>
-                <th class="text-end sortable" data-sort="profit">Profit</th>
-                <th class="text-end sortable" data-sort="margin_pct">Margin %</th>
-                <th class="text-end sortable" data-sort="aov">AOV</th>
-                <th class="text-end sortable" data-sort="repeat_pct">Repeat %</th>
-                <th class="text-end sortable" data-sort="churn_pct">Churn %</th>
-                <th class="text-end sortable" data-sort="new_customer_pct">New Cust %</th>
-                <th class="text-end sortable" data-sort="top_customer_share_pct">Top Cust %</th>
-                <th class="text-end sortable" data-sort="top_product_share_pct">Top Prod %</th>
-                <th class="text-end sortable" data-sort="delta_revenue">Δ Revenue $</th>
-                <th class="text-end sortable" data-sort="delta_revenue_pct">Δ Revenue %</th>
-                <th class="sortable" data-sort="cost_coverage_pct">Data Quality</th>
-                <th>Actions</th>
+                <th scope="col" class="sortable" data-sort="region">Region</th>
+                <th scope="col" class="text-end sortable" data-sort="customers">Customers</th>
+                <th scope="col" class="text-end sortable" data-sort="orders">Orders</th>
+                <th scope="col" class="text-end sortable" data-sort="revenue">Revenue</th>
+                <th scope="col" class="text-end sortable" data-sort="profit">Profit</th>
+                <th scope="col" class="text-end sortable" data-sort="margin_pct">Margin %</th>
+                <th scope="col" class="text-end sortable" data-sort="aov">AOV</th>
+                <th scope="col" class="text-end sortable" data-sort="repeat_pct">Repeat %</th>
+                <th scope="col" class="text-end sortable" data-sort="churn_pct">Churn %</th>
+                <th scope="col" class="text-end sortable" data-sort="new_customer_pct">New Cust %</th>
+                <th scope="col" class="text-end sortable" data-sort="top_customer_share_pct">Top Cust %</th>
+                <th scope="col" class="text-end sortable" data-sort="top_product_share_pct">Top Prod %</th>
+                <th scope="col" class="text-end sortable" data-sort="delta_revenue">Δ Revenue $</th>
+                <th scope="col" class="text-end sortable" data-sort="delta_revenue_pct">Δ Revenue %</th>
+                <th scope="col" class="sortable" data-sort="cost_coverage_pct">Data Quality</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="regionsV2TableBody">

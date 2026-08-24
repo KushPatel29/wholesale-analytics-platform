@@ -129,7 +129,8 @@ class TestForecastAccuracy:
     def test_rolling_origin_uses_only_history_available_at_origin(self):
         rows = []
         for month, revenue in enumerate([100, 100, 100, 100, 120, 90], start=1):
-            row = _line(f"2026-{month:02d}-01", "Grocery", revenue, False)
+            date = pd.Period(f"2026-{month:02d}", freq="M").end_time.normalize()
+            row = _line(str(date.date()), "Grocery", revenue, False)
             row.update({"SKU": "SKU-1", "RegionName": "West"})
             rows.append(row)
         result = planning.build_forecast_accuracy(_frame(rows))
@@ -139,6 +140,7 @@ class TestForecastAccuracy:
         assert result["series"][0]["actual"] == 120
         assert result["series"][0]["variance_pct"] == pytest.approx(100 / 6)
         assert result["headline"]["scored_periods"] == 2
+        assert result["headline"]["wape_pct"] == pytest.approx((20 + 50 / 3) / 210 * 100)
         assert result["by_sku"][0]["label"] == "SKU-1"
         assert result["by_region"][0]["label"] == "West"
 
@@ -151,6 +153,37 @@ class TestForecastAccuracy:
         assert row["lower"] == 90
         assert row["upper"] == 110.00000000000001
         assert row["method"] == "trailing 3-month mean"
+
+    def test_incomplete_month_and_week_are_excluded_from_backtest(self):
+        rows = []
+        for month, revenue in enumerate([100, 100, 100, 100, 120, 90], start=1):
+            date = pd.Period(f"2026-{month:02d}", freq="M").end_time.normalize()
+            rows.append(_line(str(date.date()), "Grocery", revenue, False))
+        rows.append(_line("2026-07-04", "Grocery", 1, False))
+        frame = _frame(rows)
+
+        assert "2026-07" not in set(planning._monthly_revenue(frame)["month"].astype(str))
+        assert "2026-06-29/2026-07-05" not in set(planning._weekly_revenue(frame)["week"].astype(str))
+        assert all(row["period"] != "2026-07" for row in planning.build_forecast_accuracy(frame)["series"])
+
+    def test_bias_is_scored_at_one_four_and_eight_week_horizons(self):
+        dates = pd.date_range("2026-01-01", "2026-06-28", freq="D")
+        frame = _frame([_line(str(date.date()), "Grocery", 100 + date.day, False) for date in dates])
+        result = planning.build_forecast_accuracy(frame)
+
+        assert [row["horizon_weeks"] for row in result["by_horizon"]] == [1, 4, 8]
+        assert all(row["scored_periods"] > 0 for row in result["by_horizon"])
+        assert all(row["bias"] is not None for row in result["by_horizon"])
+
+    def test_naive_seasonal_baseline_is_compared_on_complete_months(self):
+        dates = pd.date_range("2024-01-31", periods=18, freq="ME")
+        frame = _frame([_line(str(date.date()), "Grocery", 100 + index, False) for index, date in enumerate(dates)])
+        result = planning.build_forecast_accuracy(frame)
+
+        assert result["baseline"]["available"] is True
+        assert result["baseline"]["scored_periods"] == 6
+        assert result["baseline"]["model_beats_baseline"] is False
+        assert "does not beat" in result["baseline"]["comparison"]
 
 
 class TestEndToEnd:

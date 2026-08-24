@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,11 @@ BANNED_PROSE = re.compile(
     re.IGNORECASE,
 )
 
+BANNED_VISIBLE_PROSE = re.compile(
+    r"\b(protein|carcass|primal|catch[\s-]?weight|trsm)\b",
+    re.IGNORECASE,
+)
+
 # Proper nouns are checked by digest rather than in plaintext.
 #
 # The previous version of this guard spelled out the names it was guarding
@@ -58,6 +64,7 @@ BANNED_TOKEN_DIGESTS = {
     "b7d3897f56a89ecf",
     "ff8226b7efa5a3eb",
 }
+BANNED_VISIBLE_TOKEN_DIGESTS = BANNED_TOKEN_DIGESTS | {"96ffdcf18557871e"}
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9.'-]*")
 
@@ -66,7 +73,8 @@ def _digest(token: str) -> str:
     return hashlib.sha256(token.lower().encode("utf-8")).hexdigest()[:16]
 
 
-def _banned_tokens_in(text: str):
+def _banned_tokens_in(text: str, digests=None):
+    digests = BANNED_TOKEN_DIGESTS if digests is None else digests
     """
     Yield (line, matched-token) for any banned proper noun.
 
@@ -81,7 +89,7 @@ def _banned_tokens_in(text: str):
         if index + 1 < len(words):
             candidates.append(f"{word} {words[index + 1][0]}")
         for candidate in candidates:
-            if _digest(candidate) in BANNED_TOKEN_DIGESTS:
+            if _digest(candidate) in digests:
                 yield text.count("\n", 0, start) + 1, candidate
 
 
@@ -113,7 +121,57 @@ def test_no_wholesale_meat_vocabulary_in_visitor_facing_prose():
 
 
 def _built_pages(dist: Path):
-    return [p for p in dist.rglob("*.html") if not p.as_posix().endswith("data/index.html")]
+    return [
+        p
+        for p in dist.rglob("*.html")
+        if not p.as_posix().endswith("data/index.html")
+        and "data/sections" not in p.relative_to(dist).as_posix()
+    ]
+
+
+class _VisibleTextParser(HTMLParser):
+    """Collect rendered copy while ignoring code and styling payloads."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._ignored_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs):
+        if tag in {"script", "style", "template"}:
+            self._ignored_depth += 1
+
+    def handle_endtag(self, tag: str):
+        if tag in {"script", "style", "template"} and self._ignored_depth:
+            self._ignored_depth -= 1
+
+    def handle_data(self, data: str):
+        if not self._ignored_depth:
+            self.parts.append(data)
+
+
+def _visible_text(html: str) -> str:
+    parser = _VisibleTextParser()
+    parser.feed(html)
+    return "\n".join(parser.parts)
+
+
+@pytest.mark.parametrize("dist_name", [DIST_NAME])
+def test_frozen_pages_use_retail_vocabulary(dist_name: str):
+    """Published page copy cannot expose the source industry's vocabulary."""
+    dist = ROOT / dist_name
+    if not dist.is_dir():
+        pytest.skip(f"{dist_name}/ not built")
+    offenders: list[str] = []
+    for page in _built_pages(dist):
+        text = _visible_text(page.read_text(encoding="utf-8", errors="replace"))
+        matches = sorted({match.group(0) for match in BANNED_VISIBLE_PROSE.finditer(text)})
+        names = sorted({token for _, token in _banned_tokens_in(text, BANNED_VISIBLE_TOKEN_DIGESTS)})
+        if matches or names:
+            offenders.append(
+                f"{page.relative_to(dist).as_posix()}: {', '.join(matches + names)}"
+            )
+    assert not offenders, "published pages contain banned vocabulary:\n  " + "\n  ".join(offenders[:20])
 
 
 @pytest.mark.parametrize("dist_name", [DIST_NAME])

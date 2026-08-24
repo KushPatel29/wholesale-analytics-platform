@@ -2435,7 +2435,7 @@
     if (els.negativeMarginProteinFilter) {
       const selected = els.negativeMarginProteinFilter.value;
       const proteins = Array.from(new Set(risks.map((r) => r.protein || "Unknown"))).sort();
-      els.negativeMarginProteinFilter.innerHTML = '<option value="">All proteins</option>' + proteins.map((p) => `<option value="${p}">${p}</option>`).join("");
+      els.negativeMarginProteinFilter.innerHTML = '<option value="">All departments</option>' + proteins.map((p) => `<option value="${p}">${p}</option>`).join("");
       if (proteins.includes(selected)) els.negativeMarginProteinFilter.value = selected;
     }
 
@@ -2521,7 +2521,7 @@
         .join("");
       return `<div class="mb-3"><div class="text-muted small">${title}</div><ul class="list-unstyled mini-list mb-0">${list}</ul></div>`;
     };
-    const html = `${renderList("Regions", mix.region)}${renderList("Methods", mix.method)}${renderList("Suppliers", mix.supplier)}${renderList("Proteins", mix.protein)}`;
+    const html = `${renderList("Regions", mix.region)}${renderList("Methods", mix.method)}${renderList("Suppliers", mix.supplier)}${renderList("Departments", mix.protein)}`;
     els.opsMixPanel.innerHTML = html || '<div class="text-muted">No mix data available.</div>';
   };
 
@@ -3563,6 +3563,42 @@
     window.dispatchEvent(new CustomEvent("globalFilters:applied", { detail: payload }));
   };
 
+  const resizeRevealedCharts = (disclosure) => {
+    window.dispatchEvent(new Event("resize"));
+    disclosure?.querySelectorAll("canvas").forEach((canvas) => {
+      window.Chart?.getChart?.(canvas)?.resize?.();
+    });
+    disclosure?.querySelectorAll(".js-plotly-plot").forEach((plot) => {
+      window.Plotly?.Plots?.resize?.(plot);
+    });
+  };
+
+  const revealDisclosureTarget = (hash = window.location.hash) => {
+    if (!hash || hash === "#") return;
+    let target = null;
+    try {
+      target = document.querySelector(hash);
+    } catch (_err) {
+      return;
+    }
+    const disclosure = target?.closest?.("details");
+    if (disclosure && !disclosure.open) {
+      disclosure.open = true;
+      window.requestAnimationFrame(() => resizeRevealedCharts(disclosure));
+    }
+  };
+
+  document.querySelectorAll("#overviewPage details.overview-disclosure").forEach((disclosure) => {
+    disclosure.addEventListener("toggle", () => {
+      if (disclosure.open) window.requestAnimationFrame(() => resizeRevealedCharts(disclosure));
+    });
+  });
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest?.('a[href^="#"]');
+    if (link) window.setTimeout(() => revealDisclosureTarget(link.getAttribute("href")), 0);
+  });
+  window.addEventListener("hashchange", () => revealDisclosureTarget());
+
   const load = async (qsOverride, options = {}) => {
     const version = ++requestSeq;
     if (activeController) {
@@ -3616,6 +3652,7 @@
   wireMarginRiskFilters();
   wireOverviewActionLinks();
   wireExportActions();
+  revealDisclosureTarget();
   stripDeprecatedWindowParamsFromUrl();
   const bootstrap = async (qsHint) => {
     if (bootstrapped) return;

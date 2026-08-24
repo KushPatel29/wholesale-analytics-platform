@@ -1,0 +1,13 @@
+northgate_retail_analytics:
+  target: ci
+  outputs:
+    ci:
+      type: snowflake
+      account: placeholder
+      user: placeholder
+      password: placeholder
+      role: TRANSFORMER
+      database: NORTHGATE_DEMO
+      warehouse: TRANSFORMING
+      schema: ANALYTICS
+      threads: 2

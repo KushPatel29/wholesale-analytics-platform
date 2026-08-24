@@ -42,6 +42,7 @@ def _has_assistant_access() -> bool:
             "page.returns.view",
             "page.admin.view",
             "page.notifications.view",
+            "page.work.view",
         )
     )
 

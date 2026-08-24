@@ -33,19 +33,13 @@ from pathlib import Path
 # across the full build: 8.8-32.8 KB gzipped per page, against 42-264 KB raw.
 # 60 KB leaves real headroom while still catching a page that runs away.
 #
-# Nodes and height are generous because a full page is legitimately long, but
-# they are not unlimited: they still catch a table that forgets to cap itself.
-# Worst observed at the time of writing: 3,287 nodes (products) and 10,185px
-# (labor).
+# Height remains generous because a complete analytical page is legitimately
+# long. Initial DOM size is strict: secondary rendered sections are local
+# progressive fragments and do not need to inflate first paint.
 MAX_PAGE_GZIP_KB = 60
 MAX_FRAGMENT_KB = 400
-# Charts now carry a hover label per data point, as an empty <b> positioned over
-# the frozen image. That is up to 44 nodes per chart, and the pages that draw a
-# dozen charts pay for it - Labor and Sales Reps most. The nodes are leaf
-# elements with no text and no layout of their own, so the cost is bytes rather
-# than paint, and the budget moves to match rather than the hover coming back
-# off. Worst observed after the change: 3,652 nodes (products).
-MAX_PAGE_NODES = 4_400
+# Frozen chart hover points remain available inside the local fragments.
+MAX_PAGE_NODES = 1_800
 MAX_PAGE_HEIGHT = 11_500
 
 # Text that means the page is waiting. On a prerendered page there is nothing
@@ -74,6 +68,7 @@ APP_SCRIPTS = [
 API_ATTR_RE = re.compile(r'(?:href|src)="(/?(?:[^"]*/)?api/[^"]*)"')
 LOCAL_ATTR_RE = re.compile(r'\s(?:href|src|action)="([^"]+)"')
 CSS_URL_RE = re.compile(r"url\(([^)]+)\)")
+STATIC_FRAGMENT_RE = re.compile(r'data-static-src="([^"]+)"')
 FROZEN_MARKER = "data-static-page"
 
 
@@ -197,6 +192,13 @@ def check(dist: Path) -> int:
                     # the full publish build includes them and checks the links.
                     continue
                 failures.append(f"{rel}: missing local asset or page {match.group(1)[:60]}")
+
+        for match in STATIC_FRAGMENT_RE.finditer(html):
+            target = _local_target(dist, page.parent, match.group(1))
+            if target is None or not target.is_file():
+                failures.append(f"{rel}: detail control references a missing fragment {match.group(1)[:60]}")
+            elif not target.read_text(encoding="utf-8", errors="replace").strip():
+                failures.append(f"{rel}: detail control references an empty fragment {match.group(1)[:60]}")
 
         # The options the filter control needs, embedded rather than fetched.
         if '"filter-options"' not in html and "id=\"filter-options\"" not in html:

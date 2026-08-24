@@ -3496,7 +3496,7 @@
     if (freshRevenue > 0 && consumablesRevenue <= 0) opportunities.push("Open consumables cross-sell");
     if (freshRevenue > 0 && gmRevenue <= 0) opportunities.push("Add general merchandise mix");
     if (!opportunities.length && freshRevenue > 0) opportunities.push("Department mix is already attached");
-    if (!opportunities.length) opportunities.push("No protein anchor in the visible window");
+    if (!opportunities.length) opportunities.push("No department anchor in the visible window");
 
     title.textContent = row.customer_name || row.customer_id || TEXT_EMPTY;
     meta.textContent = [
@@ -4051,7 +4051,7 @@
       { label: "Revenue Rank",     key: null, fmt: r => escapeHtml(r.quartile_label || NA) },
       { label: "Top Customer",     key: null, fmt: r => escapeHtml(r.top_customer_name || NA) },
       { label: "Top Territory",    key: null, fmt: r => escapeHtml(r.top_territory_name || NA) },
-      { label: "Top Protein",      key: null, fmt: r => escapeHtml(r.top_protein_family || NA) },
+      { label: "Top Department",   key: null, fmt: r => escapeHtml(r.top_protein_family || NA) },
     ];
 
     const headerCells = reps.map(r => `<th class="text-center align-middle" style="min-width:150px">${escapeHtml(repDisplayName(r, READABLE_REP_FALLBACK))}</th>`).join("");
@@ -5048,7 +5048,7 @@
         <td class="col-replaced_reps" title="${escapeHtml(row.replaced_rep_names || "")}">${row.replaced_rep_count ? `${fmtInt.format(num(row.replaced_rep_count))} · ${escapeHtml(row.replaced_rep_names || "")}` : NA}</td>
         <td class="col-top_territory" title="${escapeHtml(row.top_territory_name || NA)}"><span class="sr-link"${drillAttr(territoryPayload(row.top_territory_name, "Detailed Table", "Top Territory", "Revenue", row.top_territory_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_territory_name || NA)}</span></td>
         <td class="col-top_customer" title="${escapeHtml(row.top_customer_name || NA)}"><span class="sr-link"${drillAttr(repWorkspacePayload(row, "Detailed Table", "Top Customer", "Revenue", row.top_customer_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_customer_name || NA)}</span></td>
-        <td class="col-top_protein"><span class="sr-link"${drillAttr(proteinPayload(row.top_protein_family, "Detailed Table", "Top Protein", "Revenue", row.top_protein_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_protein_family || NA)}</span></td>
+        <td class="col-top_protein"><span class="sr-link"${drillAttr(proteinPayload(row.top_protein_family, "Detailed Table", "Top Department", "Revenue", row.top_protein_revenue, { filter_mode: "current_window" }))}>${escapeHtml(row.top_protein_family || NA)}</span></td>
         <td class="text-end col-leakage" title="Revenue sold below minimum department margin target">
           <div class="${row.leakage_revenue > 0 ? "text-danger fw-bold" : "text-muted"}">${money(row.leakage_revenue)}</div>
           <div class="sr-secondary-metric">${fmtInt.format(num(row.leakage_count))} lines</div>
@@ -5423,7 +5423,7 @@
       // 6D: Protein section subtitle
       const proteins = analysis.proteins || [];
       if (proteins.length) {
-        setText("srSectionProteinSubtitle", `${proteins.length} protein famil${proteins.length !== 1 ? "ies" : "y"} in scope · margin benchmarks applied where available`);
+        setText("srSectionProteinSubtitle", `${proteins.length} department famil${proteins.length !== 1 ? "ies" : "y"} in scope · margin benchmarks applied where available`);
       }
     } catch (err) {
       logError("Department table rendering failed", err);
@@ -6943,7 +6943,7 @@
 
       const proteins = Array.isArray(props.historical_proteins) ? props.historical_proteins : (props.historical_proteins || "").split(",").filter(Boolean);
       const proteinHtml = proteins.length
-        ? `<div class="sr-map-popup-row text-muted" style="font-size:0.68rem">Core Species: ${proteins.slice(0,3).join(", ")}</div>`
+        ? `<div class="sr-map-popup-row text-muted" style="font-size:0.68rem">Core departments: ${proteins.slice(0,3).join(", ")}</div>`
         : "";
 
       const lostBadge = Number(props.is_lost) === 1

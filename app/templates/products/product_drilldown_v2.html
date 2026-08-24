@@ -133,7 +133,7 @@
             <span class="product-v2-chip {{ tone_class('accent' if (lifecycle_insights.get('stage') or lifecycle.get('stage')) not in ['Declining', 'Unstable'] else 'warn') }}">Lifecycle: {{ lifecycle_insights.get("stage") or lifecycle.get("stage") or "Unknown" }}</span>
             <span class="product-v2-chip">Classification: {{ classification.get("abc_xyz") or classification.get("label") or "Unclassified" }}</span>
             {% if family_context and family_context.get('protein_family') %}
-              <span class="product-v2-chip">Protein: {{ family_context.get("protein_family") }}</span>
+              <span class="product-v2-chip">Department: {{ family_context.get("protein_family") }}</span>
             {% endif %}
             {% if family_context and family_context.get('product_category') and family_context.get('product_category') != family_context.get('protein_family') %}
               <span class="product-v2-chip">Category: {{ family_context.get("product_category") }}</span>

@@ -7,14 +7,40 @@ runtime bindings that survive the freeze pass.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
+ACTIVE_ANALYTICS_TEMPLATES = (
+    "app/templates/customers/kpis_v3.html",
+    "app/templates/customers/rfm_v2.html",
+    "app/templates/customers/cohorts_v2.html",
+    "app/templates/customers/clv_v2.html",
+    "app/templates/products/index_v4.html",
+    "app/templates/regions/index_v2.html",
+    "app/templates/suppliers/index_v2.html",
+    "app/templates/salesreps/index.html",
+    "app/templates/returns/index.html",
+    "app/templates/returns/analytics.html",
+)
+
 
 def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def test_active_analytics_templates_have_one_h1_and_accessible_tables():
+    for relative in ACTIVE_ANALYTICS_TEMPLATES:
+        template = _read(relative)
+        assert len(re.findall(r"<h1(?=[\s>])", template)) == 1, relative
+        assert len(re.findall(r"<table(?=[\s>])", template)) == len(
+            re.findall(r"<caption(?=[\s>])", template)
+        ), relative
+        assert '<th scope="col"ead' not in template, relative
+        for header in re.findall(r"<th(?=[\s>])[^>]*>", template):
+            assert re.search(r"\bscope=(?:\"[^\"]+\"|'[^']+')", header), (relative, header)
 
 
 def test_inventory_upgrade_mounts_aging_and_holding_cost_charts():
@@ -65,6 +91,7 @@ def test_planner_print_and_view_controls_survive_the_static_freeze():
     assert "function bindPrint()" in builder
     assert "function bindReportViews()" in builder
     assert "body[data-static-page] .report-section{opacity:1!important" in builder
+    assert "document.querySelectorAll('[data-live-only]')" in builder
 
 
 def test_static_shell_menu_and_pointer_aligned_details_survive_the_freeze():
@@ -124,8 +151,15 @@ def test_long_decision_pages_publish_a_consistent_reading_path():
     inventory = _read("app/templates/inventory/index.html")
     salesreps = _read("app/templates/salesreps/index.html")
 
-    assert 'class="overview-routebar"' in overview
-    assert 'href="#trendDriversSection"' in overview
+    assert 'id="supportingMetricsDisclosure"' in overview
+    assert 'id="diagnosticWorkspacesDisclosure"' in overview
+    assert "Supporting KPI and reconciliation detail" in overview
+    assert "Detailed diagnostic workspaces" in overview
+    executive_default = overview.split('id="executiveScorecardCard"', 1)[1].split(
+        '<details class="overview-inline-disclosure"', 1
+    )[0]
+    assert executive_default.count('class="command-primary-card"') == 4
+    assert executive_default.count('class="hero-side-metric"') == 4
     assert 'class="inventory-routebar"' in inventory
     assert 'href="#inventory-actions"' in inventory
     assert 'class="sr-routebar mb-3"' in salesreps

@@ -1096,6 +1096,64 @@ def request_permission_policy(path: str | None = None) -> dict[str, tuple[tuple[
             required_all.append("page.salesreps.drilldown.view")
     elif current_path.startswith("/admin/notifications-defaults"):
         required_all.append("admin.notifications.defaults")
+    elif current_path.startswith("/api/assistant/draft-action"):
+        required_all.append("assistant.actions.draft")
+    elif current_path.startswith("/api/work/source-contracts"):
+        required_all.append("page.enterprise_admin.view")
+    elif current_path.startswith("/api/work/actions"):
+        required_all.append("page.work.view")
+    elif current_path.startswith("/api/work/crm"):
+        required_all.append("page.crm.view")
+    elif current_path.startswith("/api/work/orders"):
+        required_all.append("page.orders.view")
+    elif current_path.startswith("/api/work/procurement"):
+        required_all.append("page.procurement.view")
+    elif current_path.startswith("/api/work/finance"):
+        required_all.append("page.finance_ops.view")
+    elif current_path.startswith("/api/work/inventory"):
+        required_all.append("page.inventory_ops.view")
+    elif current_path.startswith("/api/work/master-data"):
+        required_all.append("page.master_data.view")
+    elif current_path.startswith("/api/work/service"):
+        required_all.append("page.service.view")
+    elif current_path.startswith("/work/actions"):
+        required_all.append("page.work.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("actions.manage" if current_path != "/work/actions" else "actions.create")
+    elif current_path in {"/work", "/work/"}:
+        required_all.append("page.work.view")
+    elif current_path.startswith("/work/crm"):
+        required_all.append("page.crm.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("crm.manage")
+    elif current_path.startswith("/work/orders"):
+        required_all.append("page.orders.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("orders.manage")
+    elif current_path.startswith("/work/procurement"):
+        required_all.append("page.procurement.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("procurement.manage")
+    elif current_path.startswith("/work/finance"):
+        required_all.append("page.finance_ops.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("finance_ops.manage")
+    elif current_path.startswith("/work/inventory"):
+        required_all.append("page.inventory_ops.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("inventory_ops.manage")
+    elif current_path.startswith("/work/master-data"):
+        required_all.append("page.master_data.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("master_data.manage")
+    elif current_path.startswith("/work/service"):
+        required_all.append("page.service.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("service.manage")
+    elif current_path.startswith("/work/enterprise"):
+        required_all.append("page.enterprise_admin.view")
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            required_all.append("integrations.manage")
     elif current_path.startswith("/admin/returns"):
         required_all.append("admin.returns.manage")
     elif current_path.startswith("/assistant") or current_path.startswith("/api/assistant"):

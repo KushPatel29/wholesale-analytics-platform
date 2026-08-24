@@ -696,14 +696,14 @@
       const activeProtein = state.proteinFocus;
       chipWrap.innerHTML = chips.length
         ? [
-            `<button type="button" class="supplier-v2-chip-filter ${activeProtein ? "" : "is-active"}" data-protein-focus="">All proteins</button>`,
+            `<button type="button" class="supplier-v2-chip-filter ${activeProtein ? "" : "is-active"}" data-protein-focus="">All departments</button>`,
             ...chips.map(
               (row) => `<button type="button" class="supplier-v2-chip-filter ${activeProtein === row.protein_family ? "is-active" : ""}" data-protein-focus="${escapeHtml(
                 row.protein_family || ""
               )}">${escapeHtml(row.protein_family || "Unassigned")} <span>${fmtPct(row.revenue_share_pct)}</span></button>`
             ),
           ].join("")
-        : '<div class="supplier-v2-empty-copy">No protein filters are available for the current scope.</div>';
+        : '<div class="supplier-v2-empty-copy">No department filters are available for the current scope.</div>';
     }
 
     const proteinTbody = document.getElementById("v2ProteinRows");
@@ -723,7 +723,7 @@
           `
             )
             .join("")
-        : '<tr><td colspan="6" class="text-muted text-center">No protein diagnostics in the selected window.</td></tr>';
+        : '<tr><td colspan="6" class="text-muted text-center">No department diagnostics in the selected window.</td></tr>';
     }
 
     const categoryTbody = document.getElementById("v2CategoryRows");
@@ -785,7 +785,7 @@
         },
       });
     } else {
-      setChartEmpty("v2ProteinRevenueChart", "No protein-family revenue is available for the selected window.");
+      setChartEmpty("v2ProteinRevenueChart", "No department revenue is available for the selected window.");
     }
 
     const categoryCanvas = document.getElementById("v2CategoryRevenueChart");
@@ -1116,7 +1116,7 @@
     if (countEl) countEl.textContent = `${fmtInt(rows.length)} products`;
     if (filterState) {
       const scopes = [];
-      if (state.proteinFocus) scopes.push(`${state.proteinFocus} protein`);
+      if (state.proteinFocus) scopes.push(`${state.proteinFocus} department`);
       if (state.tagFocus) scopes.push(state.tagFocus);
       filterState.textContent = scopes.length
         ? `Focused on ${scopes.join(" · ")} inside the active supplier scope.`

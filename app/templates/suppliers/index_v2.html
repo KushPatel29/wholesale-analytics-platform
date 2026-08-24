@@ -28,7 +28,7 @@
               <div class="suppliers-hero-eyebrow">Supplier Intelligence</div>
               <h1 class="suppliers-hero-title mb-2">Supplier Command Center</h1>
               <p class="suppliers-hero-subtitle mb-0">
-                Executive supplier readout for concentration, cost trust, protein exposure, commercial risk, and the next actions under the active Northgate Retail Analytics filter scope.
+                Executive supplier readout for concentration, cost trust, department exposure, commercial risk, and the next actions under the active Northgate Retail Analytics filter scope.
               </p>
             </div>
             <div class="suppliers-hero-actions" aria-label="Supplier exports">
@@ -265,14 +265,14 @@
       <div>
         <div class="suppliers-section-kicker">Portfolio posture</div>
         <h3 class="suppliers-section-title">How concentrated, resilient, and trustworthy is the supplier base?</h3>
-        <p class="suppliers-section-copy mb-0">A compact command layer for dependency, activity rhythm, protein exposure, and trust so leadership can separate portfolio shape from day-to-day noise.</p>
+        <p class="suppliers-section-copy mb-0">A compact command layer for dependency, activity rhythm, department exposure, and trust so leadership can separate portfolio shape from day-to-day noise.</p>
       </div>
     </div>
     <div id="supplierPostureCards" class="suppliers-posture-grid" aria-live="polite">
       <div class="suppliers-posture-card">
         <div class="suppliers-posture-label">Loading</div>
         <div class="suppliers-posture-value">Preparing supplier posture...</div>
-        <div class="suppliers-posture-note">Concentration, activity rhythm, protein posture, and trust summaries will appear here.</div>
+        <div class="suppliers-posture-note">Concentration, activity rhythm, department posture, and trust summaries will appear here.</div>
       </div>
     </div>
     <div id="supplierPostureNarrative" class="suppliers-inline-note mt-3">Reading portfolio posture...</div>
@@ -285,11 +285,11 @@
           <div class="card-header">
             <div class="suppliers-card-kicker">Executive readout</div>
             <h4 class="mb-1">Where concentration, trust, and margin pressure need attention</h4>
-            <div class="text-muted small">Executive narrative grounded in comparable-window deltas, concentration posture, data trust, and protein exposure.</div>
+            <div class="text-muted small">Executive narrative grounded in comparable-window deltas, concentration posture, data trust, and department exposure.</div>
           </div>
           <div class="card-body">
             <div id="strategicReadout" class="suppliers-callout-list">Loading supplier concentration story...</div>
-            <div id="supplierProteinNarrative" class="suppliers-inline-note mt-3">Reading protein-family contribution...</div>
+            <div id="supplierProteinNarrative" class="suppliers-inline-note mt-3">Reading department contribution...</div>
             <div id="supplierDependencyNarrative" class="suppliers-inline-note mt-2">Assessing supplier dependency and revenue concentration...</div>
             <div id="supplierRiskNarrative" class="suppliers-inline-note mt-2">Quantifying margin pressure and trust risk...</div>
           </div>
@@ -367,20 +367,21 @@
           <div class="card-header">
             <div class="suppliers-card-kicker">Department watch</div>
             <h4 class="mb-1">Department families that deserve review</h4>
-            <div class="text-muted small">Top departments by current revenue, mix shift, and margin risk. Click a protein chip to focus the command table.</div>
+            <div class="text-muted small">Top departments by current revenue, mix shift, and margin risk. Click a department chip to focus the command table.</div>
           </div>
           <div class="card-body">
             <div id="supplierProteinChips" class="suppliers-chip-row mb-3"></div>
             <div class="table-responsive suppliers-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Department families requiring supplier review</caption>
                 <thead>
                   <tr>
-                    <th>Department</th>
-                    <th>Top supplier</th>
-                    <th class="text-end">Revenue</th>
-                    <th class="text-end">Share</th>
-                    <th class="text-end">Δ mix</th>
-                    <th class="text-end">Margin</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Top supplier</th>
+                    <th scope="col" class="text-end">Revenue</th>
+                    <th scope="col" class="text-end">Share</th>
+                    <th scope="col" class="text-end">Δ mix</th>
+                    <th scope="col" class="text-end">Margin</th>
                   </tr>
                 </thead>
                 <tbody id="proteinMixRows">
@@ -406,12 +407,13 @@
           <div class="card-body">
             <div class="table-responsive suppliers-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Suppliers below the margin target</caption>
                 <thead>
                   <tr>
-                    <th>Supplier</th>
-                    <th>Top department</th>
-                    <th class="text-end">Margin</th>
-                    <th class="text-end">Uplift</th>
+                    <th scope="col">Supplier</th>
+                    <th scope="col">Top department</th>
+                    <th scope="col" class="text-end">Margin</th>
+                    <th scope="col" class="text-end">Uplift</th>
                   </tr>
                 </thead>
                 <tbody id="marginLeakageRows"></tbody>
@@ -430,12 +432,13 @@
           <div class="card-body">
             <div class="table-responsive suppliers-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Suppliers with missing cost exposure</caption>
                 <thead>
                   <tr>
-                    <th>Supplier</th>
-                    <th class="text-end">Missing Revenue</th>
-                    <th class="text-end">Coverage</th>
-                    <th>Top department</th>
+                    <th scope="col">Supplier</th>
+                    <th scope="col" class="text-end">Missing Revenue</th>
+                    <th scope="col" class="text-end">Coverage</th>
+                    <th scope="col">Top department</th>
                   </tr>
                 </thead>
                 <tbody id="dataRiskRows"></tbody>
@@ -454,12 +457,13 @@
           <div class="card-body">
             <div class="table-responsive suppliers-mini-table">
               <table class="table table-sm align-middle mb-0">
+                <caption class="visually-hidden">Supplier concentration watchlist</caption>
                 <thead>
                   <tr>
-                    <th>Supplier</th>
-                    <th>Top department</th>
-                    <th class="text-end">Department share</th>
-                    <th class="text-end">Posture</th>
+                    <th scope="col">Supplier</th>
+                    <th scope="col">Top department</th>
+                    <th scope="col" class="text-end">Department share</th>
+                    <th scope="col" class="text-end">Posture</th>
                   </tr>
                 </thead>
                 <tbody id="dependencyRows"></tbody>
@@ -499,11 +503,12 @@
               <div class="col-lg-5">
                 <div class="table-responsive suppliers-mini-table">
                   <table class="table table-sm align-middle mb-0">
+                    <caption class="visually-hidden">Supplier gainers and decliners</caption>
                     <thead>
                       <tr>
-                        <th>Supplier</th>
-                        <th class="text-end">Δ Revenue</th>
-                        <th class="text-end">Δ Margin</th>
+                        <th scope="col">Supplier</th>
+                        <th scope="col" class="text-end">Δ Revenue</th>
+                        <th scope="col" class="text-end">Δ Margin</th>
                       </tr>
                     </thead>
                     <tbody id="moversRows"></tbody>
@@ -513,13 +518,14 @@
               <div class="col-lg-7">
                 <div class="table-responsive suppliers-mini-table">
                   <table class="table table-sm align-middle mb-0">
+                    <caption class="visually-hidden">Supplier segment performance</caption>
                     <thead>
                       <tr>
-                        <th>Segment</th>
-                        <th class="text-end">Suppliers</th>
-                        <th class="text-end">Revenue</th>
-                        <th class="text-end">Δ %</th>
-                        <th class="text-end">Share</th>
+                        <th scope="col">Segment</th>
+                        <th scope="col" class="text-end">Suppliers</th>
+                        <th scope="col" class="text-end">Revenue</th>
+                        <th scope="col" class="text-end">Δ %</th>
+                        <th scope="col" class="text-end">Share</th>
                       </tr>
                     </thead>
                     <tbody id="segmentSummaryRows"></tbody>
@@ -540,11 +546,11 @@
           <div>
             <div class="suppliers-card-kicker">Supplier command center</div>
             <h4 class="mb-1">Decision table for drilldown, negotiation, and review</h4>
-            <div class="text-muted small">Use segment, risk, or protein shortcuts to isolate suppliers that need action, then click a row to open drilldown.</div>
+            <div class="text-muted small">Use segment, risk, or department shortcuts to isolate suppliers that need action, then click a row to open drilldown.</div>
             <div id="supplierTableNarrative" class="suppliers-inline-note mt-2">Building the current command-table slice...</div>
           </div>
           <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary supplier-protein-reset">Clear protein focus</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary supplier-protein-reset">Clear department focus</button>
           </div>
         </div>
       </div>
@@ -580,10 +586,11 @@
           </div>
         </div>
 
-        <div id="supplierProteinFocus" class="suppliers-inline-note mb-3">No protein focus selected.</div>
+        <div id="supplierProteinFocus" class="suppliers-inline-note mb-3">No department focus selected.</div>
 
         <div class="table-responsive suppliers-command-table">
           <table id="suppliersCommandTable" class="table table-sm align-middle table-hover mb-0 table-sticky-first">
+            <caption class="visually-hidden">Supplier performance command table for the active filters</caption>
             <thead class="sticky-top">
               <tr>
                 <th class="sortable" data-sort="supplier_name" scope="col">Supplier</th>

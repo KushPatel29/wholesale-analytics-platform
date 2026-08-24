@@ -24,6 +24,7 @@ failure this guards against.
 
 from __future__ import annotations
 
+import os
 import re
 from html.parser import HTMLParser
 
@@ -171,11 +172,9 @@ def test_rendered_links_resolve(demo_client):
     No anchor rendered on a nav page may 401/403/404/405/410 for the demo
     account.
 
-    5xx is deliberately not asserted on here: this suite runs against an empty
-    dataset by default (see conftest), and an export endpoint with nothing to
-    export legitimately fails. Export *content* is covered by
-    tests/test_exports_produce_files.py, which needs a real dataset. What this
-    test owns is that every link resolves and is permitted.
+    With ``STRICT_INTERNAL_LINKS=1`` the dataset-backed demo CI also rejects
+    every 5xx. The ordinary empty-dataset suite still limits itself to route
+    and permission failures because data exports legitimately have no payload.
     """
     broken: list[tuple[str, str, int]] = []
     seen: set[str] = set()
@@ -190,7 +189,9 @@ def test_rendered_links_resolve(demo_client):
                 continue
             seen.add(link)
             status = demo_client.get(link).status_code
-            if status in BROKEN_LINK_STATUSES:
+            if status in BROKEN_LINK_STATUSES or (
+                os.environ.get("STRICT_INTERNAL_LINKS") == "1" and status >= 500
+            ):
                 broken.append((page, link, status))
 
     assert not broken, "broken internal links:\n" + "\n".join(

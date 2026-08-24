@@ -582,6 +582,11 @@ def _low_sample_threshold() -> int:
     return 10
 
 
+def _suppression_threshold() -> int:
+    """Rates below this denominator are withheld, not rounded into a zero."""
+    return 5
+
+
 def _log_block_metrics(block: str, frame: pd.DataFrame | None = None, **payload: Any) -> None:
     data = dict(payload or {})
     if isinstance(frame, pd.DataFrame):
@@ -614,13 +619,18 @@ def _chart_rows(rows: list[dict[str, Any]], *, top_n: int = 8, other_label: str 
     churned = sum(_safe_int(row.get("churned_customers")) for row in tail)
     reactivated = sum(_safe_int(row.get("reactivated_customers")) for row in tail)
     threshold = _low_sample_threshold()
+    rate_suppressed = 0 < customers < _suppression_threshold()
+    churn_rate_pct = round((churned / customers * 100.0), 2) if customers > 0 else 0.0
     head.append(
         {
             "segment": other_label,
             "customers": customers,
             "churned_customers": churned,
             "reactivated_customers": reactivated,
-            "churn_rate_pct": round((churned / customers * 100.0), 2) if customers > 0 else 0.0,
+            "churn_rate_pct": churn_rate_pct,
+            "display_churn_rate_pct": None if rate_suppressed else churn_rate_pct,
+            "rate_suppressed": rate_suppressed,
+            "metric_state": "insufficient_data" if rate_suppressed else ("confirmed_zero" if churn_rate_pct == 0 else "measured"),
             "low_sample": 0 < customers < threshold,
             "low_sample_threshold": threshold,
         }
@@ -1749,13 +1759,18 @@ def _segmentation_rows(frame: pd.DataFrame) -> list[dict[str, Any]]:
         customers = _safe_int(rec.get("customers"))
         churned_customers = _safe_int(rec.get("churned_customers"))
         reactivated_customers = _safe_int(rec.get("reactivated_customers"))
+        churn_rate_pct = round(_safe_float(rec.get("churn_rate_pct")), 2)
+        rate_suppressed = 0 < customers < _suppression_threshold()
         rows.append(
             {
                 "segment": rec.get("segment") or "Unknown",
                 "customers": customers,
                 "churned_customers": churned_customers,
                 "reactivated_customers": reactivated_customers,
-                "churn_rate_pct": round(_safe_float(rec.get("churn_rate_pct")), 2),
+                "churn_rate_pct": churn_rate_pct,
+                "display_churn_rate_pct": None if rate_suppressed else churn_rate_pct,
+                "rate_suppressed": rate_suppressed,
+                "metric_state": "insufficient_data" if rate_suppressed else ("confirmed_zero" if churn_rate_pct == 0 else "measured"),
                 "low_sample": 0 < customers < threshold,
                 "low_sample_threshold": threshold,
             }

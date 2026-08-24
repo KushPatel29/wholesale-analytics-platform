@@ -24,7 +24,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
+
+import yaml
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Recency thresholds
@@ -320,7 +323,13 @@ def forecast_accuracy_suite(
     *,
     tolerance_pct: float = 10.0,
 ) -> dict[str, Any]:
-    """Score paired periods without silently treating zero actuals as accurate."""
+    """Score paired periods without letting sparse periods dominate the headline.
+
+    WAPE is the executive error measure because it weights each period by its
+    contribution to actual revenue. SMAPE is a bounded secondary diagnostic.
+    MAPE remains available for diagnosis, but callers must label it as unstable
+    when actuals approach zero.
+    """
     pairs = [
         (a, f)
         for a, f in zip((_to_float(v) for v in actuals), (_to_float(v) for v in forecasts))
@@ -329,16 +338,30 @@ def forecast_accuracy_suite(
     if not pairs:
         return {
             "variance_pct": None,
+            "wape_pct": None,
+            "smape_pct": None,
             "mape_pct": None,
             "bias": None,
+            "bias_pct": None,
             "hit_rate_pct": None,
             "scored_periods": 0,
+            "mape_scored_periods": 0,
             "zero_actual_periods": 0,
             "tolerance_pct": float(tolerance_pct),
         }
     nonzero = [(a, f) for a, f in pairs if abs(a) >= 1e-9]
     total_actual = sum(a for a, _ in pairs)
     total_forecast = sum(f for _, f in pairs)
+    absolute_error = sum(abs(a - f) for a, f in pairs)
+    wape = absolute_error / total_actual * 100.0 if total_actual > 1e-9 else None
+    smape_pairs = [(a, f) for a, f in pairs if abs(a) + abs(f) >= 1e-9]
+    smape = (
+        sum(2.0 * abs(a - f) / (abs(a) + abs(f)) for a, f in smape_pairs)
+        / len(smape_pairs)
+        * 100.0
+        if smape_pairs
+        else None
+    )
     mape = (
         sum(abs(a - f) / abs(a) for a, f in nonzero) / len(nonzero) * 100.0
         if nonzero
@@ -353,13 +376,67 @@ def forecast_accuracy_suite(
     )
     return {
         "variance_pct": variance_pct(total_actual, total_forecast),
+        "wape_pct": wape,
+        "smape_pct": smape,
         "mape_pct": mape,
         "bias": sum(f - a for a, f in pairs) / len(pairs),
+        "bias_pct": (total_forecast - total_actual) / total_actual * 100.0 if total_actual > 1e-9 else None,
         "hit_rate_pct": hit_rate,
-        "scored_periods": len(nonzero),
+        "scored_periods": len(pairs),
+        "mape_scored_periods": len(nonzero),
         "zero_actual_periods": len(pairs) - len(nonzero),
         "tolerance_pct": float(tolerance_pct),
     }
+
+
+def governed_metric_state(
+    value: Any,
+    *,
+    source_available: bool,
+    sample_size: int | None = None,
+    minimum_sample_size: int = 5,
+    computation_error: str | None = None,
+) -> dict[str, Any]:
+    """Classify a display value so missing evidence can never render as zero.
+
+    This is the global contract for governed metric surfaces. Callers still
+    own the formatted value, but they must render the returned state label and
+    must not substitute ``0`` for ``None``.
+    """
+    if computation_error:
+        return {
+            "state": "computation_error",
+            "label": "Metric error",
+            "detail": str(computation_error),
+        }
+    if not source_available:
+        return {
+            "state": "source_required",
+            "label": "Source required",
+            "detail": "The required source field is not populated for this scope.",
+        }
+    if sample_size is not None and int(sample_size) < int(minimum_sample_size):
+        return {
+            "state": "insufficient_data",
+            "label": f"Insufficient data (n<{int(minimum_sample_size)})",
+            "detail": f"Only {max(0, int(sample_size))} eligible observations are available.",
+            "sample_size": max(0, int(sample_size)),
+            "minimum_sample_size": int(minimum_sample_size),
+        }
+    number = _to_float(value)
+    if number is None:
+        return {
+            "state": "computation_error",
+            "label": "Metric error",
+            "detail": "The source is present, but the metric did not produce a valid number.",
+        }
+    if abs(number) < 1e-9:
+        return {
+            "state": "confirmed_zero",
+            "label": "Confirmed zero",
+            "detail": "The governed denominator is populated and the measured numerator is zero.",
+        }
+    return {"state": "measured", "label": "Measured"}
 
 
 def retention_rate(beginning_customers: Any, ending_customers: Any, new_customers: Any) -> Optional[float]:
@@ -686,27 +763,6 @@ def cost_per_lead(marketing_spend: Any, new_leads: Any) -> Optional[float]:
     return _ratio(marketing_spend, new_leads)
 
 
-def return_on_marketing_investment(
-    sales_growth: Any, marketing_cost: Any, marketing_investment: Any
-) -> Optional[float]:
-    """
-    (Sales growth - Marketing cost) / Marketing investment * 100.
-
-    Implemented exactly as the brief writes it, including the assumption buried
-    in it: every dollar of period-over-period sales movement is credited to
-    marketing. That makes the measure violently negative in any year revenue
-    fell for reasons campaigns do not drive - which is the case here - so the
-    page states the limitation beside the number rather than quietly swapping in
-    a friendlier denominator.
-    """
-    growth = _to_float(sales_growth)
-    cost = _to_float(marketing_cost)
-    investment = _to_float(marketing_investment)
-    if growth is None or cost is None or investment is None or investment <= 0:
-        return None
-    return (growth - cost) / investment * 100.0
-
-
 def clv_to_cac_ratio(customer_lifetime_value_amount: Any, acquisition_cost: Any) -> Optional[float]:
     """
     CLV / CAC, as a multiple.
@@ -742,6 +798,9 @@ class MetricDefinition:
     owner_page: str
     basis: str
     status: str = "Implemented"
+    certification: str = "Verified"
+    model_name: str = ""
+    missing_source: str = ""
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -753,57 +812,65 @@ class MetricDefinition:
             "owner_page": self.owner_page,
             "basis": self.basis,
             "status": self.status,
+            "certification": self.certification,
+            "model_name": self.model_name,
+            "missing_source": self.missing_source,
         }
 
 
-def _definition(key: str, name: str, formula: str, grain: str, source: str, owner: str, basis: str) -> MetricDefinition:
-    return MetricDefinition(key, name, formula, grain, source, owner, basis)
+METRIC_CATALOGUE_PATH = Path(__file__).resolve().parents[2] / "models" / "marts" / "schema.yml"
 
 
-METRIC_CATALOGUE: tuple[MetricDefinition, ...] = (
-    _definition("net_sales", "Net sales", "Gross sales - Discounts - Returns - Costs associated with discounts and returns", "Selected period", "sales_fact + return_rma", "Overview", "Net"),
-    _definition("forecast_variance", "Forecast variance %", "((Actual - Forecast) / Actual) * 100", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
-    _definition("forecast_mape", "Forecast MAPE", "mean(|Actual - Forecast| / Actual) * 100", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
-    _definition("forecast_bias", "Forecast bias", "mean(Forecast - Actual)", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
-    _definition("forecast_hit_rate", "Forecast hit rate", "% of periods within +/-X% tolerance", "Period / SKU / region / horizon", "sales_fact (rolling-origin backtest)", "Planner", "Transaction sales"),
-    _definition("retention", "Customer retention rate", "(Customers at end of period - Customers added during period) / Customers at beginning * 100", "Customer cohort and selected period", "sales_fact", "Customers", "Logo"),
-    _definition("churn", "Customer churn rate", "Customers lost during period / Customers at start of period * 100", "Customer cohort and selected period", "sales_fact", "Customers", "Logo and revenue-weighted"),
-    _definition("clv", "Customer lifetime value", "(Avg transaction value * Avg transactions per year * Avg retention in years) * Profit margin", "Customer / segment", "sales_fact", "Customers", "Gross-profit default; finite-horizon retention proxy and discount factor are disclosed"),
-    _definition("nrr", "Net revenue retention", "(Starting revenue + Expansion - Contraction - Churn) / Starting revenue * 100", "Account and selected period", "sales_fact", "Overview / Customers", "Transaction sales"),
-    _definition("arpa", "ARPA", "Total revenue in period / Number of accounts in period", "Selected period / account cohort", "sales_fact", "Customers", "Transaction sales"),
-    _definition("revenue_per_employee", "Revenue per employee", "Total revenue / Number of employees", "Selected period", "sales_fact + labor_fact", "Labor", "Transaction sales"),
-    _definition("revenue_per_paid_hour", "Revenue per paid hour", "Total revenue / Paid hours", "Selected period", "sales_fact + labor_fact", "Labor", "Transaction sales"),
-    _definition("turnover", "Employee turnover rate", "Separations in period / Average employees in period * 100", "Selected period / separation type", "labor_fact", "Labor", "Headcount"),
-    _definition("gmroi", "GMROI", "Gross margin $ / Average inventory cost", "SKU / selected period", "sales_fact", "Inventory", "Gross margin"),
-    _definition("sell_through", "Sell-through %", "Units sold / Units available * 100", "SKU / selected period", "sales_fact", "Inventory", "Units"),
-    _definition("shrink", "Shrink %", "(Book inventory - Physical inventory) / Book inventory * 100", "SKU / physical count", "sales_fact inventory snapshot", "Inventory", "Units"),
-    _definition("return_rate", "Return rate", "Returns / Orders * 100", "Selected period", "return_rma + sales_fact", "Returns", "Orders"),
-    _definition("return_cost", "Return cost rate", "Credit value / Net sales * 100", "Selected period", "return_rma + sales_fact", "Returns", "Net"),
-    _definition("resolution", "Average return resolution", "mean(closed_at - opened_at) across returns", "Resolved return / selected period", "return_rma", "Returns", "Hours"),
-    _definition("quota", "Quota attainment", "Sales achieved by rep or region / Goal for that rep or region * 100", "Rep / region / month", "sales_fact quota", "Sales Reps", "Transaction sales"),
-    _definition("gross_profit_margin", "Gross profit margin", "(Revenue - COGS) / Revenue * 100", "Any grain with revenue and cost", "sales_fact", "Overview / Finance", "Invoiced sales, revenue-weighted"),
-    _definition("net_income", "Net income", "Revenue - COGS - OpEx - Other - Interest - Taxes - D&A", "Company / month / fiscal year", "finance_month + sales_fact", "Finance", "Invoiced sales (gross less discounts), matching every other page; entity-level, not sliceable by operational filters"),
-    _definition("net_profit_margin", "Net profit margin", "Net income / Revenue * 100", "Company / month / fiscal year", "finance_month + sales_fact", "Finance", "Invoiced sales; the net sales bridge is shown separately on the page"),
-    _definition("current_ratio", "Current ratio", "Current assets / Current liabilities", "Company / month end", "finance_month", "Finance", "Month-end balance, multiple not percent"),
-    _definition("working_capital", "Working capital", "Current assets - Current liabilities", "Company / month end", "finance_month", "Finance", "Month-end balance"),
-    _definition("ar_turnover", "AR turnover", "Net credit sales / Average AR", "Company / month / fiscal year", "finance_month", "Finance", "All sales are credit sales in this book; average AR is the mean of the period's month-end balances, and a short year is annualised and labelled"),
-    _definition("ap_overdue", "AP overdue %", "AP overdue / Total AP * 100", "Company / month end", "finance_month", "Finance", "Month-end balance, past contractual due date"),
-    _definition("roa", "Return on assets", "Net income / Total assets * 100", "Company / month / fiscal year", "finance_month", "Finance", "Net income over closing total assets"),
-    _definition("inventory_turnover_cost", "Inventory turnover (cost basis)", "COGS / Average inventory", "Company / month / fiscal year", "finance_month", "Finance", "Cost basis, multiple; the brief's x100 is dropped because turnover is a multiple, not a percentage"),
-    _definition("inventory_turns_usage", "Inventory turns (usage basis)", "52 / Weeks on hand", "SKU / selected period", "sales_fact inventory snapshot", "Inventory", "Usage basis off on-hand quantity; deliberately distinct from the cost-basis turnover on Finance"),
-    _definition("cac", "Customer acquisition cost", "Total marketing and sales spend / New customers", "Company / month / fiscal year / channel", "marketing_campaign + finance_month + sales_fact", "Marketing", "Marketing spend plus an 18% acquisition share of selling compensation; new customers counted by first order in the sales fact"),
-    _definition("cpl", "Cost per lead", "Total marketing spend / New leads", "Company / month / fiscal year / channel", "marketing_campaign", "Marketing", "Marketing spend only; leads are modelled from channel cost-per-lead"),
-    _definition("romi", "ROMI", "(Sales growth - Marketing cost) / Marketing investment * 100", "Company / fiscal year", "marketing_campaign + finance_month", "Marketing", "Attributes all company sales movement to marketing, as the formula is written; reads deeply negative in a year revenue fell for unrelated reasons"),
-    _definition("clv_cac", "CLV:CAC ratio", "CLV / CAC", "Company / fiscal year", "marketing_campaign + sales_fact", "Marketing / Overview", "12-month discounted gross-profit CLV over CAC; stricter than the lifetime basis the 3:1 benchmark assumes"),
-    _definition("cac_payback", "CAC payback", "CAC / (Annual customer value / 12)", "Company / fiscal year", "marketing_campaign + sales_fact", "Marketing", "Months of 12-month gross-profit CLV needed to repay acquisition cost"),
-    MetricDefinition("lead_response_time", "Lead response time", "mean(first touch - lead created)", "Lead", "Requires CRM touch timestamps", "Metric catalogue", "Not applicable", "Not implemented - the campaign layer carries spend and lead counts, not per-lead touch timestamps"),
-    MetricDefinition("mrr", "MRR / ARR", "Subscription recurring revenue", "Month", "Requires subscription billing", "Metric catalogue", "Not applicable", "Not implemented - domain mismatch"),
-    MetricDefinition("survey_scores", "NPS / eNPS / CSAT", "Requires survey responses", "Survey response", "Requires survey platform", "Metric catalogue", "Not applicable", "Not implemented - requires survey system"),
-    MetricDefinition("web_funnel", "Web funnel metrics", "Traffic and conversion measures", "Web session", "Requires web analytics", "Metric catalogue", "Not applicable", "Not implemented - requires web analytics"),
-    MetricDefinition("hris_metrics", "Training / hiring / diversity metrics", "Requires employee lifecycle records", "Employee", "Requires HRIS", "Metric catalogue", "Not applicable", "Not implemented - requires HRIS"),
-    MetricDefinition("scrap", "Manufacturing scrap", "Scrapped production / production", "Production run", "Requires manufacturing system", "Metric catalogue", "Not applicable", "Not implemented - use retail shrink"),
-    MetricDefinition("market_metrics", "Market share / industry growth", "Company performance / external market", "Market / period", "Requires external market data", "Metric catalogue", "Not applicable", "Not implemented - requires external data"),
-)
+def _load_metric_catalogue(path: Path = METRIC_CATALOGUE_PATH) -> tuple[MetricDefinition, ...]:
+    """Load the application catalogue from dbt model metadata.
+
+    Keeping the definitions inside a valid dbt properties file means the
+    warehouse model, documentation, tests, and rendered application cannot
+    silently grow separate formula registries.
+    """
+    with path.open("r", encoding="utf-8") as handle:
+        document = yaml.safe_load(handle) or {}
+
+    raw_rows: list[dict[str, Any]] = []
+    for model in document.get("models") or []:
+        meta = ((model.get("config") or {}).get("meta") or {})
+        raw_rows.extend(meta.get("metric_catalogue") or [])
+
+    required = {
+        "key",
+        "name",
+        "formula",
+        "grain",
+        "source_table",
+        "owner_page",
+        "basis",
+        "status",
+        "certification",
+        "model_name",
+    }
+    definitions: list[MetricDefinition] = []
+    seen: set[str] = set()
+    for raw in raw_rows:
+        missing = required - set(raw)
+        if missing:
+            raise ValueError(f"Metric definition is missing {sorted(missing)}: {raw!r}")
+        key = str(raw["key"]).strip()
+        if not key or key in seen:
+            raise ValueError(f"Metric keys must be non-empty and unique: {key!r}")
+        seen.add(key)
+        definition = MetricDefinition(
+            **{field: str(raw.get(field) or "").strip() for field in MetricDefinition.__dataclass_fields__}
+        )
+        if definition.certification == "Withheld" and not definition.missing_source:
+            raise ValueError(f"Withheld metric {key!r} requires a missing_source explanation")
+        definitions.append(definition)
+
+    if not definitions:
+        raise ValueError(f"No metric_catalogue metadata found in {path}")
+    return tuple(definitions)
+
+
+METRIC_CATALOGUE: tuple[MetricDefinition, ...] = _load_metric_catalogue()
 
 
 def metric_catalogue() -> list[dict[str, str]]:

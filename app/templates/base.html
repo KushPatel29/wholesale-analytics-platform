@@ -151,6 +151,8 @@
     {% set _page_tone = 'salesreps' %}
   {% elif request.endpoint and request.endpoint.startswith('assistant.') %}
     {% set _page_tone = 'assistant' %}
+  {% elif request.endpoint and request.endpoint.startswith('decision_ops.') %}
+    {% set _page_tone = 'operations' %}
   {% elif request.endpoint and request.endpoint.startswith('returns_') %}
     {% set _page_tone = 'returns' %}
   {% elif request.endpoint and request.endpoint.startswith('admin.') %}
@@ -163,7 +165,7 @@
      dormant and every "active in the last 30 days" count zero. #}
   <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}"{% if data_through %} data-data-through="{{ data_through.isoformat() }}"{% endif %}>
     {% set branding = config.get('BRANDING', {}) %}
-    <nav class="navbar navbar-expand-xxl navbar-wholesale navbar-dark">
+    <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
           {# Inlined rather than an <img>: the wordmark is drawn with
@@ -191,40 +193,43 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           {% set _has_salesreps = has_salesreps if has_salesreps is defined else False %}
           {% if current_user.is_authenticated %}
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-2">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-1">
             {% if can_permission('page.overview.view') %}
             <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ static_page_url('') if static_page_url else url_for('overview_page.overview_landing') }}">Overview</a></li>
             {% endif %}
             {% if can_permission('page.overview.view') %}
             <li class="nav-item"><a class="nav-link {% if request.blueprint == 'stakeholder_report' %}active{% endif %}" href="{{ static_page_url('planning/') if static_page_url else url_for('stakeholder_report.index') }}">Planning</a></li>
             {% endif %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint == 'pages.metric_catalogue' %}active{% endif %}" href="{{ static_page_url('metrics/') if static_page_url else url_for('pages.metric_catalogue') }}">Metrics</a></li>
-            {% if can_permission('page.customers.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('customers.') %}active{% endif %}" href="{{ static_page_url('customers/') if static_page_url else url_for('customers.index') }}">Customers</a></li>
+            {% if can_permission('page.work.view') %}
+            <li class="nav-item"><a class="nav-link {% if request.endpoint == 'decision_ops.index' or (request.endpoint and request.endpoint.startswith('decision_ops.action')) %}active{% endif %}" href="{{ url_for('decision_ops.index') }}">Action Center</a></li>
             {% endif %}
-            {% if can_permission('page.products.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('products.') %}active{% endif %}" href="{{ static_page_url('products/') if static_page_url else url_for('products.index') }}">Products</a></li>
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('inventory.') %}active{% endif %}" href="{{ static_page_url('inventory/') if static_page_url else url_for('inventory.index') }}">Inventory</a></li>
-            {% endif %}
-            {% if can_permission('data.cost.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('finance.') %}active{% endif %}" href="{{ static_page_url('finance/') if static_page_url else url_for('finance.index') }}">Finance</a></li>
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('marketing.') %}active{% endif %}" href="{{ static_page_url('marketing/') if static_page_url else url_for('marketing.index') }}">Marketing</a></li>
-            {% endif %}
-            {% if can_permission('page.regions.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('regions.') %}active{% endif %}" href="{{ static_page_url('regions/') if static_page_url else url_for('regions.index') }}">Regions</a></li>
-            {% endif %}
-            {% if can_permission('page.suppliers.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('suppliers.') %}active{% endif %}" href="{{ static_page_url('suppliers/') if static_page_url else url_for('suppliers.index') }}">Suppliers</a></li>
-            {% endif %}
-            {% if (has_labor if has_labor is defined else false) and can_permission('page.labor.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('labor.') %}active{% endif %}" href="{{ static_page_url('labor/') if static_page_url else url_for('labor.index') }}">Labor</a></li>
-            {% endif %}
-            {% if _has_salesreps %}
-              {% if can_permission('page.salesreps.view') %}
-            <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('salesreps.') %}active{% endif %}" href="{{ static_page_url('salesreps/') if static_page_url else url_for('salesreps.index') }}">Sales Reps</a></li>
-              {% endif %}
-            {% else %}
-            <li class="nav-item"><a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Sales Reps</a></li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('customers.') or request.endpoint.startswith('products.') or request.endpoint.startswith('inventory.') or request.endpoint.startswith('finance.') or request.endpoint.startswith('marketing.') or request.endpoint.startswith('regions.') or request.endpoint.startswith('suppliers.') or request.endpoint.startswith('labor.') or request.endpoint.startswith('salesreps.') or request.endpoint == 'pages.metric_catalogue') %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Analytics</a>
+              <ul class="dropdown-menu" role="menu">
+                <li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('metrics/') if static_page_url else url_for('pages.metric_catalogue') }}">Metric Catalogue</a></li>
+                {% if can_permission('page.customers.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('customers/') if static_page_url else url_for('customers.index') }}">Customers</a></li>{% endif %}
+                {% if can_permission('page.products.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('products/') if static_page_url else url_for('products.index') }}">Products</a></li><li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('inventory/') if static_page_url else url_for('inventory.index') }}">Inventory Analytics</a></li>{% endif %}
+                {% if can_permission('data.cost.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('finance/') if static_page_url else url_for('finance.index') }}">Finance Analytics</a></li><li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('marketing/') if static_page_url else url_for('marketing.index') }}">Marketing</a></li>{% endif %}
+                {% if can_permission('page.regions.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('regions/') if static_page_url else url_for('regions.index') }}">Regions</a></li>{% endif %}
+                {% if can_permission('page.suppliers.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('suppliers/') if static_page_url else url_for('suppliers.index') }}">Suppliers</a></li>{% endif %}
+                {% if (has_labor if has_labor is defined else false) and can_permission('page.labor.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('labor/') if static_page_url else url_for('labor.index') }}">Labor</a></li>{% endif %}
+                {% if _has_salesreps and can_permission('page.salesreps.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ static_page_url('salesreps/') if static_page_url else url_for('salesreps.index') }}">Sales Reps</a></li>{% endif %}
+              </ul>
+            </li>
+            {% if can_permission('page.crm.view') or can_permission('page.orders.view') or can_permission('page.procurement.view') or can_permission('page.finance_ops.view') or can_permission('page.inventory_ops.view') or can_permission('page.master_data.view') or can_permission('page.service.view') or can_permission('page.enterprise_admin.view') %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('decision_ops.') and request.endpoint != 'decision_ops.index' %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Operations</a>
+              <ul class="dropdown-menu" role="menu">
+                {% if can_permission('page.crm.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='crm') }}">CRM Pipeline</a></li>{% endif %}
+                {% if can_permission('page.orders.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='orders') }}">Orders & Fulfilment</a></li>{% endif %}
+                {% if can_permission('page.procurement.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='procurement') }}">Procurement</a></li>{% endif %}
+                {% if can_permission('page.finance_ops.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='finance') }}">Finance Operations</a></li>{% endif %}
+                {% if can_permission('page.inventory_ops.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='inventory') }}">Inventory Operations</a></li>{% endif %}
+                {% if can_permission('page.master_data.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='master-data') }}">Master Data</a></li>{% endif %}
+                {% if can_permission('page.service.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='service') }}">Customer Service</a></li>{% endif %}
+                {% if can_permission('page.enterprise_admin.view') %}<li><a class="dropdown-item" role="menuitem" href="{{ url_for('decision_ops.workspace', workspace='enterprise') }}">Enterprise Connections</a></li>{% endif %}
+              </ul>
+            </li>
             {% endif %}
             {% if (returns_enabled if returns_enabled is defined else false) and (can_permission('page.returns.view') or can_permission('page.returns.customer_portal') or can_permission('page.returns.ops') or can_permission('page.returns.warehouse') or can_permission('admin.returns.manage')) %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('returns_') %}active{% endif %}" href="{{ url_for('returns_portal.index') }}">Returns</a></li>
@@ -240,6 +245,7 @@
               can_permission('page.returns.view') or
               can_permission('page.admin.view') or
               can_permission('page.notifications.view')
+              or can_permission('page.work.view')
             ) %}
             <li class="nav-item"><a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant.') %}active{% endif %}" href="{{ url_for('assistant.assistant_page', ref=request.path, page=request.endpoint or request.path) }}">Assistant</a></li>
             {% endif %}
@@ -299,9 +305,9 @@
     <div class="wa-live-banner" role="note">
       <span class="wa-live-banner__dot" aria-hidden="true"></span>
       <span class="wa-live-banner__text">
-        <strong>Live app.</strong>
-        Server-rendered on a free instance, so pages here are slower than the
-        prerendered dashboard. This is where returns, approvals and admin run.
+        <strong>Unified workflow workspace.</strong>
+        Server-rendered with the same navigation and theme; accountable actions,
+        approvals, returns and administration require the server-backed ledger.
       </span>
       <a class="wa-live-banner__back" href="{{ static_page_url('') }}" data-wa-carry-theme>
         &larr; Back to the fast dashboard
@@ -368,6 +374,12 @@
       {% endif %}
       {% if current_user.is_authenticated and page_guide is defined and page_guide %}
         {% include "_page_guide.html" %}
+      {% endif %}
+      {% if current_user.is_authenticated and can_permission('actions.create') and request.blueprint in ['overview_page', 'customers', 'products', 'inventory', 'regions', 'suppliers', 'salesreps', 'stakeholder_report', 'finance', 'labor'] %}
+      <div class="wa-action-from-view" role="region" aria-label="Create accountable action from this analytics view">
+        <span><strong>Turn this view into work.</strong> Preserve the current source, assign an owner, and measure the outcome.</span>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('decision_ops.index', source_module=request.blueprint, source_url=request.full_path, title='Follow up from ' ~ (request.blueprint|replace('_', ' ')|title)) }}">Create action from this view</a>
+      </div>
       {% endif %}
       {% block content %}{% endblock %}
     </main>

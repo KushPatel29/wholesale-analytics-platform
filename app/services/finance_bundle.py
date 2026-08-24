@@ -8,8 +8,8 @@ Two things this module refuses to do, both of them deliberate:
 already cost this codebase, and a financial statement is the last place to
 repeat it.
 
-**It does not accept operational filters.** A balance sheet has no region
-dimension and no protein dimension. Offering a filter that silently returned a
+**It does not accept operational filters.** A balance sheet has no region or
+department dimension. Offering a filter that silently returned a
 region's share of total assets would be worse than offering none, so the page
 states that it is entity-level and the payload carries no filter parameters at
 all.
@@ -598,7 +598,7 @@ def build_finance_bundle(fiscal_year: Optional[int] = None) -> dict[str, Any]:
             "grain": "Company / month",
             "scope": (
                 "Entity-level statements. Operational filters do not apply - a balance sheet has no "
-                "region or protein dimension."
+                "region or department dimension."
             ),
             "revenue_source": (
                 "Invoiced sales, gross sales, discounts and COGS are read from the sales fact, so the "

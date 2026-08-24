@@ -1,0 +1,36 @@
+{% extends "returns/base.html" %}
+{% block content %}
+<section class="py-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Root cause: {{ root_cause.cause_value }}</h1>
+      <p class="text-muted mb-0">{{ root_cause.cause_type|title }} · {{ root_cause.start }} to {{ root_cause.end }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('returns_portal.root_causes', from=root_cause.start, to=root_cause.end) }}">Back to causes</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body"><div class="small text-muted">Order return rate</div><div class="h2">{{ ('%.2f%%'|format(root_cause.order_rate_pct)) if root_cause.order_rate_pct is not none else 'Source required' }}</div><div class="small text-muted">{{ root_cause.return_count }} returned orders / {{ root_cause.order_count if root_cause.order_count is not none else 'unavailable order base' }}</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body"><div class="small text-muted">Unit return rate</div><div class="h2">{{ ('%.2f%%'|format(root_cause.unit_rate_pct)) if root_cause.unit_rate_pct is not none else 'Source required' }}</div><div class="small text-muted">Returned units ÷ shipped units</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body"><div class="small text-muted">Revenue return rate</div><div class="h2">{{ ('%.2f%%'|format(root_cause.revenue_rate_pct)) if root_cause.revenue_rate_pct is not none else 'Source required' }}</div><div class="small text-muted">Credit value ÷ sales revenue</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100 shadow-sm border-0"><div class="card-body"><div class="small text-muted">Dollar impact</div><div class="h2">{{ root_cause.credit_amount|currency }}</div><div class="small text-muted">{{ root_cause.confidence_label|title }} evidence (n={{ root_cause.confidence_n }})</div></div></div></div>
+  </div>
+
+  <div class="alert alert-light border" role="note"><strong>{{ 'Preventable' if root_cause.preventable else 'Non-preventable' }} under the governed rule.</strong> {{ root_cause.classification_rule }}</div>
+
+  <div class="card shadow-sm border-0"><div class="card-body">
+    <h2 class="h5">Create corrective action</h2>
+    <p class="small text-muted">The baseline above is recalculated and stored server-side when this record is created.</p>
+    <form method="post" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="type" value="{{ root_cause.cause_type }}"><input type="hidden" name="value" value="{{ root_cause.cause_value }}"><input type="hidden" name="from" value="{{ root_cause.start }}"><input type="hidden" name="to" value="{{ root_cause.end }}">
+      <div class="col-md-8"><label class="form-label" for="actionTitle">Action title</label><input class="form-control" id="actionTitle" name="title" required value="Reduce {{ root_cause.cause_value }} returns"></div>
+      <div class="col-md-4"><label class="form-label" for="actionOwner">Owner</label><select class="form-select" id="actionOwner" name="owner_user_id" required><option value="">Select owner</option>{% for owner in owners %}<option value="{{ owner.id }}">{{ owner.name }} · {{ owner.role }}</option>{% endfor %}</select></div>
+      <div class="col-md-4"><label class="form-label" for="actionDue">Due date</label><input class="form-control" id="actionDue" name="due_date" type="date" required value="{{ default_due }}"></div>
+      <div class="col-md-4"><label class="form-label" for="actionTarget">Target order return rate %</label><input class="form-control" id="actionTarget" name="target_rate_pct" type="number" min="0" step="0.01" value="{{ '%.2f'|format(root_cause.order_rate_pct * 0.75) if root_cause.order_rate_pct is not none else '' }}"></div>
+      <div class="col-12"><label class="form-label" for="actionDescription">Plan</label><textarea class="form-control" id="actionDescription" name="description" rows="3" placeholder="Describe the containment, supplier, process, or product change."></textarea></div>
+      <div class="col-12"><button class="btn btn-primary" type="submit"{% if not owners %} disabled aria-describedby="ownerHelp"{% endif %}>Create owned action</button>{% if not owners %}<span id="ownerHelp" class="small text-muted ms-2">An active user is required as owner.</span>{% endif %}</div>
+    </form>
+  </div></div>
+</section>
+{% endblock %}

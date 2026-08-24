@@ -8,10 +8,11 @@ import re
 import secrets
 from io import BytesIO
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
+import pandas as pd
 from sqlalchemy import func
 
 from app.cache import cache
@@ -778,6 +779,15 @@ def index():
     from_date = (request.args.get("from") or "").strip() or None
     to_date = (request.args.get("to") or "").strip() or None
     search = (request.args.get("q") or customer_search or "").strip() or None
+    try:
+        page = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        requested_page_size = int(request.args.get("page_size") or 25)
+    except (TypeError, ValueError):
+        requested_page_size = 25
+    page_size = requested_page_size if requested_page_size in {25, 50, 100} else 25
     export_fmt = (request.args.get("export") or "").strip().lower()
     if export_fmt in {"csv", "xlsx"}:
         return service.tracker_export_response(
@@ -794,7 +804,9 @@ def index():
             search=search,
             actor_user=current_user,
         )
-    rows = service.list_rmas(
+    pagination = service.paginate_rmas(
+        page=page,
+        page_size=page_size,
         status=status_filter,
         rep=rep_filter,
         category=category_filter,
@@ -807,9 +819,23 @@ def index():
         search=search,
         actor_user=current_user,
     )
+    page_args = request.args.to_dict(flat=True)
+    page_args.pop("export", None)
+    page_args["page_size"] = pagination["page_size"]
+    if pagination["has_previous"]:
+        page_args["page"] = pagination["page"] - 1
+        pagination["previous_url"] = url_for("returns_portal.index", **page_args)
+    else:
+        pagination["previous_url"] = None
+    if pagination["has_next"]:
+        page_args["page"] = pagination["page"] + 1
+        pagination["next_url"] = url_for("returns_portal.index", **page_args)
+    else:
+        pagination["next_url"] = None
     return render_template(
         "returns/index.html",
-        rmas=rows,
+        rmas=pagination["rows"],
+        pagination=pagination,
         filters={
             "status": status_filter,
             "rep": rep_filter or "",
@@ -822,6 +848,7 @@ def index():
             "from": from_date or "",
             "to": to_date or "",
             "q": search or "",
+            "page_size": pagination["page_size"],
         },
     )
 
@@ -1122,6 +1149,16 @@ def analytics():
             frame = frame.head(head)
         return frame.to_dict(orient="records")
 
+    header_frame = frames.get("headers")
+    submitted = (
+        header_frame.get("date_submitted")
+        if header_frame is not None and not getattr(header_frame, "empty", True)
+        else None
+    )
+    submitted_dates = pd.to_datetime(submitted, errors="coerce").dropna() if submitted is not None else []
+    root_start = from_date or (submitted_dates.min().date().isoformat() if len(submitted_dates) else date.today().isoformat())
+    root_end = to_date or (submitted_dates.max().date().isoformat() if len(submitted_dates) else date.today().isoformat())
+
     preview = {
         "volume_by_week": _records("volume_by_week", head=12),
         "credit_by_week": _records("credit_by_week", head=12),
@@ -1132,8 +1169,136 @@ def analytics():
         "category_breakdown": _records("category_breakdown"),
         "approval_sla": _records("approval_sla"),
         "follow_up_breakdown": _records("follow_up_breakdown"),
+        "root_causes": service.root_causes_from_frames(frames, start=root_start, end=root_end)[:8],
+        "corrective_actions": service.list_corrective_actions(limit=6),
+        "return_rate_basis": _records("return_rate_basis"),
+        "preventability": _records("preventability"),
+        "reason_pareto": _records("reason_pareto", head=10),
+        "sku_return_adjusted_margin": _records("sku_return_adjusted_margin", head=10),
+        "time_to_return": _records("time_to_return"),
+        "backlog_aging": _records("backlog_aging"),
+        "workflow_sla": _records("workflow_sla"),
+        "repeat_returners": _records("repeat_returners", head=10),
+        "customer_value_impact": _records("customer_value_impact", head=10),
     }
     return render_template("returns/analytics.html", analytics=payload, preview=preview, filters={"from": from_date or "", "to": to_date or ""})
+
+
+@portal_bp.get("/returns/root-causes")
+@login_required
+@any_permission_required(*ANALYTICS_VIEW_PERMISSIONS)
+def root_causes():
+    _returns_on()
+    if not service.returns_analytics_enabled():
+        abort(404)
+    from_date = (request.args.get("from") or "").strip() or None
+    to_date = (request.args.get("to") or "").strip() or None
+    causes = service.returns_root_causes(
+        actor_user=current_user,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    return render_template(
+        "returns/root_causes.html",
+        causes=causes,
+        filters={"from": from_date or "", "to": to_date or ""},
+    )
+
+
+@portal_bp.route("/returns/root-causes/detail", methods=["GET", "POST"])
+@login_required
+@any_permission_required(*ANALYTICS_VIEW_PERMISSIONS)
+def root_cause_detail():
+    _returns_on()
+    if not service.returns_analytics_enabled():
+        abort(404)
+    cause_type = (request.values.get("type") or "").strip().lower()
+    cause_value = (request.values.get("value") or "").strip()
+    from_date = (request.values.get("from") or "").strip() or None
+    to_date = (request.values.get("to") or "").strip() or None
+    try:
+        detail_payload = service.returns_root_cause_detail(
+            cause_type=cause_type,
+            cause_value=cause_value,
+            actor_user=current_user,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if request.method == "POST":
+            action = service.create_corrective_action(
+                cause_type=cause_type,
+                cause_value=cause_value,
+                title=request.form.get("title") or f"Reduce {cause_value} returns",
+                description=request.form.get("description"),
+                owner_user_id=request.form.get("owner_user_id"),
+                due_date=request.form.get("due_date"),
+                baseline_start=detail_payload["start"],
+                baseline_end=detail_payload["end"],
+                target_rate_pct=request.form.get("target_rate_pct"),
+                source_filters={
+                    "from": detail_payload["start"],
+                    "to": detail_payload["end"],
+                    "type": cause_type,
+                    "value": cause_value,
+                },
+                actor_user=current_user,
+            )
+            flash("Corrective action created with a measured baseline.", "success")
+            return redirect(url_for("returns_portal.corrective_action_detail", action_id=action["id"]))
+    except service.ReturnsError as exc:
+        if request.method == "POST":
+            flash(str(exc), "danger")
+        else:
+            abort(400, description=str(exc))
+    return render_template(
+        "returns/root_cause_detail.html",
+        root_cause=detail_payload,
+        owners=service.list_corrective_action_owners(),
+        default_due=(date.today() + timedelta(days=30)).isoformat(),
+    )
+
+
+@portal_bp.get("/returns/corrective-actions")
+@login_required
+@any_permission_required(*ANALYTICS_VIEW_PERMISSIONS)
+def corrective_actions():
+    _returns_on()
+    return render_template(
+        "returns/corrective_actions.html",
+        actions=service.list_corrective_actions(status=(request.args.get("status") or "").strip() or None),
+        active_status=(request.args.get("status") or "").strip(),
+    )
+
+
+@portal_bp.route("/returns/corrective-actions/<int:action_id>", methods=["GET", "POST"])
+@login_required
+@any_permission_required(*ANALYTICS_VIEW_PERMISSIONS)
+def corrective_action_detail(action_id: int):
+    _returns_on()
+    if request.method == "POST":
+        _require_any_permission(*OPS_APPROVE_PERMISSIONS)
+        try:
+            service.transition_corrective_action(
+                action_id,
+                target_status=request.form.get("target_status") or "",
+                notes=request.form.get("notes"),
+                outcome_start=request.form.get("outcome_start"),
+                outcome_end=request.form.get("outcome_end"),
+                actor_user=current_user,
+            )
+            flash("Corrective action updated.", "success")
+            return redirect(url_for("returns_portal.corrective_action_detail", action_id=action_id))
+        except service.ReturnsError as exc:
+            flash(str(exc), "danger")
+    action = service.get_corrective_action(action_id)
+    if not action:
+        abort(404)
+    return render_template(
+        "returns/corrective_action_detail.html",
+        action=action,
+        allowed_transitions=sorted(service.CORRECTIVE_ACTION_TRANSITIONS.get(action["status"], set())),
+        can_transition=_has_any_permission(*OPS_APPROVE_PERMISSIONS),
+    )
 
 
 @portal_bp.post("/returns/<int:rma_id>/approve_wh")

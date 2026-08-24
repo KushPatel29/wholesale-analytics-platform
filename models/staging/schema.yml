@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: stg_sales_fact
+    columns:
+      - name: order_date
+        data_tests: [not_null]
+      - name: order_id
+        data_tests: [not_null]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: product_id
+        data_tests: [not_null]
+  - name: stg_labor_fact
+    columns:
+      - name: labor_date
+        data_tests: [not_null]
+      - name: employee_key
+        data_tests: [not_null]
+  - name: stg_return_rma
+    columns:
+      - name: id
+        data_tests: [unique, not_null]
+  - name: stg_return_rma_item
+    columns:
+      - name: id
+        data_tests: [unique, not_null]
+      - name: rma_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_return_rma')
+                field: id

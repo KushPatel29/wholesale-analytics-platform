@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import html
 import json
 import re
 
+import pytest
+
 from app.services import labor_store
-from tests.labor_helpers import build_labor_dataset
+from tests.labor_helpers import build_labor_dataset, sample_synerion_records
 
 
 def _make_client():
@@ -108,6 +111,65 @@ def test_labor_bundle_api_exposes_workspace_focus_layers_and_exports(tmp_path, m
     watchlist_resp = client.get("/labor/export/watchlist?format=csv")
     assert watchlist_resp.status_code == 200
     assert watchlist_resp.headers["Content-Type"].startswith("text/csv")
+
+
+def test_turnover_uses_endpoint_average_and_renders_percent_once(tmp_path, monkeypatch):
+    templates = sample_synerion_records()
+
+    def on_day(template, day: int, *, separation: bool = False):
+        record = deepcopy(template)
+        prefix = f"2024-02-{day:02d}"
+        for field in (
+            "ShiftMatchDate",
+            "ScheduleStart",
+            "ScheduleEnd",
+            "FirstInPunchTime",
+            "LastOutPunchTime",
+            "PaidStartTime",
+            "PaidEndTime",
+        ):
+            record[field] = prefix + str(record[field])[10:]
+        if separation:
+            record["SeparationDate"] = "2024-02-02"
+            record["SeparationType"] = "Voluntary"
+            record["Status"] = "Separated"
+        return record
+
+    records = [
+        on_day(templates[0], 1),
+        on_day(templates[1], 1, separation=True),
+        on_day(templates[0], 2),
+        on_day(templates[1], 2, separation=True),
+        on_day(templates[0], 3),
+    ]
+    dataset_path = tmp_path / "labor_dataset"
+    build_labor_dataset(dataset_path, records=records)
+    monkeypatch.setenv("LABOR_PARQUET_PATH", dataset_path.as_posix())
+    monkeypatch.setenv("LABOR_ANALYTICS_ENABLED", "1")
+    labor_store.reset_duckdb_state()
+    client = _make_client()
+
+    response = client.get("/labor/api/bundle?start=2024-02-01&end=2024-02-03")
+    assert response.status_code == 200
+    payload = response.get_json()
+
+    assert payload["kpis"]["start_employees"] == 2
+    assert payload["kpis"]["end_employees"] == 1
+    assert payload["kpis"]["average_employees"] == 1.5
+    assert payload["kpis"]["separations"] == 1
+    assert payload["kpis"]["turnover_rate_pct"] == pytest.approx(66.6666667)
+    assert 0 <= payload["kpis"]["turnover_rate_pct"] <= 200
+
+    workforce = next(group for group in payload["scorecard_groups"] if group["title"] == "Workforce Footprint")
+    turnover = next(metric for metric in workforce["metrics"] if metric["label"] == "Employee Turnover")
+    assert turnover["format"] == "percent_points"
+    assert "1 separations / 1.5 average headcount" in turnover["note"]
+    assert "not annualized" in turnover["note"]
+
+    page = client.get("/labor/?start=2024-02-01&end=2024-02-03")
+    body = page.get_data(as_text=True)
+    assert "66.7%" in body
+    assert "6666.7%" not in body
 
 
 def test_labor_bundle_drilldown_filters_inherit_scope(tmp_path, monkeypatch):
