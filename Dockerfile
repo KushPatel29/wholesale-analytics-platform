@@ -50,6 +50,13 @@ COPY . .
 #
 # products.parquet is built here too: without it every products request takes a
 # FileNotFoundError path before falling back.
+#
+# ORDER MATTERS for the operations seed: it resolves owners by username through
+# get_user_by_username, so it must run after `seed-demo-users`. It also reads the
+# fact view for real customers, SKUs and suppliers, so it must run after
+# generate_synthetic_data. Nothing under /work is in WARMUP_PATHS, so it does not
+# need to precede precompute-demo-cache - but it is cheap and belongs with the
+# other DB-writing seeders.
 RUN cp .env.demo .env \
     && python -m seed.generate_synthetic_data --fiscal-years 3 --customers 110 --products 320 --suppliers 24 \
     && python -m seed.generate_synthetic_labor --days 730 \
@@ -60,6 +67,8 @@ RUN cp .env.demo .env \
     && python -m seed.generate_synthetic_marketing \
     && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-seed-only-not-a-runtime-secret \
        python -m seed.generate_synthetic_returns --count 140 --replace \
+    && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-seed-only-not-a-runtime-secret \
+       python -m seed.generate_synthetic_operations --replace \
     && ENV=development FLASK_ENV=development SECRET_KEY=demo-build-cache-only-not-a-runtime-secret \
        DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt python manage.py precompute-demo-cache
 
