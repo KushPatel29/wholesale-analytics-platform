@@ -33,6 +33,16 @@
 .decision-shell--service { --ops-accent: #bd496b; --ops-accent-rgb: 189, 73, 107; }
 .decision-shell--enterprise { --ops-accent: #5966ca; --ops-accent-rgb: 89, 102, 202; }
 
+body:has(.decision-shell--actions) { --ops-accent: #168364; --ops-accent-rgb: 22, 131, 100; }
+body:has(.decision-shell--crm) { --ops-accent: #2f6de0; --ops-accent-rgb: 47, 109, 224; }
+body:has(.decision-shell--orders) { --ops-accent: #087f9a; --ops-accent-rgb: 8, 127, 154; }
+body:has(.decision-shell--procurement) { --ops-accent: #b66a08; --ops-accent-rgb: 182, 106, 8; }
+body:has(.decision-shell--finance) { --ops-accent: #7052c6; --ops-accent-rgb: 112, 82, 198; }
+body:has(.decision-shell--inventory) { --ops-accent: #008875; --ops-accent-rgb: 0, 136, 117; }
+body:has(.decision-shell--master-data) { --ops-accent: #536b7d; --ops-accent-rgb: 83, 107, 125; }
+body:has(.decision-shell--service) { --ops-accent: #bd496b; --ops-accent-rgb: 189, 73, 107; }
+body:has(.decision-shell--enterprise) { --ops-accent: #5966ca; --ops-accent-rgb: 89, 102, 202; }
+
 :root[data-theme="dark"] .decision-shell {
   --ops-faint: var(--wa-text-muted, #9aa8b5);
   --ops-accent-text: color-mix(in srgb, var(--ops-accent) 62%, #fff);
