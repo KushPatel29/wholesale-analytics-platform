@@ -30,7 +30,12 @@ permissions:
 
 concurrency:
   group: deploy-render
-  cancel-in-progress: false
+  # Supersede, don't queue. This job waits up to ~13 minutes for the running
+  # service to report a specific commit, so with `false` a push during that
+  # window sat behind a wait for a SHA that was already obsolete - three
+  # commits deep, the newest one had not started verifying 20 minutes after it
+  # landed. Verifying a superseded commit tells you nothing worth waiting for.
+  cancel-in-progress: true
 
 jobs:
   deploy:
