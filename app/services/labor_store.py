@@ -83,7 +83,7 @@ def get_status(dataset_path: Optional[Path] = None) -> LaborDatasetStatus:
     warning = None
     if not available:
         warning = (
-            "Labor dataset is not built yet. Configure Synerion credentials in environment variables "
+            "Labor dataset is not built yet. Configure workforce data credentials in environment variables "
             "and run the labor refresh job."
         )
     row_count = manifest.get("row_count") if isinstance(manifest.get("row_count"), int) else None

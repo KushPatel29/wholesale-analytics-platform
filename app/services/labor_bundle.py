@@ -1713,7 +1713,7 @@ def build_page_payload(args: Mapping[str, Any] | None = None) -> dict[str, Any]:
             "narratives": narratives,
             "hero": {
                 "title": "Labor Intelligence",
-                "subtitle": "Workforce, labor cost, premium, absence, and staffing pressure analysis from Synerion time transactions.",
+                "subtitle": "Workforce, labor cost, premium, absence, and staffing pressure analysis from time-and-attendance transactions.",
                 "purpose": "Use this page to understand what is happening, where labor pressure is building, who is driving it, and what management should review next.",
                 "window_label": f"{filters.start.isoformat()} to {filters.end.isoformat()}",
                 "active_departments": active_departments,

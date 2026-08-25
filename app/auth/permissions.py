@@ -971,6 +971,8 @@ DEFAULT_ROLE_PERMISSION_KEYS: Dict[str, Set[str]] = {
         {
             "page.work.view", "actions.create", "actions.manage", "assistant.actions.draft",
             "page.crm.view", "crm.manage", "page.orders.view", "orders.manage",
+            "page.procurement.view", "procurement.manage",
+            "page.inventory_ops.view", "inventory_ops.manage",
             "page.service.view", "service.manage",
         },
     ),

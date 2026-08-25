@@ -858,7 +858,8 @@ window.addEventListener("load", () => {
       },
       options: {
         responsive: true,
-        parsing: false,
+        resizeDelay: 160,
+        animation: false,
         scales: {
           x: { title: { display: true, text: xLabel } },
           y: { title: { display: true, text: "Monetary" }, ticks: { callback: (v) => "$" + Number(v).toLocaleString() } }
