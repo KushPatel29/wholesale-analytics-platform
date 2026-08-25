@@ -6539,6 +6539,14 @@ body.theme-wa-future .auth-demo__cta .auth-demo__cta-sub {
   border-radius: 50%;
   background: var(--wa-warn, #e0a548);
 }
+.wa-live-banner__label {
+  flex: 0 0 auto;
+  color: var(--wa-text-dim, #9aa8b5);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 .wa-live-banner__text { flex: 1 1 22rem; min-width: 0; }
 .wa-live-banner__text strong { font-weight: 700; }
 .wa-live-banner__back {

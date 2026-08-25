@@ -1,13 +1,19 @@
 {% extends "base.html" %}
 {% block title %}{{ workspace.label }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-1') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-2') }}">{% endblock %}
 {% block content %}
-<div class="decision-shell">
+{% set module_codes = {'actions':'ACT','crm':'CRM','orders':'OTC','procurement':'P2P','finance':'R2R','inventory':'INV','master-data':'MDM','service':'SVC','enterprise':'ENT'} %}
+<div class="decision-shell decision-shell--{{ workspace_key }}" data-workspace="{{ workspace_key }}">
   <header class="decision-masthead">
-    <div>
-      <div class="decision-eyebrow">{{ workspace.eyebrow }}</div>
+    <div class="decision-masthead__copy">
+      <div class="decision-identity"><span class="decision-module-code">{{ module_codes[workspace_key] }}</span><span class="decision-eyebrow">{{ workspace.eyebrow }}</span></div>
       <h1>{{ workspace.label }}</h1>
       <p>{{ workspace.description }}</p>
+      <div class="decision-masthead__meta" aria-label="Workspace status">
+        <span><i class="decision-status-dot" aria-hidden="true"></i>Live workspace</span>
+        <span>{{ listing.total }} {{ 'record' if listing.total == 1 else 'records' }} loaded</span>
+        <span>{{ 'Write controls enabled' if can_manage else 'Read-only access' }}</span>
+      </div>
     </div>
     <div class="decision-rail" aria-label="Governed decision lifecycle">
       <div class="decision-rail__step"><strong>Signal</strong><span>Certified metric or source record</span></div>
@@ -21,6 +27,7 @@
     {% include "decision_ops/_nav.html" %}
     <div class="decision-board">
       {% set summary = listing.summary %}
+      <div class="decision-section-label"><span>Workspace pulse</span><small>Current governed state</small></div>
       <section class="decision-ledger" aria-label="Workspace summary">
         {% if workspace_key == 'actions' %}
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Open</span><strong class="decision-ledger__value">{{ summary.open }}</strong><small class="decision-ledger__note">owned actions</small></div>
@@ -70,11 +77,12 @@
 
       {% if workspace_key == 'crm' %}
       <section class="decision-panel" aria-labelledby="pipeline-heading">
-        <div class="decision-panel__head"><h2 id="pipeline-heading">Opportunity stage board</h2><span class="decision-badge">Forecast categories retained</span></div>
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Revenue control</span><h2 id="pipeline-heading">Opportunity stage board</h2></div><span class="decision-badge">Forecast categories retained</span></div>
         <div class="decision-panel__body decision-pipeline">
           {% for stage in workspace.pipeline_stages %}
-          <div class="decision-pipeline__stage">
-            <h3>{{ stage|replace('_', ' ') }}</h3>
+          {% set stage_total = listing['items']|selectattr('record_type', 'equalto', 'opportunity')|selectattr('status', 'equalto', stage)|list|length %}
+          <div class="decision-pipeline__stage" data-stage="{{ stage }}">
+            <h3><span>{{ stage|replace('_', ' ') }}</span><b>{{ stage_total }}</b></h3>
             {% for row in listing['items'] if row.record_type == 'opportunity' and row.status == stage %}
             <a class="decision-pipeline__card" href="{{ url_for('decision_ops.record_detail', record_id=row.id) }}"><strong>{{ row.title }}</strong><span>{{ row.currency }} {{ '{:,.0f}'.format(row.amount or 0) }} · {{ row.probability_pct or 0 }}%</span></a>
             {% else %}<span class="decision-ledger__note">No opportunities</span>{% endfor %}
@@ -86,7 +94,7 @@
 
       <section class="decision-panel" aria-labelledby="queue-heading">
         <div class="decision-panel__head">
-          <h2 id="queue-heading">{{ 'Accountable action queue' if workspace_key == 'actions' else 'Operational record ledger' }}</h2>
+          <div><span class="decision-panel__kicker">{{ 'Execution control' if workspace_key == 'actions' else 'System of record' }}</span><h2 id="queue-heading">{{ 'Accountable action queue' if workspace_key == 'actions' else 'Operational record ledger' }}</h2></div>
           <span class="decision-badge">{{ listing.total }} total</span>
         </div>
         <div class="decision-panel__body">
@@ -107,14 +115,14 @@
             </tbody>
           </table>
           {% else %}
-          <div class="decision-empty"><span class="decision-empty__mark" aria-hidden="true">◇</span><div><strong>No operational history has been invented.</strong>{{ 'Create the first draft action from a certified signal.' if workspace_key == 'actions' else 'Create a native workflow record, or connect the source contract below for system-of-record events.' }}</div></div>
+          <div class="decision-empty"><span class="decision-empty__mark" aria-hidden="true">◇</span><div class="decision-empty__copy"><span class="decision-panel__kicker">Awaiting first event</span><strong>No operational history has been invented.</strong><p>{{ 'Create the first draft action from a certified signal.' if workspace_key == 'actions' else 'Create a native workflow record, or connect the source contract below for system-of-record events.' }}</p>{% if can_manage %}<a class="decision-empty__action" href="#create-heading">Create governed draft <span aria-hidden="true">↓</span></a>{% else %}<small>Write controls are permission-gated for this account.</small>{% endif %}</div></div>
           {% endif %}
         </div>
       </section>
 
       {% if can_manage and workspace_key != 'enterprise' %}
       <section class="decision-panel" aria-labelledby="create-heading">
-        <div class="decision-panel__head"><h2 id="create-heading">Create governed draft</h2><span class="decision-badge">Audited</span></div>
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Controlled write</span><h2 id="create-heading">Create governed draft</h2></div><span class="decision-badge">Audited</span></div>
         <div class="decision-panel__body">
           {% if workspace_key == 'procurement' and planning_scenario_id %}
           <form class="mb-3" method="post" action="{{ url_for('decision_ops.planning_writeback', scenario_id=planning_scenario_id) }}">
@@ -172,7 +180,7 @@
 
       {% if source_contracts %}
       <section class="decision-panel" aria-labelledby="sources-heading">
-        <div class="decision-panel__head"><h2 id="sources-heading">Source contracts</h2><span class="decision-badge decision-badge--source">No synthetic operations</span></div>
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Integration posture</span><h2 id="sources-heading">Source contracts</h2></div><span class="decision-badge decision-badge--source">No synthetic operations</span></div>
         <div class="decision-panel__body decision-contracts">
           {% for contract in source_contracts %}
           <article class="decision-contract">

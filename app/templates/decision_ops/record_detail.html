@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ item.record_number }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-1') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-2') }}">{% endblock %}
 {% block content %}
-<div class="decision-shell">
+<div class="decision-shell decision-shell--{{ workspace_key }}" data-workspace="{{ workspace_key }}">
   <header class="decision-masthead">
     <div><div class="decision-eyebrow">{{ workspace.label }} · {{ item.record_number }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional operating note entered.' }}</p></div>
     <div class="decision-rail" aria-label="Operational lifecycle">
