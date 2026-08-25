@@ -350,6 +350,34 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _owner_labels(session: Any, rows: Iterable[Any]) -> dict[int, str]:
+    """Resolve the owner ids on this page to names, in one query.
+
+    The workspace table and both detail rails printed `owner_user_id` straight
+    out of the column, so every owner on a CRM/ERP screen read as `4`. No
+    template joins to users, and resolving inside `_work_dict`/`_record_dict`
+    would issue one query per row - hence a single lookup over the page's ids.
+    """
+    from app.auth.models import User
+
+    ids = {int(row.owner_user_id) for row in rows if getattr(row, "owner_user_id", None)}
+    if not ids:
+        return {}
+    labels: dict[int, str] = {}
+    for user in session.query(User).filter(User.id.in_(ids)).all():
+        full = " ".join(part for part in (user.first_name, user.last_name) if part).strip()
+        labels[int(user.id)] = full or user.username
+    return labels
+
+
+def _apply_owner_labels(session: Any, rows: Iterable[Any], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    labels = _owner_labels(session, rows)
+    for item in items:
+        owner = item.get("owner_user_id")
+        item["owner_name"] = labels.get(int(owner)) if owner else None
+    return items
+
+
 def _work_dict(item: WorkItem) -> dict[str, Any]:
     now = _now().replace(tzinfo=None)
     due = item.due_at.replace(tzinfo=None) if item.due_at and item.due_at.tzinfo else item.due_at
@@ -502,7 +530,8 @@ def list_work_items(*, page: int = 1, page_size: int = 25, status: str | None = 
             "expected_impact": sum(float(row.expected_financial_impact or 0) for row in all_open),
             "realized_impact": float(session.query(func.coalesce(func.sum(WorkItem.realized_financial_impact), 0)).scalar() or 0),
         }
-        return {"items": [_work_dict(row) for row in rows], "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
+        items = _apply_owner_labels(session, rows, [_work_dict(row) for row in rows])
+        return {"items": items, "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
 
 
 def get_work_item(work_item_id: int) -> dict[str, Any] | None:
@@ -511,6 +540,7 @@ def get_work_item(work_item_id: int) -> dict[str, Any] | None:
         if item is None:
             return None
         out = _work_dict(item)
+        _apply_owner_labels(session, [item], [out])
         out["events"] = [{"id": row.id, "event_type": row.event_type, "from_status": row.from_status, "to_status": row.to_status, "actor_user_id": row.actor_user_id, "payload": _loads(row.payload_json, {}), "created_at": _iso(row.created_at)} for row in session.query(WorkItemEvent).filter_by(work_item_id=item.id).order_by(WorkItemEvent.created_at.asc(), WorkItemEvent.id.asc()).all()]
         out["comments"] = [{"id": row.id, "body": row.body, "author_user_id": row.author_user_id, "created_at": _iso(row.created_at)} for row in session.query(WorkItemComment).filter_by(work_item_id=item.id).order_by(WorkItemComment.created_at.asc()).all()]
         out["attachments"] = [{"id": row.id, "display_name": row.display_name, "uri": row.uri, "content_type": row.content_type, "checksum": row.checksum, "created_at": _iso(row.created_at)} for row in session.query(WorkItemAttachment).filter_by(work_item_id=item.id).order_by(WorkItemAttachment.created_at.asc()).all()]
@@ -717,7 +747,8 @@ def list_operational_records(domain: str, *, page: int = 1, page_size: int = 25,
         line_counts = dict(session.query(OperationalRecordLine.operational_record_id, func.count(OperationalRecordLine.id)).filter(OperationalRecordLine.operational_record_id.in_(ids)).group_by(OperationalRecordLine.operational_record_id).all()) if ids else {}
         all_rows = session.query(OperationalRecord).filter_by(domain=domain).all()
         summary = _operational_summary(domain, all_rows)
-        return {"items": [_record_dict(row, int(line_counts.get(row.id, 0))) for row in rows], "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
+        items = _apply_owner_labels(session, rows, [_record_dict(row, int(line_counts.get(row.id, 0))) for row in rows])
+        return {"items": items, "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
 
 
 def get_operational_record(record_id: int) -> dict[str, Any] | None:
@@ -727,6 +758,7 @@ def get_operational_record(record_id: int) -> dict[str, Any] | None:
             return None
         lines = session.query(OperationalRecordLine).filter_by(operational_record_id=record.id).order_by(OperationalRecordLine.line_number.asc()).all()
         out = _record_dict(record, len(lines))
+        _apply_owner_labels(session, [record], [out])
         out["lines"] = [{
             "id": row.id,
             "line_number": row.line_number,

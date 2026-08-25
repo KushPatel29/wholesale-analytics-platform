@@ -7,7 +7,7 @@
     <div><div class="decision-eyebrow">Action #{{ item.id }} · {{ item.source_module }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional rationale entered.' }}</p></div>
     <div class="decision-rail" aria-label="Action context">
       <div class="decision-rail__step"><strong>Signal</strong><span>{{ item.metric_label or item.metric_key or 'Source record retained' }}</span></div>
-      <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
+      <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_name or item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
       <div class="decision-rail__step"><strong>Approval</strong><span>{{ item.approval_status|replace('_',' ')|title }}</span></div>
       <div class="decision-rail__step"><strong>Outcome</strong><span>{{ item.outcome_value if item.outcome_value is not none else 'Not measured yet' }}</span></div>
     </div>

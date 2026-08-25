@@ -112,7 +112,7 @@
                 <td><a href="{{ url_for('decision_ops.action_detail', work_item_id=row.id) if workspace_key == 'actions' else url_for('decision_ops.record_detail', record_id=row.id) }}">{{ row.title }}</a><div class="decision-ledger__note">{{ ('Action #' ~ row.id) if workspace_key == 'actions' else row.record_number }}</div></td>
                 <td>{{ row.source_module if workspace_key == 'actions' else row.record_type|replace('_', ' ') }}{% if row.source_record_id %}<div class="decision-ledger__note">{{ row.source_record_id }}</div>{% endif %}</td>
                 <td><span class="decision-badge {% if row.is_overdue %}decision-badge--risk{% endif %}">{{ row.status|replace('_', ' ') }}</span></td>
-                <td>{{ row.owner_user_id or 'Unassigned' }}</td>
+                <td>{{ row.owner_name or row.owner_user_id or 'Unassigned' }}</td>
                 <td>{{ (row.due_at or row.close_at or row.service_due_at or '—')|string|truncate(16, true, '') }}</td>
                 <td>{% set value = row.expected_financial_impact if workspace_key == 'actions' else row.amount %}{% if value is not none %}{{ row.currency }} {{ '{:,.0f}'.format(value) }}{% else %}—{% endif %}</td>
               </tr>

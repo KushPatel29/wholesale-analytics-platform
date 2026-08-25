@@ -7,7 +7,7 @@
     <div><div class="decision-eyebrow">{{ workspace.label }} · {{ item.record_number }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional operating note entered.' }}</p></div>
     <div class="decision-rail" aria-label="Operational lifecycle">
       <div class="decision-rail__step"><strong>Source</strong><span>{{ item.source_system or 'Native manual draft' }}</span></div>
-      <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
+      <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_name or item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
       <div class="decision-rail__step"><strong>Approval</strong><span>{{ item.approval_status|replace('_',' ')|title }}</span></div>
       <div class="decision-rail__step"><strong>Status</strong><span>{{ item.status|replace('_',' ')|title }}</span></div>
     </div>
