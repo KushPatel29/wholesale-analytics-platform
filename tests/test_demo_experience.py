@@ -540,9 +540,39 @@ class TestHealthCheck:
         assert (resp.get_json() or {}).get("status") == "ok"
 
     def test_healthz_leaks_nothing(self, app):
-        """It is public, so it reports liveness and nothing else."""
+        """It is public, so it reports liveness and build identity - nothing else.
+
+        This used to assert `<= {"status", "time"}`. Liveness alone turned out to
+        be the wrong contract: on 2026-08-25 Render served an image predating the
+        `/work` routes for days while this endpoint answered `ok`, because "a
+        process is alive" and "the right code is deployed" are different claims
+        and only the first was being made. The release fingerprint is the second.
+
+        The allowlist stays closed, though. Everything on it is what a public
+        status page would show; anything reflecting configuration or data state
+        belongs on /readyz, which stays authenticated.
+        """
         payload = app.test_client().get("/healthz").get_json() or {}
-        assert set(payload) <= {"status", "time"}
+        assert set(payload) <= {
+            "status",
+            "time",
+            "git_sha",
+            "git_sha_short",
+            "git_branch",
+            "release_id",
+            "service",
+            "identified",
+        }
+
+    def test_healthz_identifies_the_running_build(self, app):
+        """The field the deploy gate reads.
+
+        Without it, a stale-but-healthy container is indistinguishable from a
+        current one, which is precisely how the outage stayed invisible to CI.
+        """
+        payload = app.test_client().get("/healthz").get_json() or {}
+        assert "git_sha" in payload, "/healthz must name the commit it is running"
+        assert "identified" in payload, "automation needs an explicit yes/no on build identity"
 
     def test_readyz_stays_authenticated(self, app):
         """The detailed probe reports data and config state, so it stays shut."""

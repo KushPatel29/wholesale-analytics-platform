@@ -15,7 +15,7 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     steps:
       # `--max-time 45` was shorter than the thing it was waiting for. A cold
       # free-tier container takes 30-60s to answer at all - measured at 54.2s
@@ -26,7 +26,54 @@ jobs:
       # 150s is comfortably past the observed worst case, and the retries cover
       # a wake-up that overruns even that.
       - name: Require the live demo to be ready
+        id: ping
         run: |
           curl --fail --silent --show-error --location \
             --retry 3 --retry-delay 15 --max-time 150 \
+            -o healthz.json \
             https://wholesale-analytics-platform.onrender.com/healthz
+          cat healthz.json
+
+      # A 200 from /healthz says a process is alive. It does NOT say which
+      # commit that process is running, and on 2026-08-25 those were different
+      # questions with different answers: this workflow reported green every ten
+      # minutes for days while Render served an image predating the /work
+      # routes, all nine of which 404'd in production.
+      #
+      # So the ping is no longer the assertion. The assertion is that the
+      # running build names the commit at the head of this branch.
+      - name: Require the live demo to be running this commit
+        run: |
+          RUNNING="$(jq -r '.git_sha // "unknown"' healthz.json)"
+          EXPECTED="${{ github.sha }}"
+          echo "running  : $RUNNING"
+          echo "expected : $EXPECTED"
+
+          if [ "$RUNNING" = "unknown" ]; then
+            echo "::error::The live service cannot identify its commit (git_sha=unknown)."
+            echo "::error::It is running an image built before the release fingerprint landed."
+            echo "::error::Deploy the latest main commit on Render, then re-run."
+            exit 1
+          fi
+
+          if [ "$RUNNING" != "$EXPECTED" ]; then
+            echo "::error::Render is serving ${RUNNING:0:7} but this branch is at ${EXPECTED:0:7}."
+            echo "::error::The service is alive and stale - auto-deploy has not fired for this commit."
+            exit 1
+          fi
+
+          echo "Live service is running ${RUNNING:0:7}."
+
+      # Liveness and freshness both pass, so the routes are worth asserting.
+      # Without this, "warm and current" could still mean "current and broken".
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install smoke-test dependencies
+        run: python -m pip install --quiet requests
+      - name: Require every operational workspace to answer
+        run: |
+          python scripts/smoke_production.py \
+            --expect-sha "${{ github.sha }}" \
+            --attempts 3 --delay 10

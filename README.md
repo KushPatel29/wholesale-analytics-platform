@@ -440,6 +440,56 @@ The honest list. Synthetic data can demonstrate some things and not others.
 
 ---
 
+## The deploy gate, and why `status: ok` was not enough
+
+For several days every `/work` route returned 200 locally and 404 in
+production. CI was green throughout, `/healthz` answered `{"status": "ok"}`
+every ten minutes, and the only visible symptom was a Bootstrap class name on
+the login page — `navbar-expand-xxl` where the source said `navbar-expand-lg`.
+Render was serving an image built before the operational workspaces existed.
+
+Two things hid it, and both are now closed.
+
+**A liveness probe was answering a question nobody was asking.** `status: ok`
+was true — that process was alive. The question was *which commit is it
+running*, and nothing on the service could answer it. `/healthz` now carries a
+release fingerprint (`git_sha`, `release_id`, `identified`) built from Render's
+own `RENDER_GIT_COMMIT`, falling back to a `GIT_SHA` baked at image build, and
+finally to `unknown`. It never guesses: a build that cannot name its commit says
+so, because a plausible-but-wrong SHA would let the deploy gate pass on a stale
+image. See `app/core/release.py`.
+
+**An unauthenticated probe cannot detect a missing route.** The app redirects
+every anonymous request to `/login?next=…`, so a route that does not exist
+answers `302` exactly like a route that does — `/work/definitely-not-real`
+returns `302` signed out and `404` signed in. Any check that did not hold a
+session was structurally incapable of catching this. `scripts/smoke_production.py`
+signs in through `/auth/demo`, requests all nine workspaces, asserts both the
+status code and the rendered `<h1>`, and ends with a deliberate 404 canary — if
+that canary redirects, the session was lost and every other pass in the run is
+discarded rather than reported as green.
+
+`tests/test_operational_routes_contract.py` asserts the same contract offline.
+
+### Enabling automatic deploys
+
+The live service was created by hand in the Render dashboard, before
+`render.yaml` existed. **A manually-created service does not read the
+blueprint**, so `autoDeployTrigger: commit` has never had any effect on it — the
+file describes what the service should do and the service has never been asked.
+
+`.github/workflows/deploy-render.yml` closes this from the side the repository
+controls, and needs one secret set once:
+
+> Render dashboard → `wholesale-analytics-platform` → **Settings → Deploy Hook**
+> → copy the URL → GitHub → **Settings → Secrets and variables → Actions** → new
+> secret named `RENDER_DEPLOY_HOOK_URL`.
+
+Without it the workflow still verifies and still fails on a stale image; it just
+cannot start the deploy itself.
+
+---
+
 ## Running it
 
 ```bash

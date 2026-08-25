@@ -1,0 +1,75 @@
+name: Deploy to Render and verify
+
+# The live service was created by hand in the Render dashboard, before
+# render.yaml existed. A manually-created service does not read the blueprint,
+# so `autoDeployTrigger: commit` in render.yaml has never had any effect on it -
+# the file describes what the service should do and the service has never been
+# asked. The visible result on 2026-08-25: main was eight commits and one whole
+# feature ahead of what production served, CI was green the entire time, and the
+# only symptom was a CSS class name on the login page.
+#
+# This workflow closes that gap from the side we control. It prefers an explicit
+# deploy hook, falls back to whatever native auto-deploy may be configured, and
+# then - the part that actually matters - refuses to pass until the running
+# service reports this commit and serves every operational route.
+#
+# ONE-TIME SETUP to enable the trigger:
+#   Render dashboard -> wholesale-analytics-platform -> Settings -> Deploy Hook
+#   Copy the URL, then add it to GitHub as a repository secret named
+#   RENDER_DEPLOY_HOOK_URL (Settings -> Secrets and variables -> Actions).
+# Without it this workflow still verifies, and still goes red on a stale image;
+# it just cannot start the deploy itself.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke-test dependencies
+        run: python -m pip install --quiet requests
+
+      - name: Trigger a Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL is not set - no deploy was triggered."
+            echo "::warning::Relying on Render's native auto-deploy, which has historically not fired for this service."
+            echo "::warning::See the header of this workflow file for the one-time setup."
+            exit 0
+          fi
+          # The hook URL is itself the credential, so it is never echoed.
+          code="$(curl --silent --show-error --location --max-time 60 \
+                   -o /dev/null -w '%{http_code}' -X POST "$HOOK")"
+          if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+            echo "::error::Deploy hook returned HTTP $code."
+            exit 1
+          fi
+          echo "Deploy triggered."
+
+      # A build takes a few minutes and a free-tier container is slow to answer,
+      # so the wait is generous. It is bounded, though: 40 x 20s = ~13 minutes,
+      # after which a deploy that has not landed is a failure, not a wait.
+      - name: Wait for the deploy, then require every workspace to answer
+        run: |
+          python scripts/smoke_production.py \
+            --expect-sha "${{ github.sha }}" \
+            --attempts 40 --delay 20 --timeout 90

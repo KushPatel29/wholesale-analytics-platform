@@ -144,6 +144,14 @@ ENV DEMO_PREBUILT_CACHE_DIR=/app/cache/demo-prebuilt \
 ENV DEMO_MODE=1
 ENV DEMO_STATIC_SITE_URL=https://kushpatel29.github.io/wholesale-analytics-platform
 
+# Build identity, so an image can name its own commit on /healthz. Render sets
+# RENDER_GIT_COMMIT at runtime and that wins; this is the fallback for images
+# built anywhere else (`docker build --build-arg GIT_SHA=$(git rev-parse HEAD)`).
+# Left as `unknown` rather than defaulted to a branch name: a wrong SHA is worse
+# than an absent one, because the deploy gate would pass on it.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

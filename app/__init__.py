@@ -1156,13 +1156,19 @@ def create_app() -> Flask:
     #
     # It reports only that this process is alive. Anything that reveals
     # configuration or data state belongs on /readyz, which stays authenticated.
+    # It also carries a release fingerprint. `status: ok` alone was true of a
+    # container running a commit three weeks old, which is how every /work route
+    # 404'd in production for days while CI was green - see app/core/release.py.
     @app.get("/healthz")
     def healthz():  # pragma: no cover - trivial
         from datetime import datetime, timezone
 
+        from .core.release import release_info
+
         return jsonify(
             status="ok",
             time=datetime.now(tz=timezone.utc).isoformat(),
+            **release_info(),
         ), 200
 
     # Short aliases for auth routes (kept for backward compatibility)
