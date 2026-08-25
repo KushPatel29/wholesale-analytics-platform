@@ -493,7 +493,7 @@ body:has(.decision-shell) .wa-live-banner {
   gap: 0.62rem;
   padding-block: 0.45rem;
   border-bottom-color: rgba(var(--ops-accent-rgb), 0.24);
-  background: color-mix(in srgb, var(--wa-canvas-deep, #0b1219) 96%, var(--ops-accent));
+  background: color-mix(in srgb, #0b1219 96%, var(--ops-accent));
   color: #dce5eb;
 }
 
