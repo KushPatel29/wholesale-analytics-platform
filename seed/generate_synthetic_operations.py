@@ -1286,12 +1286,17 @@ def write_all(builder: Builder, work_items: list[dict], *, replace: bool) -> dic
 
         # Source contracts. One stays not_connected on purpose: the enterprise
         # page is meant to show what is *not* wired up, and a test asserts it.
+        # The status vocabulary is fixed at service.py:906 -
+        # {not_connected, discovery, configured, verified, degraded, disabled}.
+        # The Connected tile counts only `native` and `verified`; everything else
+        # lands in Source-gated, which is the honest-unavailable count. So a mix
+        # is not decoration: it is what makes both tiles mean something.
         connected = {
-            "accounting_ledger": ("Northgate GL", "finance.controller"),
-            "billing_payments": ("Northgate Billing", "finance.ar"),
-            "warehouse_execution": ("DC Execution", "supply.ops"),
-            "email_calendar": ("Workplace Mail", "it.platform"),
-            "returns": ("Returns Tracker", "service.ops"),
+            "accounting_ledger": ("Northgate GL", "finance.controller", "verified"),
+            "billing_payments": ("Northgate Billing", "finance.ar", "verified"),
+            "warehouse_execution": ("DC Execution", "supply.ops", "verified"),
+            "email_calendar": ("Workplace Mail", "it.platform", "configured"),
+            "returns": ("Returns Tracker", "service.ops", "degraded"),
         }
         contract_total = 0
         from app.decision_ops.service import SOURCE_CONTRACT_CATALOG
@@ -1300,7 +1305,7 @@ def write_all(builder: Builder, work_items: list[dict], *, replace: bool) -> dic
         for key, definition in SOURCE_CONTRACT_CATALOG.items():
             if key in present or key in ("identity_sso_scim", "tenant_directory", "hris_payroll", "marketing_automation"):
                 continue
-            system_name, owner = connected.get(key, (None, None))
+            system_name, owner, status = connected.get(key, (None, None, None))
             if system_name is None:
                 continue
             session.add(
@@ -1309,7 +1314,7 @@ def write_all(builder: Builder, work_items: list[dict], *, replace: bool) -> dic
                     display_name=definition["display_name"],
                     category=definition["category"],
                     system_name=system_name,
-                    status="connected",
+                    status=status,
                     owner=owner,
                     base_url=None,
                     expected_grain=definition["expected_grain"],

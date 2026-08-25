@@ -165,6 +165,39 @@ def test_demo_viewer_can_read_every_workspace(demo_client, path, expected_h1):
     assert heading == expected_h1, f"{path} rendered H1 {heading!r}, expected {expected_h1!r}"
 
 
+@pytest.mark.parametrize(
+    "template",
+    ["app/templates/decision_ops/workspace.html", "app/templates/decision_ops/record_detail.html"],
+)
+def test_decision_ops_tables_are_captioned_and_scoped(template):
+    """A data table needs a name and column bindings, not just rows.
+
+    Without a caption a screen-reader user tabbing between nine near-identical
+    workspaces cannot tell which ledger they are in; without `scope` a row reads
+    as six loose values instead of "Status: held".
+
+    Asserted against the template SOURCE rather than a rendered response on
+    purpose. The suite's auth DB is empty by design - tests/test_decision_ops.py
+    depends on that to assert the honest empty state - so every table here
+    renders as "no records" and a response-based check would skip silently and
+    prove nothing.
+    """
+    source = (pathlib.Path(__file__).resolve().parents[1] / template).read_text(encoding="utf-8")
+    if "<table" not in source:
+        pytest.fail(f"{template} no longer contains a table; update this contract")
+
+    assert "<caption" in source, f"{template} has a data table with no <caption>"
+
+    for head in re.findall(r"<thead.*?</thead>", source, re.S):
+        # `<th\b(?!ead)` - a bare `count("<th")` also matches the <thead> that
+        # wraps them, which reads as one unscoped header that does not exist.
+        headers = len(re.findall(r"<th\b(?!ead)", head))
+        scoped = len(re.findall(r"<th\s+scope=", head))
+        assert headers and scoped == headers, (
+            f"{template}: {headers - scoped} of {headers} column headers are missing scope"
+        )
+
+
 def test_unknown_workspace_404s_when_signed_in(demo_client):
     """The canary.
 

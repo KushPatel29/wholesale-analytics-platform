@@ -100,7 +100,12 @@
         <div class="decision-panel__body">
           {% if listing['items'] %}
           <table class="decision-table">
-            <thead><tr><th>Record</th><th>Type / source</th><th>Status</th><th>Owner</th><th>Due / close</th><th>Value</th></tr></thead>
+            {# Named, not generic: a screen-reader user tabbing between workspaces
+               hears which ledger this is, and `scope` binds each column to its
+               cells so a row reads as "Status: held" rather than as six loose
+               values. #}
+            <caption class="visually-hidden">{{ workspace.label }} records — {{ listing['total'] }} total, showing page {{ listing['page'] }} of {{ listing['pages'] }}.</caption>
+            <thead><tr><th scope="col">Record</th><th scope="col">Type / source</th><th scope="col">Status</th><th scope="col">Owner</th><th scope="col">Due / close</th><th scope="col">Value</th></tr></thead>
             <tbody>
             {% for row in listing['items'] %}
               <tr>
