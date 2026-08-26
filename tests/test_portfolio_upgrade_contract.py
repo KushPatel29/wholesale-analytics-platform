@@ -111,6 +111,7 @@ def test_static_shell_menu_and_pointer_aligned_details_survive_the_freeze():
 def test_static_overview_preserves_scope_truth_and_adapts_live_only_controls():
     builder = _read("build_static.py")
 
+    assert 'document.querySelectorAll("select[data-static-preset]")' in builder
     assert 'document.querySelector("select[data-static-preset]")' in builder
     assert 'option.toggleAttribute("selected", selected)' in builder
     assert "option.defaultSelected = item.selected" in builder

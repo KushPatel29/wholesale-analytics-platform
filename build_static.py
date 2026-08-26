@@ -376,7 +376,10 @@ STATIC_RUNTIME = r"""
   }
 
   function bindPreset() {
-    document.querySelectorAll("[data-static-preset]").forEach(function (select) {
+    /* The body carries the active preset as metadata too. Binding its bubbled
+       change events treated `body.value` as a preset and briefly requested
+       `/data/undefined/<page>.json` before the real select handler ran. */
+    document.querySelectorAll("select[data-static-preset]").forEach(function (select) {
       if (select.dataset.bound === "1") return;
       select.dataset.bound = "1";
       select.addEventListener("change", function () {
