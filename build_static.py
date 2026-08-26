@@ -394,8 +394,21 @@ STATIC_RUNTIME = r"""
              jumped back to "Current FY", so the control reported a different
              scope from the figures underneath it. Reassert the requested
              value on the newly inserted control before it is rebound. */
-          var nextSelect = document.querySelector("[data-static-preset]");
-          if (nextSelect) { nextSelect.value = preset; nextSelect.disabled = false; }
+          /* The body also carries `data-static-preset`; target the control,
+             not the first matching element. Reassert both properties and
+             attributes because browsers do not serialize a changed option's
+             live selected state consistently. */
+          var nextSelect = document.querySelector("select[data-static-preset]");
+          if (nextSelect) {
+            nextSelect.querySelectorAll("option").forEach(function (option) {
+              var selected = option.value === preset;
+              option.selected = selected;
+              option.defaultSelected = selected;
+              option.toggleAttribute("selected", selected);
+            });
+            nextSelect.value = preset;
+            nextSelect.disabled = false;
+          }
           history.replaceState({}, "", payload.path || location.pathname);
           bind();
         }).catch(function () {
@@ -623,6 +636,40 @@ STATIC_RUNTIME = r"""
     });
   }
 
+  /* Preset fragments are captured before the final page-level freeze pass.
+     Reapply the snapshot control contract after every fragment replacement so
+     exports remain useful Print / Save actions and live-only recomputation
+     controls never return as dead buttons. */
+  function adaptSnapshotControls() {
+    var printLabels = {
+      downloadSnapshotBtn: "Print / Save Snapshot",
+      exportDataHealthBtn: "Print / Save Data Issues",
+      moversExportBtn: "Print / Save Movers",
+      driversExportBtn: "Print / Save Drivers",
+      concentrationExportBtn: "Print / Save Concentration",
+      marginRiskExportBtn: "Print / Save Margin Risk",
+      trendExportBtn: "Print / Save Trend"
+    };
+    Object.keys(printLabels).forEach(function (id) {
+      var control = document.getElementById(id);
+      if (!control) return;
+      control.dataset.printReport = "1";
+      control.disabled = false;
+      control.removeAttribute("aria-disabled");
+      control.removeAttribute("title");
+      control.textContent = printLabels[id];
+    });
+    document.querySelectorAll(
+      '#diagnosticWorkspacesDisclosure button:not([data-print-report]),' +
+      '#diagnosticWorkspacesDisclosure select,' +
+      '#diagnosticWorkspacesDisclosure input[type="checkbox"]'
+    ).forEach(function (control) {
+      control.disabled = true;
+      control.setAttribute("aria-disabled", "true");
+      control.setAttribute("title", "Live recomputation is unavailable in this prerendered snapshot.");
+    });
+  }
+
   /* An in-page target can live inside one or more closed <details> elements.
      Native fragment navigation does not open those ancestors, so the Overview
      "Open trust center" links changed the URL and appeared to do nothing. */
@@ -738,6 +785,7 @@ STATIC_RUNTIME = r"""
   }
 
   function bind() {
+    adaptSnapshotControls();
     bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews();
     bindShellMenus(); bindHoverDetails(); bindAnchorReveal(); bindCrossOrigin();
   }
