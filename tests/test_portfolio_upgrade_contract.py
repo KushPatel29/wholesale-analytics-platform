@@ -99,11 +99,23 @@ def test_static_shell_menu_and_pointer_aligned_details_survive_the_freeze():
 
     assert "function bindShellMenus()" in builder
     assert "function bindHoverDetails()" in builder
-    assert "bindShellMenus(); bindHoverDetails();" in builder
+    assert "function bindAnchorReveal()" in builder
+    assert "bindShellMenus(); bindHoverDetails(); bindAnchorReveal();" in builder
     assert '[data-bs-toggle="dropdown"]' in builder
     assert '[data-bs-toggle="collapse"]' in builder
     assert "event.clientX, event.clientY" in builder
     assert ".wa-tip-runtime [data-wa-tip]::after" in builder
+    assert "body[data-static-page] .navbar-wholesale{position:relative;z-index:1040" in builder
+
+
+def test_static_overview_preserves_scope_truth_and_adapts_live_only_controls():
+    builder = _read("build_static.py")
+
+    assert "nextSelect.value = preset" in builder
+    assert "option.defaultSelected = item.selected" in builder
+    assert "Print / Save Snapshot" in builder
+    assert "#diagnosticWorkspacesDisclosure button:not([data-print-report])" in builder
+    assert "Prerendered snapshot control" in builder
 
 
 def test_static_chart_gate_requires_data_and_drawn_pixels():

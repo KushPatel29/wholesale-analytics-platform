@@ -76,6 +76,10 @@ def index():
         status=request.args.get("status"),
         owner_user_id=request.args.get("owner_user_id", type=int),
         source_module=request.args.get("source_module"),
+        priority=request.args.get("priority"),
+        attention=request.args.get("attention"),
+        q=request.args.get("q"),
+        sort=request.args.get("sort"),
     )
     return render_template(
         "decision_ops/workspace.html",
@@ -100,6 +104,7 @@ def index():
             "metric_key": request.args.get("metric_key") or "",
             "title": request.args.get("title") or "",
         },
+        assignee_choices=service.active_user_choices(),
         hide_global_filters=True,
     )
 
@@ -114,6 +119,10 @@ def actions_api():
         status=request.args.get("status"),
         owner_user_id=request.args.get("owner_user_id", type=int),
         source_module=request.args.get("source_module"),
+        priority=request.args.get("priority"),
+        attention=request.args.get("attention"),
+        q=request.args.get("q"),
+        sort=request.args.get("sort"),
     )})
 
 
@@ -132,6 +141,11 @@ def records_api(workspace: str):
         page_size=request.args.get("page_size", 25, type=int),
         status=request.args.get("status"),
         record_type=request.args.get("record_type"),
+        owner_user_id=request.args.get("owner_user_id", type=int),
+        priority=request.args.get("priority"),
+        attention=request.args.get("attention"),
+        q=request.args.get("q"),
+        sort=request.args.get("sort"),
     )})
 
 
@@ -152,7 +166,15 @@ def workspace(workspace: str):
     if not _allowed(config["permission"]):
         abort(403)
     if key == "enterprise":
-        listing = {"items": [], "summary": {"total": 0}, "page": 1, "pages": 1, "total": 0}
+        listing = {
+            "items": [],
+            "summary": {"total": 0, "status_flow": [], "exceptions": 0, "pending_approval": 0, "overdue": 0, "unassigned": 0, "critical": 0},
+            "facets": {"statuses": [], "record_types": [], "priorities": [], "owners": []},
+            "filters": {"status": "", "record_type": "", "owner_user_id": None, "priority": "", "attention": "", "q": "", "sort": "updated"},
+            "page": 1,
+            "pages": 1,
+            "total": 0,
+        }
     else:
         listing = service.list_operational_records(
             key,
@@ -160,6 +182,11 @@ def workspace(workspace: str):
             page_size=request.args.get("page_size", 25, type=int),
             status=request.args.get("status"),
             record_type=request.args.get("record_type"),
+            owner_user_id=request.args.get("owner_user_id", type=int),
+            priority=request.args.get("priority"),
+            attention=request.args.get("attention"),
+            q=request.args.get("q"),
+            sort=request.args.get("sort"),
         )
     return render_template(
         "decision_ops/workspace.html",
@@ -169,6 +196,7 @@ def workspace(workspace: str):
         source_contracts=service.source_contracts(config["source_contracts"]),
         can_manage=_allowed(config["manage_permission"]),
         planning_scenario_id=request.args.get("scenario_id", type=int),
+        assignee_choices=service.active_user_choices(),
         hide_global_filters=True,
     )
 

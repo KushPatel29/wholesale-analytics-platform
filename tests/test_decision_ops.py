@@ -147,11 +147,57 @@ def test_crm_pipeline_has_weighted_forecast_and_governed_stage_sequence(app):
         row = next(item for item in listing["items"] if item["id"] == record["id"])
         assert row["weighted_amount"] == 30000
         assert listing["summary"]["pipeline_value"] >= 100000
+        stage = next(item for item in listing["summary"]["stage_metrics"] if item["stage"] == "prospecting")
+        assert stage["count"] >= 1
+        assert stage["weighted"] >= 30000
+        detail = service.get_operational_record(record["id"])
+        assert detail["allowed_transitions"] == ["discovery", "lost"]
         with pytest.raises(service.DecisionOpsError, match="cannot move"):
             service.transition_operational_record(record["id"], "won", actor=actor)
         moved = service.transition_operational_record(record["id"], "discovery", actor=actor)
         assert moved["status"] == "discovery"
     finally:
+        _delete_records(record and record["id"])
+
+
+def test_command_ledger_filters_attention_facets_and_search(app):
+    actor = _actor(706)
+    token = uuid4().hex
+    action = record = None
+    try:
+        action = service.create_work_item({
+            "title": f"Critical overdue margin action {token}",
+            "source_module": "products",
+            "source_record_id": f"SKU-{token}",
+            "source_url": "/products/",
+            "priority": "critical",
+            "due_at": "2020-01-01T00:00:00+00:00",
+            "expected_financial_impact": 50000,
+        }, actor=actor)
+        action_view = service.list_work_items(q=token, priority="critical", attention="overdue")
+        assert [item["id"] for item in action_view["items"]] == [action["id"]]
+        assert action_view["filters"]["attention"] == "overdue"
+        assert action_view["summary"]["status_flow"]
+        assert any(option["value"] == "products" for option in action_view["facets"]["sources"])
+        action_detail = service.get_work_item(action["id"])
+        assert action_detail["allowed_transitions"] == ["planned", "pending_approval", "cancelled"]
+
+        record = service.create_operational_record({
+            "domain": "orders",
+            "record_type": "sales_order",
+            "title": f"Held order exception {token}",
+            "status": "held",
+            "priority": "high",
+            "amount": 25000,
+            "due_at": "2020-01-02T00:00:00+00:00",
+        }, actor=actor)
+        record_view = service.list_operational_records("orders", q=token, attention="exceptions", priority="high")
+        assert [item["id"] for item in record_view["items"]] == [record["id"]]
+        assert record_view["items"][0]["is_overdue"] is True
+        assert record_view["summary"]["exceptions"] >= 1
+        assert any(item["status"] == "held" for item in record_view["summary"]["status_flow"])
+    finally:
+        _delete_work_items(action and action["id"])
         _delete_records(record and record["id"])
 
 
@@ -225,6 +271,9 @@ def test_decision_ops_pages_render_one_h1_and_source_gated_empty_states(client, 
         assert body.count("<h1") == 1, path
         assert title in body, path
         assert "navbar-expand-lg" in body
+        if path != "/work/enterprise":
+            assert "Command ledger" in body
+            assert 'id="workspaceFilterForm"' in body
     assert "No operational history has been invented" in client.get("/work/orders").get_data(as_text=True)
     assert "not connected" in client.get("/work/enterprise").get_data(as_text=True).lower()
 

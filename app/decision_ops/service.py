@@ -6,12 +6,12 @@ import json
 import math
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.auth.models import SessionLocal
 from app.planning_scenario_models import PlanningReplenishmentRecommendation, PlanningScenario
@@ -47,6 +47,11 @@ ACTION_TRANSITIONS: dict[str, set[str]] = {
     "completed": set(),
     "cancelled": set(),
 }
+
+TERMINAL_RECORD_STATUSES = frozenset(
+    {"won", "lost", "paid", "closed", "completed", "cancelled", "applied", "rejected", "resolved", "void"}
+)
+ATTENTION_STATES = frozenset({"overdue", "approval", "blocked", "exceptions", "unassigned", "critical", "open", "completed"})
 
 
 WORKSPACES: dict[str, dict[str, Any]] = {
@@ -378,6 +383,60 @@ def _apply_owner_labels(session: Any, rows: Iterable[Any], items: list[dict[str,
     return items
 
 
+def _naive(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.replace(tzinfo=None) if value.tzinfo else value
+
+
+def _record_deadline(item: OperationalRecord) -> datetime | None:
+    return item.service_due_at or item.close_at or item.due_at
+
+
+def _is_record_open(item: OperationalRecord) -> bool:
+    return item.status not in TERMINAL_RECORD_STATUSES
+
+
+def _counter_options(values: Iterable[str | None], order: Iterable[str] | None = None) -> list[dict[str, Any]]:
+    counts = Counter(str(value) for value in values if value)
+    keys = [key for key in (order or ()) if counts.get(key)]
+    keys.extend(sorted(key for key in counts if key not in keys))
+    return [{"value": key, "label": key.replace("_", " ").title(), "count": counts[key]} for key in keys]
+
+
+def _owner_options(session: Any, rows: Iterable[Any]) -> list[dict[str, Any]]:
+    records = list(rows)
+    counts = Counter(int(row.owner_user_id) for row in records if getattr(row, "owner_user_id", None))
+    labels = _owner_labels(session, records)
+    return [
+        {"value": owner_id, "label": labels.get(owner_id, f"User {owner_id}"), "count": count}
+        for owner_id, count in sorted(counts.items(), key=lambda pair: (labels.get(pair[0], "").lower(), pair[0]))
+    ]
+
+
+def active_user_choices() -> list[dict[str, Any]]:
+    """Return safe assignee labels for governed create forms.
+
+    The old form asked people to type an internal numeric primary key. A
+    modern workflow should expose a named assignee while still posting the
+    stable id used by the ledger.
+    """
+    from app.auth.models import User
+
+    with SessionLocal() as session:
+        rows = (
+            session.query(User)
+            .filter(User.is_active.is_(True), User.is_approved.is_(True))
+            .order_by(User.first_name.asc(), User.last_name.asc(), User.username.asc())
+            .all()
+        )
+        choices = []
+        for user in rows:
+            full = " ".join(part for part in (user.first_name, user.last_name) if part).strip()
+            choices.append({"value": int(user.id), "label": full or user.username, "username": user.username})
+        return choices
+
+
 def _work_dict(item: WorkItem) -> dict[str, Any]:
     now = _now().replace(tzinfo=None)
     due = item.due_at.replace(tzinfo=None) if item.due_at and item.due_at.tzinfo else item.due_at
@@ -416,6 +475,10 @@ def _work_dict(item: WorkItem) -> dict[str, Any]:
 
 
 def _record_dict(item: OperationalRecord, line_count: int = 0) -> dict[str, Any]:
+    deadline = _naive(_record_deadline(item))
+    now = _now().replace(tzinfo=None)
+    quantity = float(item.quantity or 0)
+    fulfilled = float(item.fulfilled_quantity or 0)
     return {
         "id": item.id,
         "domain": item.domain,
@@ -451,6 +514,8 @@ def _record_dict(item: OperationalRecord, line_count: int = 0) -> dict[str, Any]
         "line_count": line_count,
         "created_at": _iso(item.created_at),
         "updated_at": _iso(item.updated_at),
+        "is_overdue": bool(_is_record_open(item) and deadline and deadline < now),
+        "fulfilment_pct": min(100.0, (fulfilled / quantity) * 100) if quantity > 0 else None,
     }
 
 
@@ -506,32 +571,127 @@ def create_work_item(payload: Mapping[str, Any], *, actor: Any, created_via: str
         return _work_dict(item)
 
 
-def list_work_items(*, page: int = 1, page_size: int = 25, status: str | None = None, owner_user_id: int | None = None, source_module: str | None = None) -> dict[str, Any]:
+def list_work_items(
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    status: str | None = None,
+    owner_user_id: int | None = None,
+    source_module: str | None = None,
+    priority: str | None = None,
+    attention: str | None = None,
+    q: str | None = None,
+    sort: str | None = None,
+) -> dict[str, Any]:
     page = max(1, int(page or 1))
     page_size = min(100, max(1, int(page_size or 25)))
+    status_token = str(status or "").strip().lower()
+    source_token = str(source_module or "").strip().lower()
+    priority_token = str(priority or "").strip().lower()
+    attention_token = str(attention or "").strip().lower()
+    query_token = " ".join(str(q or "").strip().split())[:160]
+    sort_token = str(sort or "due").strip().lower()
+    if priority_token not in PRIORITIES:
+        priority_token = ""
+    if attention_token not in ATTENTION_STATES:
+        attention_token = ""
+    if sort_token not in {"due", "updated", "value"}:
+        sort_token = "due"
     with SessionLocal() as session:
+        all_rows = session.query(WorkItem).all()
         query = session.query(WorkItem)
-        if status:
-            query = query.filter(WorkItem.status == str(status).strip().lower())
+        if status_token:
+            query = query.filter(WorkItem.status == status_token)
         if owner_user_id is not None:
             query = query.filter(WorkItem.owner_user_id == int(owner_user_id))
-        if source_module:
-            query = query.filter(WorkItem.source_module == str(source_module).strip().lower())
-        total = query.count()
-        rows = query.order_by(WorkItem.due_at.is_(None), WorkItem.due_at.asc(), WorkItem.updated_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-        all_open = session.query(WorkItem).filter(~WorkItem.status.in_(("completed", "cancelled"))).all()
+        if source_token:
+            query = query.filter(WorkItem.source_module == source_token)
+        if priority_token:
+            query = query.filter(WorkItem.priority == priority_token)
+        if query_token:
+            pattern = f"%{query_token}%"
+            query = query.filter(or_(
+                WorkItem.title.ilike(pattern),
+                WorkItem.description.ilike(pattern),
+                WorkItem.source_record_id.ilike(pattern),
+                WorkItem.metric_key.ilike(pattern),
+            ))
         now = _now().replace(tzinfo=None)
-        overdue = sum(1 for row in all_open if row.due_at and (row.due_at.replace(tzinfo=None) if row.due_at.tzinfo else row.due_at) < now)
+        if attention_token == "overdue":
+            query = query.filter(~WorkItem.status.in_(("completed", "cancelled")), WorkItem.due_at.is_not(None), WorkItem.due_at < now)
+        elif attention_token == "approval":
+            query = query.filter(WorkItem.status == "pending_approval")
+        elif attention_token in {"blocked", "exceptions"}:
+            query = query.filter(WorkItem.status == "blocked")
+        elif attention_token == "unassigned":
+            query = query.filter(~WorkItem.status.in_(("completed", "cancelled")), WorkItem.owner_user_id.is_(None))
+        elif attention_token == "critical":
+            query = query.filter(~WorkItem.status.in_(("completed", "cancelled")), WorkItem.priority == "critical")
+        elif attention_token == "open":
+            query = query.filter(~WorkItem.status.in_(("completed", "cancelled")))
+        elif attention_token == "completed":
+            query = query.filter(WorkItem.status == "completed")
+        total = query.count()
+        if sort_token == "value":
+            order_by = (WorkItem.expected_financial_impact.desc(), WorkItem.updated_at.desc())
+        elif sort_token == "updated":
+            order_by = (WorkItem.updated_at.desc(), WorkItem.id.desc())
+        else:
+            order_by = (WorkItem.due_at.is_(None), WorkItem.due_at.asc(), WorkItem.updated_at.desc())
+        rows = query.order_by(*order_by).offset((page - 1) * page_size).limit(page_size).all()
+        all_open = [row for row in all_rows if row.status not in {"completed", "cancelled"}]
+        overdue = sum(1 for row in all_open if _naive(row.due_at) and _naive(row.due_at) < now)
+        due_soon_cutoff = now + timedelta(days=7)
+        expected_total = sum(float(row.expected_financial_impact or 0) for row in all_rows if row.status != "cancelled")
+        realized_total = sum(float(row.realized_financial_impact or 0) for row in all_rows)
+        status_counts = Counter(row.status for row in all_rows)
         summary = {
             "open": len(all_open),
             "overdue": overdue,
             "pending_approval": sum(1 for row in all_open if row.status == "pending_approval"),
             "blocked": sum(1 for row in all_open if row.status == "blocked"),
             "expected_impact": sum(float(row.expected_financial_impact or 0) for row in all_open),
-            "realized_impact": float(session.query(func.coalesce(func.sum(WorkItem.realized_financial_impact), 0)).scalar() or 0),
+            "realized_impact": realized_total,
+            "unassigned": sum(1 for row in all_open if not row.owner_user_id),
+            "critical": sum(1 for row in all_open if row.priority == "critical"),
+            "due_soon": sum(1 for row in all_open if _naive(row.due_at) and now <= _naive(row.due_at) <= due_soon_cutoff),
+            "completion_rate": (status_counts.get("completed", 0) / len(all_rows)) if all_rows else None,
+            "realization_rate": (realized_total / expected_total) if expected_total else None,
+            "status_flow": [
+                {
+                    "status": state,
+                    "count": status_counts.get(state, 0),
+                    "impact": sum(float(row.expected_financial_impact or 0) for row in all_rows if row.status == state),
+                }
+                for state in ACTION_STATUSES
+                if status_counts.get(state, 0)
+            ],
         }
         items = _apply_owner_labels(session, rows, [_work_dict(row) for row in rows])
-        return {"items": items, "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
+        facets = {
+            "statuses": _counter_options((row.status for row in all_rows), ACTION_STATUSES),
+            "priorities": _counter_options((row.priority for row in all_rows), PRIORITIES),
+            "sources": _counter_options(row.source_module for row in all_rows),
+            "owners": _owner_options(session, all_rows),
+        }
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "pages": max(1, math.ceil(total / page_size)),
+            "summary": summary,
+            "facets": facets,
+            "filters": {
+                "status": status_token,
+                "owner_user_id": owner_user_id,
+                "source_module": source_token,
+                "priority": priority_token,
+                "attention": attention_token,
+                "q": query_token,
+                "sort": sort_token,
+            },
+        }
 
 
 def get_work_item(work_item_id: int) -> dict[str, Any] | None:
@@ -541,6 +701,8 @@ def get_work_item(work_item_id: int) -> dict[str, Any] | None:
             return None
         out = _work_dict(item)
         _apply_owner_labels(session, [item], [out])
+        allowed = ACTION_TRANSITIONS.get(item.status, set())
+        out["allowed_transitions"] = [state for state in ACTION_STATUSES if state in allowed]
         out["events"] = [{"id": row.id, "event_type": row.event_type, "from_status": row.from_status, "to_status": row.to_status, "actor_user_id": row.actor_user_id, "payload": _loads(row.payload_json, {}), "created_at": _iso(row.created_at)} for row in session.query(WorkItemEvent).filter_by(work_item_id=item.id).order_by(WorkItemEvent.created_at.asc(), WorkItemEvent.id.asc()).all()]
         out["comments"] = [{"id": row.id, "body": row.body, "author_user_id": row.author_user_id, "created_at": _iso(row.created_at)} for row in session.query(WorkItemComment).filter_by(work_item_id=item.id).order_by(WorkItemComment.created_at.asc()).all()]
         out["attachments"] = [{"id": row.id, "display_name": row.display_name, "uri": row.uri, "content_type": row.content_type, "checksum": row.checksum, "created_at": _iso(row.created_at)} for row in session.query(WorkItemAttachment).filter_by(work_item_id=item.id).order_by(WorkItemAttachment.created_at.asc()).all()]
@@ -729,26 +891,118 @@ def create_operational_record(payload: Mapping[str, Any], *, actor: Any, expecte
         return _record_dict(record, len(lines))
 
 
-def list_operational_records(domain: str, *, page: int = 1, page_size: int = 25, status: str | None = None, record_type: str | None = None) -> dict[str, Any]:
+def list_operational_records(
+    domain: str,
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    status: str | None = None,
+    record_type: str | None = None,
+    owner_user_id: int | None = None,
+    priority: str | None = None,
+    attention: str | None = None,
+    q: str | None = None,
+    sort: str | None = None,
+) -> dict[str, Any]:
     domain = str(domain or "").strip().lower()
     if domain not in WORKSPACES or domain == "enterprise":
         raise DecisionOpsError("Operational domain is invalid.")
     page = max(1, int(page or 1))
     page_size = min(100, max(1, int(page_size or 25)))
+    status_token = str(status or "").strip().lower()
+    type_token = str(record_type or "").strip().lower()
+    priority_token = str(priority or "").strip().lower()
+    attention_token = str(attention or "").strip().lower()
+    query_token = " ".join(str(q or "").strip().split())[:160]
+    sort_token = str(sort or "updated").strip().lower()
+    if priority_token not in PRIORITIES:
+        priority_token = ""
+    if attention_token not in ATTENTION_STATES:
+        attention_token = ""
+    if sort_token not in {"updated", "due", "value"}:
+        sort_token = "updated"
     with SessionLocal() as session:
+        all_rows = session.query(OperationalRecord).filter_by(domain=domain).all()
         query = session.query(OperationalRecord).filter_by(domain=domain)
-        if status:
-            query = query.filter(OperationalRecord.status == str(status).strip().lower())
-        if record_type:
-            query = query.filter(OperationalRecord.record_type == str(record_type).strip().lower())
+        if status_token:
+            query = query.filter(OperationalRecord.status == status_token)
+        if type_token:
+            query = query.filter(OperationalRecord.record_type == type_token)
+        if owner_user_id is not None:
+            query = query.filter(OperationalRecord.owner_user_id == int(owner_user_id))
+        if priority_token:
+            query = query.filter(OperationalRecord.priority == priority_token)
+        if query_token:
+            pattern = f"%{query_token}%"
+            query = query.filter(or_(
+                OperationalRecord.title.ilike(pattern),
+                OperationalRecord.description.ilike(pattern),
+                OperationalRecord.record_number.ilike(pattern),
+                OperationalRecord.account_ref.ilike(pattern),
+                OperationalRecord.supplier_ref.ilike(pattern),
+                OperationalRecord.product_ref.ilike(pattern),
+                OperationalRecord.source_record_id.ilike(pattern),
+            ))
+        now = _now().replace(tzinfo=None)
+        open_statuses = tuple(state for state in WORKSPACES[domain]["statuses"] if state not in TERMINAL_RECORD_STATUSES)
+        if attention_token == "overdue":
+            query = query.filter(
+                OperationalRecord.status.in_(open_statuses),
+                or_(
+                    OperationalRecord.service_due_at < now,
+                    OperationalRecord.close_at < now,
+                    OperationalRecord.due_at < now,
+                ),
+            )
+        elif attention_token in {"approval"}:
+            query = query.filter(OperationalRecord.status == "pending_approval")
+        elif attention_token in {"exceptions", "blocked"}:
+            query = query.filter(OperationalRecord.status.in_(("exception", "held", "escalated")))
+        elif attention_token == "unassigned":
+            query = query.filter(OperationalRecord.status.in_(open_statuses), OperationalRecord.owner_user_id.is_(None))
+        elif attention_token == "critical":
+            query = query.filter(OperationalRecord.status.in_(open_statuses), OperationalRecord.priority == "critical")
+        elif attention_token == "open":
+            query = query.filter(OperationalRecord.status.in_(open_statuses))
+        elif attention_token == "completed":
+            query = query.filter(OperationalRecord.status.in_(tuple(TERMINAL_RECORD_STATUSES)))
         total = query.count()
-        rows = query.order_by(OperationalRecord.updated_at.desc(), OperationalRecord.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        if sort_token == "value":
+            order_by = (OperationalRecord.amount.desc(), OperationalRecord.updated_at.desc())
+        elif sort_token == "due":
+            deadline = func.coalesce(OperationalRecord.service_due_at, OperationalRecord.close_at, OperationalRecord.due_at)
+            order_by = (deadline.is_(None), deadline.asc(), OperationalRecord.updated_at.desc())
+        else:
+            order_by = (OperationalRecord.updated_at.desc(), OperationalRecord.id.desc())
+        rows = query.order_by(*order_by).offset((page - 1) * page_size).limit(page_size).all()
         ids = [row.id for row in rows]
         line_counts = dict(session.query(OperationalRecordLine.operational_record_id, func.count(OperationalRecordLine.id)).filter(OperationalRecordLine.operational_record_id.in_(ids)).group_by(OperationalRecordLine.operational_record_id).all()) if ids else {}
-        all_rows = session.query(OperationalRecord).filter_by(domain=domain).all()
         summary = _operational_summary(domain, all_rows)
         items = _apply_owner_labels(session, rows, [_record_dict(row, int(line_counts.get(row.id, 0))) for row in rows])
-        return {"items": items, "page": page, "page_size": page_size, "total": total, "pages": max(1, math.ceil(total / page_size)), "summary": summary}
+        facets = {
+            "statuses": _counter_options((row.status for row in all_rows), WORKSPACES[domain]["statuses"]),
+            "record_types": _counter_options((row.record_type for row in all_rows), WORKSPACES[domain]["record_types"]),
+            "priorities": _counter_options((row.priority for row in all_rows), PRIORITIES),
+            "owners": _owner_options(session, all_rows),
+        }
+        return {
+            "items": items,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "pages": max(1, math.ceil(total / page_size)),
+            "summary": summary,
+            "facets": facets,
+            "filters": {
+                "status": status_token,
+                "record_type": type_token,
+                "owner_user_id": owner_user_id,
+                "priority": priority_token,
+                "attention": attention_token,
+                "q": query_token,
+                "sort": sort_token,
+            },
+        }
 
 
 def get_operational_record(record_id: int) -> dict[str, Any] | None:
@@ -759,6 +1013,8 @@ def get_operational_record(record_id: int) -> dict[str, Any] | None:
         lines = session.query(OperationalRecordLine).filter_by(operational_record_id=record.id).order_by(OperationalRecordLine.line_number.asc()).all()
         out = _record_dict(record, len(lines))
         _apply_owner_labels(session, [record], [out])
+        allowed = DOMAIN_TRANSITIONS.get(record.domain, {}).get(record.status, set())
+        out["allowed_transitions"] = [state for state in WORKSPACES[record.domain]["statuses"] if state in allowed]
         out["lines"] = [{
             "id": row.id,
             "line_number": row.line_number,
@@ -785,7 +1041,32 @@ def get_operational_record(record_id: int) -> dict[str, Any] | None:
 def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict[str, Any]:
     records = list(rows)
     statuses = Counter(row.status for row in records)
-    summary: dict[str, Any] = {"total": len(records), "exceptions": statuses.get("exception", 0) + statuses.get("held", 0) + statuses.get("escalated", 0), "pending_approval": statuses.get("pending_approval", 0)}
+    now = _now().replace(tzinfo=None)
+    due_soon_cutoff = now + timedelta(days=7)
+    open_rows_common = [row for row in records if _is_record_open(row)]
+    summary: dict[str, Any] = {
+        "total": len(records),
+        "exceptions": statuses.get("exception", 0) + statuses.get("held", 0) + statuses.get("escalated", 0),
+        "pending_approval": statuses.get("pending_approval", 0),
+        "unassigned": sum(1 for row in open_rows_common if not row.owner_user_id),
+        "critical": sum(1 for row in open_rows_common if row.priority == "critical"),
+        "overdue": sum(1 for row in open_rows_common if _naive(_record_deadline(row)) and _naive(_record_deadline(row)) < now),
+        "due_soon": sum(
+            1
+            for row in open_rows_common
+            if _naive(_record_deadline(row)) and now <= _naive(_record_deadline(row)) <= due_soon_cutoff
+        ),
+        "open_value": sum(float(row.amount or 0) for row in open_rows_common),
+        "status_flow": [
+            {
+                "status": state,
+                "count": statuses.get(state, 0),
+                "value": sum(float(row.amount or 0) for row in records if row.status == state),
+            }
+            for state in WORKSPACES[domain]["statuses"]
+            if statuses.get(state, 0)
+        ],
+    }
     if domain == "crm":
         opportunities = [row for row in records if row.record_type == "opportunity"]
         open_rows = [row for row in opportunities if row.status not in {"won", "lost"}]
@@ -801,6 +1082,33 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
             "new_logo_pipeline": sum(float(row.amount or 0) for row in open_rows if _loads(row.metadata_json, {}).get("motion") == "new_logo"),
             "expansion_pipeline": sum(float(row.amount or 0) for row in open_rows if _loads(row.metadata_json, {}).get("motion") == "expansion"),
             "average_deal_size": (sum(float(row.amount or 0) for row in opportunities if row.status == "won") / won) if won else None,
+            "at_risk_pipeline": sum(
+                float(row.amount or 0)
+                for row in open_rows
+                if not row.next_step or (_naive(row.close_at) and _naive(row.close_at) < now)
+            ),
+            "stage_metrics": [
+                {
+                    "stage": stage,
+                    "count": sum(1 for row in opportunities if row.status == stage),
+                    "value": sum(float(row.amount or 0) for row in opportunities if row.status == stage),
+                    "weighted": sum(
+                        float(row.amount or 0) * float(row.probability_pct or 0) / 100
+                        for row in opportunities
+                        if row.status == stage
+                    ),
+                    "stalled": sum(1 for row in opportunities if row.status == stage and not row.next_step),
+                }
+                for stage in WORKSPACES[domain]["pipeline_stages"]
+            ],
+            "forecast_mix": [
+                {
+                    "category": category,
+                    "count": sum(1 for row in open_rows if (row.forecast_category or "pipeline") == category),
+                    "value": sum(float(row.amount or 0) for row in open_rows if (row.forecast_category or "pipeline") == category),
+                }
+                for category in ("pipeline", "best_case", "commit")
+            ],
         })
     elif domain == "orders":
         orders = [row for row in records if row.record_type == "sales_order"]
@@ -832,7 +1140,6 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
         summary.update({"open_proposals": sum(1 for row in records if row.record_type == "reorder_proposal" and row.status not in {"completed", "cancelled"}), "adjustments_pending": sum(1 for row in records if row.record_type == "adjustment" and row.status == "pending_approval")})
     elif domain == "service":
         cases = [row for row in records if row.record_type == "case"]
-        now = _now().replace(tzinfo=None)
         summary.update({"open_cases": sum(1 for row in cases if row.status not in {"resolved", "closed"}), "sla_at_risk": sum(1 for row in cases if row.service_due_at and (row.service_due_at.replace(tzinfo=None) if row.service_due_at.tzinfo else row.service_due_at) < now and row.status not in {"resolved", "closed"}), "reopened": sum(1 for row in cases if row.status == "reopened")})
         scores = [float(_loads(row.metadata_json, {}).get("csat")) for row in cases if _loads(row.metadata_json, {}).get("csat") is not None]
         summary["csat"] = (sum(scores) / len(scores)) if scores else None

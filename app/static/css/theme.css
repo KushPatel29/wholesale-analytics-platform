@@ -5622,6 +5622,10 @@ body.theme-wa-future .auth-demo__hint {
 /* ---- chrome -------------------------------------------------------------- */
 .navbar-wholesale,
 body.theme-wa-future .navbar-wholesale {
+  position: relative;
+  z-index: 1040;
+  overflow: visible;
+  isolation: isolate;
   background: var(--wa-canvas-deep);
   border-bottom: 1px solid var(--wa-hairline);
   box-shadow: none;

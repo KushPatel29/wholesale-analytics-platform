@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ workspace.label }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260825-4') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260826-command-ledger-2') }}">{% endblock %}
 {% block content %}
 {% set module_codes = {'actions':'ACT','crm':'CRM','orders':'OTC','procurement':'P2P','finance':'R2R','inventory':'INV','master-data':'MDM','service':'SVC','enterprise':'ENT'} %}
 <div class="decision-shell decision-shell--{{ workspace_key }}" data-workspace="{{ workspace_key }}">
@@ -27,6 +27,8 @@
     {% include "decision_ops/_nav.html" %}
     <div class="decision-board">
       {% set summary = listing.summary %}
+      {% set filters = listing.filters %}
+      {% set facets = listing.facets %}
       <div class="decision-section-label"><span>Workspace pulse</span><small>Current governed state</small></div>
       <section class="decision-ledger" aria-label="Workspace summary">
         {% if workspace_key == 'actions' %}
@@ -75,17 +77,98 @@
         {% endif %}
       </section>
 
+      {% if workspace_key != 'enterprise' %}
+      <section class="decision-command" aria-labelledby="command-heading">
+        <div class="decision-command__head">
+          <div>
+            <span class="decision-panel__kicker">Command ledger</span>
+            <h2 id="command-heading">Find, focus, and clear the next exception</h2>
+          </div>
+          <div class="decision-command__result"><strong>{{ listing.total }}</strong><span>{{ 'result' if listing.total == 1 else 'results' }}</span></div>
+        </div>
+        <form class="decision-command__form" id="workspaceFilterForm" method="get">
+          {% if filters.attention %}<input type="hidden" name="attention" value="{{ filters.attention }}">{% endif %}
+          <div class="decision-command__search">
+            <label for="workspaceSearch">Search ledger</label>
+            <input class="form-control" id="workspaceSearch" name="q" type="search" value="{{ filters.q }}" maxlength="160" placeholder="Title, record, account, supplier, metric…">
+          </div>
+          <div>
+            <label for="workspaceStatus">Status</label>
+            <select class="form-select" id="workspaceStatus" name="status"><option value="">All statuses</option>{% for option in facets.statuses %}<option value="{{ option.value }}" {% if filters.status == option.value %}selected{% endif %}>{{ option.label }} · {{ option.count }}</option>{% endfor %}</select>
+          </div>
+          <div>
+            <label for="workspaceType">{{ 'Source' if workspace_key == 'actions' else 'Record type' }}</label>
+            <select class="form-select" id="workspaceType" name="{{ 'source_module' if workspace_key == 'actions' else 'record_type' }}"><option value="">All {{ 'sources' if workspace_key == 'actions' else 'types' }}</option>{% for option in (facets.sources if workspace_key == 'actions' else facets.record_types) %}<option value="{{ option.value }}" {% if (filters.source_module if workspace_key == 'actions' else filters.record_type) == option.value %}selected{% endif %}>{{ option.label }} · {{ option.count }}</option>{% endfor %}</select>
+          </div>
+          <div>
+            <label for="workspaceOwner">Owner</label>
+            <select class="form-select" id="workspaceOwner" name="owner_user_id"><option value="">All owners</option>{% for option in facets.owners %}<option value="{{ option.value }}" {% if filters.owner_user_id == option.value %}selected{% endif %}>{{ option.label }} · {{ option.count }}</option>{% endfor %}</select>
+          </div>
+          <div>
+            <label for="workspacePriority">Priority</label>
+            <select class="form-select" id="workspacePriority" name="priority"><option value="">All priorities</option>{% for option in facets.priorities %}<option value="{{ option.value }}" {% if filters.priority == option.value %}selected{% endif %}>{{ option.label }} · {{ option.count }}</option>{% endfor %}</select>
+          </div>
+          <div>
+            <label for="workspaceSort">Sort</label>
+            <select class="form-select" id="workspaceSort" name="sort"><option value="updated" {% if filters.sort == 'updated' %}selected{% endif %}>Recently updated</option><option value="due" {% if filters.sort == 'due' %}selected{% endif %}>Due first</option><option value="value" {% if filters.sort == 'value' %}selected{% endif %}>Highest value</option></select>
+          </div>
+          <div class="decision-command__actions">
+            <button class="btn btn-primary" type="submit">Apply view</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('decision_ops.index') if workspace_key == 'actions' else url_for('decision_ops.workspace', workspace=workspace_key) }}">Reset</a>
+          </div>
+        </form>
+        <nav class="decision-quick-filters" aria-label="Attention views">
+          {% set attention_views = [('open', summary.open if workspace_key == 'actions' else (summary.total - (summary.status_flow|selectattr('status', 'in', ['completed','cancelled','closed','won','lost','paid','applied','rejected','resolved','void'])|map(attribute='count')|sum))), ('overdue', summary.overdue), ('approval', summary.pending_approval), ('exceptions', summary.blocked if workspace_key == 'actions' else summary.exceptions), ('critical', summary.critical), ('unassigned', summary.unassigned)] %}
+          {% for key, count in attention_views %}
+          <a href="{{ url_for('decision_ops.index', attention=key) if workspace_key == 'actions' else url_for('decision_ops.workspace', workspace=workspace_key, attention=key) }}" {% if filters.attention == key %}aria-current="page"{% endif %}><span>{{ key|replace('_',' ')|title }}</span><b>{{ count or 0 }}</b></a>
+          {% endfor %}
+        </nav>
+      </section>
+
+      {% if summary.status_flow %}
+      <section class="decision-panel decision-flow-panel" aria-labelledby="flow-heading">
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Lifecycle telemetry</span><h2 id="flow-heading">{{ 'Action execution flow' if workspace_key == 'actions' else 'Operational process flow' }}</h2></div><span class="decision-badge">Live counts</span></div>
+        <div class="decision-flow" role="list" aria-label="Lifecycle status counts">
+          {% for state in summary.status_flow %}
+          <a role="listitem" href="{{ url_for('decision_ops.index', status=state.status) if workspace_key == 'actions' else url_for('decision_ops.workspace', workspace=workspace_key, status=state.status) }}" data-state="{{ state.status }}">
+            <span class="decision-flow__index">{{ '%02d'|format(loop.index) }}</span>
+            <strong>{{ state.status|replace('_',' ')|title }}</strong>
+            <b>{{ state.count }}</b>
+            {% set state_value = state.impact if workspace_key == 'actions' else state.value %}
+            {% if state_value %}<small>${{ '{:,.0f}'.format(state_value) }}</small>{% else %}<small>governed state</small>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      {% endif %}
+
       {% if workspace_key == 'crm' %}
+      <section class="decision-crm-intel" aria-label="Revenue intelligence">
+        <div class="decision-crm-intel__forecast">
+          <div class="decision-crm-intel__head"><span class="decision-panel__kicker">Forecast posture</span><strong>Category mix</strong></div>
+          {% for bucket in summary.forecast_mix %}
+          <div><span>{{ bucket.category|replace('_',' ')|title }}</span><strong>${{ '{:,.0f}'.format(bucket.value) }}</strong><small>{{ bucket.count }} opportunities</small></div>
+          {% endfor %}
+        </div>
+        <div class="decision-crm-intel__hygiene">
+          <span class="decision-panel__kicker">Pipeline hygiene</span>
+          <strong>${{ '{:,.0f}'.format(summary.at_risk_pipeline or 0) }}</strong>
+          <p>Open value with a missing next step or a past close date.</p>
+          <div><span>Next-step complete</span><b>{{ '{:.0%}'.format(summary.next_step_completeness) if summary.next_step_completeness is not none else '—' }}</b></div>
+          <div><span>Average won deal</span><b>${{ '{:,.0f}'.format(summary.average_deal_size or 0) }}</b></div>
+        </div>
+      </section>
       <section class="decision-panel" aria-labelledby="pipeline-heading">
         <div class="decision-panel__head"><div><span class="decision-panel__kicker">Revenue control</span><h2 id="pipeline-heading">Opportunity stage board</h2></div><span class="decision-badge">Forecast categories retained</span></div>
         <div class="decision-panel__body decision-pipeline">
-          {% for stage in workspace.pipeline_stages %}
-          {% set stage_total = listing['items']|selectattr('record_type', 'equalto', 'opportunity')|selectattr('status', 'equalto', stage)|list|length %}
-          <div class="decision-pipeline__stage" data-stage="{{ stage }}">
-            <h3><span>{{ stage|replace('_', ' ') }}</span><b>{{ stage_total }}</b></h3>
-            {% for row in listing['items'] if row.record_type == 'opportunity' and row.status == stage %}
+          {% for stage in summary.stage_metrics %}
+          <div class="decision-pipeline__stage" data-stage="{{ stage.stage }}">
+            <h3><span>{{ stage.stage|replace('_', ' ') }}</span><b>{{ stage.count }}</b></h3>
+            <div class="decision-pipeline__measure"><strong>${{ '{:,.0f}'.format(stage.value) }}</strong><span>${{ '{:,.0f}'.format(stage.weighted) }} weighted{% if stage.stalled %} · {{ stage.stalled }} stalled{% endif %}</span></div>
+            {% for row in listing['items'] if row.record_type == 'opportunity' and row.status == stage.stage %}
             <a class="decision-pipeline__card" href="{{ url_for('decision_ops.record_detail', record_id=row.id) }}"><strong>{{ row.title }}</strong><span>{{ row.currency }} {{ '{:,.0f}'.format(row.amount or 0) }} · {{ row.probability_pct or 0 }}%</span></a>
-            {% else %}<span class="decision-ledger__note">No opportunities</span>{% endfor %}
+            {% else %}<span class="decision-ledger__note">No opportunities in this page view</span>{% endfor %}
           </div>
           {% endfor %}
         </div>
@@ -95,7 +178,7 @@
       <section class="decision-panel" aria-labelledby="queue-heading">
         <div class="decision-panel__head">
           <div><span class="decision-panel__kicker">{{ 'Execution control' if workspace_key == 'actions' else 'System of record' }}</span><h2 id="queue-heading">{{ 'Accountable action queue' if workspace_key == 'actions' else 'Operational record ledger' }}</h2></div>
-          <span class="decision-badge">{{ listing.total }} total</span>
+          <span class="decision-badge">{{ listing.total }} matching · page {{ listing.page }}/{{ listing.pages }}</span>
         </div>
         <div class="decision-panel__body">
           {% if listing['items'] %}
@@ -105,20 +188,23 @@
                cells so a row reads as "Status: held" rather than as six loose
                values. #}
             <caption class="visually-hidden">{{ workspace.label }} records — {{ listing['total'] }} total, showing page {{ listing['page'] }} of {{ listing['pages'] }}.</caption>
-            <thead><tr><th scope="col">Record</th><th scope="col">Type / source</th><th scope="col">Status</th><th scope="col">Owner</th><th scope="col">Due / close</th><th scope="col">Value</th></tr></thead>
+            <thead><tr><th scope="col">Record</th><th scope="col">Type / source</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Owner</th><th scope="col">Business context</th><th scope="col">Due / close</th><th scope="col">Value</th></tr></thead>
             <tbody>
             {% for row in listing['items'] %}
               <tr>
                 <td><a href="{{ url_for('decision_ops.action_detail', work_item_id=row.id) if workspace_key == 'actions' else url_for('decision_ops.record_detail', record_id=row.id) }}">{{ row.title }}</a><div class="decision-ledger__note">{{ ('Action #' ~ row.id) if workspace_key == 'actions' else row.record_number }}</div></td>
                 <td>{{ row.source_module if workspace_key == 'actions' else row.record_type|replace('_', ' ') }}{% if row.source_record_id %}<div class="decision-ledger__note">{{ row.source_record_id }}</div>{% endif %}</td>
                 <td><span class="decision-badge {% if row.is_overdue %}decision-badge--risk{% endif %}">{{ row.status|replace('_', ' ') }}</span></td>
+                <td><span class="decision-priority decision-priority--{{ row.priority }}">{{ row.priority }}</span></td>
                 <td>{{ row.owner_name or row.owner_user_id or 'Unassigned' }}</td>
+                <td>{% if workspace_key == 'actions' %}{{ row.metric_label or row.metric_key or 'Certified source signal' }}{% else %}{{ row.account_ref or row.supplier_ref or row.product_ref or row.location_ref or 'Enterprise scope' }}{% endif %}{% if workspace_key != 'actions' and row.line_count %}<div class="decision-ledger__note">{{ row.line_count }} lines{% if row.fulfilment_pct is not none %} · {{ '{:.0f}%'.format(row.fulfilment_pct) }} fulfilled{% endif %}</div>{% endif %}</td>
                 <td>{{ (row.due_at or row.close_at or row.service_due_at or '—')|string|truncate(16, true, '') }}</td>
                 <td>{% set value = row.expected_financial_impact if workspace_key == 'actions' else row.amount %}{% if value is not none %}{{ row.currency }} {{ '{:,.0f}'.format(value) }}{% else %}—{% endif %}</td>
               </tr>
             {% endfor %}
             </tbody>
           </table>
+          {% if listing.pages > 1 %}<div class="decision-pagination" aria-label="Ledger pages"><button class="btn btn-outline-secondary btn-sm" type="submit" name="page" value="{{ listing.page - 1 }}" form="workspaceFilterForm" {% if listing.page <= 1 %}disabled{% endif %}>← Previous</button><span>Page {{ listing.page }} of {{ listing.pages }}</span><button class="btn btn-outline-secondary btn-sm" type="submit" name="page" value="{{ listing.page + 1 }}" form="workspaceFilterForm" {% if listing.page >= listing.pages %}disabled{% endif %}>Next →</button></div>{% endif %}
           {% else %}
           <div class="decision-empty"><span class="decision-empty__mark" aria-hidden="true">◇</span><div class="decision-empty__copy"><span class="decision-panel__kicker">Awaiting first event</span><strong>No operational history has been invented.</strong><p>{{ 'Create the first draft action from a certified signal.' if workspace_key == 'actions' else 'Create a native workflow record, or connect the source contract below for system-of-record events.' }}</p>{% if can_manage %}<a class="decision-empty__action" href="#create-heading">Create governed draft <span aria-hidden="true">↓</span></a>{% else %}<small>Write controls are permission-gated for this account.</small>{% endif %}</div></div>
           {% endif %}
@@ -159,7 +245,7 @@
               <div><label for="nextStep">Next step</label><input class="form-control" id="nextStep" name="next_step" maxlength="240"></div>
               {% endif %}
               {% endif %}
-              <div><label for="ownerUser">Owner user ID</label><input class="form-control" id="ownerUser" name="owner_user_id" type="number" min="1"></div>
+              <div><label for="ownerUser">Owner</label><select class="form-select" id="ownerUser" name="owner_user_id"><option value="">Unassigned</option>{% for user in assignee_choices %}<option value="{{ user.value }}">{{ user.label }}{% if user.username != user.label %} · {{ user.username }}{% endif %}</option>{% endfor %}</select></div>
               <div><label for="priorityValue">Priority</label><select class="form-select" id="priorityValue" name="priority">{% for priority in ['low','medium','high','critical'] %}<option value="{{ priority }}" {% if priority == 'medium' %}selected{% endif %}>{{ priority|title }}</option>{% endfor %}</select></div>
               <div><label for="dueValue">Due / close</label><input class="form-control" id="dueValue" name="{{ 'due_at' if workspace_key == 'actions' else 'close_at' }}" type="datetime-local"></div>
               {% if workspace_key == 'actions' %}<div><label for="expectedImpact">Expected financial impact</label><input class="form-control" id="expectedImpact" name="expected_financial_impact" inputmode="decimal"></div>{% endif %}

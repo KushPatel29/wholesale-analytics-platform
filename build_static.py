@@ -388,6 +388,14 @@ STATIC_RUNTIME = r"""
           current.outerHTML = payload.main.replaceAll("__STATIC_ROOT__/", String(config().siteRoot || ""));
           document.title = payload.title || document.title;
           document.body.dataset.staticPreset = preset;
+          /* `option.selected = true` is a live DOM property and is not
+             guaranteed to survive serialising `main.outerHTML` into the
+             fragment JSON. The data changed while the replacement select
+             jumped back to "Current FY", so the control reported a different
+             scope from the figures underneath it. Reassert the requested
+             value on the newly inserted control before it is rebound. */
+          var nextSelect = document.querySelector("[data-static-preset]");
+          if (nextSelect) { nextSelect.value = preset; nextSelect.disabled = false; }
           history.replaceState({}, "", payload.path || location.pathname);
           bind();
         }).catch(function () {
@@ -615,6 +623,26 @@ STATIC_RUNTIME = r"""
     });
   }
 
+  /* An in-page target can live inside one or more closed <details> elements.
+     Native fragment navigation does not open those ancestors, so the Overview
+     "Open trust center" links changed the URL and appeared to do nothing. */
+  function bindAnchorReveal() {
+    if (document.documentElement.dataset.staticAnchorRevealBound === "1") return;
+    document.documentElement.dataset.staticAnchorRevealBound = "1";
+    document.addEventListener("click", function (event) {
+      var anchor = event.target.closest && event.target.closest('a[href^="#"]');
+      if (!anchor) return;
+      var id = decodeURIComponent(String(anchor.getAttribute("href") || "").slice(1));
+      var target = id && document.getElementById(id);
+      if (!target) return;
+      var details = target.closest("details");
+      while (details) {
+        details.open = true;
+        details = details.parentElement && details.parentElement.closest("details");
+      }
+    }, true);
+  }
+
   /* The planner ships a View control - Everything, Demand only, Supply only,
      Just what to do, Choose sections - and on a frozen page it did nothing at
      all. A reviewer picks "Demand only", the page does not move, and the
@@ -692,6 +720,8 @@ STATIC_RUNTIME = r"""
      so without this a visitor reading in Light arrives in Dark and the flip is
      the only sign they crossed a boundary at all. */
   function bindCrossOrigin() {
+    if (document.documentElement.dataset.staticCrossOriginBound === "1") return;
+    document.documentElement.dataset.staticCrossOriginBound = "1";
     document.addEventListener("click", function (event) {
       var link = event.target.closest && event.target.closest("a[href]");
       if (!link) return;
@@ -709,7 +739,7 @@ STATIC_RUNTIME = r"""
 
   function bind() {
     bindTabs(); bindPreset(); bindTheme(); bindPrint(); bindReportViews();
-    bindShellMenus(); bindHoverDetails(); bindCrossOrigin();
+    bindShellMenus(); bindHoverDetails(); bindAnchorReveal(); bindCrossOrigin();
   }
   bind();
 })();
@@ -1075,6 +1105,10 @@ STATIC_CRITICAL_CSS = """
   white-space:pre-line;text-transform:none;box-shadow:0 14px 32px rgba(2,6,23,.34);pointer-events:none}
 .wa-hover-detail[hidden]{display:none}
 body[data-static-page] .navbar .dropdown-menu.show{display:block;z-index:1080}
+/* The menu itself had z-index, but its navbar stacking context did not. Main
+   cards painted above the open menu and received its clicks. Lift the shell,
+   not individual menu items, so every desktop dropdown remains selectable. */
+body[data-static-page] .navbar-wholesale{position:relative;z-index:1040;overflow:visible;isolation:isolate}
 /* A card that clips its overflow clips the label with it. Only the cards that
    scroll a wide table need to clip, and `:has()` is how we tell them apart -
    the planner puts a 640px scorecard and a chart inside the same class. Where
@@ -2185,6 +2219,40 @@ class Builder:
                       el.removeAttribute('aria-label');
                     });
                   }
+                  /* The Overview snapshot keeps the chosen result, but its
+                     live API controls cannot recompute after scripts and
+                     payloads are removed. Leave no dead affordances: exports
+                     become a working Print/Save snapshot action and the
+                     recompute-only controls say explicitly that this is the
+                     frozen view. The preset selector above remains live. */
+                  if (document.getElementById('overviewPage')) {
+                    const printLabels = {
+                      downloadSnapshotBtn: 'Print / Save Snapshot',
+                      exportDataHealthBtn: 'Print Data Trust',
+                      moversExportBtn: 'Print Movers',
+                      driversExportBtn: 'Print Drivers',
+                      concentrationExportBtn: 'Print Concentration',
+                      marginRiskExportBtn: 'Print Margin Risk',
+                      trendExportBtn: 'Print Trend'
+                    };
+                    Object.entries(printLabels).forEach(([id, label]) => {
+                      const control = document.getElementById(id);
+                      if (!control) return;
+                      control.setAttribute('data-print-report', '1');
+                      control.setAttribute('aria-label', label);
+                      const text = control.querySelector('span') || control;
+                      text.textContent = label;
+                    });
+                    document.querySelectorAll(
+                      '#diagnosticWorkspacesDisclosure button:not([data-print-report]),' +
+                      '#diagnosticWorkspacesDisclosure select,' +
+                      '#diagnosticWorkspacesDisclosure input[type="checkbox"]'
+                    ).forEach(control => {
+                      control.disabled = true;
+                      control.setAttribute('aria-disabled', 'true');
+                      control.setAttribute('title', 'Prerendered snapshot control. Change Preset scope above or use the live app for custom analysis.');
+                    });
+                  }
                   /* Put the actual business story above the instructional
                      guide. The guide remains available at the end of main,
                      but cannot become a mobile LCP gate before the hero. */
@@ -2261,7 +2329,11 @@ class Builder:
                     const select = document.createElement('select'); select.dataset.staticPreset = '1';
                     options.forEach(item => {
                       const option = document.createElement('option'); option.value = item.value;
-                      option.textContent = item.label; option.selected = item.selected; select.append(option);
+                      option.textContent = item.label;
+                      option.selected = item.selected;
+                      option.defaultSelected = item.selected;
+                      if (item.selected) option.setAttribute('selected', 'selected');
+                      select.append(option);
                     });
                     label.append(select); bar.append(label);
                     const note = document.createElement('span'); note.className = 'static-scope-note';
