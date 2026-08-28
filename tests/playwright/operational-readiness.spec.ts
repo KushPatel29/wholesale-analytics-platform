@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '@playwright/test';
 
 import { ensureLoggedIn } from './helpers/auth';
@@ -55,5 +56,40 @@ test.describe('Operational readiness regressions', () => {
     await expect(page.locator('.decision-quick-filters')).toBeVisible();
     const viewportOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(viewportOverflow).toBeLessThanOrEqual(2);
+  });
+
+  test('operational details use domain intelligence and remain mobile-safe', async ({ page }) => {
+    await page.goto('/work/crm');
+    const form = page.locator('form[action="/work/crm/records"]');
+    await form.locator('#recordTitle').fill('Accessibility verification opportunity');
+    await form.locator('#recordType').selectOption('opportunity');
+    await form.locator('#recordStatus').selectOption('proposal');
+    await form.locator('#accountRef').fill('PW-ACCOUNT-1');
+    await form.locator('#amountValue').fill('120000');
+    await form.locator('#probabilityValue').fill('45');
+    await form.locator('#forecastCategory').selectOption('best_case');
+    await form.locator('#nextStep').fill('Confirm the buying committee');
+    await form.locator('#dueValue').fill('2026-10-15T00:00');
+    await Promise.all([
+      page.waitForURL(/\/work\/records\/\d+$/),
+      form.getByRole('button', { name: 'Create draft' }).click(),
+    ]);
+
+    await expect(page.getByText('Weighted value', { exact: true })).toBeVisible();
+    await expect(page.getByText('Next step', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Revenue decision timeline' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Protect the close date/ })).toBeVisible();
+    await expect(page.getByText('Create linked action', { exact: true })).toBeVisible();
+    await expect(page.getByText('Quantity', { exact: true })).toHaveCount(0);
+
+    const axe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations.filter((violation) => violation.impact === 'critical')).toEqual([]);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const viewportOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(viewportOverflow).toBeLessThanOrEqual(2);
+    await expect(page.locator('.decision-control-brief')).toBeVisible();
   });
 });

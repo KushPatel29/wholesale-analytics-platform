@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -11,7 +12,7 @@ import pytest
 
 from app.auth.models import SessionLocal
 from app.auth.permissions import DEFAULT_ROLE_PERMISSION_KEYS, permission_registry
-from app.decision_ops import service
+from app.decision_ops import presentation, service
 from app.decision_ops.models import (
     ApprovalRecord,
     OperationalRecord,
@@ -160,6 +161,85 @@ def test_crm_pipeline_has_weighted_forecast_and_governed_stage_sequence(app):
         _delete_records(record and record["id"])
 
 
+def test_record_intelligence_is_domain_specific_and_relationships_are_permission_scoped(
+    client,
+    app,
+):
+    actor = _actor(707)
+    token = uuid4().hex
+    crm = order = case = None
+    try:
+        crm = service.create_operational_record({
+            "domain": "crm",
+            "record_type": "opportunity",
+            "title": f"Connected expansion {token}",
+            "status": "proposal",
+            "amount": 120000,
+            "probability_pct": 45,
+            "forecast_category": "best_case",
+            "next_step": "Confirm the buying committee",
+            "account_ref": f"ACCOUNT-{token}",
+            "close_at": "2026-09-15T00:00:00+00:00",
+            "source_system": "crm_source",
+            "source_record_id": f"OPP-{token}",
+            "source_url": "/customers/",
+        }, actor=actor)
+        order = service.create_operational_record({
+            "domain": "orders",
+            "record_type": "sales_order",
+            "title": f"Connected order {token}",
+            "status": "partially_shipped",
+            "amount": 80000,
+            "quantity": 100,
+            "fulfilled_quantity": 65,
+            "account_ref": f"ACCOUNT-{token}",
+        }, actor=actor)
+        case = service.create_operational_record({
+            "domain": "service",
+            "record_type": "case",
+            "title": f"Connected case {token}",
+            "status": "triaged",
+            "account_ref": f"ACCOUNT-{token}",
+        }, actor=actor)
+
+        item = service.get_operational_record(crm["id"])
+        brief = presentation.build_record_brief(
+            item,
+            now=datetime(2026, 8, 28, tzinfo=timezone.utc),
+        )
+        assert [metric["label"] for metric in brief["metrics"]] == [
+            "Deal value",
+            "Weighted value",
+            "Probability",
+            "Forecast",
+            "Close date",
+            "Next step",
+        ]
+        assert brief["metrics"][1]["value"] == "CAD 54,000"
+        assert brief["timeline_title"] == "Revenue decision timeline"
+
+        related = service.related_operational_records(
+            crm["id"],
+            allowed_domains={"orders"},
+        )
+        assert [record["id"] for record in related] == [order["id"]]
+        assert related[0]["relationship"] == "Same account"
+
+        app.config.update(LOGIN_DISABLED=True, AUTHZ_DISABLED=True, WTF_CSRF_ENABLED=False)
+        body = client.get(f"/work/records/{crm['id']}").get_data(as_text=True)
+        assert "Revenue decision timeline" in body
+        assert "Create linked action" in body
+        assert "Weighted value" in body
+        assert "source_module=crm" in body
+        assert "Quantity</span>" not in body
+    finally:
+        _delete_records(
+            crm and crm["id"],
+            order and order["id"],
+            case and case["id"],
+        )
+
+
 def test_command_ledger_filters_attention_facets_and_search(app):
     actor = _actor(706)
     token = uuid4().hex
@@ -276,6 +356,12 @@ def test_decision_ops_pages_render_one_h1_and_source_gated_empty_states(client, 
             assert 'id="workspaceFilterForm"' in body
     assert "No operational history has been invented" in client.get("/work/orders").get_data(as_text=True)
     assert "not connected" in client.get("/work/enterprise").get_data(as_text=True).lower()
+    action_body = client.get("/work").get_data(as_text=True)
+    assert 'name="reminder_at"' in action_body
+    assert 'name="escalation_at"' in action_body
+    assert '<option value="crm"' in action_body
+    assert 'name="quantity"' in client.get("/work/orders").get_data(as_text=True)
+    assert 'name="service_due_at"' in client.get("/work/service").get_data(as_text=True)
 
 
 def test_decision_ops_json_routes_and_assistant_confirmation(client, app):

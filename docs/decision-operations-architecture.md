@@ -77,6 +77,23 @@ surface over immediately creating dozens of shallow tables. A module can split
 from the shared envelope later without changing action, approval, or event
 identities.
 
+## Record intelligence and relationship context
+
+Each operational record is presented through a domain-specific control brief,
+not a generic transaction card. The brief derives only from stored fields and
+source metadata: CRM exposes probability, weighted value, forecast and close
+risk; orders expose fulfilment and backorder signals; procurement exposes
+receipt and supplier control; finance, inventory, service and master-data
+records expose their corresponding control measures. Unknown values remain
+explicitly marked `Source required` rather than being converted to zero.
+
+Detail pages also surface permission-filtered related records using exact
+governed identities such as account, supplier, product, location or parent
+record. Relationships are evidence-backed labels, never inferred narrative.
+Users with action-write permission can open an audited Action Center draft with
+the source record and deep link already attached; read-only users see the same
+decision context without a mutation path.
+
 ## Trust and security
 
 - Every route is session-authenticated and permission-gated.

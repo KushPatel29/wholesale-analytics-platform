@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Action {{ item.id }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260826-command-ledger-2') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260828-record-intelligence-1') }}">{% endblock %}
 {% block content %}
 <div class="decision-shell decision-shell--actions" data-workspace="actions">
   <nav class="decision-detail-toolbar" aria-label="Action navigation"><a href="{{ url_for('decision_ops.index') }}">← Action Center</a><span>Action #{{ item.id }}</span><span class="decision-priority decision-priority--{{ item.priority }}">{{ item.priority }}</span><span class="decision-badge {% if item.is_overdue %}decision-badge--risk{% endif %}">{{ item.status|replace('_',' ') }}</span></nav>
-  <header class="decision-masthead">
-    <div><div class="decision-eyebrow">Action #{{ item.id }} · {{ item.source_module }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional rationale entered.' }}</p></div>
+  <header class="decision-masthead decision-masthead--detail">
+    <div class="decision-masthead__copy"><div class="decision-identity"><span class="decision-module-code">ACT</span><span class="decision-eyebrow">Action #{{ item.id }} · {{ item.source_module }}</span></div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional rationale entered.' }}</p><div class="decision-masthead__meta" aria-label="Action control status"><span><i class="decision-status-dot" aria-hidden="true"></i>{{ 'Attention required' if item.is_overdue or item.status == 'blocked' else 'Governed action' }}</span><span>{{ item.owner_name or 'Unassigned owner' }}</span><span>Updated {{ item.updated_display or 'Not recorded' }}</span></div></div>
     <div class="decision-rail" aria-label="Action context">
       <div class="decision-rail__step"><strong>Signal</strong><span>{{ item.metric_label or item.metric_key or 'Source record retained' }}</span></div>
       <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_name or item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
@@ -18,7 +18,7 @@
     <div class="decision-board">
       <section class="decision-ledger" aria-label="Action measures">
         <div class="decision-ledger__cell"><span class="decision-ledger__label">Status</span><strong class="decision-ledger__value">{{ item.status|replace('_',' ')|title }}</strong><small class="decision-ledger__note">current state</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Due</span><strong class="decision-ledger__value">{{ (item.due_at or '—')|string|truncate(11, true, '') }}</strong><small class="decision-ledger__note">{{ 'overdue' if item.is_overdue else 'target date' }}</small></div>
+        <div class="decision-ledger__cell {% if item.is_overdue %}decision-ledger__cell--risk{% endif %}"><span class="decision-ledger__label">Due</span><strong class="decision-ledger__value">{{ item.due_display or 'Not scheduled' }}</strong><small class="decision-ledger__note">{{ 'overdue' if item.is_overdue else 'governed target date' }}</small></div>
         <div class="decision-ledger__cell"><span class="decision-ledger__label">Baseline</span><strong class="decision-ledger__value">{{ item.baseline_value if item.baseline_value is not none else '—' }}</strong><small class="decision-ledger__note">{{ item.metric_unit or 'KPI' }}</small></div>
         <div class="decision-ledger__cell"><span class="decision-ledger__label">Target</span><strong class="decision-ledger__value">{{ item.target_value if item.target_value is not none else '—' }}</strong><small class="decision-ledger__note">{{ item.metric_unit or 'KPI' }}</small></div>
         <div class="decision-ledger__cell"><span class="decision-ledger__label">Expected</span><strong class="decision-ledger__value">{{ item.currency }} {{ '{:,.0f}'.format(item.expected_financial_impact) if item.expected_financial_impact is not none else '—' }}</strong><small class="decision-ledger__note">entered impact</small></div>
@@ -26,6 +26,13 @@
       </section>
 
       {% if item.source_url %}<div class="alert alert-secondary mt-3" role="note"><strong>Source retained:</strong> <a href="{{ item.source_url }}">{{ item.source_record_id or item.source_url }}</a>{% if item.metric_key %} · certified metric <code>{{ item.metric_key }}</code>{% endif %}</div>{% endif %}
+
+      <section class="decision-domain-intel" aria-label="Action governance controls">
+        <div><span>Approval route</span><strong>{{ item.approval_route|replace('_',' ')|title if item.approval_route else 'Not required' }}</strong><small>governed decision path</small></div>
+        <div><span>Reminder</span><strong>{{ item.reminder_display or 'Not scheduled' }}</strong><small>operator follow-up control</small></div>
+        <div><span>Escalation</span><strong>{{ item.escalation_display or 'Not scheduled' }}</strong><small>unresolved-work threshold</small></div>
+        <div><span>Dependencies</span><strong>{{ item.dependencies|length }}</strong><small>blocking actions · confirmed count</small></div>
+      </section>
 
       {% if can_manage and item.allowed_transitions %}
       <section class="decision-panel" aria-labelledby="transition-heading"><div class="decision-panel__head"><h2 id="transition-heading">Advance the decision</h2><span class="decision-badge">Audited transition</span></div><div class="decision-panel__body"><form method="post" action="{{ url_for('decision_ops.transition_action', work_item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="decision-form-grid"><div><label for="transitionStatus">Next governed status</label><select class="form-select" id="transitionStatus" name="status">{% for status in item.allowed_transitions %}<option value="{{ status }}">{{ status|replace('_',' ')|title }}</option>{% endfor %}</select></div><div><label for="outcomeValue">Outcome KPI</label><input class="form-control" id="outcomeValue" name="outcome_value" inputmode="decimal" value="{{ item.outcome_value if item.outcome_value is not none else '' }}"></div><div><label for="realizedImpact">Realized financial impact</label><input class="form-control" id="realizedImpact" name="realized_financial_impact" inputmode="decimal" value="{{ item.realized_financial_impact if item.realized_financial_impact is not none else '' }}"></div><div class="span-3"><label for="transitionNotes">Decision notes</label><textarea class="form-control" id="transitionNotes" name="notes" rows="2" maxlength="4000"></textarea></div><div class="span-3"><button class="btn btn-primary" type="submit">Record transition</button></div></div></form></div></section>

@@ -360,6 +360,97 @@ body:has(.decision-shell) .app-main {
   overflow-wrap: anywhere;
 }
 .decision-ledger__note { display: block; margin-top: 0.3rem; color: var(--ops-faint); font-size: 0.67rem; line-height: 1.3; }
+.decision-ledger__cell--risk { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--ops-risk) 70%, transparent); }
+.decision-ledger__cell--risk .decision-ledger__value { color: var(--ops-risk); }
+.decision-ledger__cell--warning { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--ops-signal) 70%, transparent); }
+.decision-ledger__cell--warning .decision-ledger__value { color: color-mix(in srgb, var(--ops-signal) 84%, var(--ops-ink)); }
+.decision-ledger__cell--healthy { box-shadow: inset 0 -3px 0 rgba(var(--ops-accent-rgb), 0.65); }
+.decision-ledger__cell--source .decision-ledger__value { color: var(--ops-signal); font-size: clamp(1rem, 1.5vw, 1.25rem); letter-spacing: -0.02em; }
+
+/* Record intelligence: every domain uses the same grammar without falling
+   back to generic quantities or fulfilment language. */
+.decision-masthead--detail { min-height: 225px; }
+.decision-masthead--detail h1 { font-size: clamp(1.9rem, 3.5vw, 3.45rem); }
+
+.decision-control-brief {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) minmax(180px, 0.32fr);
+  gap: 1rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--ops-line);
+  border-left: 3px solid var(--ops-accent);
+  border-radius: 0.55rem;
+  background:
+    linear-gradient(100deg, rgba(var(--ops-accent-rgb), 0.09), transparent 48%),
+    var(--ops-panel);
+  box-shadow: var(--wa-shadow-sm, 0 4px 16px rgba(15, 23, 42, 0.05));
+}
+
+.decision-control-brief--risk { border-left-color: var(--ops-risk); }
+.decision-control-brief--risk .decision-control-brief__signal span:last-child { background: var(--ops-risk); }
+.decision-control-brief__signal { display: grid; gap: 0.25rem; align-content: end; height: 2.6rem; }
+.decision-control-brief__signal span { display: block; height: 0.22rem; border-radius: 999px; background: rgba(var(--ops-accent-rgb), 0.28); }
+.decision-control-brief__signal span:nth-child(2) { width: 72%; background: rgba(var(--ops-accent-rgb), 0.5); }
+.decision-control-brief__signal span:nth-child(3) { width: 44%; background: var(--ops-accent); }
+.decision-control-brief h2 { max-width: 780px; margin: 0.22rem 0 0; color: var(--ops-ink); font-size: clamp(1rem, 1.7vw, 1.32rem); font-weight: 690; letter-spacing: -0.025em; }
+.decision-control-brief p { max-width: 850px; margin: 0.36rem 0 0; color: var(--ops-muted); font-size: 0.75rem; line-height: 1.5; }
+.decision-control-brief__action { display: flex; flex-direction: column; gap: 0.35rem; align-items: stretch; text-align: center; }
+.decision-control-brief__action small { color: var(--ops-faint); font-size: 0.6rem; line-height: 1.35; }
+
+.decision-source-trace {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 0.65rem 0.9rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--ops-line);
+  border-radius: 0.45rem;
+  background: var(--ops-panel-2);
+  font-size: 0.69rem;
+}
+.decision-source-trace strong { color: var(--ops-ink); }
+.decision-source-trace a { color: var(--ops-accent-text); font-weight: 720; overflow-wrap: anywhere; }
+.decision-source-trace small { color: var(--ops-faint); }
+
+.decision-related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.65rem; }
+.decision-related-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 134px;
+  padding: 0.82rem;
+  border: 1px solid var(--ops-line);
+  border-radius: 0.42rem;
+  color: var(--ops-muted);
+  background: linear-gradient(145deg, rgba(var(--ops-accent-rgb), 0.055), transparent 55%), var(--ops-panel-2);
+  text-decoration: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+.decision-related-card:hover, .decision-related-card:focus-visible { border-color: rgba(var(--ops-accent-rgb), 0.5); color: var(--ops-muted); box-shadow: 0 9px 20px rgba(15, 23, 42, 0.08); transform: translateY(-2px); outline: none; }
+.decision-related-card__meta { color: var(--ops-accent-text); font-size: 0.58rem; font-weight: 760; letter-spacing: 0.075em; text-transform: uppercase; }
+.decision-related-card strong { margin-top: 0.42rem; color: var(--ops-ink); font-size: 0.78rem; line-height: 1.35; }
+.decision-related-card > span:not(.decision-related-card__meta) { margin-top: 0.25rem; color: var(--ops-faint); font-size: 0.65rem; }
+.decision-related-card small { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: auto; padding-top: 0.58rem; color: var(--ops-muted); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
+.decision-related-card small b { color: var(--ops-accent-text); }
+
+.decision-relationship-empty {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px dashed var(--ops-line-strong);
+  border-radius: 0.5rem;
+  background: var(--ops-panel-2);
+}
+.decision-relationship-empty strong { display: block; margin-top: 0.25rem; color: var(--ops-ink); font-size: 0.86rem; }
+.decision-relationship-empty p { max-width: 720px; margin: 0.25rem 0 0; color: var(--ops-muted); font-size: 0.72rem; line-height: 1.5; }
+.decision-timeline__event p { margin: 0.32rem 0 0; color: var(--ops-muted); font-size: 0.7rem; }
 
 /* Command ledger: one dense operating surface for daily queue work. */
 .decision-command {
@@ -460,6 +551,22 @@ body:has(.decision-shell) .app-main {
 .decision-crm-intel__hygiene p { margin: 0.2rem 0 0.55rem; color: var(--ops-faint); font-size: 0.63rem; line-height: 1.35; }
 .decision-crm-intel__hygiene > div { display: flex; justify-content: space-between; gap: 0.75rem; padding-top: 0.3rem; border-top: 1px solid var(--ops-line); color: var(--ops-muted); font-size: 0.64rem; }
 
+.decision-domain-intel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 1rem;
+  border: 1px solid var(--ops-line);
+  border-radius: 0.55rem;
+  background: var(--ops-panel);
+  box-shadow: var(--wa-shadow-sm, 0 4px 16px rgba(15, 23, 42, 0.05));
+  overflow: hidden;
+}
+.decision-domain-intel > div { min-height: 100px; padding: 0.82rem; border-left: 1px solid var(--ops-line); background: linear-gradient(180deg, rgba(var(--ops-accent-rgb), 0.04), transparent); }
+.decision-domain-intel > div:first-child { border-left: 0; }
+.decision-domain-intel span { display: block; color: var(--ops-faint); font-size: 0.6rem; font-weight: 760; letter-spacing: 0.075em; text-transform: uppercase; }
+.decision-domain-intel strong { display: block; margin-top: 0.28rem; color: var(--ops-ink); font-family: var(--wa-font-display, system-ui, sans-serif); font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.decision-domain-intel small { display: block; margin-top: 0.25rem; color: var(--ops-faint); font-size: 0.62rem; line-height: 1.35; }
+
 /* Panels, ledgers, and forms. */
 .decision-panel {
   margin-top: 1rem;
@@ -492,6 +599,7 @@ body:has(.decision-shell) .app-main {
 .decision-table tbody tr:hover { background: rgba(var(--ops-accent-rgb), 0.045); }
 .decision-table a { color: var(--ops-ink); font-weight: 720; text-decoration-color: rgba(var(--ops-accent-rgb), 0.6); text-underline-offset: 0.2em; }
 .decision-table a:hover { color: var(--ops-accent-text); }
+.decision-source-value { color: var(--ops-signal); font-size: 0.68rem; font-weight: 720; }
 
 .decision-badge {
   display: inline-flex;
@@ -628,6 +736,7 @@ body:has(.decision-shell) a.wa-live-banner__back:hover { border-color: var(--ops
   .decision-command__search { grid-column: span 2; }
   .decision-command__actions { justify-content: flex-end; }
   .decision-crm-intel { grid-template-columns: 1fr; }
+  .decision-related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 991.98px) {
@@ -647,6 +756,9 @@ body:has(.decision-shell) a.wa-live-banner__back:hover { border-color: var(--ops
   .decision-nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ops-accent); }
   .decision-crm-intel__forecast { grid-template-columns: repeat(3, 1fr); }
   .decision-crm-intel__head { grid-column: 1 / -1; min-height: 64px; border-right: 0; border-bottom: 1px solid var(--ops-line); }
+  .decision-domain-intel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .decision-domain-intel > div:nth-child(odd) { border-left: 0; }
+  .decision-domain-intel > div:nth-child(n + 3) { border-top: 1px solid var(--ops-line); }
 }
 
 @media (max-width: 767.98px) {
@@ -676,6 +788,12 @@ body:has(.decision-shell) a.wa-live-banner__back:hover { border-color: var(--ops
   .decision-command__search { grid-column: 1 / -1; }
   .decision-command__actions { grid-column: 1 / -1; justify-content: stretch; }
   .decision-command__actions > * { flex: 1; }
+  .decision-control-brief { grid-template-columns: minmax(0, 1fr); }
+  .decision-control-brief__signal { display: none; }
+  .decision-control-brief__action { align-items: stretch; text-align: left; }
+  .decision-source-trace { grid-template-columns: 1fr; gap: 0.28rem; }
+  .decision-related-grid { grid-template-columns: 1fr; }
+  .decision-relationship-empty { flex-direction: column; }
 }
 
 @media (max-width: 575.98px) {
@@ -692,6 +810,9 @@ body:has(.decision-shell) a.wa-live-banner__back:hover { border-color: var(--ops
   .decision-crm-intel__head { grid-column: auto; }
   .decision-crm-intel__forecast > div { min-height: 74px; border-right: 0; border-bottom: 1px solid var(--ops-line); }
   .decision-crm-intel__forecast > div:last-child { border-bottom: 0; }
+  .decision-domain-intel { grid-template-columns: 1fr; }
+  .decision-domain-intel > div { border-left: 0; border-top: 1px solid var(--ops-line); }
+  .decision-domain-intel > div:first-child { border-top: 0; }
   .decision-detail-toolbar { flex-wrap: wrap; }
   body:has(.decision-shell) .wa-live-banner__label { display: none; }
   body:has(.decision-shell) .wa-live-banner__text { flex-basis: calc(100% - 1.2rem); }

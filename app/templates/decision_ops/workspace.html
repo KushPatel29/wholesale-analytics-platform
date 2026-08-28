@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ workspace.label }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260826-command-ledger-2') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260828-record-intelligence-1') }}">{% endblock %}
 {% block content %}
 {% set module_codes = {'actions':'ACT','crm':'CRM','orders':'OTC','procurement':'P2P','finance':'R2R','inventory':'INV','master-data':'MDM','service':'SVC','enterprise':'ENT'} %}
 <div class="decision-shell decision-shell--{{ workspace_key }}" data-workspace="{{ workspace_key }}">
@@ -44,7 +44,7 @@
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Commit</span><strong class="decision-ledger__value">${{ '{:,.0f}'.format(summary.commit_value or 0) }}</strong><small class="decision-ledger__note">forecast category</small></div>
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Win rate</span><strong class="decision-ledger__value">{{ '{:.0%}'.format(summary.win_rate) if summary.win_rate is not none else '—' }}</strong><small class="decision-ledger__note">closed decisions only</small></div>
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Stalled</span><strong class="decision-ledger__value">{{ summary.stalled }}</strong><small class="decision-ledger__note">missing next step</small></div>
-          <div class="decision-ledger__cell"><span class="decision-ledger__label">Coverage</span><strong class="decision-ledger__value">—</strong><small class="decision-ledger__note">quota source required</small></div>
+          <div class="decision-ledger__cell decision-ledger__cell--source"><span class="decision-ledger__label">Coverage</span><strong class="decision-ledger__value">Source required</strong><small class="decision-ledger__note">connect quota targets to calculate</small></div>
         {% else %}
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Records</span><strong class="decision-ledger__value">{{ summary.total or 0 }}</strong><small class="decision-ledger__note">governed envelopes</small></div>
           <div class="decision-ledger__cell"><span class="decision-ledger__label">Exceptions</span><strong class="decision-ledger__value">{{ summary.exceptions or 0 }}</strong><small class="decision-ledger__note">needs attention</small></div>
@@ -148,7 +148,7 @@
         <div class="decision-crm-intel__forecast">
           <div class="decision-crm-intel__head"><span class="decision-panel__kicker">Forecast posture</span><strong>Category mix</strong></div>
           {% for bucket in summary.forecast_mix %}
-          <div><span>{{ bucket.category|replace('_',' ')|title }}</span><strong>${{ '{:,.0f}'.format(bucket.value) }}</strong><small>{{ bucket.count }} opportunities</small></div>
+          <div><span>{{ bucket.category|replace('_',' ')|title }}</span><strong>{% if bucket.count %}${{ '{:,.0f}'.format(bucket.value) }}{% else %}No open deals{% endif %}</strong><small>{{ bucket.count }} opportunities · confirmed count</small></div>
           {% endfor %}
         </div>
         <div class="decision-crm-intel__hygiene">
@@ -166,12 +166,46 @@
           <div class="decision-pipeline__stage" data-stage="{{ stage.stage }}">
             <h3><span>{{ stage.stage|replace('_', ' ') }}</span><b>{{ stage.count }}</b></h3>
             <div class="decision-pipeline__measure"><strong>${{ '{:,.0f}'.format(stage.value) }}</strong><span>${{ '{:,.0f}'.format(stage.weighted) }} weighted{% if stage.stalled %} · {{ stage.stalled }} stalled{% endif %}</span></div>
-            {% for row in listing['items'] if row.record_type == 'opportunity' and row.status == stage.stage %}
+            {% for row in stage.cards %}
             <a class="decision-pipeline__card" href="{{ url_for('decision_ops.record_detail', record_id=row.id) }}"><strong>{{ row.title }}</strong><span>{{ row.currency }} {{ '{:,.0f}'.format(row.amount or 0) }} · {{ row.probability_pct or 0 }}%</span></a>
-            {% else %}<span class="decision-ledger__note">No opportunities in this page view</span>{% endfor %}
+            {% else %}<span class="decision-ledger__note">Confirmed zero opportunities in this stage</span>{% endfor %}
           </div>
           {% endfor %}
         </div>
+      </section>
+      {% elif workspace_key in ['orders','procurement','finance','inventory','service','master-data'] %}
+      <section class="decision-domain-intel" aria-label="{{ workspace.label }} control intelligence">
+        {% if workspace_key == 'orders' %}
+        <div><span>Backorders</span><strong>{{ summary.backorders }}</strong><small>open orders with unfulfilled units</small></div>
+        <div><span>Perfect order</span><strong>{{ '{:.0%}'.format(summary.perfect_order_rate) if summary.perfect_order_rate is not none else 'Source required' }}</strong><small>measured on closed orders only</small></div>
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>governed deadlines · confirmed count</small></div>
+        <div><span>Open exposure</span><strong>${{ '{:,.0f}'.format(summary.open_value) }}</strong><small>non-terminal record value</small></div>
+        {% elif workspace_key == 'procurement' %}
+        <div><span>Purchase-price variance</span><strong>${{ '{:,.0f}'.format(summary.purchase_price_variance) }}</strong><small>signed vs contract · favourable may be negative</small></div>
+        <div><span>GRNI</span><strong>${{ '{:,.0f}'.format(summary.grni) }}</strong><small>goods received, not invoiced</small></div>
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>governed deadlines · confirmed count</small></div>
+        <div><span>Open exposure</span><strong>${{ '{:,.0f}'.format(summary.open_value) }}</strong><small>non-terminal record value</small></div>
+        {% elif workspace_key == 'finance' %}
+        <div><span>Budget envelope</span><strong>${{ '{:,.0f}'.format(summary.budget) }}</strong><small>entered budget records, not actual variance</small></div>
+        <div><span>Posted journals</span><strong>{{ summary.posted_journals }}</strong><small>workflow states with source drill-through</small></div>
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>close and control deadlines</small></div>
+        <div><span>Open exposure</span><strong>${{ '{:,.0f}'.format(summary.open_value) }}</strong><small>controlled, not legal-ledger balance</small></div>
+        {% elif workspace_key == 'inventory' %}
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>proposal and control deadlines</small></div>
+        <div><span>Open exposure</span><strong>${{ '{:,.0f}'.format(summary.open_value) }}</strong><small>entered proposal / adjustment value</small></div>
+        <div><span>Unassigned</span><strong>{{ summary.unassigned }}</strong><small>open records without an owner</small></div>
+        <div><span>Physical execution</span><strong>Source required</strong><small>connect WMS for movements and picks</small></div>
+        {% elif workspace_key == 'service' %}
+        <div><span>CSAT</span><strong>{{ '{:.1f} / 5'.format(summary.csat) if summary.csat is not none else 'Pending survey' }}</strong><small>only cases with recorded feedback</small></div>
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>active SLA deadlines</small></div>
+        <div><span>Escalated</span><strong>{{ summary.exceptions }}</strong><small>status-routed case escalations</small></div>
+        <div><span>Unassigned</span><strong>{{ summary.unassigned }}</strong><small>open cases without an owner</small></div>
+        {% else %}
+        <div><span>Due in 7 days</span><strong>{{ summary.due_soon }}</strong><small>governance review deadlines</small></div>
+        <div><span>Unassigned</span><strong>{{ summary.unassigned }}</strong><small>open changes without a steward</small></div>
+        <div><span>Source-gated</span><strong>{{ source_contracts|rejectattr('status', 'in', ['native', 'verified'])|list|length }}</strong><small>contracts awaiting verification</small></div>
+        <div><span>Credential storage</span><strong>None</strong><small>secrets remain in deployment vaults</small></div>
+        {% endif %}
       </section>
       {% endif %}
 
@@ -198,8 +232,8 @@
                 <td><span class="decision-priority decision-priority--{{ row.priority }}">{{ row.priority }}</span></td>
                 <td>{{ row.owner_name or row.owner_user_id or 'Unassigned' }}</td>
                 <td>{% if workspace_key == 'actions' %}{{ row.metric_label or row.metric_key or 'Certified source signal' }}{% else %}{{ row.account_ref or row.supplier_ref or row.product_ref or row.location_ref or 'Enterprise scope' }}{% endif %}{% if workspace_key != 'actions' and row.line_count %}<div class="decision-ledger__note">{{ row.line_count }} lines{% if row.fulfilment_pct is not none %} · {{ '{:.0f}%'.format(row.fulfilment_pct) }} fulfilled{% endif %}</div>{% endif %}</td>
-                <td>{{ (row.due_at or row.close_at or row.service_due_at or '—')|string|truncate(16, true, '') }}</td>
-                <td>{% set value = row.expected_financial_impact if workspace_key == 'actions' else row.amount %}{% if value is not none %}{{ row.currency }} {{ '{:,.0f}'.format(value) }}{% else %}—{% endif %}</td>
+                <td>{{ (row.due_display if workspace_key == 'actions' else row.deadline_display) or 'Not scheduled' }}</td>
+                <td>{% set value = row.expected_financial_impact if workspace_key == 'actions' else row.amount %}{% if value is not none %}{{ row.currency }} {{ '{:,.0f}'.format(value) }}{% else %}<span class="decision-source-value">Source required</span>{% endif %}</td>
               </tr>
             {% endfor %}
             </tbody>
@@ -226,7 +260,8 @@
             <div class="decision-form-grid">
               <div class="span-2"><label for="recordTitle">Title</label><input class="form-control" id="recordTitle" name="title" maxlength="240" value="{{ action_seed.title if action_seed is defined else '' }}" required></div>
               {% if workspace_key == 'actions' %}
-              <div><label for="recordSource">Source module</label><select class="form-select" id="recordSource" name="source_module" required>{% for module in ['overview','products','inventory','customers','suppliers','salesreps','planning','returns','assistant'] %}<option value="{{ module }}" {% if action_seed is defined and module == action_seed.source_module %}selected{% endif %}>{{ module }}</option>{% endfor %}</select></div>
+              {% set action_sources = ['overview','overview_page','products','inventory','customers','suppliers','salesreps','planning','returns','assistant','crm','orders','procurement','finance','master-data','service'] %}
+              <div><label for="recordSource">Source module</label><select class="form-select" id="recordSource" name="source_module" required>{% for module in action_sources %}<option value="{{ module }}" {% if action_seed is defined and module == action_seed.source_module %}selected{% endif %}>{{ module|replace('_',' ')|replace('-',' ')|title }}</option>{% endfor %}{% if action_seed is defined and action_seed.source_module not in action_sources %}<option value="{{ action_seed.source_module }}" selected>{{ action_seed.source_module|replace('_',' ')|replace('-',' ')|title }}</option>{% endif %}</select></div>
               <div><label for="sourceRecord">Source record</label><input class="form-control" id="sourceRecord" name="source_record_id" value="{{ action_seed.source_record_id if action_seed is defined else '' }}" maxlength="180"></div>
               <div><label for="metricKey">Certified metric key</label><input class="form-control" id="metricKey" name="metric_key" value="{{ action_seed.metric_key if action_seed is defined else '' }}" maxlength="160"></div>
               <div><label for="sourceUrl">Source URL</label><input class="form-control" id="sourceUrl" name="source_url" value="{{ action_seed.source_url if action_seed is defined else '/work' }}" maxlength="500"></div>
@@ -236,9 +271,30 @@
               {% else %}
               <div><label for="recordType">Record type</label><select class="form-select" id="recordType" name="record_type" required>{% for type in workspace.record_types %}<option value="{{ type }}">{{ type|replace('_', ' ')|title }}</option>{% endfor %}</select></div>
               <div><label for="recordStatus">Starting status</label><select class="form-select" id="recordStatus" name="status">{% for status in workspace.statuses %}<option value="{{ status }}">{{ status|replace('_', ' ')|title }}</option>{% endfor %}</select></div>
+              {% if workspace_key in ['crm','orders','service'] %}
               <div><label for="accountRef">Account / customer</label><input class="form-control" id="accountRef" name="account_ref" maxlength="160"></div>
+              {% endif %}
+              {% if workspace_key in ['crm','service'] %}
+              <div><label for="contactRef">Contact</label><input class="form-control" id="contactRef" name="contact_ref" maxlength="160"></div>
+              {% endif %}
+              {% if workspace_key == 'procurement' %}
               <div><label for="supplierRef">Supplier</label><input class="form-control" id="supplierRef" name="supplier_ref" maxlength="160"></div>
+              {% endif %}
+              {% if workspace_key in ['procurement','inventory'] %}
+              <div><label for="productRef">Product / SKU</label><input class="form-control" id="productRef" name="product_ref" maxlength="160"></div>
+              {% endif %}
+              {% if workspace_key in ['orders','inventory'] %}
+              <div><label for="locationRef">Location</label><input class="form-control" id="locationRef" name="location_ref" maxlength="160"></div>
+              {% endif %}
+              {% if workspace_key != 'master-data' %}
               <div><label for="amountValue">Amount</label><input class="form-control" id="amountValue" name="amount" inputmode="decimal"></div>
+              {% endif %}
+              {% if workspace_key in ['orders','procurement','inventory'] %}
+              <div><label for="quantityValue">Quantity</label><input class="form-control" id="quantityValue" name="quantity" type="number" min="0" step="any"></div>
+              {% endif %}
+              {% if workspace_key in ['orders','procurement'] %}
+              <div><label for="fulfilledValue">Fulfilled / received</label><input class="form-control" id="fulfilledValue" name="fulfilled_quantity" type="number" min="0" step="any"></div>
+              {% endif %}
               {% if workspace_key == 'crm' %}
               <div><label for="probabilityValue">Probability %</label><input class="form-control" id="probabilityValue" name="probability_pct" type="number" min="0" max="100"></div>
               <div><label for="forecastCategory">Forecast category</label><select class="form-select" id="forecastCategory" name="forecast_category"><option value="pipeline">Pipeline</option><option value="best_case">Best case</option><option value="commit">Commit</option><option value="closed">Closed</option></select></div>
@@ -247,8 +303,14 @@
               {% endif %}
               <div><label for="ownerUser">Owner</label><select class="form-select" id="ownerUser" name="owner_user_id"><option value="">Unassigned</option>{% for user in assignee_choices %}<option value="{{ user.value }}">{{ user.label }}{% if user.username != user.label %} · {{ user.username }}{% endif %}</option>{% endfor %}</select></div>
               <div><label for="priorityValue">Priority</label><select class="form-select" id="priorityValue" name="priority">{% for priority in ['low','medium','high','critical'] %}<option value="{{ priority }}" {% if priority == 'medium' %}selected{% endif %}>{{ priority|title }}</option>{% endfor %}</select></div>
-              <div><label for="dueValue">Due / close</label><input class="form-control" id="dueValue" name="{{ 'due_at' if workspace_key == 'actions' else 'close_at' }}" type="datetime-local"></div>
-              {% if workspace_key == 'actions' %}<div><label for="expectedImpact">Expected financial impact</label><input class="form-control" id="expectedImpact" name="expected_financial_impact" inputmode="decimal"></div>{% endif %}
+              {% set deadline_name = 'due_at' if workspace_key == 'actions' else 'service_due_at' if workspace_key == 'service' else 'close_at' if workspace_key == 'crm' else 'due_at' %}
+              <div><label for="dueValue">{{ 'SLA due' if workspace_key == 'service' else 'Expected close' if workspace_key == 'crm' else 'Due date' }}</label><input class="form-control" id="dueValue" name="{{ deadline_name }}" type="datetime-local"></div>
+              {% if workspace_key == 'actions' %}
+              <div><label for="expectedImpact">Expected financial impact</label><input class="form-control" id="expectedImpact" name="expected_financial_impact" inputmode="decimal"></div>
+              <div><label for="approvalRoute">Approval route</label><select class="form-select" id="approvalRoute" name="approval_route"><option value="">Not required</option><option value="manager">Manager</option><option value="category_manager">Category manager</option><option value="finance_controller">Finance controller</option><option value="executive">Executive</option></select></div>
+              <div><label for="reminderAt">Reminder</label><input class="form-control" id="reminderAt" name="reminder_at" type="datetime-local"></div>
+              <div><label for="escalationAt">Escalate if unresolved</label><input class="form-control" id="escalationAt" name="escalation_at" type="datetime-local"></div>
+              {% endif %}
               <div class="span-3"><label for="recordDescription">Description / rationale</label><textarea class="form-control" id="recordDescription" name="description" rows="3" maxlength="4000"></textarea></div>
               <div class="span-3"><button class="btn btn-primary" type="submit">Create draft</button></div>
             </div>

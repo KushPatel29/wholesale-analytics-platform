@@ -1,11 +1,26 @@
 {% extends "base.html" %}
 {% block title %}{{ item.record_number }} · Northgate{% endblock %}
-{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260826-command-ledger-2') }}">{% endblock %}
+{% block head_extras %}<link rel="stylesheet" href="{{ url_for('static', filename='css/decision_ops.css', v='20260828-record-intelligence-1') }}">{% endblock %}
 {% block content %}
 <div class="decision-shell decision-shell--{{ workspace_key }}" data-workspace="{{ workspace_key }}">
-  <nav class="decision-detail-toolbar" aria-label="Record navigation"><a href="{{ url_for('decision_ops.workspace', workspace=workspace_key) }}">← {{ workspace.label }}</a><span>{{ item.record_number }}</span><span class="decision-priority decision-priority--{{ item.priority }}">{{ item.priority }}</span><span class="decision-badge {% if item.is_overdue %}decision-badge--risk{% endif %}">{{ item.status|replace('_',' ') }}</span></nav>
-  <header class="decision-masthead">
-    <div><div class="decision-eyebrow">{{ workspace.label }} · {{ item.record_number }}</div><h1>{{ item.title }}</h1><p>{{ item.description or 'No additional operating note entered.' }}</p></div>
+  <nav class="decision-detail-toolbar" aria-label="Record navigation">
+    <a href="{{ url_for('decision_ops.workspace', workspace=workspace_key) }}">← {{ workspace.label }}</a>
+    <span>{{ item.record_number }}</span>
+    <span class="decision-priority decision-priority--{{ item.priority }}">{{ item.priority }}</span>
+    <span class="decision-badge {% if item.is_overdue %}decision-badge--risk{% endif %}">{{ item.status|replace('_',' ') }}</span>
+  </nav>
+
+  <header class="decision-masthead decision-masthead--detail">
+    <div class="decision-masthead__copy">
+      <div class="decision-identity"><span class="decision-module-code">{{ item.record_type[:3]|upper }}</span><span class="decision-eyebrow">{{ workspace.label }} · {{ item.record_number }}</span></div>
+      <h1>{{ item.title }}</h1>
+      <p>{{ item.description or 'No additional operating note entered.' }}</p>
+      <div class="decision-masthead__meta" aria-label="Record control status">
+        <span><i class="decision-status-dot" aria-hidden="true"></i>{{ 'Attention required' if brief.tone == 'risk' else 'Governed record' }}</span>
+        <span>{{ item.owner_name or 'Unassigned owner' }}</span>
+        <span>Updated {{ item.updated_display or 'Not recorded' }}</span>
+      </div>
+    </div>
     <div class="decision-rail" aria-label="Operational lifecycle">
       <div class="decision-rail__step"><strong>Source</strong><span>{{ item.source_system or 'Native manual draft' }}</span></div>
       <div class="decision-rail__step"><strong>Owner</strong><span>{{ item.owner_name or item.owner_user_id or 'Unassigned' }} · {{ item.priority|title }}</span></div>
@@ -13,25 +28,107 @@
       <div class="decision-rail__step"><strong>Status</strong><span>{{ item.status|replace('_',' ')|title }}</span></div>
     </div>
   </header>
+
   <div class="decision-layout">
     {% include "decision_ops/_nav.html" %}
     <div class="decision-board">
-      <section class="decision-ledger" aria-label="Record summary">
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Type</span><strong class="decision-ledger__value">{{ item.record_type|replace('_',' ')|title }}</strong><small class="decision-ledger__note">controlled record type</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Status</span><strong class="decision-ledger__value">{{ item.status|replace('_',' ')|title }}</strong><small class="decision-ledger__note">current lifecycle state</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Amount</span><strong class="decision-ledger__value">{{ item.currency }} {{ '{:,.0f}'.format(item.amount) if item.amount is not none else '—' }}</strong><small class="decision-ledger__note">recorded, not inferred</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Quantity</span><strong class="decision-ledger__value">{{ item.quantity if item.quantity is not none else '—' }}</strong><small class="decision-ledger__note">fulfilled {{ item.fulfilled_quantity or 0 }}</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Account</span><strong class="decision-ledger__value">{{ item.account_ref or '—' }}</strong><small class="decision-ledger__note">{{ item.contact_ref or 'no contact' }}</small></div>
-        <div class="decision-ledger__cell"><span class="decision-ledger__label">Close / due</span><strong class="decision-ledger__value">{{ (item.close_at or item.due_at or item.service_due_at or '—')|string|truncate(11, true, '') }}</strong><small class="decision-ledger__note">next step: {{ item.next_step or 'not set' }}</small></div>
+      <div class="decision-section-label"><span>Decision brief</span><small>Domain-specific control state</small></div>
+      <section class="decision-ledger" aria-label="{{ workspace.label }} record intelligence">
+        {% for metric in brief.metrics %}
+        <div class="decision-ledger__cell decision-ledger__cell--{{ metric.state }}">
+          <span class="decision-ledger__label">{{ metric.label }}</span>
+          <strong class="decision-ledger__value">{{ metric.value }}</strong>
+          <small class="decision-ledger__note">{{ metric.note }}</small>
+        </div>
+        {% endfor %}
       </section>
 
-      {% if item.source_url %}<div class="alert alert-secondary mt-3" role="note"><strong>Source drill-through:</strong> <a href="{{ item.source_url }}">{{ item.source_system }} / {{ item.source_record_id }}</a></div>{% endif %}
+      <section class="decision-control-brief decision-control-brief--{{ brief.tone }}" aria-labelledby="control-brief-heading">
+        <div class="decision-control-brief__signal" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <span class="decision-panel__kicker">Recommended operating posture</span>
+          <h2 id="control-brief-heading">{{ brief.headline }}</h2>
+          <p>{{ brief.narrative }}</p>
+        </div>
+        <div class="decision-control-brief__action">
+          {% if can_create_action %}
+          <a class="btn btn-primary" href="{{ create_action_url }}">Create linked action</a>
+          <small>Opens an audited draft; this record remains unchanged.</small>
+          {% else %}
+          <span class="btn btn-outline-secondary disabled" aria-disabled="true">Create linked action</span>
+          <small>Write controls are intentionally disabled for the public demo role.</small>
+          {% endif %}
+        </div>
+      </section>
 
-      {% if can_manage and item.allowed_transitions %}<section class="decision-panel" aria-labelledby="transition-heading"><div class="decision-panel__head"><h2 id="transition-heading">Record lifecycle decision</h2><span class="decision-badge">Append-only event</span></div><div class="decision-panel__body"><form method="post" action="{{ url_for('decision_ops.transition_record', record_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="decision-form-grid"><div><label for="recordStatus">Next governed status</label><select class="form-select" id="recordStatus" name="status">{% for status in item.allowed_transitions %}<option value="{{ status }}">{{ status|replace('_',' ')|title }}</option>{% endfor %}</select></div><div class="span-2"><label for="recordNotes">Decision / exception note</label><input class="form-control" id="recordNotes" name="notes" maxlength="4000"></div><div class="span-3"><button class="btn btn-primary" type="submit">Record transition</button></div></div></form></div></section>{% endif %}
+      {% if item.source_url %}
+      <div class="decision-source-trace" role="note">
+        <span class="decision-panel__kicker">Source trace</span>
+        <strong>{{ item.source_system or 'Connected source' }}</strong>
+        <a href="{{ item.source_url }}">{{ item.source_record_id or item.source_url }} <span aria-hidden="true">↗</span></a>
+        <small>Drill-through retained; no operational history inferred.</small>
+      </div>
+      {% endif %}
 
-      {% if item.lines %}<section class="decision-panel" aria-labelledby="lines-heading"><div class="decision-panel__head"><h2 id="lines-heading">Lines</h2><span class="decision-badge">{{ item.lines|length }}</span></div><table class="decision-table"><caption class="visually-hidden">Line items on {{ item.record_number }} — {{ item.lines|length }} lines.</caption><thead><tr><th scope="col">#</th><th scope="col">Item</th><th scope="col">Description</th><th scope="col">Quantity</th><th scope="col">Fulfilled</th><th scope="col">Amount</th></tr></thead><tbody>{% for line in item.lines %}<tr><td>{{ line.line_number }}</td><td>{{ line.item_ref or '—' }}</td><td>{{ line.description or '—' }}</td><td>{{ line.quantity }}</td><td>{{ line.fulfilled_quantity }}</td><td>{{ item.currency }} {{ '{:,.2f}'.format(line.amount) if line.amount is not none else '—' }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+      {% if item.related_records %}
+      <section class="decision-panel" aria-labelledby="related-heading">
+        <div class="decision-panel__head">
+          <div><span class="decision-panel__kicker">Connected execution</span><h2 id="related-heading">Related CRM and ERP records</h2></div>
+          <span class="decision-badge">{{ item.related_records|length }} permission-scoped</span>
+        </div>
+        <div class="decision-panel__body decision-related-grid">
+          {% for related in item.related_records %}
+          <a class="decision-related-card" href="{{ url_for('decision_ops.record_detail', record_id=related.id) }}">
+            <span class="decision-related-card__meta">{{ related.relationship }} · {{ related.workspace_label }}</span>
+            <strong>{{ related.title }}</strong>
+            <span>{{ related.record_number }} · {{ related.status|replace('_',' ')|title }}</span>
+            <small>{% if related.amount is not none %}{{ related.currency }} {{ '{:,.0f}'.format(related.amount) }}{% else %}No monetary value recorded{% endif %} <b aria-hidden="true">↗</b></small>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% else %}
+      <section class="decision-relationship-empty" aria-label="Connected execution">
+        <div><span class="decision-panel__kicker">Connected execution</span><strong>No related governed records yet.</strong><p>A matching account, supplier, product, location, or parent identity will populate this relationship view without manual duplication.</p></div>
+        <span class="decision-badge decision-badge--source">Identity match required</span>
+      </section>
+      {% endif %}
 
-      <section class="decision-panel" aria-labelledby="timeline-heading"><div class="decision-panel__head"><h2 id="timeline-heading">Fulfilment / decision timeline</h2><span class="decision-badge">{{ item.events|length }} events</span></div><div class="decision-panel__body decision-timeline">{% for event in item.events %}<div class="decision-timeline__event"><strong>{{ event.event_type|replace('_',' ')|title }}</strong><small>{{ event.from_status or 'created' }} → {{ event.to_status or '—' }}</small><small>{{ event.created_at }} · user {{ event.actor_user_id or 'system' }}</small></div>{% endfor %}</div></section>
+      {% if can_manage and item.allowed_transitions %}
+      <section class="decision-panel" aria-labelledby="transition-heading">
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Controlled write</span><h2 id="transition-heading">Advance the {{ workspace.eyebrow|lower }} lifecycle</h2></div><span class="decision-badge">Append-only event</span></div>
+        <div class="decision-panel__body">
+          <form method="post" action="{{ url_for('decision_ops.transition_record', record_id=item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="decision-form-grid">
+              <div><label for="recordStatus">Next governed status</label><select class="form-select" id="recordStatus" name="status">{% for status in item.allowed_transitions %}<option value="{{ status }}">{{ status|replace('_',' ')|title }}</option>{% endfor %}</select></div>
+              <div class="span-2"><label for="recordNotes">Decision / exception note</label><input class="form-control" id="recordNotes" name="notes" maxlength="4000" required></div>
+              <div class="span-3"><button class="btn btn-primary" type="submit">Record governed transition</button></div>
+            </div>
+          </form>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if item.lines %}
+      <section class="decision-panel" aria-labelledby="lines-heading">
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Transaction detail</span><h2 id="lines-heading">Controlled record lines</h2></div><span class="decision-badge">{{ item.lines|length }} lines</span></div>
+        <table class="decision-table">
+          <caption class="visually-hidden">Line items on {{ item.record_number }} — {{ item.lines|length }} lines.</caption>
+          <thead><tr><th scope="col">#</th><th scope="col">Item</th><th scope="col">Description</th><th scope="col">Quantity</th><th scope="col">Fulfilled</th><th scope="col">Amount</th></tr></thead>
+          <tbody>{% for line in item.lines %}<tr><td>{{ line.line_number }}</td><td>{{ line.item_ref or '—' }}</td><td>{{ line.description or '—' }}</td><td>{{ line.quantity }}</td><td>{{ line.fulfilled_quantity }}</td><td>{{ item.currency }} {{ '{:,.2f}'.format(line.amount) if line.amount is not none else 'Source required' }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </section>
+      {% endif %}
+
+      <section class="decision-panel" aria-labelledby="timeline-heading">
+        <div class="decision-panel__head"><div><span class="decision-panel__kicker">Immutable audit trail</span><h2 id="timeline-heading">{{ brief.timeline_title }}</h2></div><span class="decision-badge">{{ item.events|length }} events</span></div>
+        <div class="decision-panel__body decision-timeline">
+          {% for event in item.events %}
+          <div class="decision-timeline__event"><strong>{{ event.event_type|replace('_',' ')|title }}</strong><small>{{ event.from_status or 'created' }} → {{ event.to_status or '—' }}</small><small>{{ event.created_at }} · user {{ event.actor_user_id or 'system' }}</small>{% if event.payload.notes %}<p>{{ event.payload.notes }}</p>{% endif %}</div>
+          {% else %}<p class="decision-ledger__note">No lifecycle event has been recorded.</p>{% endfor %}
+        </div>
+      </section>
     </div>
   </div>
 </div>

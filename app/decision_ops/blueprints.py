@@ -23,7 +23,7 @@ from app.core import rbac
 from app.core.audit import log_audit
 from app.core.rbac import permission_required
 
-from . import service
+from . import presentation, service
 
 bp = Blueprint("decision_ops", __name__)
 
@@ -226,12 +226,31 @@ def record_detail(record_id: int):
     workspace = service.WORKSPACES[item["domain"]]
     if not _allowed(workspace["permission"]):
         abort(403)
+    allowed_domains = [
+        key
+        for key, config in service.WORKSPACES.items()
+        if key != "enterprise" and _allowed(config["permission"])
+    ]
+    item["related_records"] = service.related_operational_records(
+        record_id,
+        allowed_domains=allowed_domains,
+    )
+    can_create_action = _allowed("actions.create")
     return render_template(
         "decision_ops/record_detail.html",
         item=item,
+        brief=presentation.build_record_brief(item),
         workspace=workspace,
         workspace_key=item["domain"],
         can_manage=_allowed(workspace["manage_permission"]),
+        can_create_action=can_create_action,
+        create_action_url=url_for(
+            "decision_ops.index",
+            source_module=item["domain"],
+            source_record_id=item["record_number"],
+            source_url=url_for("decision_ops.record_detail", record_id=item["id"]),
+            title=f"Follow up — {item['title']}",
+        ),
         hide_global_filters=True,
     )
 

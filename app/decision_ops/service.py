@@ -355,6 +355,12 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _display_date(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.strftime("%b %d, %Y").replace(" 0", " ")
+
+
 def _owner_labels(session: Any, rows: Iterable[Any]) -> dict[int, str]:
     """Resolve the owner ids on this page to names, in one query.
 
@@ -470,6 +476,10 @@ def _work_dict(item: WorkItem) -> dict[str, Any]:
         "escalation_at": _iso(item.escalation_at),
         "created_at": _iso(item.created_at),
         "updated_at": _iso(item.updated_at),
+        "due_display": _display_date(item.due_at),
+        "reminder_display": _display_date(item.reminder_at),
+        "escalation_display": _display_date(item.escalation_at),
+        "updated_display": _display_date(item.updated_at),
         "is_overdue": bool(is_open and due and due < now),
     }
 
@@ -514,6 +524,8 @@ def _record_dict(item: OperationalRecord, line_count: int = 0) -> dict[str, Any]
         "line_count": line_count,
         "created_at": _iso(item.created_at),
         "updated_at": _iso(item.updated_at),
+        "deadline_display": _display_date(_record_deadline(item)),
+        "updated_display": _display_date(item.updated_at),
         "is_overdue": bool(_is_record_open(item) and deadline and deadline < now),
         "fulfilment_pct": min(100.0, (fulfilled / quantity) * 100) if quantity > 0 else None,
     }
@@ -1038,6 +1050,87 @@ def get_operational_record(record_id: int) -> dict[str, Any] | None:
         return out
 
 
+def related_operational_records(
+    record_id: int,
+    *,
+    allowed_domains: Iterable[str],
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Return permission-scoped records connected by governed master keys.
+
+    Cross-workspace context is the useful part of a unified CRM/ERP control
+    plane, but it must never punch through RBAC.  The route supplies only the
+    domains the current user can view; this service then connects records by
+    exact account, supplier, product, location, or parent identity.
+    """
+
+    domains = {
+        str(domain).strip().lower()
+        for domain in allowed_domains
+        if str(domain).strip().lower() in WORKSPACES
+        and str(domain).strip().lower() != "enterprise"
+    }
+    if not domains:
+        return []
+    with SessionLocal() as session:
+        record = session.get(OperationalRecord, int(record_id))
+        if record is None:
+            return []
+        relationships = []
+        for column, value in (
+            (OperationalRecord.account_ref, record.account_ref),
+            (OperationalRecord.supplier_ref, record.supplier_ref),
+            (OperationalRecord.product_ref, record.product_ref),
+            (OperationalRecord.location_ref, record.location_ref),
+        ):
+            if value:
+                relationships.append(column == value)
+        relationships.append(OperationalRecord.parent_id == record.id)
+        if record.parent_id:
+            relationships.append(OperationalRecord.id == record.parent_id)
+        rows = (
+            session.query(OperationalRecord)
+            .filter(
+                OperationalRecord.id != record.id,
+                OperationalRecord.domain.in_(domains),
+                or_(*relationships),
+            )
+            .order_by(OperationalRecord.updated_at.desc(), OperationalRecord.id.desc())
+            .limit(min(20, max(1, int(limit))))
+            .all()
+        )
+        line_counts = dict(
+            session.query(
+                OperationalRecordLine.operational_record_id,
+                func.count(OperationalRecordLine.id),
+            )
+            .filter(OperationalRecordLine.operational_record_id.in_([row.id for row in rows]))
+            .group_by(OperationalRecordLine.operational_record_id)
+            .all()
+        ) if rows else {}
+        items = _apply_owner_labels(
+            session,
+            rows,
+            [_record_dict(row, int(line_counts.get(row.id, 0))) for row in rows],
+        )
+        for row, item in zip(rows, items, strict=False):
+            if record.account_ref and row.account_ref == record.account_ref:
+                relation = "Same account"
+            elif record.supplier_ref and row.supplier_ref == record.supplier_ref:
+                relation = "Same supplier"
+            elif record.product_ref and row.product_ref == record.product_ref:
+                relation = "Same product"
+            elif record.location_ref and row.location_ref == record.location_ref:
+                relation = "Same location"
+            elif row.parent_id == record.id:
+                relation = "Child record"
+            else:
+                relation = "Parent record"
+            item["relationship"] = relation
+            item["workspace_label"] = WORKSPACES[row.domain]["label"]
+        return items
+
+
 def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict[str, Any]:
     records = list(rows)
     statuses = Counter(row.status for row in records)
@@ -1072,6 +1165,42 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
         open_rows = [row for row in opportunities if row.status not in {"won", "lost"}]
         won = sum(1 for row in opportunities if row.status == "won")
         lost = sum(1 for row in opportunities if row.status == "lost")
+        stage_metrics = [
+            {
+                "stage": stage,
+                "count": sum(1 for row in opportunities if row.status == stage),
+                "value": sum(
+                    float(row.amount or 0) for row in opportunities if row.status == stage
+                ),
+                "weighted": sum(
+                    float(row.amount or 0) * float(row.probability_pct or 0) / 100
+                    for row in opportunities
+                    if row.status == stage
+                ),
+                "stalled": sum(
+                    1
+                    for row in opportunities
+                    if row.status == stage and not row.next_step
+                ),
+                "cards": [
+                    {
+                        "id": row.id,
+                        "title": row.title,
+                        "currency": row.currency,
+                        "amount": row.amount,
+                        "probability_pct": row.probability_pct,
+                        "next_step": row.next_step,
+                        "close_at": _iso(row.close_at),
+                    }
+                    for row in sorted(
+                        (item for item in opportunities if item.status == stage),
+                        key=lambda item: float(item.amount or 0),
+                        reverse=True,
+                    )[:3]
+                ],
+            }
+            for stage in WORKSPACES[domain]["pipeline_stages"]
+        ]
         summary.update({
             "pipeline_value": sum(float(row.amount or 0) for row in open_rows),
             "weighted_pipeline": sum(float(row.amount or 0) * float(row.probability_pct or 0) / 100 for row in open_rows),
@@ -1087,19 +1216,15 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
                 for row in open_rows
                 if not row.next_step or (_naive(row.close_at) and _naive(row.close_at) < now)
             ),
-            "stage_metrics": [
+            "stage_metrics": stage_metrics,
+            "status_flow": [
                 {
-                    "stage": stage,
-                    "count": sum(1 for row in opportunities if row.status == stage),
-                    "value": sum(float(row.amount or 0) for row in opportunities if row.status == stage),
-                    "weighted": sum(
-                        float(row.amount or 0) * float(row.probability_pct or 0) / 100
-                        for row in opportunities
-                        if row.status == stage
-                    ),
-                    "stalled": sum(1 for row in opportunities if row.status == stage and not row.next_step),
+                    "status": stage["stage"],
+                    "count": stage["count"],
+                    "value": stage["value"],
                 }
-                for stage in WORKSPACES[domain]["pipeline_stages"]
+                for stage in stage_metrics
+                if stage["count"]
             ],
             "forecast_mix": [
                 {
