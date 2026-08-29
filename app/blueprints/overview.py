@@ -242,13 +242,13 @@ def _coerce_float(value: Any, default: float = 0.0, minimum: float | None = None
 
 
 def _last_closed_month_end(now: pd.Timestamp | None = None) -> pd.Timestamp:
-    now = now or pd.Timestamp.utcnow().tz_localize(None)
+    now = now or pd.Timestamp.now(tz="UTC").tz_localize(None)
     month_start = now.normalize().replace(day=1)
     return (month_start - pd.Timedelta(days=1)).normalize()
 
 
 def _closed_month_window(months: int = 3, include_current_month: bool = False) -> tuple[pd.Timestamp, pd.Timestamp]:
-    now = pd.Timestamp.utcnow().tz_localize(None)
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None)
     if include_current_month:
         end = now.normalize()
     else:
@@ -300,7 +300,7 @@ def _overview_effective_filters() -> tuple[FilterParams, bool, bool]:
         start = getattr(parsed, "start", None)
         end = getattr(parsed, "end", None)
         if end is None:
-            end = pd.Timestamp.utcnow().tz_localize(None).normalize()
+            end = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
         if start is None and end is not None:
             start = end.replace(day=1)
 
@@ -1396,7 +1396,7 @@ def overview_trend_export():
     meta = bundle.get("meta") or {}
     meta_df = pd.DataFrame(
         [
-            {"field": "generated_at_utc", "value": pd.Timestamp.utcnow().isoformat()},
+            {"field": "generated_at_utc", "value": pd.Timestamp.now(tz="UTC").isoformat()},
             {"field": "dataset_version", "value": meta.get("version")},
             {"field": "window_start", "value": (meta.get("window") or {}).get("start")},
             {"field": "window_end", "value": (meta.get("window") or {}).get("end")},
@@ -1482,7 +1482,7 @@ def overview_drilldown_v2(drilldown: str):
     ).get("meta", {})
     metadata_df = pd.DataFrame(
         [
-            {"field": "generated_at_utc", "value": pd.Timestamp.utcnow().isoformat()},
+            {"field": "generated_at_utc", "value": pd.Timestamp.now(tz="UTC").isoformat()},
             {"field": "drilldown", "value": token},
             {"field": "dimension", "value": dimension},
             {"field": "rows", "value": int(len(frame.index))},

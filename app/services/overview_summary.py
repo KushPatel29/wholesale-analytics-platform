@@ -170,7 +170,7 @@ def build_summary_payload(
     """
     Compose a single payload that fuels the overview dashboard UI.
     """
-    generated_at = pd.Timestamp.utcnow().isoformat()
+    generated_at = pd.Timestamp.now(tz="UTC").isoformat()
     has_data = df is not None and not df.empty
     overview_data = overview or (compute_overview(df) if has_data else {"kpis": {}, "monthly": {}})
     kpis = overview_data.get("kpis", {}) or {}

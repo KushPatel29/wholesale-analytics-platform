@@ -18,6 +18,14 @@ const REPORT_VIEW_PRESETS = {
   actions: ['plan', 'actions']
 };
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;'
+})[char]);
+
 class ReportWorkspace {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
@@ -600,8 +608,8 @@ class ReportWorkspace {
     return `
       <div class="section-header">
         <div>
-          <span class="section-eyebrow">${eyebrows[id] || 'Reporting Layer'}</span>
-          <h2 class="section-title">${title}</h2>
+          <span class="section-eyebrow">${escapeHtml(eyebrows[id] || 'Reporting Layer')}</span>
+          <h2 class="section-title">${escapeHtml(title)}</h2>
         </div>
       </div>
     `;
@@ -656,7 +664,7 @@ class ReportWorkspace {
   }
 
   _empty(message) {
-    return `<div class="plan-empty">${message}</div>`;
+    return `<div class="plan-empty">${escapeHtml(message)}</div>`;
   }
 
   renderPlanningPosition() {
@@ -668,8 +676,8 @@ class ReportWorkspace {
     const meetsTarget = Number.isFinite(onTime) && onTime >= target;
 
     const comparison = window.comparable
-      ? `Comparing <strong>${window.recent_label}</strong> against <strong>${window.prior_label}</strong>.`
-      : (window.reason || 'The active window is too short to split into two halves for a demand trend.');
+      ? `Comparing <strong>${escapeHtml(window.recent_label)}</strong> against <strong>${escapeHtml(window.prior_label)}</strong>.`
+      : escapeHtml(window.reason || 'The active window is too short to split into two halves for a demand trend.');
 
     return `
       <div class="report-card">
@@ -722,7 +730,7 @@ class ReportWorkspace {
         <thead><tr><th>Name</th><th class="num">WAPE</th><th class="num">SMAPE</th><th class="num">Signed bias</th><th class="num">Hit rate</th><th class="num">Periods</th></tr></thead>
         <tbody>${items.map(row => `
           <tr>
-            <td><span class="plan-label">${row.label || `${row.horizon_weeks}-week horizon`}</span></td>
+            <td><span class="plan-label">${escapeHtml(row.label || `${row.horizon_weeks}-week horizon`)}</span></td>
             <td class="num">${this._pct(row.wape_pct)}</td>
             <td class="num">${this._pct(row.smape_pct)}</td>
             <td class="num">${this._money(row.bias)}</td>
@@ -734,9 +742,9 @@ class ReportWorkspace {
     const baseline = forecast.baseline || {};
     const baselineComparison = baseline.available ? `
       <p class="plan-lede">
-        <strong>${baseline.label}:</strong> ${this._pct(baseline.wape_pct)} WAPE versus
+        <strong>${escapeHtml(baseline.label)}:</strong> ${this._pct(baseline.wape_pct)} WAPE versus
         ${this._pct(baseline.model_wape_pct)} for the model on the same ${baseline.scored_periods} periods.
-        <strong>${baseline.comparison}</strong>
+        <strong>${escapeHtml(baseline.comparison)}</strong>
       </p>` : this._empty(`${baseline.label || 'Naive-seasonal baseline'} unavailable. ${baseline.reason || 'Broaden the date range to include prior-year history.'}`);
 
     return `
@@ -764,7 +772,7 @@ class ReportWorkspace {
           <div>${scoreTable(forecast.by_sku || [], 'By SKU')}</div>
           <div>${scoreTable(forecast.by_region || [], 'By region')}</div>
         </div>
-        <p class="plan-footnote">${forecast.methodology?.model || ''} ${forecast.methodology?.weekly_horizons || ''} ${forecast.methodology?.zero_actuals || ''} ${forecast.methodology?.mape || ''}</p>
+        <p class="plan-footnote">${escapeHtml(forecast.methodology?.model || '')} ${escapeHtml(forecast.methodology?.weekly_horizons || '')} ${escapeHtml(forecast.methodology?.zero_actuals || '')} ${escapeHtml(forecast.methodology?.mape || '')}</p>
       </div>
     `;
   }
@@ -793,12 +801,12 @@ class ReportWorkspace {
               <tr>
                 <td>
                   <div class="plan-bar" style="--w:${((Number(r.revenue) || 0) / max * 100).toFixed(1)}%"></div>
-                  <span class="plan-label">${r.label}</span>
+                  <span class="plan-label">${escapeHtml(r.label)}</span>
                 </td>
                 <td class="num">${this._money(r.revenue)}</td>
                 <td class="num">${this._pct(r.share_pct, 1)}</td>
                 <td class="num">${this._delta(r.change_pct)}</td>
-                <td><span class="plan-dir plan-dir--${r.direction}">${r.direction.replace('_', ' ')}</span></td>
+                <td><span class="plan-dir plan-dir--${escapeHtml(r.direction)}">${escapeHtml(String(r.direction || '').replace('_', ' '))}</span></td>
               </tr>
             `).join('')}
           </tbody>
@@ -812,7 +820,7 @@ class ReportWorkspace {
     const target = this._plan().thresholds?.service_target_pct ?? 92;
     return `
       <table class="plan-table">
-        <caption class="plan-caption">${caption}</caption>
+        <caption class="plan-caption">${escapeHtml(caption)}</caption>
         <thead>
           <tr><th>Name</th><th class="num">On time</th><th class="num">Lines</th><th class="num">Revenue</th><th>Status</th></tr>
         </thead>
@@ -821,7 +829,7 @@ class ReportWorkspace {
             <tr class="${r.status === 'critical' ? 'is-critical' : ''}">
               <td>
                 <div class="plan-bar plan-bar--service" style="--w:${Math.max(0, Math.min(100, Number(r.on_time_pct) || 0))}%; --target:${target}%"></div>
-                <span class="plan-label">${r.label}</span>
+                <span class="plan-label">${escapeHtml(r.label)}</span>
               </td>
               <td class="num">${this._pct(r.on_time_pct)}</td>
               <td class="num">${(Number(r.lines) || 0).toLocaleString()}</td>
@@ -846,7 +854,7 @@ class ReportWorkspace {
 
     const scorecard = (list, caption) => `
       <table class="plan-table">
-        <caption class="plan-caption">${caption}</caption>
+        <caption class="plan-caption">${escapeHtml(caption)}</caption>
         <thead>
           <tr>
             <th>Name</th>
@@ -859,14 +867,14 @@ class ReportWorkspace {
             <tr class="${r.status === 'critical' ? 'is-critical' : ''}">
               <td>
                 <div class="plan-bar plan-bar--service" style="--w:${Math.max(0, Math.min(100, Number(r.otif_pct) || 0))}%"></div>
-                <span class="plan-label">${r.label}</span>
+                <span class="plan-label">${escapeHtml(r.label)}</span>
               </td>
               <td class="num">${this._pct(r.otif_pct, 0)}</td>
               <td class="num">${this._pct(r.line_fill_pct, 0)}</td>
               <td class="num">${this._pct(r.on_time_pct, 0)}</td>
               <td class="num">${this._pct(r.stockout_pct, 1)}</td>
               <td class="num">${Number.isFinite(Number(r.cover_days)) ? Number(r.cover_days).toFixed(0) + 'd' : '—'}
-                  <span class="plan-sub">/ ${r.cover_target_days}d</span></td>
+                  <span class="plan-sub">/ ${escapeHtml(r.cover_target_days)}d</span></td>
               <td class="num">${this._money(r.on_hand_value)}</td>
               <td>${this._statusChip(r.status)}</td>
             </tr>
@@ -934,12 +942,12 @@ class ReportWorkspace {
           <div class="plan-spacer"></div>
           <ol class="plan-actions">
             ${inv.actions.slice(0, 5).map(a => `
-              <li class="plan-action plan-action--${a.severity}">
+              <li class="plan-action plan-action--${escapeHtml(a.severity)}">
                 <div class="plan-action__head">
-                  <span class="plan-action__sev">${a.severity}</span>
-                  <h5>${a.title}</h5>
+                  <span class="plan-action__sev">${escapeHtml(a.severity)}</span>
+                  <h3 class="h5">${escapeHtml(a.title)}</h3>
                 </div>
-                <p>${a.detail}</p>
+                <p>${escapeHtml(a.detail)}</p>
               </li>
             `).join('')}
           </ol>` : ''}
@@ -1003,13 +1011,13 @@ class ReportWorkspace {
           ${order.filter(q => groups[q]).map(q => `
             <section class="plan-quadrant plan-quadrant--${q}">
               <header>
-                <h4>${quadrantCopy[q][0]}</h4>
-                <p>${quadrantCopy[q][1]}</p>
+                <h3 class="h4">${escapeHtml(quadrantCopy[q][0])}</h3>
+                <p>${escapeHtml(quadrantCopy[q][1])}</p>
               </header>
               <ul>
                 ${groups[q].map(p => `
                   <li>
-                    <span class="plan-label">${p.label}</span>
+                    <span class="plan-label">${escapeHtml(p.label)}</span>
                     <span class="plan-quadrant__metrics">
                       ${this._delta(p.change_pct)}
                       <span class="plan-sep">·</span>
@@ -1048,8 +1056,8 @@ class ReportWorkspace {
           <tbody>
             ${rows.map(r => `
               <tr class="${r.concentrated ? 'is-critical' : ''}">
-                <td><span class="plan-label">${r.department}</span></td>
-                <td>${r.vendor}</td>
+                <td><span class="plan-label">${escapeHtml(r.department)}</span></td>
+                <td>${escapeHtml(r.vendor)}</td>
                 <td class="num">${this._pct(r.share_pct, 0)}${r.concentrated ? ' <span class="plan-chip plan-chip--watch">single-sourced</span>' : ''}</td>
                 <td class="num">${r.vendor_count}</td>
                 <td class="num">${this._pct(r.vendor_on_time_pct, 0)}</td>
@@ -1074,12 +1082,12 @@ class ReportWorkspace {
         </p>
         <ol class="plan-actions">
           ${actions.map(a => `
-            <li class="plan-action plan-action--${a.severity}">
+            <li class="plan-action plan-action--${escapeHtml(a.severity)}">
               <div class="plan-action__head">
-                <span class="plan-action__sev">${a.severity}</span>
-                <h5>${a.title}</h5>
+                <span class="plan-action__sev">${escapeHtml(a.severity)}</span>
+                <h3 class="h5">${escapeHtml(a.title)}</h3>
               </div>
-              <p>${a.detail}</p>
+              <p>${escapeHtml(a.detail)}</p>
             </li>
           `).join('')}
         </ol>
@@ -1149,8 +1157,8 @@ class ReportWorkspace {
       <div class="text-center py-5">
         <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
         <h3 class="mt-3 fw-bold">System Failure</h3>
-        <p class="text-muted">${msg}</p>
-        <button class="btn btn-dark mt-3" onclick="window.location.reload()">Retry Analysis</button>
+        <p class="text-muted">${escapeHtml(msg)}</p>
+        <button type="button" class="btn btn-dark mt-3" onclick="window.location.reload()">Retry Analysis</button>
       </div>
     `;
   }

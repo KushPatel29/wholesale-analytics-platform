@@ -74,6 +74,19 @@ def check(dist: Path) -> int:
                               'filtersRetryWrap', 'filtersErrorBanner'
                             ].filter(id => document.getElementById(id)),
                             waitingText: /Loading filters|Retry filters|Options request timed out/.test(document.body.innerText || ''),
+                            h1Count: document.querySelectorAll('main h1').length,
+                            duplicateIds: [...document.querySelectorAll('[id]')]
+                              .map(el => el.id).filter((id, index, all) => id && all.indexOf(id) !== index)
+                              .filter((id, index, all) => all.indexOf(id) === index),
+                            missingButtonTypes: document.querySelectorAll('button:not([type])').length,
+                            unsafeBlankLinks: [...document.querySelectorAll('a[target="_blank"]')]
+                              .filter(link => !String(link.rel || '').split(/\\s+/).includes('noopener')).length,
+                            headingSkips: (() => {
+                              const levels = [...document.querySelectorAll('main h1,main h2,main h3,main h4,main h5,main h6')]
+                                .filter(el => !el.closest('[hidden]'))
+                                .map(el => Number(el.tagName.slice(1)));
+                              return levels.filter((level, index) => index > 0 && level > levels[index - 1] + 1).length;
+                            })(),
                           };
                         }"""
                     )
@@ -92,8 +105,41 @@ def check(dist: Path) -> int:
                         issues.append(f"retired UI exists: {result['retired']}")
                     if result["waitingText"]:
                         issues.append("waiting/error text is visible")
+                    if result["h1Count"] != 1:
+                        issues.append(f"expected one main H1, found {result['h1Count']}")
+                    if result["duplicateIds"]:
+                        issues.append(f"duplicate IDs: {result['duplicateIds'][:3]}")
+                    if result["missingButtonTypes"]:
+                        issues.append(f"{result['missingButtonTypes']} button(s) lack an explicit type")
+                    if result["unsafeBlankLinks"]:
+                        issues.append(f"{result['unsafeBlankLinks']} target=_blank link(s) lack rel=noopener")
+                    if result["headingSkips"]:
+                        issues.append(f"{result['headingSkips']} heading-level skip(s)")
                     if requested_api:
                         issues.append(f"API requested: {requested_api[:2]}")
+
+                    # The first pass deliberately blocks every subresource to
+                    # prove that the meaningful DOM is prerendered. Reload with
+                    # the local runtime available before checking interaction;
+                    # event listeners cannot exist when their script is
+                    # intentionally blocked.
+                    page.unroute("**/*")
+                    page.goto(f"{origin}/{path}", wait_until="domcontentloaded", timeout=15_000)
+                    dropdown = page.locator('[data-bs-toggle="dropdown"]').first
+                    if dropdown.count():
+                        dropdown.focus()
+                        dropdown.press("ArrowDown")
+                        keyboard_state = page.evaluate(
+                            """() => ({
+                              expanded: document.activeElement?.closest('.dropdown-menu.show') != null,
+                              menuitem: document.activeElement?.matches('a[href],button,[role="menuitem"]') || false,
+                            })"""
+                        )
+                        if not keyboard_state["expanded"] or not keyboard_state["menuitem"]:
+                            issues.append("header dropdown does not open and focus an item with ArrowDown")
+                        page.keyboard.press("Escape")
+                        if dropdown.get_attribute("aria-expanded") != "false" or not dropdown.evaluate("el => el === document.activeElement"):
+                            issues.append("header dropdown Escape does not close and restore focus")
                     if issues:
                         failures.append(f"{path}: {'; '.join(issues)}")
                     page.close()

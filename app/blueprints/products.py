@@ -1772,7 +1772,7 @@ def _safe_int(v: Any, default: int) -> int:
 
 def _recent_window(months: int) -> Tuple[pd.Timestamp, pd.Timestamp]:
     months = max(1, int(months))
-    now = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
     end = now
     start = (end - pd.DateOffset(months=months)).normalize().replace(day=1)
     return start, end
@@ -2203,7 +2203,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict[str, Any]) -> pd.DataFrame:
     include_current = _coerce_bool(filters.get("include_current_month"), default=False)
     if not include_current:
         try:
-            current_month_start = pd.Timestamp.utcnow().tz_localize(None).normalize().replace(day=1)
+            current_month_start = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize().replace(day=1)
             mask &= dates < current_month_start
         except Exception:
             pass
@@ -3166,7 +3166,7 @@ def _build_sales_segments(filters: Dict[str, Any]) -> Dict[str, Any]:
     df["_qty_basis"] = _qty_basis_series(df)
     df["month"] = pd.to_datetime(df[CAN.date], errors="coerce").dt.to_period("M")
     last_sold_map = df.groupby(CAN.product_id, observed=True)[CAN.date].max()
-    now = pd.Timestamp.utcnow().tz_localize(None).normalize()
+    now = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
 
     revenue_totals = df.groupby(CAN.product_id, observed=True)[CAN.revenue].sum().astype(float)
     qty_totals = df.groupby(CAN.product_id, observed=True)["_qty_basis"].sum().astype(float)
@@ -3891,11 +3891,11 @@ def _simple_forecast(df: pd.DataFrame, periods: int = 6, include_current: bool =
 
     # Always train on complete months (exclude the current partial unless explicitly overridden)
     try:
-        now = pd.to_datetime(today) if today is not None else pd.Timestamp.utcnow()
+        now = pd.to_datetime(today) if today is not None else pd.Timestamp.now(tz="UTC")
         now = pd.Timestamp(now).tz_localize(None)
         current_month_start = now.normalize().replace(day=1)
     except Exception:
-        current_month_start = pd.Timestamp.utcnow().normalize().replace(day=1)
+        current_month_start = pd.Timestamp.now(tz="UTC").normalize().replace(day=1)
 
     if not include_current:
         monthly = monthly[monthly.index < current_month_start]
@@ -5413,7 +5413,7 @@ def drilldown(product_id: str):
     try:
         if current_app.config.get("TESTING") and not (request.args.get("start") or request.args.get("end")):
             start = "2017-01-01"
-            end = pd.Timestamp.utcnow().date().isoformat()
+            end = pd.Timestamp.now(tz="UTC").date().isoformat()
     except Exception:
         pass
     if start and not args.get("start"):
@@ -5433,7 +5433,7 @@ def drilldown(product_id: str):
             fallback_args = MultiDict(request.args)
             fallback_args.setlist("product_id", [str(product_id)])
             fallback_args.setlist("start", ["2017-01-01"])
-            fallback_args.setlist("end", [pd.Timestamp.utcnow().date().isoformat()])
+            fallback_args.setlist("end", [pd.Timestamp.now(tz="UTC").date().isoformat()])
             fallback_args.setlist("date_preset", ["all"])
             payload = bundle_service.drilldown("products", fallback_args)
             kpis = payload.get("kpis") or {}

@@ -696,7 +696,7 @@ def export_overview():
     try:
         fmt = (request.args.get("format") or "xlsx").lower()
         dataset = str(request.args.get("dataset") or "summary").strip().lower()
-        stamp = pd.Timestamp.utcnow().strftime("%Y%m%d")
+        stamp = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d")
         if not legacy_pandas_enabled():
             args = MultiDict(request.args)
             args["page"] = "1"
@@ -851,7 +851,7 @@ def export_momentum():
     """
     try:
         fmt = (request.args.get("format") or "csv").lower()
-        stamp = pd.Timestamp.utcnow().strftime("%Y%m%d")
+        stamp = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d")
         if not legacy_pandas_enabled():
             args = MultiDict(request.args)
             args["page"] = "1"
@@ -953,7 +953,7 @@ def export_region(region_name):
             export_args["drilldown_v2"] = "1"
             export_args["region_drilldown_v2"] = "1"
             frames, meta = regions_bundle.build_region_drilldown_export_frames(region_name, filters, scope, export_args)
-            stamp = pd.Timestamp.utcnow().strftime("%Y%m%d")
+            stamp = pd.Timestamp.now(tz="UTC").strftime("%Y%m%d")
             safe = sanitize_filename(str(region_name) if region_name is not None else "region")
             metadata_df = pd.DataFrame(
                 [

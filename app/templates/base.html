@@ -165,9 +165,10 @@
      dormant and every "active in the last 30 days" count zero. #}
   <body class="app-shell theme-wa-future" data-filters-handler="{{ 'disabled' if _hide_global_filters else filters_handler|default('ssr') }}" data-page-tone="{{ _page_tone }}"{% if data_through %} data-data-through="{{ data_through.isoformat() }}"{% endif %}>
     {% set branding = config.get('BRANDING', {}) %}
+    {% set _auth_bypassed = config.get('LOGIN_DISABLED', False) %}
     <nav class="navbar navbar-expand-lg navbar-wholesale navbar-dark">
       <div class="container-fluid px-4">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{% if current_user.is_authenticated or _auth_bypassed %}{{ url_for('pages.home') }}{% else %}{{ url_for('login_alias') }}{% endif %}">
           {# Inlined rather than an <img>: the wordmark is drawn with
              `fill="currentColor"` so it follows the theme, and an external SVG
              cannot see the page's colour - it rendered black on the dark
@@ -192,7 +193,7 @@
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
           {% set _has_salesreps = has_salesreps if has_salesreps is defined else False %}
-          {% if current_user.is_authenticated %}
+          {% if current_user.is_authenticated or _auth_bypassed %}
           <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-1">
             {% if can_permission('page.overview.view') %}
             <li class="nav-item"><a class="nav-link {% if request.blueprint == 'overview_page' %}active{% endif %}" href="{{ static_page_url('') if static_page_url else url_for('overview_page.overview_landing') }}">Overview</a></li>

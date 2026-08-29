@@ -2619,7 +2619,7 @@ def export():
                 data_df = pd.DataFrame(columns=empty_export_columns.get(sheet_name, []))
 
             metadata = {
-                "generated_at_utc": pd.Timestamp.utcnow().isoformat(),
+                "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
                 "dataset": dataset,
                 "dataset_version": meta_payload.get("dataset_version"),
                 "filters_hash": meta_payload.get("filter_hash"),
@@ -2728,7 +2728,7 @@ def export():
                 export_df = pd.DataFrame()
 
             metadata = {
-                "generated_at_utc": pd.Timestamp.utcnow().isoformat(),
+                "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
                 "dataset_version": meta_payload.get("dataset_version"),
                 "filters_hash": meta_payload.get("filter_hash"),
                 "filters_query": str(request.query_string.decode("utf-8") if request.query_string else ""),
@@ -3024,7 +3024,7 @@ def export():
             summary_df = pd.DataFrame.from_records(summary_rows)
 
             metadata = {
-                "generated_at_utc": pd.Timestamp.utcnow().isoformat(),
+                "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
                 "dataset": dataset,
                 "dataset_version": meta_payload.get("dataset_version"),
                 "filters_hash": meta_payload.get("filter_hash"),
@@ -3208,7 +3208,7 @@ def export():
                 data_df = pd.DataFrame()
 
             metadata = {
-                "generated_at_utc": pd.Timestamp.utcnow().isoformat(),
+                "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
                 "dataset": dataset,
                 "dataset_version": meta_payload.get("dataset_version"),
                 "filters_hash": meta_payload.get("filter_hash"),

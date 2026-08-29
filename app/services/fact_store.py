@@ -1242,7 +1242,7 @@ def _apply_default_window(start_ts: Optional[pd.Timestamp], end_ts: Optional[pd.
         try:
             end_ts = pd.Timestamp.now(tz=timezone.utc)
         except Exception:
-            end_ts = pd.Timestamp.utcnow()
+            end_ts = pd.Timestamp.now(tz="UTC")
         start_ts = end_ts - pd.DateOffset(months=_default_window_months())
     return start_ts, end_ts
 

@@ -12,7 +12,7 @@
   <!-- Header -->
   <div class="row align-items-center mb-3">
     <div class="col">
-      <h2 class="mb-0">Suppliers Overview</h2>
+      <h1 class="h2 mb-0">Suppliers Overview</h1>
       <div class="text-muted small">Aggregated across your current filters</div>
     </div>
     <div class="col-auto d-flex gap-2">
@@ -106,7 +106,7 @@
   <section class="supplier-priorities mb-3" aria-labelledby="supplierPrioritiesTitle">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
       <div>
-        <h5 class="mb-0" id="supplierPrioritiesTitle">Procurement priorities</h5>
+        <h2 class="h5 mb-0" id="supplierPrioritiesTitle">Procurement priorities</h2>
         <div class="text-muted small">The three decisions implied by the active supplier book, ranked from the same rows as the table.</div>
       </div>
     </div>
@@ -122,7 +122,7 @@
     <div class="col-lg-7">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Revenue Trend (Last 12 Months)</h5>
+          <h2 class="card-title h5 mb-0">Revenue Trend (Last 12 Months)</h2>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" type="button"
               onclick="ExportKit.exportArrayToCSV('supplier_trend', trendLabels, trendValues, 'Month', 'Revenue')">
@@ -143,7 +143,7 @@
     <div class="col-lg-5">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Top Suppliers by Revenue</h5>
+          <h2 class="card-title h5 mb-0">Top Suppliers by Revenue</h2>
           {# The CSV button that used to sit here pointed at
              suppliers.export_overview, which `_block_legacy_suppliers` answers
              with 410 Gone. It rendered as a working control and downloaded an
@@ -166,7 +166,7 @@
     <div class="col-lg-7">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Spend concentration</h5>
+          <h2 class="card-title h5 mb-0">Spend concentration</h2>
           {# No bare "HHI" in this copy: `test_no_page_prints_a_bare_hhi`
              requires the acronym to be followed by its basis wherever it
              appears, and it cannot tell a caption from a label. #}
@@ -183,7 +183,7 @@
     <div class="col-lg-5">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Margin against spend</h5>
+          <h2 class="card-title h5 mb-0">Margin against spend</h2>
           <div class="text-muted small">Bubble size is spend. Anything below the dashed portfolio margin costs more than it returns.</div>
         </div>
         <div class="card-body">
@@ -200,7 +200,7 @@
     <div class="col-12">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Assortment breadth and order velocity</h5>
+          <h2 class="card-title h5 mb-0">Assortment breadth and order velocity</h2>
           <div class="text-muted small" id="supplierBreadthRead">Each bubble is a supplier: active SKUs against orders per SKU, sized by revenue and coloured by margin.</div>
         </div>
         <div class="card-body">
@@ -219,12 +219,12 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
           <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
-            <h5 class="card-title mb-0">Suppliers — Current Filters</h5>
+            <h2 class="card-title h5 mb-0">Suppliers — Current Filters</h2>
             <div class="d-flex gap-2 align-items-center">
               <div class="input-group input-group-sm">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                 <input type="search" class="form-control" id="tableSearch" placeholder="Search supplier…" aria-label="Search suppliers">
-                <button class="btn btn-outline-secondary" id="btnClearSearch" title="Clear search">Clear</button>
+                <button type="button" class="btn btn-outline-secondary" id="btnClearSearch" title="Clear search">Clear</button>
               </div>
               <button class="btn btn-sm btn-outline-secondary" type="button"
                       onclick="ExportKit.exportTableToCSV('supTable','suppliers_table')">
@@ -365,7 +365,7 @@
             <div id="tableStatus" class="text-muted small" aria-live="polite"></div>
             <div class="d-flex gap-2">
               <span class="text-muted small me-2" id="tableCount"></span>
-              <button id="loadMore" class="btn btn-sm btn-outline-secondary">Load more</button>
+              <button type="button" id="loadMore" class="btn btn-sm btn-outline-secondary">Load more</button>
             </div>
           </div>
         </div>

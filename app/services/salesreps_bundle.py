@@ -5523,7 +5523,7 @@ def build_salesreps_export_workbook_sheets(filters: Any, scope: Dict[str, Any], 
             {"key": "window_start", "value": str((payload.get("meta") or {}).get("window_start") or "")},
             {"key": "window_end", "value": str((payload.get("meta") or {}).get("window_end") or "")},
             {"key": "attribution_mode", "value": str(((payload.get("meta") or {}).get("attribution") or {}).get("attribution_mode") or "")},
-            {"key": "generated_at_utc", "value": pd.Timestamp.utcnow().isoformat()},
+            {"key": "generated_at_utc", "value": pd.Timestamp.now(tz="UTC").isoformat()},
             {"key": "dataset_version", "value": str((payload.get("meta") or {}).get("dataset_version") or fact_store.cache_buster())},
         ]
     )
@@ -6191,7 +6191,7 @@ def _salesrep_metadata_frame(
         rep_name = _business_rep_name(None, rep_id)
     start = getattr(filters, "start", None)
     end = getattr(filters, "end", None)
-    generated_at = pd.Timestamp.utcnow().isoformat()
+    generated_at = pd.Timestamp.now(tz="UTC").isoformat()
     return pd.DataFrame(
         [
             {"key": "rep_name", "value": rep_name},

@@ -3867,6 +3867,14 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
     if requested_module == "assistant":
         requested_module = "overview"
     include_all = requested_module in {"all", "cross_module", "cross-module", "business", "portfolio", "*"}
+    # A cross-module leadership prompt must stay interactive. Each module
+    # bundle is independently substantial; fanning out across all five made a
+    # single assistant turn run for minutes on the production-sized snapshot.
+    # The overview already contains the governed cross-business concentration
+    # and profitability signals. Detailed bundle work is reserved for an
+    # explicitly requested module, where its cost is both bounded and useful.
+    query_module_details = not include_all
+    queried_sources: List[str] = []
 
     def include(module: str) -> bool:
         return include_all or requested_module == module
@@ -3874,6 +3882,7 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
     if include("overview") and access.get("overview"):
         try:
             overview = _overview_context(ctx)
+            queried_sources.append("overview_v2.build_overview_context")
             concentration = ((overview.get("risk") or {}).get("concentration") or {})
             profitability = ((overview.get("risk") or {}).get("profitability") or {})
             hhi = concentration.get("hhi") or concentration.get("customer_hhi")
@@ -3901,8 +3910,9 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
         except Exception:
             pass
 
-    if include("customers") and access.get("customers"):
+    if query_module_details and include("customers") and access.get("customers"):
         payload = _module_bundle(ctx, "customers", {})
+        queried_sources.append("customers_bundle.build_customers_bundle")
         kpis = payload.get("kpis") if isinstance(payload.get("kpis"), Mapping) else {}
         at_risk = int(kpis.get("at_risk_90") or 0)
         if at_risk > 0:
@@ -3916,8 +3926,9 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
                 }
             )
 
-    if include("products") and access.get("products"):
+    if query_module_details and include("products") and access.get("products"):
         payload = _module_bundle(ctx, "products", {})
+        queried_sources.append("products_bundle.build_products_bundle")
         guardrails = payload.get("pricing_guardrails") if isinstance(payload.get("pricing_guardrails"), Mapping) else {}
         outside = int(guardrails.get("outside_count") or 0)
         if outside > 0:
@@ -3931,8 +3942,9 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
                 }
             )
 
-    if include("regions") and access.get("regions"):
+    if query_module_details and include("regions") and access.get("regions"):
         payload = _module_bundle(ctx, "regions", {})
+        queried_sources.append("regions_bundle.build_regions_bundle")
         risk_summary = ((payload.get("risk") or {}).get("summary") or {}) if isinstance(payload.get("risk"), Mapping) else {}
         high_risk_regions = int(risk_summary.get("high_risk_regions") or 0)
         if high_risk_regions > 0:
@@ -3946,8 +3958,9 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
                 }
             )
 
-    if include("suppliers") and access.get("suppliers"):
+    if query_module_details and include("suppliers") and access.get("suppliers"):
         payload = _module_bundle(ctx, "suppliers", {})
+        queried_sources.append("suppliers_bundle.build_suppliers_bundle")
         kpis = payload.get("kpis") if isinstance(payload.get("kpis"), Mapping) else {}
         at_risk_suppliers = int(kpis.get("at_risk_suppliers") or 0)
         if at_risk_suppliers > 0:
@@ -3961,8 +3974,9 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
                 }
             )
 
-    if include("salesreps") and access.get("salesreps"):
+    if query_module_details and include("salesreps") and access.get("salesreps"):
         payload = _module_bundle(ctx, "salesreps", {})
+        queried_sources.append("salesreps_bundle.build_salesreps_bundle")
         risk_flags = list(payload.get("risk_flags") or [])
         high_count = sum(1 for row in risk_flags if str(row.get("severity") or "").lower() == "high")
         if high_count > 0:
@@ -3981,6 +3995,7 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
             statuses=[returns_service.STATUS_PENDING, returns_service.STATUS_NEEDS_REVIEW],
             actor_user=ctx.user,
         )
+        queried_sources.append("returns_service.list_rmas")
         if pending:
             investigations.append(
                 {
@@ -3997,18 +4012,19 @@ def get_priority_investigations(ctx: ToolContext, args: Dict[str, Any] | None = 
     return _tool_response(
         status="ok" if investigations else "empty",
         title="Priority Investigations",
-        data={"investigations": investigations[:12], "requested_module": result_module},
+        data={
+            "investigations": investigations[:12],
+            "requested_module": result_module,
+            "coverage_mode": "overview_fast" if include_all else "module_detail",
+        },
         ctx=ctx,
+        notes=(
+            ["Cross-module scan uses the governed overview risk layer; request a named module for its detailed investigation bundle."]
+            if include_all
+            else []
+        ),
         next_actions=[item.get("title") for item in investigations[:5] if item.get("title")],
-        citations=[
-            "overview_v2.build_overview_context",
-            "customers_bundle.build_customers_bundle",
-            "products_bundle.build_products_bundle",
-            "regions_bundle.build_regions_bundle",
-            "suppliers_bundle.build_suppliers_bundle",
-            "salesreps_bundle.build_salesreps_bundle",
-            "returns_service.list_rmas",
-        ],
+        citations=queried_sources,
         module=result_module,
     )
 

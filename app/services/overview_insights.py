@@ -53,7 +53,7 @@ def _is_month_aligned(start: date, end: date) -> bool:
 def _periods_from_filters(filters: FilterParams, include_current_month: bool) -> Dict[str, Any]:
     start_dt, end_dt, _ = ov2._normalize_dates(filters, include_current_month)
     if not start_dt or not end_dt:
-        today = pd.Timestamp.utcnow().tz_localize(None).date()
+        today = pd.Timestamp.now(tz="UTC").tz_localize(None).date()
         end_dt = end_dt or today
         start_dt = start_dt or (end_dt - timedelta(days=30))
     if start_dt > end_dt:

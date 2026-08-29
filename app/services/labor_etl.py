@@ -378,7 +378,7 @@ def normalize_labor_records(
     window_start: date,
     window_end: date,
 ) -> pd.DataFrame:
-    loaded_ts = _timestamp_or_none(loaded_at) or pd.Timestamp.utcnow().tz_localize(None)
+    loaded_ts = _timestamp_or_none(loaded_at) or pd.Timestamp.now(tz="UTC").tz_localize(None)
     rows: list[dict[str, Any]] = []
 
     for record in records:

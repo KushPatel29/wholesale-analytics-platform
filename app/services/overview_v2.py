@@ -157,7 +157,7 @@ def _refresh_meta() -> Dict[str, Any]:
     version, last_refresh = _manifest_meta()
     refresh_ts = _coerce_manifest_timestamp(last_refresh)
     cutoff_ts = _coerce_manifest_timestamp(manifest_max_date())
-    now_ts = pd.Timestamp.utcnow().tz_localize(None)
+    now_ts = pd.Timestamp.now(tz="UTC").tz_localize(None)
     refresh_age_hours: Optional[int] = None
     refresh_age_days: Optional[int] = None
     if refresh_ts is not None:
@@ -3811,7 +3811,7 @@ def build_trend(filters: FilterParams, months: int = 12, exclude_partial: bool =
         monthly = pd.DataFrame()
     work = monthly.copy() if isinstance(monthly, pd.DataFrame) else pd.DataFrame()
     if not work.empty and exclude_partial:
-        current_month = pd.Timestamp.utcnow().tz_localize(None).to_period("M")
+        current_month = pd.Timestamp.now(tz="UTC").tz_localize(None).to_period("M")
         if work.index.max() == current_month and len(work) > 1:
             work = work.iloc[:-1]
     if months and months > 0 and not work.empty:
@@ -4522,7 +4522,7 @@ def build_snapshot_sheets(
     kpis = payload.get("kpis") or {}
 
     metadata_rows = [
-        {"field": "generated_at_utc", "value": pd.Timestamp.utcnow().isoformat()},
+        {"field": "generated_at_utc", "value": pd.Timestamp.now(tz="UTC").isoformat()},
         {"field": "dataset_version", "value": meta.get("version")},
         {"field": "last_refresh", "value": meta.get("last_refresh")},
         {"field": "data_cutoff", "value": meta.get("data_cutoff")},

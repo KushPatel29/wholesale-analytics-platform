@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 import hashlib
 import json
@@ -426,7 +426,7 @@ def _cohorts_today_iso() -> str:
     try:
         return datetime.now(ZoneInfo(tz_name)).date().isoformat()
     except Exception:
-        return datetime.utcnow().date().isoformat()
+        return datetime.now(timezone.utc).date().isoformat()
 
 
 def _coerce_date_ts(value: Any) -> pd.Timestamp | None:
@@ -442,7 +442,7 @@ def _coerce_date_ts(value: Any) -> pd.Timestamp | None:
 
 
 def _cohorts_dataset_end_ts() -> pd.Timestamp:
-    today_ts = _coerce_date_ts(_cohorts_today_iso()) or pd.Timestamp.utcnow().normalize()
+    today_ts = _coerce_date_ts(_cohorts_today_iso()) or pd.Timestamp.now(tz="UTC").normalize()
     live_ts = None
     try:
         cols = fact_store.list_columns()

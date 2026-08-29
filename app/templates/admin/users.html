@@ -852,6 +852,13 @@
   const adminPermissionsV2 = {{ config.get('ADMIN_PERMISSIONS_V2', False)|tojson }};
   const ALL_SCOPE_TOKEN = "__all__";
   const authFetch = window.authFetch || fetch;
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  })[char]);
   const tableBody = document.querySelector('[data-user-table-body]');
   const alertHost = document.getElementById('adminAlerts');
   const summaryEl = document.getElementById('adminUserSummary');
@@ -1043,7 +1050,14 @@
     const el = document.createElement('div');
     el.className = `alert alert-${variant} alert-dismissible fade show`;
     el.role = "alert";
-    el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    const copy = document.createElement('div');
+    copy.textContent = String(message || '');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn-close';
+    close.dataset.bsDismiss = 'alert';
+    close.setAttribute('aria-label', 'Close');
+    el.append(copy, close);
     alertHost.appendChild(el);
     setTimeout(() => el.classList.remove('show'), 5000);
     setTimeout(() => el.remove(), 5200);
@@ -1057,7 +1071,7 @@
       return;
     }
     container.className = `alert alert-${variant} mb-3`;
-    container.innerHTML = message;
+    container.textContent = String(message);
   }
 
   function setPendingButton(button, pending, pendingLabel) {
@@ -1135,14 +1149,14 @@
       return '<span class="badge bg-primary">All</span>';
     }
     if (!list.length) return '<span class="text-muted">No access</span>';
-    const shown = list.slice(0, 3).map(v => String(v));
+    const shown = list.slice(0, 3).map(v => escapeHtml(v));
     const extra = list.length > 3 ? ` +${list.length - 3}` : '';
     return `${shown.join(', ')}${extra}`;
   }
 
   function formatErpId(user) {
     const id = user.erp_user_id || user.sales_rep_id;
-    return id ? String(id) : '<span class="text-muted">Unlinked</span>';
+    return id ? escapeHtml(id) : '<span class="text-muted">Unlinked</span>';
   }
 
   function normalizeErpUser(raw) {
@@ -1235,8 +1249,8 @@
       return;
     }
     container.innerHTML = items.map(item => `
-      <button type="button" class="list-group-item list-group-item-action" data-result-id="${item.id}">
-        ${item.label}
+      <button type="button" class="list-group-item list-group-item-action" data-result-id="${escapeHtml(item.id)}">
+        ${escapeHtml(item.label)}
       </button>
     `).join('');
     container.querySelectorAll('[data-result-id]').forEach(btn => {
@@ -1259,13 +1273,13 @@
   function renderSelected(container, map, emptyText) {
     if (!container) return;
     if (!map.size) {
-      container.innerHTML = `<span class="text-muted">${emptyText}</span>`;
+      container.innerHTML = `<span class="text-muted">${escapeHtml(emptyText)}</span>`;
       return;
     }
     container.innerHTML = Array.from(map.entries()).map(([id, label]) => `
       <span class="badge bg-light text-dark border me-1 mb-1 d-inline-flex align-items-center">
-        <span class="me-1">${label}</span>
-        <button type="button" class="btn btn-sm btn-link text-danger p-0" data-remove-id="${id}">x</button>
+        <span class="me-1">${escapeHtml(label)}</span>
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" data-remove-id="${escapeHtml(id)}">x</button>
       </span>
     `).join('');
   }
@@ -1294,7 +1308,11 @@
         const items = await fetcher(q);
         renderSearchResults(resultsEl, items, onSelect);
       } catch (err) {
-        resultsEl.innerHTML = `<div class="list-group-item text-muted">${err.message}</div>`;
+        resultsEl.replaceChildren();
+        const errorCopy = document.createElement('div');
+        errorCopy.className = 'list-group-item text-muted';
+        errorCopy.textContent = String(err.message || 'Lookup failed.');
+        resultsEl.appendChild(errorCopy);
       }
     }, 300);
     inputEl.addEventListener('input', run);
@@ -1703,7 +1721,7 @@
       return;
     }
     accessRoleDefaults.innerHTML = rolePermissions
-      .map(key => `<span class="access-pill inherited">${accessPermissionLabel(key)}</span>`)
+      .map(key => `<span class="access-pill inherited">${escapeHtml(accessPermissionLabel(key))}</span>`)
       .join('');
   }
 
@@ -1718,8 +1736,8 @@
     }
     const overrides = accessOverrideState();
     const pills = [
-      ...overrides.allow.map(key => `<span class="access-pill allow">Allow: ${accessPermissionLabel(key)}</span>`),
-      ...overrides.deny.map(key => `<span class="access-pill deny">Hide: ${accessPermissionLabel(key)}</span>`),
+      ...overrides.allow.map(key => `<span class="access-pill allow">Allow: ${escapeHtml(accessPermissionLabel(key))}</span>`),
+      ...overrides.deny.map(key => `<span class="access-pill deny">Hide: ${escapeHtml(accessPermissionLabel(key))}</span>`),
     ];
     accessOverrideSummary.innerHTML = pills.join('') || '<span class="text-muted">No user-specific overrides.</span>';
   }
@@ -1749,11 +1767,11 @@
     accessPreview.innerHTML = `
       <ul class="access-summary-list">
         <li>Access source: ${state.access.sourceMode === 'role' ? 'Inherited from role' : 'Custom per-user overrides'}</li>
-        <li>Accessible modules: ${accessibleModules.length ? accessibleModules.join(', ') : 'None'}</li>
-        <li>Accessible drilldowns: ${drilldowns.length ? drilldowns.join(', ') : 'Disabled'}</li>
-        <li>Export access: ${exports.length ? exports.join('; ') : 'None'}</li>
-        <li>Scope summary: ${scopePreviewText(state.access.user.scope)}</li>
-        <li>${sensitive.join(' | ')}</li>
+        <li>Accessible modules: ${escapeHtml(accessibleModules.length ? accessibleModules.join(', ') : 'None')}</li>
+        <li>Accessible drilldowns: ${escapeHtml(drilldowns.length ? drilldowns.join(', ') : 'Disabled')}</li>
+        <li>Export access: ${escapeHtml(exports.length ? exports.join('; ') : 'None')}</li>
+        <li>Scope summary: ${escapeHtml(scopePreviewText(state.access.user.scope))}</li>
+        <li>${escapeHtml(sensitive.join(' | '))}</li>
         <li>${selected.has('data.cost.view') ? 'Cost-driven tables, cards, charts, drilldowns, and exports are allowed.' : 'Cost-driven tables, cards, charts, drilldowns, and exports stay masked or hidden.'}</li>
       </ul>
     `;
@@ -1766,7 +1784,7 @@
       warnings.unshift('Saving in role-default mode clears any explicit per-user overrides for this user.');
     }
     accessWarnings.innerHTML = warnings.length
-      ? `<ul class="access-warning-list">${warnings.map(item => `<li>${item}</li>`).join('')}</ul>`
+      ? `<ul class="access-warning-list">${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
       : '<span class="text-success">No access conflicts detected.</span>';
   }
 
@@ -1775,12 +1793,12 @@
     const user = state.access.user || {};
     const source = state.access.source || {};
     accessSourceSummary.innerHTML = `
-      <div class="fw-semibold mb-1">Role preset: ${(source.role_preset || user.role || 'none')}</div>
+      <div class="fw-semibold mb-1">Role preset: ${escapeHtml(source.role_preset || user.role || 'none')}</div>
       <div class="text-muted">Mode: ${state.access.sourceMode === 'role' ? 'Inherited from role only' : 'Custom overrides enabled'}</div>
-      <div class="text-muted">Roles: ${(source.role_names || user.roles || []).join(', ') || 'None'}</div>
-      <div class="text-muted">Overrides: ${(source.allow_override_count || 0)} allow / ${(source.deny_override_count || 0)} hide</div>
-      <div class="text-muted">Current scope: ${scopePreviewText(user.scope)}</div>
-      <div class="text-muted">Current visibility summary: ${(user.visibility_count || 0)} visible ERP user(s)</div>
+      <div class="text-muted">Roles: ${escapeHtml((source.role_names || user.roles || []).join(', ') || 'None')}</div>
+      <div class="text-muted">Overrides: ${escapeHtml(source.allow_override_count || 0)} allow / ${escapeHtml(source.deny_override_count || 0)} hide</div>
+      <div class="text-muted">Current scope: ${escapeHtml(scopePreviewText(user.scope))}</div>
+      <div class="text-muted">Current visibility summary: ${escapeHtml(user.visibility_count || 0)} visible ERP user(s)</div>
     `;
   }
 
@@ -1790,9 +1808,9 @@
     accessUserSummary.innerHTML = `
       <div class="d-flex flex-wrap justify-content-between gap-3">
         <div>
-          <div class="fw-semibold">${user.full_name || user.username || user.email || 'User'}</div>
-          <div class="text-muted">${user.email || 'No email'} | Role ${user.role || 'No role'} | ERP ${user.erp_user_id || 'Unlinked'}</div>
-          <div class="text-muted">Status ${status} | Scope mode ${(user.scope && user.scope.scope_mode) || 'none'} | ${scopePreviewText(user.scope)}</div>
+          <div class="fw-semibold">${escapeHtml(user.full_name || user.username || user.email || 'User')}</div>
+          <div class="text-muted">${escapeHtml(user.email || 'No email')} | Role ${escapeHtml(user.role || 'No role')} | ERP ${escapeHtml(user.erp_user_id || 'Unlinked')}</div>
+          <div class="text-muted">Status ${escapeHtml(status)} | Scope mode ${escapeHtml((user.scope && user.scope.scope_mode) || 'none')} | ${escapeHtml(scopePreviewText(user.scope))}</div>
         </div>
         <div class="access-pill-row">
           <span class="access-pill">${user.is_active ? 'Enabled' : 'Disabled'}</span>
@@ -1930,18 +1948,18 @@
     if (!accessQuickActions || !state.access) return;
     const roleLabel = ((state.access.source || {}).role_preset || (state.access.user || {}).role || 'role').toUpperCase();
     const bundleButtons = (state.access.editor.bundles || []).map(bundle => `
-      <button type="button" class="btn btn-outline-secondary btn-sm" data-access-bundle="${bundle.id}" title="${bundle.description || ''}">
-        ${bundle.label}
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-access-bundle="${escapeHtml(bundle.id)}" title="${escapeHtml(bundle.description || '')}">
+        ${escapeHtml(bundle.label)}
       </button>
     `).join('');
     const presetButtons = (state.access.editor.presets || []).map(preset => `
-      <button type="button" class="btn btn-outline-primary btn-sm" data-access-preset="${preset.id}" title="${preset.description || ''}">
-        ${preset.label}
+      <button type="button" class="btn btn-outline-primary btn-sm" data-access-preset="${escapeHtml(preset.id)}" title="${escapeHtml(preset.description || '')}">
+        ${escapeHtml(preset.label)}
       </button>
     `).join('');
     accessQuickActions.innerHTML = `
       <div class="btn-group btn-group-sm" role="group">
-        <button type="button" class="btn btn-primary btn-sm" data-access-role-preset="1">Select ${roleLabel} role preset</button>
+        <button type="button" class="btn btn-primary btn-sm" data-access-role-preset="1">Select ${escapeHtml(roleLabel)} role preset</button>
       </div>
       <div class="btn-group btn-group-sm" role="group">${bundleButtons}</div>
       <div class="btn-group btn-group-sm" role="group">${presetButtons}</div>
@@ -2009,16 +2027,16 @@
         <details class="access-module-card" open>
           <summary>
             <div>
-              <div class="fw-semibold">${module.label}</div>
-              <div class="access-module-meta">${module.description || ''}</div>
+              <div class="fw-semibold">${escapeHtml(module.label)}</div>
+              <div class="access-module-meta">${escapeHtml(module.description || '')}</div>
             </div>
             <div class="access-pill">${enabledCount}/${items.length} enabled</div>
           </summary>
           <div class="access-module-body">
             <div class="access-module-actions">
-              <button type="button" class="btn btn-outline-primary btn-sm" data-module-action="enable" data-module-id="${module.id}">Enable all</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="clear" data-module-id="${module.id}">Clear</button>
-              ${module.id !== 'sensitive_data' ? `<button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="page" data-module-id="${module.id}">Page only</button>` : ''}
+              <button type="button" class="btn btn-outline-primary btn-sm" data-module-action="enable" data-module-id="${escapeHtml(module.id)}">Enable all</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="clear" data-module-id="${escapeHtml(module.id)}">Clear</button>
+              ${module.id !== 'sensitive_data' ? `<button type="button" class="btn btn-outline-secondary btn-sm" data-module-action="page" data-module-id="${escapeHtml(module.id)}">Page only</button>` : ''}
             </div>
             <div class="access-checklist">
               ${items.map(item => {
@@ -2027,14 +2045,14 @@
                 const requires = (item.requires || []).map(dep => accessPermissionLabel(dep)).join(', ');
                 return `
                   <label class="access-check">
-                    <input class="form-check-input access-permission-input" type="checkbox" value="${item.key}" ${checked ? 'checked' : ''}>
+                    <input class="form-check-input access-permission-input" type="checkbox" value="${escapeHtml(item.key)}" ${checked ? 'checked' : ''}>
                     <span>
-                      <span class="access-check-type">${item.type || 'permission'}</span>
-                      <span class="d-block fw-semibold">${item.label || item.key}</span>
-                      <small class="text-muted d-block">${item.description || item.key}</small>
-                      ${requires ? `<small class="text-muted d-block">Requires: ${requires}</small>` : ''}
+                      <span class="access-check-type">${escapeHtml(item.type || 'permission')}</span>
+                      <span class="d-block fw-semibold">${escapeHtml(item.label || item.key)}</span>
+                      <small class="text-muted d-block">${escapeHtml(item.description || item.key)}</small>
+                      ${requires ? `<small class="text-muted d-block">Requires: ${escapeHtml(requires)}</small>` : ''}
                     </span>
-                    <span class="access-check-state ${stateBadge.className}">${stateBadge.label}</span>
+                    <span class="access-check-state ${escapeHtml(stateBadge.className)}">${escapeHtml(stateBadge.label)}</span>
                   </label>
                 `;
               }).join('')}
@@ -2123,43 +2141,44 @@
 
   function renderRow(user) {
     state.cache.set(user.id, user);
+    const safeId = escapeHtml(user.id);
     const approveAction = user.is_approved
-      ? `<button class="btn btn-outline-warning" data-action="revoke" data-id="${user.id}">Revoke</button>`
-      : `<button class="btn btn-outline-success" data-action="approve" data-id="${user.id}">Approve</button>`;
+      ? `<button type="button" class="btn btn-outline-warning" data-action="revoke" data-id="${safeId}">Revoke</button>`
+      : `<button type="button" class="btn btn-outline-success" data-action="approve" data-id="${safeId}">Approve</button>`;
     const activeAction = user.is_active
-      ? `<button class="btn btn-outline-secondary" data-action="disable" data-id="${user.id}">Disable</button>`
-      : `<button class="btn btn-outline-success" data-action="enable" data-id="${user.id}">Enable</button>`;
+      ? `<button type="button" class="btn btn-outline-secondary" data-action="disable" data-id="${safeId}">Disable</button>`
+      : `<button type="button" class="btn btn-outline-success" data-action="enable" data-id="${safeId}">Enable</button>`;
     return `
-      <tr data-user-row="${user.id}">
-        <td><input class="form-check-input" type="checkbox" data-select="${user.id}" ${state.selected.has(user.id) ? 'checked' : ''}></td>
+      <tr data-user-row="${safeId}">
+        <td><input class="form-check-input" type="checkbox" data-select="${safeId}" aria-label="Select ${escapeHtml(formatName(user))}" ${state.selected.has(user.id) ? 'checked' : ''}></td>
         <td>
-          <div class="fw-semibold">${user.email || '-'}</div>
-          <div class="text-muted small">${user.username || ''}</div>
+          <div class="fw-semibold">${escapeHtml(user.email || '-')}</div>
+          <div class="text-muted small">${escapeHtml(user.username || '')}</div>
         </td>
         <td>
-          <div class="fw-semibold">${formatName(user)}</div>
+          <div class="fw-semibold">${escapeHtml(formatName(user))}</div>
         </td>
         <td>
-          <select class="form-select form-select-sm" data-role="${user.id}">
-            ${roles.map(r => `<option value="${r}" ${String(user.role || '').toLowerCase() === r ? 'selected' : ''}>${r}</option>`).join('')}
+          <select class="form-select form-select-sm" data-role="${safeId}" aria-label="Role for ${escapeHtml(formatName(user))}">
+            ${roles.map(r => `<option value="${escapeHtml(r)}" ${String(user.role || '').toLowerCase() === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
           </select>
         </td>
         <td class="small">${formatErpId(user)}</td>
         <td class="small">${formatVisibility(user)}</td>
         <td>${boolBadge(user.is_approved, "Approved", "Unapproved")}</td>
         <td>${boolBadge(user.is_active, "Enabled", "Disabled")}</td>
-        <td class="small">${formatDate(user.last_login_at)}</td>
-        <td class="small">${formatDate(user.updated_at)}</td>
+        <td class="small">${escapeHtml(formatDate(user.last_login_at))}</td>
+        <td class="small">${escapeHtml(formatDate(user.updated_at))}</td>
         <td class="text-end">
           <div class="btn-group btn-group-sm">
             ${approveAction}
             ${activeAction}
-            <button class="btn btn-outline-success" data-action="permissions" data-id="${user.id}">Access</button>
-            <button class="btn btn-outline-primary" data-action="scope" data-id="${user.id}">Visibility</button>
-            <button class="btn btn-outline-info" data-action="preview" data-id="${user.id}">Preview</button>
-            <button class="btn btn-outline-dark" data-action="audit" data-id="${user.id}">Audit</button>
-            <button class="btn btn-outline-secondary" data-action="resend-invite" data-id="${user.id}">Resend Invite</button>
-            <button class="btn btn-outline-warning" data-action="reset" data-id="${user.id}">Reset PW</button>
+            <button type="button" class="btn btn-outline-success" data-action="permissions" data-id="${safeId}">Access</button>
+            <button type="button" class="btn btn-outline-primary" data-action="scope" data-id="${safeId}">Visibility</button>
+            <button type="button" class="btn btn-outline-info" data-action="preview" data-id="${safeId}">Preview</button>
+            <button type="button" class="btn btn-outline-dark" data-action="audit" data-id="${safeId}">Audit</button>
+            <button type="button" class="btn btn-outline-secondary" data-action="resend-invite" data-id="${safeId}">Resend Invite</button>
+            <button type="button" class="btn btn-outline-warning" data-action="reset" data-id="${safeId}">Reset PW</button>
           </div>
         </td>
       </tr>
@@ -2639,15 +2658,15 @@
       list.innerHTML = res.audit.map(entry => `
         <div class="list-group-item">
           <div class="d-flex justify-content-between">
-            <div class="fw-semibold">${entry.action}</div>
-            <div class="text-muted">${entry.created_at || ''}</div>
+            <div class="fw-semibold">${escapeHtml(entry.action)}</div>
+            <div class="text-muted">${escapeHtml(entry.created_at || '')}</div>
           </div>
-          <div class="text-muted">Actor: ${entry.actor_user_id || entry.username || 'n/a'}  IP: ${entry.ip || 'n/a'}</div>
+          <div class="text-muted">Actor: ${escapeHtml(entry.actor_user_id || entry.username || 'n/a')}  IP: ${escapeHtml(entry.ip || 'n/a')}</div>
           <div class="mt-1">
             <code class="small">Before:</code>
-            <pre class="small bg-light p-2 border">${entry.before ? JSON.stringify(entry.before, null, 2) : '-'}</pre>
+            <pre class="small bg-light p-2 border">${escapeHtml(entry.before ? JSON.stringify(entry.before, null, 2) : '-')}</pre>
             <code class="small">After:</code>
-            <pre class="small bg-light p-2 border">${entry.after ? JSON.stringify(entry.after, null, 2) : '-'}</pre>
+            <pre class="small bg-light p-2 border">${escapeHtml(entry.after ? JSON.stringify(entry.after, null, 2) : '-')}</pre>
           </div>
         </div>
       `).join('') || '<div class="text-muted">No audit entries.</div>';
@@ -2702,34 +2721,34 @@
       const more = allowed.length > 6 ? ` +${allowed.length - 6}` : '';
       const html = `
         <div class="mb-3">
-          <div class="fw-semibold">${preview.full_name || preview.username || preview.email}</div>
-          <div class="text-muted small">${preview.email || ''}</div>
-          <div class="badge bg-secondary">Role: ${preview.role}</div>
+          <div class="fw-semibold">${escapeHtml(preview.full_name || preview.username || preview.email || 'User')}</div>
+          <div class="text-muted small">${escapeHtml(preview.email || '')}</div>
+          <div class="badge bg-secondary">Role: ${escapeHtml(preview.role || 'none')}</div>
           ${scopeMode === 'all' ? '<span class="badge bg-primary ms-1">All</span>' : ''}
           ${scopeMode === 'none' ? '<span class="badge bg-warning text-dark ms-1">No access</span>' : ''}
         </div>
         <div class="mb-3">
           <div class="small text-muted">ERP UserId</div>
-          <div>${preview.erp_user_id || '-'}</div>
+          <div>${escapeHtml(preview.erp_user_id || '-')}</div>
         </div>
         <div class="mb-3">
           <div class="small text-muted">Visibility</div>
-          <div>${scopeLabel}</div>
-          <div class="small text-muted">${sample ? `${sample}${more}` : ''}</div>
+          <div>${escapeHtml(scopeLabel)}</div>
+          <div class="small text-muted">${escapeHtml(sample ? `${sample}${more}` : '')}</div>
           <div class="small text-muted mt-1">Customers: ${customerAllowed.length} | Regions: ${regionAllowed.length} | Suppliers: ${supplierAllowed.length}</div>
         </div>
         <div class="mb-3">
           <div class="small text-muted">Metrics</div>
           <ul class="mb-2">
-            <li>Orders (90d): ${metrics.orders_90d ?? 'n/a'}</li>
-            <li>Orders (max): ${metrics.orders_max ?? 'n/a'}</li>
-            <li>Revenue sum: ${metrics.revenue_sum ?? 0}</li>
-            <li>Cost coverage %: ${metrics.cost_coverage_pct ?? 0}</li>
+            <li>Orders (90d): ${escapeHtml(metrics.orders_90d ?? 'n/a')}</li>
+            <li>Orders (max): ${escapeHtml(metrics.orders_max ?? 'n/a')}</li>
+            <li>Revenue sum: ${escapeHtml(metrics.revenue_sum ?? 0)}</li>
+            <li>Cost coverage %: ${escapeHtml(metrics.cost_coverage_pct ?? 0)}</li>
           </ul>
           <div class="small text-muted">Top products</div>
-          <pre class="small bg-light p-2 border">${metrics.top_products ? JSON.stringify(metrics.top_products, null, 2) : '-'}</pre>
+          <pre class="small bg-light p-2 border">${escapeHtml(metrics.top_products ? JSON.stringify(metrics.top_products, null, 2) : '-')}</pre>
           <div class="small text-muted">Top customers</div>
-          <pre class="small bg-light p-2 border">${metrics.top_customers ? JSON.stringify(metrics.top_customers, null, 2) : '-'}</pre>
+          <pre class="small bg-light p-2 border">${escapeHtml(metrics.top_customers ? JSON.stringify(metrics.top_customers, null, 2) : '-')}</pre>
         </div>
       `;
       document.getElementById('previewContent').innerHTML = html;
@@ -2961,4 +2980,3 @@
 })();
 </script>
 {% endblock %}
-

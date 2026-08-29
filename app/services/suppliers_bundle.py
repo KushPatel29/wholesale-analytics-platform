@@ -1957,10 +1957,15 @@ def _assign_supplier_segments(frame: pd.DataFrame) -> pd.DataFrame:
         reasons.append("Lower-revenue supplier with narrower impact under the current scope.")
         actions.append("Rationalize long tail")
 
-    out["segment_label"] = labels
-    out["segment_reason"] = reasons
-    out["action_bucket"] = actions
-    out["segment_key"] = out["segment_label"].map(
+    segment_frame = pd.DataFrame(
+        {
+            "segment_label": labels,
+            "segment_reason": reasons,
+            "action_bucket": actions,
+        },
+        index=out.index,
+    )
+    segment_frame["segment_key"] = segment_frame["segment_label"].map(
         {
             "Strategic": "strategic",
             "Growth": "growth",
@@ -1969,7 +1974,10 @@ def _assign_supplier_segments(frame: pd.DataFrame) -> pd.DataFrame:
             "Long tail": "long_tail",
         }
     ).fillna("long_tail")
-    return out
+    return pd.concat(
+        [out.drop(columns=segment_frame.columns, errors="ignore"), segment_frame],
+        axis=1,
+    )
 
 
 def _supplier_protein_mix_sql(scoped_cte: str) -> str:
@@ -4096,7 +4104,7 @@ def build_suppliers_export_metadata_frame(
 ) -> pd.DataFrame:
     getter = args.get if hasattr(args, "get") else (lambda _k, _d=None: None)
     rows = [
-        {"field": "generated_at_utc", "value": pd.Timestamp.utcnow().isoformat()},
+        {"field": "generated_at_utc", "value": pd.Timestamp.now(tz="UTC").isoformat()},
         {"field": "dataset", "value": str(dataset)},
         {"field": "dataset_version", "value": str(dataset_version or "")},
         {"field": "window_start", "value": str(meta.get("start") or "")},

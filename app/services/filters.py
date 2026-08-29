@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -140,7 +140,7 @@ def _default_filter_window() -> tuple[pd.Timestamp, pd.Timestamp]:
 
     global _WINDOW_CACHE, _WINDOW_CACHE_TS
 
-    now = pd.Timestamp.utcnow()
+    now = pd.Timestamp.now(tz="UTC")
     now = _coerce_tznaive(now).normalize()
 
     # refresh cache every 10 minutes
@@ -545,7 +545,7 @@ def _clamp_elapsed_period_end(
 def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, pd.Timestamp]]:
     if now is None:
         try:
-            now = pd.Timestamp.utcnow()
+            now = pd.Timestamp.now(tz="UTC")
         except Exception:
             now = pd.Timestamp.today()
     # The hosted demo ships an immutable snapshot and a matching prebuilt
@@ -688,7 +688,7 @@ def _preset_to_range(
         return None, None
     if now is None:
         try:
-            now = pd.Timestamp.utcnow()
+            now = pd.Timestamp.now(tz="UTC")
         except Exception:
             now = pd.Timestamp.today()
     now = _coerce_tznaive(now).normalize()
@@ -1323,7 +1323,7 @@ def write_sticky_filters_to_session(session_obj: Any, payload: Any, user_id: Any
         "v": _STICKY_FILTERS_REV,
         "user_id": owner,
         "filters": stored_filters,
-        "updated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     }
     try:
         session_obj[STICKY_FILTERS_SESSION_KEY] = record
@@ -1414,7 +1414,7 @@ _SUMMARY_DIMENSIONS: tuple[tuple[str, str, str], ...] = (
 
 
 def mark_filters_last_applied(session_obj: Any) -> str:
-    stamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
         session_obj[FILTERS_LAST_APPLIED_SESSION_KEY] = stamp
     except Exception:

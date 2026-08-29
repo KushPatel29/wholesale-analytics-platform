@@ -351,7 +351,7 @@ def monthly_series(filters: FilterParams, *, include_partial_current: bool = Tru
 
     monthly = monthly.sort_index()
     if not include_partial_current and not monthly.empty:
-        now_period = pd.Timestamp.utcnow().tz_localize(None).to_period("M")
+        now_period = pd.Timestamp.now(tz="UTC").tz_localize(None).to_period("M")
         if monthly.index.max() == now_period and len(monthly) > 1:
             monthly = monthly.iloc[:-1]
 
@@ -631,7 +631,7 @@ def _build_weekly_history(filters: FilterParams, metric: str, *, include_current
     series = pd.Series(arr.values, index=idx).dropna()
     series = series.sort_index()
     if not include_current and not series.empty:
-        now_floor = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        now_floor = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
         series = series[series.index <= now_floor]
     series = series.tail(MAX_HISTORY_MONTHS * 5)
     return series.astype("float64"), {"bundle_meta": bundle.get("meta") or {}}
@@ -828,7 +828,7 @@ def _effective_window_end(filters: FilterParams) -> pd.Timestamp | None:
     data_end = _coerce_timestamp(manifest_max_date())
     if data_end is not None:
         return data_end
-    return _coerce_timestamp(pd.Timestamp.utcnow())
+    return _coerce_timestamp(pd.Timestamp.now(tz="UTC"))
 
 
 def _replace_filters(filters: FilterParams, **changes: Any) -> FilterParams:
@@ -856,7 +856,7 @@ def _replace_filters(filters: FilterParams, **changes: Any) -> FilterParams:
 
 
 def _expanded_forecast_filters(filters: FilterParams, *, months_back: int = NOWCAST_LOOKBACK_MONTHS) -> FilterParams:
-    effective_end = _effective_window_end(filters) or _coerce_timestamp(pd.Timestamp.utcnow())
+    effective_end = _effective_window_end(filters) or _coerce_timestamp(pd.Timestamp.now(tz="UTC"))
     if effective_end is None:
         return _replace_filters(filters, complete_months_only=False)
     lookback_start = (effective_end.replace(day=1) - pd.DateOffset(months=max(1, int(months_back)) - 1)).normalize()

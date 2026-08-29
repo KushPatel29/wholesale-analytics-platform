@@ -2,7 +2,8 @@
   "name": "northgate-retail-analytics-quality-gates",
   "private": true,
   "scripts": {
-    "test:a11y": "playwright test tests/playwright/accessibility.spec.ts --project=chromium"
+    "test:a11y": "playwright test tests/playwright/accessibility.spec.ts --project=chromium",
+    "test:release-ui": "playwright test tests/playwright/accessibility.spec.ts tests/playwright/operational-readiness.spec.ts tests/playwright/security-rendering.spec.ts --project=chromium"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

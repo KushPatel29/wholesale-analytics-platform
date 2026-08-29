@@ -39,7 +39,7 @@ def test_parse_filters_supports_today_preset():
 
 def test_parse_filters_marks_new_fiscal_presets_as_fiscal():
     params = parse_filters({"date_preset": "current_fm"})
-    periods = get_fiscal_periods(pd.Timestamp.utcnow())
+    periods = get_fiscal_periods(pd.Timestamp.now(tz="UTC"))
     assert params.preset == "current_fm"
     assert params.date_type == "fiscal"
     assert params.start == periods["current_fm"]["start"]

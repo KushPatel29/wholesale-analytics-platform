@@ -129,7 +129,14 @@
   const notify = (message, variant = "success") => {
     const el = document.createElement("div");
     el.className = `alert alert-${variant} alert-dismissible fade show`;
-    el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    const copy = document.createElement("div");
+    copy.textContent = String(message || "");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "btn-close";
+    close.dataset.bsDismiss = "alert";
+    close.setAttribute("aria-label", "Close");
+    el.append(copy, close);
     alertHost.appendChild(el);
     setTimeout(() => { try { el.remove(); } catch (_) {} }, 5000);
   };
@@ -166,8 +173,16 @@
       tr.className = "role-row";
       tr.dataset.roleId = String(role.id);
       if (state.selectedRoleId === role.id) tr.classList.add("active");
-      tr.innerHTML = `<td><button type="button" class="btn btn-link p-0 role-select">${role.name}</button></td><td>${role.permission_count || 0}</td>`;
-      tr.querySelector(".role-select").addEventListener("click", () => selectRole(role.id));
+      const nameCell = document.createElement("td");
+      const select = document.createElement("button");
+      select.type = "button";
+      select.className = "btn btn-link p-0 role-select";
+      select.textContent = String(role.name || "Unnamed role");
+      select.addEventListener("click", () => selectRole(role.id));
+      nameCell.appendChild(select);
+      const countCell = document.createElement("td");
+      countCell.textContent = String(role.permission_count || 0);
+      tr.append(nameCell, countCell);
       roleBody.appendChild(tr);
     }
   }

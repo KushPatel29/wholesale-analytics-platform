@@ -288,7 +288,7 @@ def fact_frame(
 
 def _generated_at() -> str:
     try:
-        return pd.Timestamp.utcnow().isoformat()
+        return pd.Timestamp.now(tz="UTC").isoformat()
     except Exception:
         return pd.Timestamp.now().isoformat()
 
@@ -310,11 +310,11 @@ def _safe_nunique(series: pd.Series) -> int:
 
 def _active_window(filters: FilterParams, frame: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp]:
     if frame is None or frame.empty or "Date" not in frame.columns:
-        today = pd.Timestamp.utcnow().normalize()
+        today = pd.Timestamp.now(tz="UTC").normalize()
         return today - pd.Timedelta(days=30), today
     dates = pd.to_datetime(frame["Date"], errors="coerce").dropna()
     if dates.empty:
-        today = pd.Timestamp.utcnow().normalize()
+        today = pd.Timestamp.now(tz="UTC").normalize()
         return today - pd.Timedelta(days=30), today
     start = filters.start.normalize() if filters.start is not None else dates.min().normalize()
     end = filters.end.normalize() if filters.end is not None else dates.max().normalize()

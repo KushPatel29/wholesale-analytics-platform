@@ -41,6 +41,14 @@
   });
   const fmtNumber0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
   const fmtNumber1 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+  const escapeHtml = (value) =>
+    String(value ?? "").replace(/[&<>'"]/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;",
+    })[char]);
 
   const els = {
     banner: document.getElementById("overviewBanner"),
@@ -388,10 +396,10 @@
     if (!el) return;
     const items = Array.isArray(lines) ? lines.filter(Boolean) : [];
     if (!items.length) {
-      el.innerHTML = `<li class="text-muted">${fallback}</li>`;
+      el.innerHTML = `<li class="text-muted">${escapeHtml(fallback)}</li>`;
       return;
     }
-    el.innerHTML = items.map((line) => `<li>${String(line)}</li>`).join("");
+    el.innerHTML = items.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
   }
 
   function buildActionLinks() {
@@ -558,7 +566,7 @@
             ? "n/a"
             : `${Number(row.share_of_delta_pct) > 0 ? "+" : ""}${fmtNumber1.format(Number(row.share_of_delta_pct))}%`;
         return `<tr>
-          <td>${row?.driver || "Driver"}</td>
+          <td>${escapeHtml(row?.driver || "Driver")}</td>
           <td class="text-end ${signClass}">${formatDelta(row?.delta, "currency")}</td>
           <td class="text-end">${shareText}</td>
         </tr>`;
@@ -589,13 +597,13 @@
         const pctLabelRaw = String(row?.delta_pct_label || "").trim();
         let pctDisplay = "n/a";
         if (pctLabelRaw) {
-          pctDisplay = `<span class="badge text-bg-light border">${pctLabelRaw}</span>`;
+          pctDisplay = `<span class="badge text-bg-light border">${escapeHtml(pctLabelRaw)}</span>`;
         } else if (row?.delta_pct !== null && row?.delta_pct !== undefined && Number.isFinite(Number(row.delta_pct))) {
           const pctNum = Number(row.delta_pct);
           pctDisplay = `${pctNum > 0 ? "+" : ""}${fmtNumber1.format(pctNum)}%`;
         }
         return `<tr>
-          <td>${row?.label || "Unknown"}</td>
+          <td>${escapeHtml(row?.label || "Unknown")}</td>
           <td class="text-end">${fmtCurrency(row?.current)}</td>
           <td class="text-end ${deltaClass}">${formatDelta(row?.delta, "currency")}</td>
           <td class="text-end">${pctDisplay}</td>

@@ -4,7 +4,7 @@ import math
 import time
 from collections import defaultdict
 from dataclasses import replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 from typing import Any, Dict, List, Sequence, Set
 
@@ -3782,9 +3782,9 @@ def build_products_bundle(
         apply_default_window=True,
     )
     try:
-        end_dt = datetime.fromisoformat(str(comparison.get("current_end"))) if comparison.get("current_end") else datetime.utcnow()
+        end_dt = datetime.fromisoformat(str(comparison.get("current_end"))) if comparison.get("current_end") else datetime.now(timezone.utc).replace(tzinfo=None)
     except Exception:
-        end_dt = datetime.utcnow()
+        end_dt = datetime.now(timezone.utc).replace(tzinfo=None)
     requested = {
         str(section or "").strip().lower().replace("-", "_")
         for section in (requested_sections or _requested_product_sections(args) or ())
@@ -4191,9 +4191,9 @@ def build_products_drilldown(product_id: str, filters: Any, scope: Dict[str, Any
     where_sql, where_params, start_iso, end_iso = fact_store.build_where_clause(filters, cols, scope, apply_default_window=True)
     # Extend date window for classification/lifecycle while honoring non-date filters + RBAC.
     try:
-        end_dt = datetime.fromisoformat(end_iso) if end_iso else datetime.utcnow()
+        end_dt = datetime.fromisoformat(end_iso) if end_iso else datetime.now(timezone.utc).replace(tzinfo=None)
     except Exception:
-        end_dt = datetime.utcnow()
+        end_dt = datetime.now(timezone.utc).replace(tzinfo=None)
     start_dt = None
     if start_iso:
         try:

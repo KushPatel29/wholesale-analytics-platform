@@ -479,7 +479,7 @@ def _freshness_meta() -> Dict[str, Any]:
         ts = pd.to_datetime(raw, utc=True, errors="coerce")
         if pd.isna(ts):
             return out
-        today = pd.Timestamp.utcnow()
+        today = pd.Timestamp.now(tz="UTC")
         if today.tzinfo is None:
             today = today.tz_localize("UTC")
         freshness_days = int((today.normalize() - ts.normalize()).days)

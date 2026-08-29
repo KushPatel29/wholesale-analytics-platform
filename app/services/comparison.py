@@ -38,7 +38,7 @@ from __future__ import annotations
 import threading
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from app.services.filters import (
@@ -225,7 +225,7 @@ def effective_today(cutoff: Optional[date] = None) -> date:
     when the data stops before that window opens.
     """
     resolved = cutoff if cutoff is not None else data_cutoff()
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     if resolved is None:
         return today
     return min(today, resolved)

@@ -552,6 +552,53 @@ def test_assistant_role_permutation_chat_coverage(assistant_client, monkeypatch,
         assert payload["answer"]["permission_limited"] is True
 
 
+def test_cross_module_priority_scan_does_not_fan_out_to_every_heavy_bundle(monkeypatch):
+    from app.assistant import tools as assistant_tools
+    from app.services.filters import FilterParams
+
+    monkeypatch.setattr(
+        assistant_tools,
+        "_module_access",
+        lambda _ctx: {
+            "overview": True,
+            "customers": True,
+            "products": True,
+            "regions": True,
+            "suppliers": True,
+            "salesreps": True,
+            "returns": True,
+            "admin": True,
+            "notifications": True,
+            "work": True,
+        },
+        raising=True,
+    )
+    monkeypatch.setattr(
+        assistant_tools,
+        "_overview_context",
+        lambda _ctx: {"risk": {"concentration": {"hhi": 2400}, "profitability": {"margin_risk": []}}},
+        raising=True,
+    )
+    monkeypatch.setattr(
+        assistant_tools,
+        "_module_bundle",
+        lambda *_args, **_kwargs: pytest.fail("cross-module scan fanned out to a heavy module bundle"),
+        raising=True,
+    )
+    monkeypatch.setattr(assistant_tools, "_mask", lambda data, _user: data, raising=True)
+    monkeypatch.setattr(assistant_tools.returns_service, "list_rmas", lambda **_kwargs: [], raising=True)
+
+    result = assistant_tools.get_priority_investigations(
+        assistant_tools.ToolContext(user=None, page="overview", filters=FilterParams(), scope={}),
+        {"module": "all"},
+    )
+
+    assert result["status"] == "ok"
+    assert result["data"]["coverage_mode"] == "overview_fast"
+    assert result["data"]["investigations"][0]["module"] == "overview"
+    assert result["citations"] == ["overview_v2.build_overview_context", "returns_service.list_rmas"]
+
+
 def test_assistant_viewer_revenue_ranking_is_safe_and_actionable(assistant_client, monkeypatch):
     from app.assistant import service as assistant_service
     from app.assistant import tools as assistant_tools

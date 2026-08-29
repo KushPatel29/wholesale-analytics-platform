@@ -285,7 +285,7 @@ STATIC_BANNER = """
   padding:10px 16px;background:rgba(125,211,252,.10);border-bottom:1px solid rgba(125,211,252,.28);
   color:inherit;text-align:center}
 .static-demo-banner a{color:#38bdf8;text-decoration:underline;text-underline-offset:2px}
-.static-demo-banner__warn{opacity:.8}
+.static-demo-banner__warn{font-weight:650}
 </style>
 """
 
@@ -453,16 +453,40 @@ STATIC_RUNTIME = r"""
       });
     }
 
+    function menuFor(toggle) {
+      return toggle && toggle.parentElement
+        ? toggle.parentElement.querySelector(":scope > .dropdown-menu")
+        : null;
+    }
+
+    function menuItems(menu) {
+      return menu
+        ? Array.prototype.slice.call(menu.querySelectorAll('a[href], button:not([disabled]), [role="menuitem"]'))
+          .filter(function (item) { return !item.hasAttribute("disabled") && item.getAttribute("aria-disabled") !== "true"; })
+        : [];
+    }
+
+    function setDropdown(toggle, open, focusEdge) {
+      var menu = menuFor(toggle);
+      if (!menu) return;
+      closeDropdowns(toggle);
+      menu.classList.toggle("show", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open && focusEdge) {
+        var items = menuItems(menu);
+        var target = focusEdge === "last" ? items[items.length - 1] : items[0];
+        if (target) target.focus();
+      }
+    }
+
     document.addEventListener("click", function (event) {
       var dropdown = event.target.closest('[data-bs-toggle="dropdown"]');
       if (dropdown) {
         event.preventDefault();
-        var menu = dropdown.parentElement && dropdown.parentElement.querySelector(":scope > .dropdown-menu");
+        var menu = menuFor(dropdown);
         if (!menu) return;
         var opening = !menu.classList.contains("show");
-        closeDropdowns(dropdown);
-        menu.classList.toggle("show", opening);
-        dropdown.setAttribute("aria-expanded", opening ? "true" : "false");
+        setDropdown(dropdown, opening);
         return;
       }
 
@@ -483,10 +507,43 @@ STATIC_RUNTIME = r"""
     });
 
     document.addEventListener("keydown", function (event) {
-      if (event.key !== "Escape") return;
+      var toggle = event.target.closest && event.target.closest('[data-bs-toggle="dropdown"]');
+      if (toggle && ["ArrowDown", "ArrowUp", " "].indexOf(event.key) !== -1) {
+        event.preventDefault();
+        var isOpen = toggle.getAttribute("aria-expanded") === "true";
+        if (event.key === " " && isOpen) {
+          setDropdown(toggle, false);
+        } else {
+          setDropdown(toggle, true, event.key === "ArrowUp" ? "last" : "first");
+        }
+        return;
+      }
+
+      var menu = event.target.closest && event.target.closest(".dropdown-menu.show");
+      if (menu && ["ArrowDown", "ArrowUp", "Home", "End"].indexOf(event.key) !== -1) {
+        var items = menuItems(menu);
+        if (!items.length) return;
+        event.preventDefault();
+        var current = items.indexOf(event.target);
+        var next = current;
+        if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = items.length - 1;
+        else if (event.key === "ArrowDown") next = current < 0 ? 0 : (current + 1) % items.length;
+        else next = current <= 0 ? items.length - 1 : current - 1;
+        items[next].focus();
+        return;
+      }
+
+      if (event.key === "Escape") {
+        var open = document.querySelector('[data-bs-toggle="dropdown"][aria-expanded="true"]');
+        closeDropdowns();
+        if (open) open.focus();
+      }
+    });
+
+    document.addEventListener("focusin", function (event) {
       var open = document.querySelector('[data-bs-toggle="dropdown"][aria-expanded="true"]');
-      closeDropdowns();
-      if (open) open.focus();
+      if (open && open.parentElement && !open.parentElement.contains(event.target)) closeDropdowns();
     });
   }
 
@@ -2353,6 +2410,13 @@ class Builder:
                   document.body.classList.remove('loading');
                   document.querySelectorAll('.is-loading,[aria-busy="true"]').forEach(el => {
                     el.classList.remove('is-loading'); el.removeAttribute('aria-busy');
+                  });
+                  /* A button defaults to submit only when it is inside a form,
+                     but frozen chart controls can move between fragments and
+                     forms during the transform. Make their inert/non-submit
+                     semantics explicit before serialisation. */
+                  document.querySelectorAll('button:not([type])').forEach(button => {
+                    button.setAttribute('type', 'button');
                   });
                   document.querySelectorAll('*').forEach(el => {
                     [...el.attributes].forEach(attr => {

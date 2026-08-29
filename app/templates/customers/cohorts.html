@@ -6,6 +6,8 @@
 {% set needs_early_charts = true %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
+<h1 class="h3 mb-3">Customer Cohorts</h1>
+
 <ul class="nav nav-tabs mb-3 cohort-tabs">
   <li class="nav-item"><a class="nav-link" href="/customers/kpis"><i class="bi bi-speedometer2 me-1"></i>KPIs</a></li>
   <li class="nav-item"><a class="nav-link" href="/customers/rfm"><i class="bi bi-grid-3x3-gap me-1"></i>RFM</a></li>
@@ -46,12 +48,12 @@
   <div class="col-lg-6">
     <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInLeft 0.6s ease-out;">
       <div class="card-body">
-        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+        <h2 class="card-title h5 mb-3 d-flex align-items-center justify-content-between">
           <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Cohort Retention</span>
-          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="cohort_bar" title="Export to Excel">
+          <button type="button" class="btn btn-sm btn-outline-success export-xlsx" data-export-target="cohort_bar" title="Export to Excel">
             <i class="bi bi-file-earmark-spreadsheet"></i>
           </button>
-        </h5>
+        </h2>
         <div id="cohort_bar" style="height:340px;"></div>
         <div id="cohort_empty" class="text-muted small text-center py-4" style="display:none;">
           <i class="bi bi-info-circle me-1"></i>No cohort data available for the selected filters.
@@ -62,12 +64,12 @@
   <div class="col-lg-6">
     <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInRight 0.6s ease-out;">
       <div class="card-body">
-        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+        <h2 class="card-title h5 mb-3 d-flex align-items-center justify-content-between">
           <span><i class="bi bi-geo-alt-fill me-2 text-danger"></i>Churn by Region</span>
-          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="region_bar" title="Export to Excel">
+          <button type="button" class="btn btn-sm btn-outline-success export-xlsx" data-export-target="region_bar" title="Export to Excel">
             <i class="bi bi-file-earmark-spreadsheet"></i>
           </button>
-        </h5>
+        </h2>
         <div id="region_bar" style="height:340px;"></div>
         <div id="region_empty" class="text-muted small text-center py-4" style="display:none;">
           <i class="bi bi-info-circle me-1"></i>Regional churn needs a starting customer base and follow-up activity by region.
@@ -82,12 +84,12 @@
   <div class="col-12">
     <div class="card border-0 shadow-lg cohort-card" style="animation: fadeInUp 0.7s ease-out;">
       <div class="card-body">
-        <h5 class="card-title mb-3 d-flex align-items-center justify-content-between">
+        <h2 class="card-title h5 mb-3 d-flex align-items-center justify-content-between">
           <span><i class="bi bi-graph-down me-2 text-warning"></i>Monthly Churn Trend</span>
-          <button class="btn btn-sm btn-outline-success export-xlsx" data-export-target="churn_trend" title="Export to Excel">
+          <button type="button" class="btn btn-sm btn-outline-success export-xlsx" data-export-target="churn_trend" title="Export to Excel">
             <i class="bi bi-file-earmark-spreadsheet"></i>
           </button>
-        </h5>
+        </h2>
         <div id="churn_trend" style="height:360px;"></div>
         <div id="trend_empty" class="text-muted small text-center py-4" style="display:none;">
           <i class="bi bi-info-circle me-1"></i>No churn trend data available.

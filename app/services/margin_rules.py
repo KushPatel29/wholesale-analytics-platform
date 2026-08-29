@@ -901,9 +901,20 @@ def annotate_margin_frame(
     keys_to_assign: set[str] = set()
     for item in annotations:
         keys_to_assign.update(item.keys())
-    for key in keys_to_assign:
-        out[key] = [item.get(key) for item in annotations]
-    return out
+    ordered_keys = sorted(keys_to_assign)
+    annotation_frame = pd.DataFrame.from_records(
+        ({key: item.get(key) for key in ordered_keys} for item in annotations),
+        index=out.index,
+        columns=ordered_keys,
+    )
+    if not copy:
+        # Preserve the documented in-place mode for callers that explicitly
+        # opt into it. The default path below performs one block-wise concat so
+        # large analytical frames do not become highly fragmented.
+        out[ordered_keys] = annotation_frame
+        return out
+    base = out.drop(columns=ordered_keys, errors="ignore")
+    return pd.concat([base, annotation_frame], axis=1)
 
 
 def weighted_target_margin_pct(rows: Sequence[Mapping[str, Any]], *, revenue_key: str = "revenue", target_key: str = "target_margin_pct") -> float | None:

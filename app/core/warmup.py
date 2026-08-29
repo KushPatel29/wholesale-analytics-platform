@@ -168,7 +168,7 @@ def _default_window_query() -> str:
         periods = get_fiscal_periods()
         current = periods.get("current_fy") or {}
         start = current.get("start")
-        end = current.get("end") or pd.Timestamp.utcnow()
+        end = current.get("end") or pd.Timestamp.now(tz="UTC")
         # End on the data cutoff, matching what the request path clamps to.
         # Warming `end=today` produced a key that changed at every midnight, so
         # the cache baked into the demo image stopped matching after a day.

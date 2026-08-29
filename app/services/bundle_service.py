@@ -320,7 +320,11 @@ def _bundle_query_budget(page: str, meta: Mapping[str, Any]) -> Optional[int]:
             return 5
         return 5
     if page == "salesreps":
-        return 4
+        # Four analytical queries are the steady-state bundle. A governed
+        # ownership/snapshot lookup can add one query for real datasets, so
+        # keep one measured slot of headroom while still flagging any sixth
+        # query as a regression.
+        return 5
     if page in {"regions", "suppliers"}:
         return 3
     return None

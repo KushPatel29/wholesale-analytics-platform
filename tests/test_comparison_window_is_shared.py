@@ -115,7 +115,9 @@ class TestEveryPageAgrees:
     """
 
     @pytest.fixture(scope="class")
-    def expected(self):
+    @classmethod
+    def expected(cls):
+        del cls
         return comparison.resolve_comparison(CURRENT_FY, cutoff=CUTOFF)
 
     def test_products_defers(self, expected, monkeypatch):

@@ -103,7 +103,7 @@
   <section class="sr-section-heading mb-3" id="srScorecardSection">
     <div>
       <p class="sr-section-kicker mb-1">Leadership Summary</p>
-      <h3 class="mb-1">Executive Scorecard And Signal Strip</h3>
+      <h2 class="h3 mb-1">Executive Scorecard And Signal Strip</h2>
       <p class="text-muted mb-0" id="srSectionLeadershipSubtitle">High-level performance, ownership mix, concentration risk, and the fastest leadership callouts in one scan.</p>
     </div>
   </section>
@@ -312,7 +312,7 @@
   <section class="sr-section-heading mb-3" id="srCoverageSection">
     <div>
       <p class="sr-section-kicker mb-1">Ownership / Portfolio Intelligence</p>
-      <h3 class="mb-1">Current Owner Coverage, Territory Mix, And Transfer Context</h3>
+      <h2 class="h3 mb-1">Current Owner Coverage, Territory Mix, And Transfer Context</h2>
       <p class="text-muted mb-0" id="srSectionOwnershipSubtitle">Where the visible book sits today, which accounts were inherited, and where exceptions or mapping risk remain.</p>
     </div>
   </section>
@@ -417,7 +417,7 @@
   <section class="sr-section-heading mb-3" id="srMomentumSection">
     <div>
       <p class="sr-section-kicker mb-1">Trend Intelligence</p>
-      <h3 class="mb-1">Current Versus Prior Performance And Rep Momentum</h3>
+      <h2 class="h3 mb-1">Current Versus Prior Performance And Rep Momentum</h2>
       <p class="text-muted mb-0" id="srSectionTrendSubtitle">Aligned current-period trends, prior-year comparisons, transfer exposure, and rep-level performance movement.</p>
     </div>
   </section>
@@ -435,6 +435,7 @@
           <div class="position-relative">
             <div style="height:320px" class="sr-chart-shell sr-chart-shell--loading sr-chart-shell--line"><canvas id="monthlyCompareChart"></canvas></div>
             <button id="btnMonthlyComparePng"
+                    type="button"
                     class="btn btn-sm btn-outline-secondary sr-chart-dl-btn"
                     title="Download chart as PNG"
                     style="position:absolute;top:6px;right:6px;display:none;font-size:0.75rem;padding:2px 10px;border-radius:20px">
@@ -578,13 +579,14 @@
   <section class="sr-section-heading mb-3" id="srPrioritySection">
     <div>
       <p class="sr-section-kicker mb-1">Customer Intelligence</p>
-      <h3 class="mb-1">All Accounts, Movers, And Owner Context</h3>
+      <h2 class="h3 mb-1">All Accounts, Movers, And Owner Context</h2>
       <p class="text-muted mb-0">
         <span id="srCustSummaryLine">Customer-level contribution, movement, and owner accountability.</span>
       </p>
     </div>
     <div class="d-flex gap-2">
       <button id="btnExportFollowUpHeader"
+              type="button"
               onclick="openFollowUpDrawer()"
               class="btn btn-sm"
               style="background:var(--wa-accent-deep);color:var(--wa-text-inverse);border:none;border-radius:6px;font-size:0.82rem">
@@ -622,10 +624,12 @@
                      aria-label="Search customers, owners, or territories"
                      style="max-width:340px">
               <button id="btnExportCustCSV"
+                      type="button"
                       class="btn btn-sm btn-outline-secondary ms-auto">
                 &#11015; Export View
               </button>
               <button id="btnExportFollowUp"
+                      type="button"
                       class="btn btn-sm"
                       onclick="openFollowUpDrawer()"
                       style="background:var(--wa-accent-deep);color:var(--wa-text-inverse);border:none;border-radius:6px;padding:4px 12px;font-size:0.82rem">
@@ -635,9 +639,9 @@
             <div class="sr-owner-pills mb-2" id="srOwnerPills"></div>
             <div id="srFollowUpToast" class="alert alert-success py-1 px-3 small mb-2" style="display:none"></div>
             <div class="sr-customer-view-toggle mb-2" role="group" aria-label="Customer view">
-              <button class="sr-toggle-btn active" data-customer-view="all">All Accounts</button>
-              <button class="sr-toggle-btn" data-customer-view="best">&#9733; Top 10 Best</button>
-              <button class="sr-toggle-btn" data-customer-view="atrisk">&#9888; Top 10 At-Risk</button>
+              <button type="button" class="sr-toggle-btn active" data-customer-view="all">All Accounts</button>
+              <button type="button" class="sr-toggle-btn" data-customer-view="best">&#9733; Top 10 Best</button>
+              <button type="button" class="sr-toggle-btn" data-customer-view="atrisk">&#9888; Top 10 At-Risk</button>
             </div>
           </div>
           <div class="sr-top-customers-wrap" id="srTopCustomersWrap">
@@ -719,7 +723,7 @@
   <section class="sr-section-heading mb-3" id="srDepartmentSection">
     <div>
       <p class="sr-section-kicker mb-1">Department / Product Intelligence</p>
-      <h3 class="mb-1">Department Mix, Margin Performance, And Contribution Detail</h3>
+      <h2 class="h3 mb-1">Department Mix, Margin Performance, And Contribution Detail</h2>
       <p class="text-muted mb-0" id="srSectionProteinSubtitle">Category performance, mix shifts, and department-level details tied back to customers and owner portfolios.</p>
     </div>
   </section>
@@ -767,7 +771,7 @@
   <section class="sr-section-heading mb-3" id="srComparisonSection">
     <div>
       <p class="sr-section-kicker mb-1">Rep Ranking / Comparison</p>
-      <h3 class="mb-1">Share, Pricing Leadership, And Full Rep Comparison</h3>
+      <h2 class="h3 mb-1">Share, Pricing Leadership, And Full Rep Comparison</h2>
       <p class="text-muted mb-0" id="srSectionComparisonSubtitle">Searchable, sortable owner performance with selectable executive and risk views.</p>
     </div>
   </section>
@@ -810,10 +814,10 @@
             <span id="srColumnPresetLabel">Full View ▾</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><button class="dropdown-item" data-col-preset="Full View">Full View</button></li>
-            <li><button class="dropdown-item" data-col-preset="Executive">Executive</button></li>
-            <li><button class="dropdown-item" data-col-preset="Risk View">Risk View</button></li>
-            <li><button class="dropdown-item" data-col-preset="Scott's View">Scott's View</button></li>
+            <li><button type="button" class="dropdown-item" data-col-preset="Full View">Full View</button></li>
+            <li><button type="button" class="dropdown-item" data-col-preset="Executive">Executive</button></li>
+            <li><button type="button" class="dropdown-item" data-col-preset="Risk View">Risk View</button></li>
+            <li><button type="button" class="dropdown-item" data-col-preset="Scott's View">Scott's View</button></li>
           </ul>
         </div>
         <div class="dropdown" data-bs-auto-close="outside">
@@ -855,8 +859,8 @@
     <!-- Rep Comparison Toolbar (appears when reps are selected) -->
     <div id="srCompareToolbar" class="sr-compare-toolbar d-none" role="status" aria-live="polite">
       <span id="srCompareCount">0 reps selected</span>
-      <button class="btn btn-primary btn-sm" id="srCompareBtn" disabled>Compare</button>
-      <button class="btn btn-outline-light btn-sm" id="srClearCompare">Clear</button>
+      <button type="button" class="btn btn-primary btn-sm" id="srCompareBtn" disabled>Compare</button>
+      <button type="button" class="btn btn-outline-light btn-sm" id="srClearCompare">Clear</button>
     </div>
 
     <div class="table-responsive sr-table-wrap" id="srTableWrap">
@@ -942,8 +946,8 @@
           <div class="text-muted small" id="srDrawerSubtitle">At-risk customers ranked by urgency</div>
         </div>
         <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-outline-secondary btn-sm" onclick="exportFollowUpList()">&#11015; Export CSV</button>
-          <button class="btn-close" onclick="closeFollowUpDrawer()" aria-label="Close drawer"></button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportFollowUpList()">&#11015; Export CSV</button>
+          <button type="button" class="btn-close" onclick="closeFollowUpDrawer()" aria-label="Close drawer"></button>
         </div>
       </div>
       <div class="sr-followup-drawer-body" id="srFollowUpDrawerBody">
@@ -957,7 +961,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header" style="background:var(--wa-canvas-deep);color:var(--wa-text-inverse);border-bottom:2px solid var(--wa-accent-deep)">
-          <h5 class="modal-title" id="srCompareModalLabel">Rep Side-by-Side Comparison</h5>
+          <h2 class="modal-title h5" id="srCompareModalLabel">Rep Side-by-Side Comparison</h2>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body p-0" id="srCompareModalBody">

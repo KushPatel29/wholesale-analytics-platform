@@ -179,7 +179,7 @@ def current_data_version() -> str:
     except Exception:
         pass
 
-    return str(int(pd.Timestamp.utcnow().timestamp()))
+    return str(int(pd.Timestamp.now(tz="UTC").timestamp()))
 
 
 @dataclass

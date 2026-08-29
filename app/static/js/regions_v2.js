@@ -556,8 +556,8 @@
       .slice(0, 12)
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Operating Pattern", "Operational Mix", "Supplier count", row.supplier_count))}>
-          <td>${row.region || ""}</td>
-          <td class="text-end">${row.dominant_ship_method ? `${row.dominant_ship_method} (${fmtPercent(row.dominant_ship_share_pct)})` : "-"}</td>
+          <td>${escapeHtml(row.region || "")}</td>
+          <td class="text-end">${row.dominant_ship_method ? `${escapeHtml(row.dominant_ship_method)} (${fmtPercent(row.dominant_ship_share_pct)})` : "-"}</td>
           <td class="text-end">${fmtInt.format(asNumber(row.supplier_count))}</td>
           <td class="text-end">${fmtInt.format(asNumber(row.product_count))}</td>
         </tr>
@@ -577,7 +577,7 @@
       .slice(0, 12)
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Unit Economics", "Region Unit Economics", "Revenue per customer", row.revenue_per_customer))}>
-          <td>${row.region || ""}</td>
+          <td>${escapeHtml(row.region || "")}</td>
           <td class="text-end">${fmtCurrency2(row.revenue_per_customer)}</td>
           <td class="text-end">${fmtCurrency2(row.profit_per_order)}</td>
           <td class="text-end">${fmtCurrency2(row.revenue_per_unit)}</td>
@@ -604,7 +604,7 @@
     tbody.innerHTML = rows
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Dependency & Concentration", "Over-Reliant Regions", "Top customer share", row.top_customer_share_pct))}>
-          <td>${row.region || ""}</td>
+          <td>${escapeHtml(row.region || "")}</td>
           <td class="text-end">${fmtPercent(row.top_customer_share_pct)}</td>
           <td class="text-end">${fmtPercent(row.top_product_share_pct)}</td>
           <td class="text-end">${fmtPercent(row.top_supplier_share_pct)}</td>
@@ -710,7 +710,8 @@
     groups.forEach((quadrant) => {
       const panel = document.createElement("section");
       panel.className = `regions-v2-quadrant regions-v2-quadrant--${quadrant.toLowerCase()}`;
-      const title = document.createElement("h6");
+      const title = document.createElement("h3");
+      title.className = "h6";
       title.textContent = quadrant;
       panel.appendChild(title);
       points
@@ -746,7 +747,7 @@
     tbody.innerHTML = rows
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Retention", "Region Retention", "Repeat %", row.repeat_pct))}>
-          <td>${row.region || ""}</td>
+          <td>${escapeHtml(row.region || "")}</td>
           <td class="text-end">${fmtPercent(row.repeat_pct)}</td>
           <td class="text-end">${fmtPercent(row.churn_pct)}</td>
           <td class="text-end">${fmtInt.format(asNumber(row.active_customers_30d))} / ${fmtInt.format(asNumber(row.active_customers_90d))}</td>
@@ -767,11 +768,11 @@
     tbody.innerHTML = rows
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Risk & Coverage", "Region Risk", "Revenue delta", row.delta_revenue))}>
-          <td>${row.region || ""}</td>
-          <td><span class="${pillClass(row.risk_band, "risk")}">${row.risk_band || "Low"}</span></td>
-          <td>${row.risk_summary || "-"}</td>
+          <td>${escapeHtml(row.region || "")}</td>
+          <td><span class="${pillClass(row.risk_band, "risk")}">${escapeHtml(row.risk_band || "Low")}</span></td>
+          <td>${escapeHtml(row.risk_summary || "-")}</td>
           <td class="text-end">${fmtCurrency(row.delta_revenue)}</td>
-          <td><span class="${pillClass(row.data_quality_flag, "quality")}">${row.data_quality_flag || "OK"}</span></td>
+          <td><span class="${pillClass(row.data_quality_flag, "quality")}">${escapeHtml(row.data_quality_flag || "OK")}</span></td>
         </tr>
       `)
       .join("");
@@ -814,11 +815,11 @@
     tbody.innerHTML = rows
       .map((row) => `
         <tr${drillAttr(regionDrillPayload(row.region_id || row.region, row.region, "Momentum", "Region Momentum", "Delta revenue", row.delta_revenue))}>
-          <td>${row.region || ""}</td>
+          <td>${escapeHtml(row.region || "")}</td>
           <td class="text-end">${fmtCurrency(row.revenue_current)}</td>
           <td class="text-end">${fmtCurrency(row.revenue_prior)}</td>
           <td class="text-end">${fmtCurrency(row.delta_revenue)}</td>
-          <td class="text-end ${deltaClass(row.delta_revenue_status)}">${row.delta_revenue_label || fmtPercent(row.delta_revenue_pct)}</td>
+          <td class="text-end ${deltaClass(row.delta_revenue_status)}">${escapeHtml(row.delta_revenue_label || fmtPercent(row.delta_revenue_pct))}</td>
           <td class="text-end">${fmtInt.format(asNumber(row.delta_orders))}</td>
           <td class="text-end">${fmtInt.format(asNumber(row.delta_customers))}</td>
           <td class="text-end">${fmtCurrency(row.profit_delta)}</td>
@@ -864,7 +865,7 @@
         const payload = regionDrillPayload(row.region_id || row.region, row.region, "Region Table", "Region Command Center", "Revenue", row.revenue);
         return `
           <tr${drillAttr(payload)}>
-            <td><a class="text-decoration-none fw-semibold" href="${viewHref}">${row.region || ""}</a></td>
+            <td><a class="text-decoration-none fw-semibold" href="${escapeHtml(viewHref)}">${escapeHtml(row.region || "")}</a></td>
             <td class="text-end">${fmtInt.format(asNumber(row.customers))}</td>
             <td class="text-end">${fmtInt.format(asNumber(row.orders))}</td>
             <td class="text-end">${fmtCurrency(row.revenue)}</td>
@@ -877,17 +878,17 @@
             <td class="text-end">${fmtPercent(row.top_customer_share_pct)}</td>
             <td class="text-end">${fmtPercent(row.top_product_share_pct)}</td>
             <td class="text-end">${fmtCurrency(row.delta_revenue)}</td>
-            <td class="text-end ${deltaClass(row.delta_revenue_status)}">${row.delta_revenue_label || fmtPercent(row.delta_revenue_pct)}</td>
+            <td class="text-end ${deltaClass(row.delta_revenue_status)}">${escapeHtml(row.delta_revenue_label || fmtPercent(row.delta_revenue_pct))}</td>
             <td>
               <div class="d-flex flex-column gap-1">
-                <span class="${pillClass(row.risk_band, "risk")}">${row.risk_band || "Low"}</span>
-                <span class="${pillClass(row.data_quality_flag, "quality")}">${row.data_quality_flag || "OK"}</span>
+                <span class="${pillClass(row.risk_band, "risk")}">${escapeHtml(row.risk_band || "Low")}</span>
+                <span class="${pillClass(row.data_quality_flag, "quality")}">${escapeHtml(row.data_quality_flag || "OK")}</span>
               </div>
             </td>
             <td>
               <div class="btn-group btn-group-sm">
-                <a class="btn btn-primary" href="${viewHref}">View</a>
-                <a class="btn btn-outline-secondary" href="${exportHref}">Export</a>
+                <a class="btn btn-primary" href="${escapeHtml(viewHref)}">View</a>
+                <a class="btn btn-outline-secondary" href="${escapeHtml(exportHref)}">Export</a>
               </div>
             </td>
           </tr>

@@ -19,6 +19,30 @@ test.describe('Operational readiness regressions', () => {
     expect(stacking.isolation).toBe('isolate');
   });
 
+  test('desktop header menus support keyboard focus, dismissal, and selection', async ({ page }) => {
+    await page.goto('/');
+    const analyticsToggle = page.locator('.navbar-wholesale [data-bs-toggle="dropdown"]')
+      .filter({ hasText: 'Analytics' }).first();
+    const menu = analyticsToggle.locator('xpath=..').locator('.dropdown-menu');
+    const firstItem = menu.locator('a[href], button:not([disabled]), [role="menuitem"]').first();
+
+    await analyticsToggle.focus();
+    await analyticsToggle.press('ArrowDown');
+    await expect(analyticsToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(menu).toBeVisible();
+    await expect(firstItem).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(analyticsToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(analyticsToggle).toBeFocused();
+
+    await analyticsToggle.click();
+    await Promise.all([
+      page.waitForURL(/\/metrics\/?(?:\?.*)?$/),
+      menu.getByRole('menuitem', { name: 'Metric Catalogue' }).click(),
+    ]);
+  });
+
   test('overview action links reveal diagnostic content', async ({ page }) => {
     await page.goto('/');
     const disclosure = page.locator('#diagnosticWorkspacesDisclosure');

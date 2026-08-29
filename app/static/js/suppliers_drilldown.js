@@ -67,7 +67,11 @@
     const el = document.getElementById(id);
     if (!el) return;
     removeSkeleton(id);
-    el.innerHTML = `<p class="text-muted text-center mt-3">${message}</p>`;
+    el.replaceChildren();
+    const copy = document.createElement("p");
+    copy.className = "text-muted text-center mt-3";
+    copy.textContent = String(message || "No data available.");
+    el.appendChild(copy);
   };
 
   const aoaToCSV = (aoa) =>
@@ -189,7 +193,11 @@
     if (!h2) return;
     const name = kpis.supplier_name || supplierId || "Unknown";
     const sid = kpis.supplier_id || supplierId || "—";
-    h2.innerHTML = `Supplier: ${name} <span class="text-muted">(ID: ${sid})</span>`;
+    h2.replaceChildren(document.createTextNode(`Supplier: ${name} `));
+    const idLabel = document.createElement("span");
+    idLabel.className = "text-muted";
+    idLabel.textContent = `(ID: ${sid})`;
+    h2.appendChild(idLabel);
   };
 
   const computeTrendStats = (trend = {}) => {
