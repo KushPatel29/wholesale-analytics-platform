@@ -676,7 +676,6 @@ def list_work_items(
                     "impact": sum(float(row.expected_financial_impact or 0) for row in all_rows if row.status == state),
                 }
                 for state in ACTION_STATUSES
-                if status_counts.get(state, 0)
             ],
         }
         items = _apply_owner_labels(session, rows, [_work_dict(row) for row in rows])
@@ -1157,7 +1156,6 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
                 "value": sum(float(row.amount or 0) for row in records if row.status == state),
             }
             for state in WORKSPACES[domain]["statuses"]
-            if statuses.get(state, 0)
         ],
     }
     if domain == "crm":
@@ -1224,7 +1222,6 @@ def _operational_summary(domain: str, rows: Iterable[OperationalRecord]) -> dict
                     "value": stage["value"],
                 }
                 for stage in stage_metrics
-                if stage["count"]
             ],
             "forecast_mix": [
                 {

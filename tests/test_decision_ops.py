@@ -357,6 +357,8 @@ def test_decision_ops_pages_render_one_h1_and_source_gated_empty_states(client, 
     assert "No operational history has been invented" in client.get("/work/orders").get_data(as_text=True)
     assert "not connected" in client.get("/work/enterprise").get_data(as_text=True).lower()
     action_body = client.get("/work").get_data(as_text=True)
+    assert "Action execution flow" in action_body
+    assert "Operational process flow" in client.get("/work/crm").get_data(as_text=True)
     assert 'name="reminder_at"' in action_body
     assert 'name="escalation_at"' in action_body
     assert '<option value="crm"' in action_body
