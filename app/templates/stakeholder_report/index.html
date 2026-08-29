@@ -705,6 +705,10 @@
 /* The inventory scorecard is wide; let it scroll rather than squeeze the page. */
 .report-card > .plan-table { min-width: 640px; }
 .report-card { overflow-x: auto; }
+.report-card:focus-visible {
+  outline: 3px solid rgba(var(--page-accent-rgb), 0.58);
+  outline-offset: 3px;
+}
 </style>
 {% endblock %}
 

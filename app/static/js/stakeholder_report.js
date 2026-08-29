@@ -177,6 +177,41 @@ class ReportWorkspace {
     // Sections are built as HTML strings, so anything that needs a live element
     // has to be drawn after they are in the document.
     this.drawCharts();
+    this.enhanceScrollableCards();
+  }
+
+  enhanceScrollableCards() {
+    this.cardResizeObserver?.disconnect();
+    const cards = Array.from(this.container.querySelectorAll('.report-card'));
+    const update = (card) => {
+      const scrollable = card.scrollWidth > card.clientWidth + 1;
+      if (!scrollable) {
+        if (card.dataset.scrollRegionEnhanced === '1') {
+          card.removeAttribute('tabindex');
+          card.removeAttribute('role');
+          card.removeAttribute('aria-labelledby');
+          delete card.dataset.scrollRegionEnhanced;
+        }
+        return;
+      }
+
+      const section = card.closest('.report-section');
+      const heading = section?.querySelector('.section-title');
+      if (heading && !heading.id) heading.id = `${section.id}-heading`;
+      card.tabIndex = 0;
+      card.setAttribute('role', 'region');
+      if (heading?.id) card.setAttribute('aria-labelledby', heading.id);
+      card.dataset.scrollRegionEnhanced = '1';
+    };
+
+    cards.forEach(update);
+    if ('ResizeObserver' in window) {
+      this.cardResizeObserver = new ResizeObserver((entries) => {
+        entries.forEach((entry) => update(entry.target));
+      });
+      cards.forEach((card) => this.cardResizeObserver.observe(card));
+    }
+    requestAnimationFrame(() => cards.forEach(update));
   }
 
   /* The two figures on this page that are genuinely two-dimensional.
