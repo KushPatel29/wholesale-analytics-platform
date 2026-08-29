@@ -1,9 +1,11 @@
 {% extends 'base.html' %}
 {% block title %}Customer Cohorts | Northgate Retail Analytics{% endblock %}
-{# Charts are drawn from an inline <script> in the content block, which runs
-   while the page is parsing - so the charting libraries have to be in <head>,
-   not at the end of <body>. See base.html. #}
-{% set needs_early_charts = true %}
+{# Charts are drawn from an inline <script> in the content block, so these
+   dependencies must be available synchronously before that block is parsed. #}
+{% block head_extras %}
+  <script src="{{ url_for('static', filename='vendor/plotly/plotly-2.35.2.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/chart-utils.js', v='20260811-instant-3') }}"></script>
+{% endblock %}
 {% set filters_handler = 'ssr' %}
 {% block content %}
 {% set controls = payload.get('controls') or {} %}
@@ -278,8 +280,8 @@
               {% endif %}
               <option value="segment" {% if (state.get('segmentation') or 'region') == 'segment' %}selected{% endif %}>Revenue Tier</option>
             </select>
-            <a class="btn btn-sm btn-outline-success export-link" id="segExportBtn" data-export-dataset="churn_region" href="#">
-              <i class="bi bi-file-earmark-arrow-down"></i>
+            <a class="btn btn-sm btn-outline-success export-link" id="segExportBtn" data-export-dataset="churn_region" href="#" aria-label="Export segmentation analysis">
+              <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
             </a>
           </div>
         </div>

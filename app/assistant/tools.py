@@ -471,7 +471,7 @@ def _effective_filter_reference(ctx: ToolContext, args: Mapping[str, Any] | None
 
 
 def _hash_permissions(user: Any) -> str:
-    return hashlib.sha1(",".join(sorted(rbac.effective_permissions(user))).encode("utf-8")).hexdigest()
+    return hashlib.sha256(",".join(sorted(rbac.effective_permissions(user))).encode("utf-8")).hexdigest()
 
 
 def _payload_status(payload: Any, *, primary_keys: Sequence[str] = ()) -> str:
@@ -1255,7 +1255,7 @@ def _module_bundle(ctx: ToolContext, module: str, args: Mapping[str, Any] | None
     cache_key = filters_cache_key(
         ctx.user,
         ctx.filters,
-        extras={"assistant_module": hashlib.sha1(json.dumps(extras_blob, sort_keys=True, default=str).encode("utf-8")).hexdigest()},
+        extras={"assistant_module": hashlib.sha256(json.dumps(extras_blob, sort_keys=True, default=str).encode("utf-8")).hexdigest()},
     )
     with _MODULE_LOCK:
         cached = _MODULE_CACHE.get(cache_key)

@@ -330,6 +330,10 @@ def _server_env(host: str, port: str) -> dict[str, str]:
             "PLAYWRIGHT_THEME_AUDIT_SEED": "1",
             "PLAYWRIGHT_HOST": host,
             "PLAYWRIGHT_PORT": port,
+            # Keep the audit server away from any developer instance already
+            # writing logs/app.jsonl. RotatingFileHandler cannot coordinate a
+            # Windows rename across processes.
+            "LOG_PATH": (OUTPUT_DIR / f"theme-audit-{port}.jsonl").as_posix(),
         }
     )
     return env

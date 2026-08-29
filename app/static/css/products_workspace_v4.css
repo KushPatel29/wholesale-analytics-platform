@@ -405,10 +405,34 @@
 }
 
 .is-clickable-card:hover,
-.is-clickable-card:focus-visible {
+.is-clickable-card:focus-within {
   border-color: var(--wa-accent-wash);
   box-shadow: 0 16px 34px rgba(122, 65, 58, 0.12);
   transform: translateY(-1px);
+}
+
+.card-primary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: max-content;
+  min-height: 28px;
+  margin-top: 0.65rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--wa-accent-line);
+  border-radius: 999px;
+  background: var(--wa-accent-wash);
+  color: var(--wa-accent-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.card-primary-action:hover,
+.card-primary-action:focus-visible {
+  border-color: var(--wa-accent);
+  background: var(--wa-accent);
+  color: var(--wa-accent-contrast);
 }
 
 .table-row-clickable:hover td {

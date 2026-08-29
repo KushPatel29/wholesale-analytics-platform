@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 import duckdb
 
@@ -108,8 +108,8 @@ def _stats(dataset_path: Path, *, window_days: int) -> Stats:
     )
 
 
-def _run(cmd: str) -> int:
-    proc = subprocess.run(cmd, shell=True, check=False)
+def _run(cmd: Sequence[str]) -> int:
+    proc = subprocess.run(list(cmd), shell=False, check=False)
     return int(proc.returncode)
 
 
@@ -117,8 +117,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run refresh twice and validate idempotency + 2026 coverage.")
     ap.add_argument(
         "--cmd",
-        default="python run.py refresh-fact --once",
-        help="Refresh command to run twice",
+        nargs=argparse.REMAINDER,
+        default=["python", "run.py", "refresh-fact", "--once"],
+        help="Refresh command and arguments to run twice; place this option last",
     )
     ap.add_argument("--dataset-path", default=None, help="Dataset dir (defaults to resolved FACT_DATASET_PATH/PARQUET_PATH)")
     ap.add_argument("--revenue-eps", type=float, default=0.01, help="Allowed delta in revenue totals between runs")

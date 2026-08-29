@@ -135,21 +135,21 @@
     <div class="row g-3">
       <div class="col-12 col-md-6 col-xl-3">
         <div class="kpi-shell">
-          <div class="kpi-label">Revenue <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Total revenue in current window."></i></div>
+          <div class="kpi-label">Revenue <i class="bi bi-info-circle" role="img" aria-label="About revenue" data-bs-toggle="tooltip" title="Total revenue in current window."></i></div>
           <div class="kpi-value">{{ fmt_currency(summary.get('total_revenue')) }}</div>
           <div class="kpi-delta">{{ delta_line('revenue', 'currency') }}</div>
         </div>
       </div>
       <div class="col-12 col-md-6 col-xl-3">
         <div class="kpi-shell">
-          <div class="kpi-label">Profit <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Revenue minus cost. May be understated when costs are missing."></i></div>
+          <div class="kpi-label">Profit <i class="bi bi-info-circle" role="img" aria-label="About profit" data-bs-toggle="tooltip" title="Revenue minus cost. May be understated when costs are missing."></i></div>
           <div class="kpi-value">{{ fmt_currency(summary.get('total_profit')) }}</div>
           <div class="kpi-delta">{{ delta_line('profit', 'currency') }}</div>
         </div>
       </div>
       <div class="col-12 col-md-6 col-xl-3">
         <div class="kpi-shell">
-          <div class="kpi-label">Margin % <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Profit divided by revenue."></i></div>
+          <div class="kpi-label">Margin % <i class="bi bi-info-circle" role="img" aria-label="About margin percentage" data-bs-toggle="tooltip" title="Profit divided by revenue."></i></div>
           <div class="kpi-value">{{ fmt_percent(summary.get('margin_pct')) }}</div>
           <div class="kpi-delta">{{ delta_line('margin_pct', 'percent') }}</div>
           <div class="small text-muted">
@@ -440,11 +440,11 @@
       </div>
       <div class="col-6 col-md-2 d-flex gap-1">
         <button id="applyFiltersBtn" class="btn btn-sm btn-primary w-100" type="button">Apply</button>
-        <button id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary w-100" type="button">Reset</button>
+        <button id="customerKpiResetBtn" class="btn btn-sm btn-outline-secondary w-100" type="button">Reset</button>
       </div>
       <div class="col-12 d-flex flex-wrap gap-2 pt-2">
         <button id="saveViewBtn" class="btn btn-sm btn-outline-secondary" type="button">Save View</button>
-        <select id="savedViewSelect" class="form-select form-select-sm" style="max-width: 240px;" aria-label="Saved views"><option value="">Saved Views</option></select>
+        <select id="customerKpiSavedViewSelect" class="form-select form-select-sm" style="max-width: 240px;" aria-label="Saved views"><option value="">Saved Views</option></select>
         <a id="exportXlsxBtn" class="btn btn-sm btn-success" href="#">Export XLSX (all rows)</a>
         <a id="exportCsvBtn" class="btn btn-sm btn-outline-success" href="#">Export CSV (all rows)</a>
       </div>
@@ -486,9 +486,9 @@
         {% for row in rows %}
         {% set risk = row.get('ChurnRisk') %}
         {% set delta_status = (row.get('DeltaRevenueStatus') or 'normal')|lower %}
-        <tr class="table-row-click" tabindex="0" role="button" data-href="{{ url_for('customers.drilldown', customer_id=row['CustomerId']) }}">
+        <tr class="table-row-click" data-href="{{ url_for('customers.drilldown', customer_id=row['CustomerId']) }}">
           <td>
-            <div class="fw-semibold">{{ row.get('CustomerName') or row.get('CustomerId') }}</div>
+            <div class="fw-semibold"><a class="link-body-emphasis text-decoration-none" href="{{ url_for('customers.drilldown', customer_id=row['CustomerId']) }}">{{ row.get('CustomerName') or row.get('CustomerId') }}</a></div>
             <div class="small text-muted">{{ row.get('CustomerId') }}</div>
           </td>
           <td>{{ fmt_date(row.get('FirstOrder')) }}</td>
@@ -597,7 +597,7 @@
   };
 
   document.getElementById('applyFiltersBtn')?.addEventListener('click', () => applyControls(false));
-  document.getElementById('resetFiltersBtn')?.addEventListener('click', () => applyControls(true));
+  document.getElementById('customerKpiResetBtn')?.addEventListener('click', () => applyControls(true));
 
   document.getElementById('prevPageBtn')?.addEventListener('click', () => {
     q.set('page', String(Math.max(1, page - 1)));
@@ -629,12 +629,9 @@
   document.querySelectorAll('.table-row-click').forEach((row) => {
     const href = row.dataset.href;
     if (!href) return;
-    row.addEventListener('click', () => { window.location.href = href; });
-    row.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        window.location.href = href;
-      }
+    row.addEventListener('click', (event) => {
+      if (event.target.closest('a, button, input, select, textarea')) return;
+      window.location.href = href;
     });
   });
 
@@ -710,7 +707,7 @@
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
   };
   const writeViews = (views) => localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
-  const selector = document.getElementById('savedViewSelect');
+  const selector = document.getElementById('customerKpiSavedViewSelect');
   const hydrateSavedViews = () => {
     if (!selector) return;
     const views = readViews();

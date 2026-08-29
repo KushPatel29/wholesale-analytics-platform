@@ -46,6 +46,14 @@ body:has(.decision-shell--enterprise) { --ops-accent: #5966ca; --ops-accent-rgb:
 :root[data-theme="dark"] .decision-shell {
   --ops-faint: var(--wa-text-muted, #9aa8b5);
   --ops-accent-text: color-mix(in srgb, var(--ops-accent) 62%, #fff);
+  --ops-signal: #e0a548;
+  --ops-risk: #ef7772;
+}
+
+:root[data-theme="light"] .decision-shell {
+  /* Status ink must remain legible on both the tinted badges and white cards. */
+  --ops-signal: #805009;
+  --ops-risk: #a62f32;
 }
 
 body:has(.decision-shell) .app-main {

@@ -631,6 +631,9 @@ class TestWarmupOrder:
 
 
 class TestSecurityHeaders:
+    def _headers(self, app):
+        return app.test_client().get("/healthz").headers
+
     def test_data_uri_fonts_are_allowed(self, app):
         """
         `img-src` was the only directive naming `data:`, and CSP does not
@@ -638,7 +641,33 @@ class TestSecurityHeaders:
         `default-src`, which does not include it. Fonts inlined as data URIs
         were blocked outright.
         """
-        csp = app.test_client().get("/healthz").headers.get("Content-Security-Policy", "")
+        csp = self._headers(app).get("Content-Security-Policy", "")
         assert "font-src" in csp, "font-src must be named or default-src decides for it"
         font_src = next(part for part in csp.split(";") if "font-src" in part)
         assert "data:" in font_src
+
+    def test_browser_capabilities_and_transport_are_restricted(self, app):
+        headers = self._headers(app)
+        assert headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+        assert headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+        assert headers["Cross-Origin-Opener-Policy"] == "same-origin"
+        assert headers["X-Permitted-Cross-Domain-Policies"] == "none"
+        permissions = headers["Permissions-Policy"]
+        for capability in ("camera=()", "microphone=()", "geolocation=()", "payment=()", "usb=()"):
+            assert capability in permissions
+
+    def test_csp_denies_ambient_remote_execution_and_embedding(self, app):
+        csp = self._headers(app)["Content-Security-Policy"]
+        directives = {
+            parts[0]: parts[1:]
+            for segment in csp.split(";")
+            if (parts := segment.strip().split())
+        }
+        assert directives["default-src"] == ["'self'"]
+        assert directives["base-uri"] == ["'self'"]
+        assert directives["object-src"] == ["'none'"]
+        assert directives["frame-ancestors"] == ["'none'"]
+        assert directives["form-action"] == ["'self'"]
+        assert "https:" not in directives["script-src"]
+        assert "https://cdn.jsdelivr.net" in directives["script-src"]
+        assert "https://cdn.sheetjs.com" in directives["script-src"]

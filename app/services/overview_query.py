@@ -2183,7 +2183,7 @@ def compute_overview(df: pd.DataFrame) -> Dict[str, Any]:
 
 def etag_for(obj: Dict[str, Any]) -> str:
     body = json.dumps(obj, separators=(",", ":"), default=str)
-    return '"' + hashlib.md5(body.encode("utf-8")).hexdigest() + '"'
+    return '"' + hashlib.sha256(body.encode("utf-8")).hexdigest() + '"'
 
 EMPTY_CUSTOMER_INSIGHT: Dict[str, Any] = {
     "top": [],

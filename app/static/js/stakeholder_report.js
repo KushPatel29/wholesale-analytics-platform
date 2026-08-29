@@ -749,6 +749,7 @@ class ReportWorkspace {
         <div id="planDemandChart" class="plan-chart" role="img"
              aria-label="Department demand change against the prior window"></div>
         <table class="plan-table">
+          <caption class="plan-caption">Department demand performance for the active reporting window</caption>
           <thead>
             <tr><th>Department</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Change</th><th>Direction</th></tr>
           </thead>
@@ -1005,6 +1006,7 @@ class ReportWorkspace {
         <div id="planExposureChart" class="plan-chart" role="img"
              aria-label="Top-vendor share of each department against that vendor's on-time rate"></div>
         <table class="plan-table">
+          <caption class="plan-caption">Largest vendor exposure and service by department</caption>
           <thead>
             <tr><th>Department</th><th>Largest vendor</th><th class="num">Share</th><th class="num">Vendors</th><th class="num">Their on-time</th></tr>
           </thead>

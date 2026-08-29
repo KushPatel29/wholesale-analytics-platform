@@ -12,6 +12,9 @@ export default defineConfig({
     baseURL,
     headless: true,
     viewport: { width: 1440, height: 900 },
+    // Audit the settled interface, not intermediate opacity frames from entry
+    // animations. The application already honors this OS-level preference.
+    reducedMotion: 'reduce',
     ignoreHTTPSErrors: true,
     storageState: process.env.PLAYWRIGHT_AUTH_STATE || undefined,
   },

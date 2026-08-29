@@ -94,7 +94,7 @@ def _slice_cache_key(name: str) -> str:
 
 def _etag_response(payload: Dict[str, Any]) -> Response:
     body = json.dumps(payload, separators=(",", ":"), default=str)
-    etag = '"' + hashlib.md5(body.encode("utf-8")).hexdigest() + '"'
+    etag = '"' + hashlib.sha256(body.encode("utf-8")).hexdigest() + '"'
     inm = request.headers.get("If-None-Match")
     if inm and inm == etag:
         resp = Response(status=304)

@@ -245,7 +245,7 @@ def _narrative_cache_key(*, user_id: Any, page: str, module: str, kind: str, pay
         "k": str(kind or ""),
         "d": dict(payload or {}),
     }
-    token = hashlib.sha1(_stable_json(raw).encode("utf-8")).hexdigest()
+    token = hashlib.sha256(_stable_json(raw).encode("utf-8")).hexdigest()
     return f"assistant:{token}"
 
 

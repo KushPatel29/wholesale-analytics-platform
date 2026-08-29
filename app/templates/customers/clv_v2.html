@@ -244,9 +244,9 @@
       </thead>
       <tbody>
         {% for row in leaderboard %}
-        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}">
           <td>
-            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="fw-semibold"><a class="link-body-emphasis text-decoration-none" href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}">{{ row.get('customer_name') or row.get('customer_id') }}</a></div>
             <div class="small text-muted">{{ row.get('customer_id') }}</div>
           </td>
           <td>{{ row.get('segment') }}</td>
@@ -447,9 +447,9 @@
       <tbody>
         {% for row in customers_table.get('rows') or [] %}
         {% set risk_class = 'risk-low' if (row.get('risk_band') == 'Low') else ('risk-med' if (row.get('risk_band') == 'Medium') else 'risk-high') %}
-        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}" tabindex="0" role="button">
+        <tr class="table-row-click" data-href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}">
           <td>
-            <div class="fw-semibold">{{ row.get('customer_name') or row.get('customer_id') }}</div>
+            <div class="fw-semibold"><a class="link-body-emphasis text-decoration-none" href="{{ row.get('drilldown_url') or url_for('customers.drilldown', customer_id=row.get('customer_id')) }}">{{ row.get('customer_name') or row.get('customer_id') }}</a></div>
             <div class="small text-muted">{{ row.get('customer_id') }}</div>
           </td>
           <td>
@@ -581,12 +581,9 @@ window.addEventListener("load", () => {
   document.querySelectorAll(".table-row-click").forEach((row) => {
     const href = row.getAttribute("data-href");
     if (!href) return;
-    row.addEventListener("click", () => (window.location.href = href));
-    row.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        window.location.href = href;
-      }
+    row.addEventListener("click", (ev) => {
+      if (ev.target.closest("a, button, input, select, textarea")) return;
+      window.location.href = href;
     });
   });
 

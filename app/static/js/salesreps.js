@@ -50,21 +50,23 @@
   const fmtPct = new Intl.NumberFormat(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const THEME_READY = true;
   window.THEME_READY = THEME_READY;
+  const themeStyle = getComputedStyle(document.documentElement);
+  const themeToken = (name, fallback) => themeStyle.getPropertyValue(name).trim() || fallback;
   const SR_THEME = Object.freeze({
-    espresso: "#1E293B",
-    espressoSoft: "#334155",
-    cream: "#FFFFFF",
-    creamStrong: "#F8FAFC",
-    tan: "#F1F5F9",
-    tanSoft: "#E2E8F0",
-    oxblood: "#720e0e",
-    blood: "#991b1b",
-    forest: "#059669",
-    gold: "#C5A059",
-    bronze: "#946c37",
-    tick: "#64748B",
-    grid: "#E2E8F0",
-    gridStrong: "#CBD5E1",
+    espresso: themeToken("--wa-text", "#1E293B"),
+    espressoSoft: themeToken("--wa-text-dim", "#334155"),
+    cream: themeToken("--wa-surface", "#FFFFFF"),
+    creamStrong: themeToken("--wa-surface-2", "#F8FAFC"),
+    tan: themeToken("--wa-surface-3", "#F1F5F9"),
+    tanSoft: themeToken("--wa-hairline", "#E2E8F0"),
+    oxblood: themeToken("--wa-bad", "#720e0e"),
+    blood: themeToken("--wa-bad", "#991b1b"),
+    forest: themeToken("--wa-good", "#036b4f"),
+    gold: themeToken("--wa-warn", "#C5A059"),
+    bronze: themeToken("--wa-warn", "#946c37"),
+    tick: themeToken("--wa-text-dim", "#64748B"),
+    grid: themeToken("--wa-hairline", "#E2E8F0"),
+    gridStrong: themeToken("--wa-hairline-strong", "#CBD5E1"),
   });
   const READABLE_REP_FALLBACK = "Needs Review";
   const UNASSIGNED_REP_FALLBACK = "Unassigned / Needs Review";
@@ -1066,7 +1068,7 @@
       emptyEl = document.createElement("div");
       emptyEl.dataset.emptyState = "true";
       emptyEl.className = "position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center text-muted small";
-      emptyEl.style.background = "rgba(245,245,220,0.92)";
+      emptyEl.style.background = "var(--wa-surface)";
       emptyEl.style.pointerEvents = "none";
       holder.appendChild(emptyEl);
     }
@@ -2083,12 +2085,12 @@
       const freshMargin = opt(freshRow.margin_pct);
       if (freshMargin !== null && freshMargin < 22) {
         storyHtml = `
-          <div class="alert alert-danger border-0 shadow-sm mb-3 py-3 px-4" style="background: #fff5f5; border-left: 5px solid #ef4444 !important;">
+          <div class="alert alert-danger border-0 shadow-sm mb-3 py-3 px-4" style="background:var(--wa-bad-wash);border-left:5px solid var(--wa-bad) !important;">
             <div class="d-flex align-items-center gap-2 mb-1">
               <span class="badge bg-danger">Critical Alert</span>
               <span class="fw-bold text-danger">Executive Briefing</span>
             </div>
-            <div class="fs-5 text-dark fw-semibold">
+            <div class="fs-5 fw-semibold">
               ${money(kpis.revenue)} Portfolio showing ${Math.abs(revMoM).toFixed(1)}% momentum loss driven by Fresh margin compression (${freshMargin.toFixed(1)}% avg margin).
             </div>
           </div>
@@ -2099,9 +2101,9 @@
     if (!storyHtml) {
       const direction = (revMoM || 0) >= 0 ? "up" : "down";
       storyHtml = `
-        <div class="alert alert-info border-0 shadow-sm mb-3 py-3 px-4" style="background: #f0f9ff; border-left: 5px solid #0ea5e9 !important;">
+        <div class="alert alert-info border-0 shadow-sm mb-3 py-3 px-4" style="background:var(--wa-info-wash);border-left:5px solid var(--wa-info) !important;">
           <div class="fw-bold text-info mb-1 small text-uppercase">Performance Narrative</div>
-          <div class="fs-5 text-dark fw-semibold">
+          <div class="fs-5 fw-semibold">
             The portfolio is trending ${direction} ${Math.abs(revMoM || 0).toFixed(1)}% month-over-month. 
             ${kpis.active_customers || 0} active accounts contributing ${money(kpis.revenue)}.
           </div>
@@ -4066,7 +4068,7 @@
       return `<tr><th scope="row" class="text-muted small fw-normal py-2">${m.label}</th>${cells}</tr>`;
     }).join("");
 
-    body.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover align-middle sr-compare-table mb-0"><thead class="table-light sticky-top"><tr><th scope="col" style="width:140px" class="text-muted">Metric</th>${headerCells}</tr></thead><tbody>${metricRows}</tbody></table></div>`;
+    body.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover align-middle sr-compare-table mb-0"><caption class="visually-hidden">Side-by-side performance comparison for selected sales representatives</caption><thead class="table-light sticky-top"><tr><th scope="col" style="width:140px" class="text-muted">Metric</th>${headerCells}</tr></thead><tbody>${metricRows}</tbody></table></div>`;
   };
 
   const wireCompare = () => {
@@ -4242,6 +4244,7 @@
       ${summaryBar}
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0" style="font-size:0.85rem">
+          <caption class="visually-hidden">Priority customer re-engagement opportunities</caption>
           <thead class="table-light">
             <tr>
               <th>Customer / Species Focus</th>

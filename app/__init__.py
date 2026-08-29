@@ -1462,20 +1462,27 @@ def create_app() -> Flask:
     def add_security_headers(resp):  # pragma: no cover - header behavior
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["X-Frame-Options"] = "DENY"
-        resp.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
-        # `img-src` was the only directive that allowed `data:`, and CSP does
-        # not inherit per-type allowances - anything not named falls back to
-        # `default-src`, which does not include it. Fonts embedded as data URIs
-        # were therefore blocked outright, which is how a chart or icon library
-        # that inlines its own typeface silently loses it.
-        #
-        # `font-src` and `style-src` are named explicitly so the fallback stops
-        # deciding for them.
+        resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+        # Inline scripts/styles remain temporarily allowed because the reporting
+        # templates intentionally embed chart bootstrap code. Everything else is
+        # explicitly scoped instead of inheriting a broad `https:` fallback.
         resp.headers["Content-Security-Policy"] = (
-            "default-src 'self' https: 'unsafe-inline' 'unsafe-eval' blob:; "
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.sheetjs.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' https: data: blob:; "
-            "font-src 'self' https: data:; "
-            "style-src 'self' https: 'unsafe-inline';"
+            "font-src 'self' data:; "
+            "connect-src 'self' https://basemaps.cartocdn.com https://cdn.jsdelivr.net; "
+            "worker-src 'self' blob:; "
+            "manifest-src 'self';"
         )
         try:
             path = request.path or ""

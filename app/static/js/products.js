@@ -643,17 +643,19 @@
   const makeInteractiveCard = (node, onClick) => {
     if (!node || typeof onClick !== "function") return;
     node.classList.add("is-clickable-card");
-    node.setAttribute("role", "button");
-    if (!node.hasAttribute("tabindex")) node.tabIndex = 0;
     if (node.dataset.clickBound === "1") return;
     node.dataset.clickBound = "1";
-    node.addEventListener("click", (evt) => {
-      if (evt.target.closest("a,button,input,select,label,summary")) return;
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.className = "card-primary-action";
+    actionButton.innerHTML = '<span>Open details</span><i class="bi bi-arrow-up-right" aria-hidden="true"></i>';
+    actionButton.addEventListener("click", (evt) => {
+      evt.stopPropagation();
       onClick(evt);
     });
-    node.addEventListener("keydown", (evt) => {
-      if (evt.key !== "Enter" && evt.key !== " ") return;
-      evt.preventDefault();
+    node.appendChild(actionButton);
+    node.addEventListener("click", (evt) => {
+      if (evt.target.closest("a,button,input,select,label,summary")) return;
       onClick(evt);
     });
   };

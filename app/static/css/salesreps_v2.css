@@ -3403,7 +3403,7 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 .sr-table-average-row .sticky-col,
 .salesreps-v2 .sr-table-average-row th.sticky-col {
   background: var(--wa-warn-wash) !important;
-  color: var(--wa-canvas-deep) !important;
+  color: var(--wa-text) !important;
   box-shadow: inset 0 1px 0 rgba(102, 0, 0, 0.08);
 }
 
@@ -3501,7 +3501,6 @@ body:has(.salesreps-v2) .app-main {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.72;
   white-space: nowrap;
 }
 
@@ -3808,6 +3807,38 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 .sr-routebar a:hover,
 .salesreps-v2 .sr-routebar a:focus-visible { color: var(--wa-text-strong); background: var(--wa-info-wash); }
 .salesreps-v2 :is(#srScorecardSection, #srMapSection, #srCoverageSection, #srMomentumSection, #srPrioritySection, #srComparisonSection) { scroll-margin-top: 5.5rem; }
+
+/* Theme-safe dynamic controls and third-party map chrome. */
+.salesreps-v2 .sr-grain-pill.active,
+.salesreps-v2 .sr-grain-pill:hover {
+  background: var(--page-accent);
+  border-color: var(--page-accent);
+  color: var(--wa-accent-contrast);
+}
+
+.salesreps-v2 .maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--wa-surface) 94%, transparent) !important;
+  color: var(--wa-text-dim) !important;
+}
+
+.salesreps-v2 .maplibregl-ctrl-attrib a {
+  color: var(--wa-accent-bright) !important;
+}
+
+:root[data-theme="dark"] .salesreps-v2 .sr-movers-pane-badge.badge-gained,
+:root[data-theme="dark"] .salesreps-v2 .sr-mover-badge.is-new {
+  background: var(--wa-good-wash) !important;
+  color: var(--wa-good) !important;
+  border-color: var(--wa-good) !important;
+}
+
+:root[data-theme="dark"] .salesreps-v2 .sr-movers-pane-badge.badge-lost,
+:root[data-theme="dark"] .salesreps-v2 .sr-mover-badge.is-lost {
+  background: var(--wa-bad-wash) !important;
+  color: #ff918a !important;
+  border-color: var(--wa-bad) !important;
+}
+
 @media (max-width: 767.98px) {
   .salesreps-v2 .sr-routebar { grid-template-columns: 1fr; gap: 0.45rem; }
   .salesreps-v2 .sr-routebar__label { padding-right: 0; border-right: 0; }

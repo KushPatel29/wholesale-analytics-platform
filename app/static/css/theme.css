@@ -37,7 +37,7 @@
   /* --- type ------------------------------------------------------------ */
   --wa-text: #e6edf3;
   --wa-text-dim: #9aa8b4;
-  --wa-text-faint: #6c7a86;
+  --wa-text-faint: #8796a2;
   --wa-text-inverse: #0f1419;
   --wa-on-dark: #f4f8fb;
   --wa-on-dark-muted: rgba(230, 237, 243, 0.74);
@@ -109,6 +109,7 @@
   --bs-body-bg: var(--wa-canvas);
   --bs-body-color: var(--wa-text);
   --bs-emphasis-color: var(--wa-text);
+  --bs-emphasis-color-rgb: 230, 237, 243;
   --bs-secondary-color: var(--wa-text-dim);
   --bs-tertiary-color: var(--wa-text-faint);
   --bs-border-color: var(--wa-hairline);
@@ -157,27 +158,26 @@
 
   --wa-text: #16211f;
   --wa-text-dim: #55635f;
-  --wa-text-faint: #7d8a86;
+  /* Still visually subordinate, but dark enough for AA on white surfaces. */
+  --wa-text-faint: #4e5e59;
   --wa-text-inverse: #ffffff;
   --wa-on-dark: #ffffff;
   --wa-on-dark-muted: rgba(255, 255, 255, 0.76);
 
-  --wa-accent: #1f8a67;
-  /* White on this green is 4.29:1 - still short of AA at this text size - so
-     the call-to-action darkens its own background rather than its label. */
+  --wa-accent: #16775a;
   --wa-accent-contrast: #ffffff;
   --wa-cta-bg: #0f5c44;
   --wa-accent-bright: #16775a;
   --wa-accent-deep: #0f5c44;
-  --wa-accent-wash: rgba(31, 138, 103, 0.10);
-  --wa-accent-line: rgba(31, 138, 103, 0.28);
+  --wa-accent-wash: rgba(22, 119, 90, 0.10);
+  --wa-accent-line: rgba(22, 119, 90, 0.28);
 
-  --wa-good: #1f8a67;
-  --wa-good-wash: rgba(31, 138, 103, 0.10);
-  --wa-warn: #a96c10;
-  --wa-warn-wash: rgba(169, 108, 16, 0.11);
-  --wa-bad: #c0453c;
-  --wa-bad-wash: rgba(192, 69, 60, 0.10);
+  --wa-good: #0f684d;
+  --wa-good-wash: rgba(15, 104, 77, 0.10);
+  --wa-warn: #865207;
+  --wa-warn-wash: rgba(134, 82, 7, 0.11);
+  --wa-bad: #a93630;
+  --wa-bad-wash: rgba(169, 54, 48, 0.10);
   --wa-info: #2b6ca3;
   --wa-info-wash: rgba(43, 108, 163, 0.10);
 
@@ -192,9 +192,10 @@
   --wa-cat-5: #4a3aa7;
   --wa-cat-6: #eb6834;
 
-  --bs-primary-rgb: 31, 138, 103;
-  --bs-link-color-rgb: 31, 138, 103;
-  --bs-btn-focus-shadow-rgb: 31, 138, 103;
+  --bs-primary-rgb: 22, 119, 90;
+  --bs-emphasis-color-rgb: 22, 33, 31;
+  --bs-link-color-rgb: 22, 119, 90;
+  --bs-btn-focus-shadow-rgb: 22, 119, 90;
 }
 
 body {
@@ -2492,9 +2493,9 @@ a:focus {
   }
 }
 
-.card, .kpi-card {
-  animation: fadeIn 0.5s ease-out;
-}
+/* Component state, not partial opacity, communicates loading. Applying an
+   entrance animation to every Bootstrap card made controls briefly illegible
+   and caused assistive tooling to sample blended, non-final colours. */
 
 /* Print Styles */
 @media print {
@@ -3350,7 +3351,9 @@ body.theme-wa-future[data-page-tone="salesreps"] {
   --page-accent-alt-rgb: 159, 141, 245;
   --wa-accent: #ef7d78;
   --wa-accent-bright: #f29a96;
-  --wa-accent-deep: #b94d4b;
+  /* This token is used as both accent ink and filled-control background in the
+     sales workspace; keep it bright enough for either role on dark surfaces. */
+  --wa-accent-deep: #ef7d78;
   --wa-accent-wash: rgba(239, 125, 120, 0.13);
   --wa-accent-line: rgba(239, 125, 120, 0.34);
   --bs-primary-rgb: 239, 125, 120;
@@ -5254,6 +5257,11 @@ body.theme-wa-future .table-responsive {
   background-attachment: local, local, scroll, scroll;
 }
 
+body.theme-wa-future .table-responsive:focus-visible {
+  outline: 3px solid rgba(var(--page-accent-rgb), 0.58);
+  outline-offset: 3px;
+}
+
 body.theme-wa-future .table-responsive > table > thead > tr > th {
   position: sticky;
   top: 0;
@@ -5317,6 +5325,9 @@ body.theme-wa-future .overview-tour__steps {
 }
 
 body.theme-wa-future .overview-tour__steps a {
+  display: inline-block;
+  min-height: 24px;
+  padding-block: 0.1rem;
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -5707,10 +5718,10 @@ body.theme-wa-future .navbar-wholesale {
   gap: 0.45rem;
   padding: 0.3rem 0.7rem;
   margin-right: 0.4rem;
-  border: 1px solid var(--wa-hairline);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
   background: transparent;
-  color: var(--wa-text-dim);
+  color: var(--wa-on-dark-muted);
   font: inherit;
   font-size: 0.78rem;
   line-height: 1;
@@ -5720,9 +5731,9 @@ body.theme-wa-future .navbar-wholesale {
 
 .wa-theme-toggle:hover,
 .wa-theme-toggle:focus-visible {
-  color: var(--wa-text);
-  border-color: var(--wa-hairline-strong);
-  background: var(--wa-surface-2);
+  color: var(--wa-on-dark);
+  border-color: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .wa-theme-toggle__icon {
@@ -5735,6 +5746,15 @@ body.theme-wa-future .navbar-wholesale {
 
 :root[data-theme="light"] .wa-theme-toggle__icon {
   box-shadow: none;
+}
+
+/* Help affordances must remain a usable touch target even when their icon is
+   intentionally compact. */
+.info-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
 }
 
 /* ---- surfaces ------------------------------------------------------------ */
