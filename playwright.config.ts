@@ -8,6 +8,7 @@ export default defineConfig({
   testDir: 'tests/playwright',
   timeout: 60_000,
   expect: { timeout: 15_000 },
+  reporter: process.env.CI ? [['github'], ['line']] : [['list']],
   // The release specs share one analytics server and deliberately exercise
   // expensive, stateful routes. CI runners must not fan those files out across
   // workers or the browser budget becomes a measure of self-contention.
