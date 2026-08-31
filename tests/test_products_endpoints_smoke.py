@@ -14,7 +14,7 @@ def products_client(app, monkeypatch):
     products_bp._STORE_SINGLETON = None
     tmp_dir = Path("cache") / f"products_smoke_{uuid.uuid4().hex}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    today = pd.Timestamp.utcnow().normalize()
+    today = pd.Timestamp.now(tz="UTC").normalize()
     rows = []
     for i in range(3):
         rows.append({

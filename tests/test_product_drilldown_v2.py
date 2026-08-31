@@ -95,14 +95,14 @@ def product_drilldown_v2_client(app, monkeypatch, tmp_path):
 
     monkeypatch.setenv("PRODUCTS_SALES_PARQUET", str(parquet_path))
     monkeypatch.setenv("PARQUET_PATH", str(parquet_path))
-    app.config["PRODUCTS_SALES_PARQUET"] = str(parquet_path)
-    app.config["PARQUET_PATH"] = str(parquet_path)
-    app.config["DATA_DIR"] = str(parquet_path.parent)
-    app.config["LOGIN_DISABLED"] = True
-    app.config["AUTHZ_DISABLED"] = True
-    app.config["PRODUCT_DRILLDOWN_V2"] = True
-    app.config["PRODUCT_FORECAST_V1"] = True
-    app.config["FEATURE_FORECAST_ENABLED"] = False
+    monkeypatch.setitem(app.config, "PRODUCTS_SALES_PARQUET", str(parquet_path))
+    monkeypatch.setitem(app.config, "PARQUET_PATH", str(parquet_path))
+    monkeypatch.setitem(app.config, "DATA_DIR", str(parquet_path.parent))
+    monkeypatch.setitem(app.config, "LOGIN_DISABLED", True)
+    monkeypatch.setitem(app.config, "AUTHZ_DISABLED", True)
+    monkeypatch.setitem(app.config, "PRODUCT_DRILLDOWN_V2", True)
+    monkeypatch.setitem(app.config, "PRODUCT_FORECAST_V1", True)
+    monkeypatch.setitem(app.config, "FEATURE_FORECAST_ENABLED", False)
     fact_store.reset_duckdb_state()
     fact_store.init_views()
 
@@ -479,7 +479,7 @@ def test_product_drilldown_v2_forecast_api_short_history_fallback(monkeypatch, a
     )
 
     with app.app_context():
-        app.config["PRODUCT_FORECAST_V1"] = True
+        monkeypatch.setitem(app.config, "PRODUCT_FORECAST_V1", True)
         payload = product_drilldown_service.build_product_forecast_payload(
             "SKU-001",
             filters={},
