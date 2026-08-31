@@ -147,6 +147,18 @@ PAGES: tuple[Page, ...] = (
 PRESET_RE = re.compile(r'<option value="([a-z0-9_]+)"')
 SKIP_PRESETS = {"custom", ""}
 
+# Only discard copy that is recognisably a transient placeholder.  This used
+# to be a broad ``/^(Loading|Reading|Building|...)/`` test over every leaf in
+# the document.  A generated SKU named "Building Blocks ..." therefore lost
+# its real H1 during the freeze pass.  Real placeholders either are the exact
+# generic labels below or finish with loading punctuation; business labels do
+# not.  Keep this as a shared pattern so its boundary can be regression-tested
+# without having to freeze the full 621-page site.
+WAITING_LEAF_PATTERN = (
+    r"^(?:Retry filters(?:\u2026|\.{3})?|Loading filters|Loading(?:$|(?:\s+.*)?(?:\u2026|\.{3})$)|"
+    r"(?:Reading|Building|Summarizing|Resolving)\s+.*(?:\u2026|\.{3}|\.)$)"
+)
+
 
 def discover_presets() -> list[str]:
     src = (ROOT / "app" / "templates" / "_filters.html").read_text(encoding="utf-8")
@@ -2297,7 +2309,7 @@ class Builder:
                 "siteRoot": base,
             }
             page.evaluate(
-                """({options, filterOptions, config, criticalCss}) => {
+                """({options, filterOptions, config, criticalCss, waitingTextPattern}) => {
                   document.getElementById('GlobalFilters')?.remove();
                   /* The static transform deliberately strips dead filter UI
                      before browser parsing. Guard against any malformed legacy
@@ -2402,10 +2414,11 @@ class Builder:
                      grep over the built file, which is how the build check sees
                      them, and as a stalled page to a reviewer if any CSS ever
                      makes them visible again. */
+                  const waitingText = new RegExp(waitingTextPattern, 'i');
                   document.querySelectorAll('body *').forEach(el => {
                     if (el.children.length) return;
                     var text = (el.textContent || '').trim();
-                    if (/^(Loading|Retry filters|Reading |Building |Summarizing |Resolving )/.test(text)) el.remove();
+                    if (waitingText.test(text)) el.remove();
                   });
                   document.body.classList.remove('loading');
                   document.querySelectorAll('.is-loading,[aria-busy="true"]').forEach(el => {
@@ -2467,6 +2480,7 @@ class Builder:
                     ),
                     "config": config_payload,
                     "criticalCss": STATIC_CRITICAL_CSS,
+                    "waitingTextPattern": WAITING_LEAF_PATTERN,
                 },
             )
             self._externalize_inline_styles(page, base)
