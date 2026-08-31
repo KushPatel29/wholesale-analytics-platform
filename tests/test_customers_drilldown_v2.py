@@ -658,6 +658,14 @@ def test_customers_drilldown_v2_chart_payload_is_json_safe(app_client, seed_cust
 def test_customers_drilldown_v2_template_flag_on_and_off(app_client, seed_customers_drilldown_v2, monkeypatch):
     monkeypatch.setattr("app.services.filters_service.scope_from_user", lambda _u: _scope_admin())
 
+    def assert_heading_hierarchy(body):
+        main = re.search(r"<main\b[^>]*>(.*?)</main>", body, re.S | re.I)
+        assert main is not None
+        levels = [int(level) for level in re.findall(r"<h([1-6])\b", main.group(1), re.I)]
+        assert levels.count(1) == 1
+        assert levels[0] == 1
+        assert all(current <= previous + 1 for previous, current in zip(levels, levels[1:], strict=False))
+
     monkeypatch.setitem(app_client.application.config, "CUSTOMER_DRILLDOWN_V2", True)
     v2_resp = app_client.get("/customers/drilldown/C_MAIN", query_string={"start": "2025-03-01", "end": "2025-03-31"})
     assert v2_resp.status_code == 200
@@ -665,6 +673,7 @@ def test_customers_drilldown_v2_template_flag_on_and_off(app_client, seed_custom
     assert "Customer Intelligence Workspace" in v2_body
     assert "Next Best Actions" in v2_body
     assert "CRM Action Workspace" in v2_body
+    assert_heading_hierarchy(v2_body)
 
     monkeypatch.setitem(app_client.application.config, "CUSTOMER_DRILLDOWN_V2", False)
     v1_resp = app_client.get("/customers/drilldown/C_MAIN", query_string={"start": "2025-03-01", "end": "2025-03-31"})
@@ -672,3 +681,4 @@ def test_customers_drilldown_v2_template_flag_on_and_off(app_client, seed_custom
     v1_body = v1_resp.get_data(as_text=True)
     assert "Customer Intelligence Workspace" not in v1_body
     assert "Opportunity highlights" in v1_body
+    assert_heading_hierarchy(v1_body)

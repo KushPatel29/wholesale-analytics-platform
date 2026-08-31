@@ -5447,30 +5447,30 @@ def drilldown(product_id: str):
 
     trend = payload.get("trend") or {}
     months_list = trend.get("labels") or []
-    monthly_revenue = trend.get("revenue") or []
-    monthly_qty = trend.get("qty") or []
+    monthly_revenue = [_safe_float_optional(value) for value in (trend.get("revenue") or [])]
+    monthly_qty = [_safe_float_optional(value) for value in (trend.get("qty") or [])]
 
-    total_revenue = kpis.get("revenue") or 0.0
-    total_qty = kpis.get("qty") or 0.0
-    total_weight = kpis.get("weight")
+    total_revenue = _safe_float_optional(kpis.get("revenue")) or 0.0
+    total_qty = _safe_float_optional(kpis.get("qty")) or 0.0
+    total_weight = _safe_float_optional(kpis.get("weight"))
     customers = kpis.get("customers") or 0
 
     avg_unit_price = (total_revenue / total_qty) if total_qty else None
     asp_recent = None
-    if monthly_qty and monthly_revenue and monthly_qty[-1]:
+    if monthly_qty and monthly_revenue and monthly_qty[-1] and monthly_revenue[-1] is not None:
         asp_recent = monthly_revenue[-1] / monthly_qty[-1]
 
     recent_velocity = None
     if monthly_qty:
-        tail = monthly_qty[-min(3, len(monthly_qty)) :]
+        tail = [value for value in monthly_qty[-min(3, len(monthly_qty)) :] if value is not None]
         recent_velocity = sum(tail) / len(tail) if tail else None
 
     mom_pct = None
-    if len(monthly_revenue) >= 2 and monthly_revenue[-2]:
+    if len(monthly_revenue) >= 2 and monthly_revenue[-1] is not None and monthly_revenue[-2]:
         mom_pct = (monthly_revenue[-1] - monthly_revenue[-2]) / monthly_revenue[-2] * 100.0
 
     yoy_pct = None
-    if len(monthly_revenue) >= 13 and monthly_revenue[-13]:
+    if len(monthly_revenue) >= 13 and monthly_revenue[-1] is not None and monthly_revenue[-13]:
         yoy_pct = (monthly_revenue[-1] - monthly_revenue[-13]) / monthly_revenue[-13] * 100.0
 
     ps = {

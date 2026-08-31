@@ -17,7 +17,7 @@
   <!-- Header -->
   <div class="row align-items-center mb-3">
     <div class="col">
-      <h2 class="mb-0">Region: {{ region_name }}</h2>
+      <h1 class="h2 mb-0">Region: {{ region_name }}</h1>
       <div class="text-muted small">All figures reflect your current filters.</div>
     </div>
     <div class="col-auto d-flex gap-2">
@@ -113,7 +113,7 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
           <div class="d-flex align-items-center gap-2">
-            <h5 class="card-title mb-0">Monthly Revenue</h5>
+            <h2 class="h5 card-title mb-0">Monthly Revenue</h2>
             <div class="form-check form-switch ms-2">
               <input class="form-check-input" type="checkbox" id="logScale">
               <label class="form-check-label small" for="logScale">Log</label>
@@ -136,7 +136,7 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
           <div class="d-flex align-items-center gap-2">
-            <h5 class="card-title mb-0">Top Customers</h5>
+            <h2 class="h5 card-title mb-0">Top Customers</h2>
             <select id="custTopN" class="form-select form-select-sm" style="width:auto;">
               <option value="10" selected>Top 10</option>
               <option value="15">Top 15</option>
@@ -163,7 +163,7 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
           <div class="d-flex align-items-center gap-2">
-            <h5 class="card-title mb-0">Top Products</h5>
+            <h2 class="h5 card-title mb-0">Top Products</h2>
             <select id="prodTopN" class="form-select form-select-sm" style="width:auto;">
               <option value="10" selected>Top 10</option>
               <option value="15">Top 15</option>
@@ -186,7 +186,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Churned Customers</h5>
+          <h2 class="h5 card-title mb-0">Churned Customers</h2>
           <div class="d-flex gap-2">
             <input id="churnSearch" type="search" class="form-control form-control-sm" placeholder="Search customers…">
             <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('regions.churn_download', region_name=region_name) }}">Download</a>
@@ -219,7 +219,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Shipping Method Mix</h5>
+          <h2 class="h5 card-title mb-0">Shipping Method Mix</h2>
         </div>
         <div class="card-body">
           <div id="region_ship_mix" class="chart-container" style="min-height:320px;"></div>
@@ -230,7 +230,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Weekday Revenue</h5>
+          <h2 class="h5 card-title mb-0">Weekday Revenue</h2>
         </div>
         <div class="card-body">
           <div id="region_weekday_chart" class="chart-container" style="min-height:320px;"></div>

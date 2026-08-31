@@ -14,10 +14,10 @@
   <!-- Header -->
   <div class="row align-items-center mb-3">
     <div class="col">
-      <h2 class="mb-0">
+      <h1 class="h2 mb-0">
         Supplier: {{ supplier_name or 'Unknown' }}
         <span class="text-muted">(ID: {{ supplier_id or '—' }})</span>
-      </h2>
+      </h1>
       <div class="text-muted small">Details reflect your current filters.</div>
     </div>
     <div class="col-auto d-flex gap-2">
@@ -105,7 +105,7 @@
     <div class="col-lg-7">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Monthly Revenue</h5>
+          <h2 class="h5 card-title mb-0">Monthly Revenue</h2>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" type="button" onclick="exportPlotly('supTrend','supplier_{{ supplier_id }}_trend')">CSV</button>
           </div>
@@ -123,7 +123,7 @@
     <div class="col-lg-5">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Top Products by Revenue</h5>
+          <h2 class="h5 card-title mb-0">Top Products by Revenue</h2>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" type="button" onclick="exportBarsCSV('prodBar','supplier_{{ supplier_id }}_top_products')">CSV</button>
           </div>
@@ -143,7 +143,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Avg Sale Price by Product</h5>
+          <h2 class="h5 card-title mb-0">Avg Sale Price by Product</h2>
           <div class="text-muted small">Top {{ product_metrics|length or 0 }} products</div>
         </div>
         <div class="card-body">
@@ -157,9 +157,9 @@
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
           {% if show_costs %}
-          <h5 class="card-title mb-0">Margin % by Product</h5>
+          <h2 class="h5 card-title mb-0">Margin % by Product</h2>
           {% else %}
-          <h5 class="card-title mb-0">Units by Product</h5>
+          <h2 class="h5 card-title mb-0">Units by Product</h2>
           {% endif %}
           <div class="text-muted small">Same sample as chart left</div>
         </div>
@@ -177,7 +177,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Unit Price Distribution</h5>
+          <h2 class="h5 card-title mb-0">Unit Price Distribution</h2>
           <div class="text-muted small">p10 / p50 / p90</div>
         </div>
         <div class="card-body">
@@ -192,7 +192,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Top Customers</h5>
+          <h2 class="h5 card-title mb-0">Top Customers</h2>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" type="button" onclick="exportBarsCSV('custBar','supplier_{{ supplier_id }}_top_customers')">CSV</button>
           </div>

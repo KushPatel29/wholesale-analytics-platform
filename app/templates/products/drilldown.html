@@ -45,9 +45,9 @@
       <div class="flex-grow-1">
         <div class="d-flex align-items-center gap-2 mb-1">
           <div class="hero-badge"><i class="bi bi-bar-chart-steps"></i></div>
-          <h2 class="mb-0 fw-bold">
+          <h1 class="h2 mb-0 fw-bold">
             {{ product_display_name or product_name or 'Unknown Product' }}
-          </h2>
+          </h1>
         </div>
         <div class="text-white-50 small">
           Drilldown reflects your current filters. Use the table + exports for stakeholder-ready snapshots.
@@ -110,7 +110,7 @@
     <div class="card-body">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
         <div>
-          <h5 class="mb-0">Snapshot</h5>
+          <h2 class="h5 mb-0">Snapshot</h2>
           <div class="text-muted small">Transparent roll-ups from underlying shipments</div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
@@ -194,7 +194,7 @@
     <div class="col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
-          <h5 class="card-title mb-2">Product Classification</h5>
+          <h2 class="h5 card-title mb-2">Product Classification</h2>
           {% set class_badge = 'bg-secondary' %}
           {% if class_label == 'Stable' %}
             {% set class_badge = 'bg-success' %}
@@ -225,7 +225,7 @@
     <div class="col-lg-8">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent">
-          <h5 class="card-title mb-0">Product Lifecycle</h5>
+          <h2 class="h5 card-title mb-0">Product Lifecycle</h2>
         </div>
         <div class="card-body">
           {% set lc_stage = lifecycle.get('stage')|default('Insufficient history', true) %}
@@ -263,7 +263,7 @@
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-start gap-2 flex-wrap">
           <div>
-            <h5 class="card-title mb-0">Demand Forecast</h5>
+            <h2 class="h5 card-title mb-0">Demand Forecast</h2>
             <small class="text-muted">
               {% if forecast and forecast.message %}
                 {{ forecast.message }}
@@ -291,7 +291,7 @@
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-start flex-wrap gap-2">
           <div>
-            <h5 class="card-title mb-0">Frequently Bought Together</h5>
+            <h2 class="h5 card-title mb-0">Frequently Bought Together</h2>
             <small class="text-muted" id="fbtMeta">Confidence based on co-orders in the current filters.</small>
           </div>
           <div class="btn-group btn-group-sm" role="group" aria-label="Co-purchase metric">
@@ -331,7 +331,7 @@
       {% if anomalies %}
         <div class="card border-warning shadow-sm h-100">
           <div class="card-header bg-warning text-dark">
-            <h5 class="card-title mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Anomalies Detected</h5>
+            <h2 class="h5 card-title mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Anomalies Detected</h2>
           </div>
           <div class="card-body">
             {% for anomaly in anomalies %}
@@ -359,21 +359,21 @@
       {% if price_insights %}
         <div class="card shadow-sm h-100">
           <div class="card-header bg-transparent">
-            <h5 class="card-title mb-0">Price Optimization Insights</h5>
+            <h2 class="h5 card-title mb-0">Price Optimization Insights</h2>
           </div>
           <div class="card-body">
             <div class="row text-center mb-3">
               <div class="col-md-4 border-end">
                 <small class="text-muted">Price Elasticity</small>
-                <h4 class="fw-bold mb-0">{{ price_insights.elasticity }}</h4>
+                <div class="h4 fw-bold mb-0">{{ price_insights.elasticity }}</div>
               </div>
               <div class="col-md-4 border-end">
                 <small class="text-muted">Current Avg Price</small>
-                <h4 class="fw-bold mb-0">{{ price_insights.current_avg_price|currency }}</h4>
+                <div class="h4 fw-bold mb-0">{{ price_insights.current_avg_price|currency }}</div>
               </div>
               <div class="col-md-4">
                 <small class="text-muted">Optimal Range</small>
-                <h4 class="fw-bold mb-0">{{ price_insights.optimal_price_min|currency }} – {{ price_insights.optimal_price_max|currency }}</h4>
+                <div class="h4 fw-bold mb-0">{{ price_insights.optimal_price_min|currency }} – {{ price_insights.optimal_price_max|currency }}</div>
               </div>
             </div>
             <div class="alert alert-info mt-3 py-2 px-3 mb-0">
@@ -397,7 +397,7 @@
     <div class="col-lg-8">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Monthly Revenue &amp; {{ (qty_title or 'Quantity') }}</h5>
+          <h2 class="h5 card-title mb-0">Monthly Revenue &amp; {{ (qty_title or 'Quantity') }}</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="trendChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -414,7 +414,7 @@
     <div class="col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">ASP Trend</h5>
+          <h2 class="h5 card-title mb-0">ASP Trend</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="aspChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -432,7 +432,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Unit Price Distribution</h5>
+          <h2 class="h5 card-title mb-0">Unit Price Distribution</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="upHist" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -451,7 +451,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Price vs Volume</h5>
+          <h2 class="h5 card-title mb-0">Price vs Volume</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="pxqChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -469,7 +469,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Seasonality Heatmap</h5>
+          <h2 class="h5 card-title mb-0">Seasonality Heatmap</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="seasonChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -484,7 +484,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Customer Concentration</h5>
+          <h2 class="h5 card-title mb-0">Customer Concentration</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="custPie" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -502,7 +502,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Revenue by Region</h5>
+          <h2 class="h5 card-title mb-0">Revenue by Region</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="regionChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -516,7 +516,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Revenue by Supplier</h5>
+          <h2 class="h5 card-title mb-0">Revenue by Supplier</h2>
           <button class="btn btn-outline-secondary btn-sm exp-csv" data-export="supplierChart" type="button">CSV</button>
         </div>
         <div class="card-body">
@@ -533,7 +533,7 @@
     <div class="col-lg-6">
       <div class="card shadow-sm h-100">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-          <h5 class="card-title mb-0">Top Customers</h5>
+          <h2 class="h5 card-title mb-0">Top Customers</h2>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" id="custCsv" type="button">CSV</button>
             <a class="btn btn-outline-primary" href="{{ url_for('products.export_product', product_id=product_id, format='xlsx') }}">Excel</a>
@@ -566,7 +566,7 @@
       <div class="card shadow-sm h-100">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="card-title mb-0">Price Suggestion</h5>
+            <h2 class="h5 card-title mb-0">Price Suggestion</h2>
             {% if selected_cid %}
               <a class="btn btn-sm btn-outline-secondary"
                  href="{{ url_for('products.drilldown', product_id=product_id, forecast=request.args.get('forecast','0')) }}">Clear</a>

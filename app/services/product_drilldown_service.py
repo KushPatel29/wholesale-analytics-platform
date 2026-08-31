@@ -115,7 +115,7 @@ def _coalesce_text(df: pd.DataFrame, *columns: str, fallback: str = "") -> pd.Se
     for col in columns:
         if col not in df.columns:
             continue
-        values = df[col].astype("string", copy=False).str.strip()
+        values = df[col].astype("string").str.strip()
         values = values.where(values.str.len() > 0)
         mask = out.isna()
         if mask.any():

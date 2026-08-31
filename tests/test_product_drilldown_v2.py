@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 import shutil
 import uuid
 
@@ -14,13 +15,22 @@ from app.services import product_drilldown_service
 from app.services import presentation
 
 
+def _assert_heading_hierarchy(body: str) -> None:
+    main = re.search(r"<main\b[^>]*>(.*?)</main>", body, re.S | re.I)
+    assert main is not None
+    levels = [int(level) for level in re.findall(r"<h([1-6])\b", main.group(1), re.I)]
+    assert levels.count(1) == 1
+    assert levels[0] == 1
+    assert all(current <= previous + 1 for previous, current in zip(levels, levels[1:], strict=False))
+
+
 @pytest.fixture
 def product_drilldown_v2_client(app, monkeypatch, tmp_path):
     products_bp._STORE_SINGLETON = None
     tmp_dir = tmp_path / f"product_drilldown_v2_{uuid.uuid4().hex}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    end_month = pd.Timestamp.utcnow().normalize().replace(day=1)
+    end_month = pd.Timestamp.now(tz="UTC").normalize().replace(day=1)
     month_starts = pd.date_range(end=end_month, periods=22, freq="MS")
     rows = []
     target_sku = "SKU-001"
@@ -114,6 +124,20 @@ def test_product_drilldown_v2_renders(product_drilldown_v2_client):
     assert b"SKU-001 \xe2\x80\x94 Prime Ribeye" in response.data
     assert b"Weight Analytics" in response.data
     assert b"ASP/lb Distribution" in response.data
+
+
+def test_product_drilldown_heading_hierarchy_for_both_templates(product_drilldown_v2_client, monkeypatch):
+    client, _expected_customers = product_drilldown_v2_client
+
+    monkeypatch.setitem(client.application.config, "PRODUCT_DRILLDOWN_V2", True)
+    response_v2 = client.get("/products/SKU-001/drilldown")
+    assert response_v2.status_code == 200
+    _assert_heading_hierarchy(response_v2.get_data(as_text=True))
+
+    monkeypatch.setitem(client.application.config, "PRODUCT_DRILLDOWN_V2", False)
+    response_v1 = client.get("/products/SKU-001/drilldown")
+    assert response_v1.status_code == 200
+    _assert_heading_hierarchy(response_v1.get_data(as_text=True))
 
 
 def test_product_drilldown_v2_interactive_workspace_markers(product_drilldown_v2_client):

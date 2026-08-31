@@ -12,6 +12,15 @@ from app.services import presentation
 from app.services import suppliers_bundle
 
 
+def _assert_heading_hierarchy(body: str) -> None:
+    main = re.search(r"<main\b[^>]*>(.*?)</main>", body, re.S | re.I)
+    assert main is not None
+    levels = [int(level) for level in re.findall(r"<h([1-6])\b", main.group(1), re.I)]
+    assert levels.count(1) == 1
+    assert levels[0] == 1
+    assert all(current <= previous + 1 for previous, current in zip(levels, levels[1:], strict=False))
+
+
 @pytest.fixture
 def seed_supplier_drilldown_v2(tmp_path, monkeypatch):
     rows = [
@@ -165,6 +174,7 @@ def test_supplier_drilldown_v2_template_flag_on_off(app_client, seed_supplier_dr
     assert "Decision-Ready Product Table" in body_v2
     assert "ASP/lb" in body_v2
     assert "Products vs Customers (XLSX)" in body_v2
+    _assert_heading_hierarchy(body_v2)
 
     monkeypatch.setitem(app_client.application.config, "SUPPLIER_DRILLDOWN_V2", False)
     resp_v1 = app_client.get("/suppliers/SUP_A", query_string={"start": "2025-03-01", "end": "2025-04-30"})
@@ -172,6 +182,7 @@ def test_supplier_drilldown_v2_template_flag_on_off(app_client, seed_supplier_dr
     body_v1 = resp_v1.get_data(as_text=True)
     assert "Monthly Revenue" in body_v1
     assert "Supplier Performance & Diagnostics" not in body_v1
+    _assert_heading_hierarchy(body_v1)
 
 
 def test_supplier_drilldown_v2_requires_both_flags(app_client, seed_supplier_drilldown_v2, monkeypatch):

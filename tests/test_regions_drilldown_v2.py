@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import io
+import re
 
 import pandas as pd
 import pytest
 
 from app.services import fact_store
+
+
+def _assert_heading_hierarchy(body: str) -> None:
+    main = re.search(r"<main\b[^>]*>(.*?)</main>", body, re.S | re.I)
+    assert main is not None
+    levels = [int(level) for level in re.findall(r"<h([1-6])\b", main.group(1), re.I)]
+    assert levels.count(1) == 1
+    assert levels[0] == 1
+    assert all(current <= previous + 1 for previous, current in zip(levels, levels[1:], strict=False))
 
 
 @pytest.fixture
@@ -257,6 +267,7 @@ def test_region_drilldown_v2_template_flag_on_off(app_client, seed_regions_drill
     body_v2 = resp_v2.get_data(as_text=True)
     assert "Regional Diagnostics Workspace" in body_v2
     assert "js/regions_drilldown_v2.js" in body_v2
+    _assert_heading_hierarchy(body_v2)
 
     app_client.application.config.update(REGIONS_V2=True, REGION_DRILLDOWN_V2=False)
     resp_v1 = app_client.get("/regions/Vancouver%20W", query_string={"start": "2025-04-01", "end": "2025-05-01"})
@@ -264,6 +275,7 @@ def test_region_drilldown_v2_template_flag_on_off(app_client, seed_regions_drill
     body_v1 = resp_v1.get_data(as_text=True)
     assert "Regional Diagnostics Workspace" not in body_v1
     assert "Monthly Revenue" in body_v1
+    _assert_heading_hierarchy(body_v1)
 
 
 def test_region_drilldown_v2_requires_both_flags(app_client, seed_regions_drilldown_v2):
