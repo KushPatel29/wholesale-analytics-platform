@@ -73,12 +73,28 @@ same pages narrow to one rep's accounts.
 
 ---
 
+## Contents
+
+**The build** — [What it is](#what-it-is) · [The architecture worth explaining](#the-architecture-worth-explaining) · [Access control you can log into](#access-control-you-can-log-into) · [Running it](#running-it)
+
+**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough)
+
+**The numbers** — [Metric definitions](#metric-definitions) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
+
+**What it does not do** — [Known limitations](#known-limitations) · [Deliberate omissions](#deliberate-omissions)
+
+If you are reading one section, read [the margin gap](#the-margin-gap-and-the-coalesce-under-it). It is the defect
+that took longest to find and says the most about how the rest of this was
+built.
+
+---
+
 ## What it is
 
 | | |
 |---|---|
 | **Scale** | 259 Python files, ~157k lines, 85 templates, 32 runbooks |
-| **Structure** | 20 blueprints, 47 services, 107 test files |
+| **Structure** | 20 blueprints, 47 services, 136 test files · 1,290 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
 | **Demo data** | 620 stores · 880 SKUs · 326k order lines · 24 months |
@@ -113,6 +129,13 @@ drift apart.
 rather than a dozen chatty endpoints, and the JSON export path is the same
 builder. An export can't disagree with the screen because it isn't computed
 separately.
+
+It closes that gap and opens a different one, which is worth being explicit
+about: a *page* can still disagree with another page, because each bundle
+shapes its own query for its own grain. That is the design, and it is where
+[the margin gap](#the-margin-gap-and-the-coalesce-under-it) came from.
+`tests/test_bundle_kpi_reconciliation.py` is the counterweight — it queries
+every bundle under one filter and fails if any shared KPI drifts.
 
 **The decision loop is persisted, not mocked.** A preventable Returns cause
 drills through with its filters intact, becomes an owned corrective action,
@@ -198,6 +221,98 @@ fewer of them.
 Five regression tests cover it, including an AST assertion that
 `_where_clause` actually *calls* the scope helper — a test that the predicate
 exists would have passed against the broken version too.
+
+---
+
+## The margin gap, and the COALESCE under it
+
+Five pages report the company's margin. For three review passes they gave four
+answers, and the disagreement was recorded as an expected failure with the
+measured numbers in it rather than deleted:
+
+| Page | Margin % | Revenue |
+|---|---|---|
+| Customers | 22.96% | $51,019,051.48 |
+| Regions | 22.96% | $51,019,051.48 |
+| Sales Reps | 22.96% | $51,019,051.48 |
+| **Suppliers** | **22.31%** | $51,019,051.48 |
+| **Products** | **23.52%** | **$32,527,665.89** |
+
+Revenue agreeing to the cent on four of the five is what made this hard. It
+rules out the filter, the scope and the row set, and it makes the odd one out
+look like a rounding argument rather than a defect. It also meant every
+existing test passed: each page was self-consistent, and no test held two of
+them side by side.
+
+**Two independent causes, and neither was the margin formula.**
+
+**Suppliers charged $333,573 for goods that were never shipped.** The cost
+resolver picks between candidate columns with `NULLIF(col, 0)`, so a
+zero-filled column cannot shadow a real one. That is a sound rule for choosing
+a *column*, and it was being used to answer a different question — whether a
+cost was recorded at all. The dataset carries 3,056 stockout lines with
+`QuantityShipped = 0`, `Revenue = $0` and `Cost = $0`. `NULLIF` turned each
+recorded zero into "no cost", the `COALESCE` fell through to
+`cost_per_unit × units`, and `units` falls back to `QuantityOrdered` when
+nothing shipped. So the page bought 3,403 units it never received and sold
+none of them.
+
+```sql
+COALESCE(
+    cost_total,      -- NULLIF(Cost, 0): a real 0 arrives here as NULL
+    cost_recorded,   -- the fix: the same candidates, zeros intact
+    cost_per_lb  * NULLIF(weight_lb, 0),
+    cost_per_unit * NULLIF(units, 0)
+)
+```
+
+**Products was summing the top 200 SKUs of 880.** Its entire KPI block came
+from a revenue-ranked slice taken for speed — 63.8% of the book — while
+`customers` and `orders` in the same block were already being overwritten from
+a full-population query, which is what made the rest look like it had been. The
+header printed `Products 200` beside an inventory strip reading `880 SKUs`, the
+Revenue tile's own tooltip called it "shipped revenue in the active filter
+window", and every share quoted "of filtered revenue" was a share of the slice.
+Concentration was worse than wrong, it was bounded: `SKUs to 80% of revenue`
+read 117 because it could not exceed 200, against a true 379.
+
+Underneath that, Products took cost off the raw ledger column while every other
+page adds the flat per-line overhead charge from `margin_rules` — so its profit
+was one charge per line high, $130,364, on top of the truncation. Its own table
+rows already carried the effective cost. A page that disagrees with itself is
+harder to see than one that disagrees with its neighbours.
+
+Neither fix costs a query. The Suppliers change is one extra COALESCE arm; the
+Products totals come from a frame that was already being scanned for the
+trajectory chart.
+
+**What actually closed it was a reconciliation, not a review.** Three passes of
+reading the margin code found nothing, because the margin code was correct
+every time. Querying all five bundles under one filter and diffing every shared
+KPI took minutes and located both causes to the line. That check is now
+`tests/test_bundle_kpi_reconciliation.py`, and it fails on either defect:
+
+```
+AssertionError: bundles disagree on cost by 13,200.00:
+      customers          200,398.2000
+      salesreps          200,398.2000
+      suppliers          213,598.2000
+```
+
+Three test files cover this: the reconciliation above (fixture-based, runs
+everywhere), `tests/test_supplier_cost_basis.py` for the recorded-zero rule,
+and `tests/test_cross_page_consistency.py`, which scrapes the rendered pages
+and now asserts what it had been silently skipping.
+
+**The last of it is a lesson about the test that was already there.**
+`test_cross_page_consistency.py` was written for exactly this defect and had
+been passing — vacuously. Its fixture created the demo user without a scope
+rule, so every page rendered "Access not configured" and returned **200** with
+no figures on it. The fixture kept pages by status code, `200` is what an empty
+page returns, and eight tests then compared empty sets and agreed. The xfail
+tracking the margin gap had quietly turned into an *xpass*, which reads as
+fixed. A test that cannot fail is worse than no test, because it is also a
+claim; the fixture now refuses a page with no figures on it.
 
 ---
 
@@ -302,7 +417,7 @@ the same idea.
 | **Churned** | last ordered more than 120 days before the cutoff |
 | **Repeat rate** | customers with ≥2 orders ÷ customers with ≥1 order |
 | **Revenue at risk** | revenue belonging to accounts currently *at risk* |
-| **Margin %** | (revenue − cost) ÷ revenue, revenue-weighted — never the mean of per-row margins |
+| **Margin %** | (revenue − cost) ÷ revenue, revenue-weighted — never the mean of per-row margins, and never over a subset of the rows the same page counts. Reconciled across all five bundles by test. |
 | **HHI** | sum of squared percentage shares, 0–10,000, always labelled with its dimension |
 | **Coverage** | rows carrying a usable value ÷ rows; `—` when there are no rows, `0%` when there are rows but no values |
 | **Growth %** | suppressed below a $5,000 / 10-order prior base — `New` or `n/a` instead |
@@ -437,6 +552,13 @@ The honest list. Synthetic data can demonstrate some things and not others.
 * **Forecasting is a baseline, not a model.** Monthly forecasts need six
   points and use simple methods deliberately — a portfolio piece that claims a
   tuned model on invented data is claiming nothing.
+* **Price guardrails are measured on the head of the catalogue, not all of it.**
+  Outlier detection needs per-SKU price detail, and the analysis runs over the
+  revenue-ranked top SKUs rather than every one. Every total on the page is now
+  full-population; this one figure is not, so it ships its denominator with it —
+  "79.0% (158 of 200)", not a bare percentage beside a SKU count of 880. That
+  ambiguity is exactly what the
+  [margin gap](#the-margin-gap-and-the-coalesce-under-it) was made of.
 
 ---
 

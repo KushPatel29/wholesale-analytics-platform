@@ -2584,6 +2584,87 @@ def _default_quick_rec(row: Dict[str, Any]) -> str:
     return "Hold"
 
 
+def _population_totals(
+    current_identity: pd.DataFrame,
+    prior_identity: pd.DataFrame,
+) -> Dict[str, Any]:
+    """
+    Company totals and revenue concentration over every SKU in the window.
+
+    Separated from `_summary_row_from_product_rows` on purpose. That function
+    reads the top 200 SKUs, which is the right basis for a distribution and the
+    wrong basis for a total, and the two had been sharing one code path.
+
+    Concentration is here rather than there for the same reason: an HHI or a
+    "SKUs to 80% of revenue" computed over the head of the curve describes a
+    portfolio that does not exist. On the demo dataset the truncated HHI read
+    95 against 880 SKUs of real spread, and `skus_to_80` could never have
+    exceeded 200 however long the tail ran.
+    """
+
+    def _sum(frame: pd.DataFrame, column: str) -> float:
+        if frame.empty or column not in frame.columns:
+            return 0.0
+        return float(pd.to_numeric(frame[column], errors="coerce").fillna(0.0).sum())
+
+    revenue = _sum(current_identity, "revenue")
+    cost = _sum(current_identity, "cost")
+    profit = revenue - cost
+    revenue_prior = _sum(prior_identity, "revenue")
+    cost_prior = _sum(prior_identity, "cost")
+
+    totals: Dict[str, Any] = {
+        "revenue": revenue,
+        "cost": cost,
+        "profit": profit,
+        "qty": _sum(current_identity, "qty"),
+        "weight": _sum(current_identity, "weight"),
+        "margin_pct": (profit / revenue * 100.0) if revenue > 0 else None,
+        "compare_revenue_current": revenue,
+        "compare_revenue_prior": revenue_prior,
+        "compare_cost_current": cost,
+        "compare_cost_prior": cost_prior,
+        "compare_profit_current": profit,
+        "compare_profit_prior": revenue_prior - cost_prior,
+        "compare_qty_current": _sum(current_identity, "qty"),
+        "compare_qty_prior": _sum(prior_identity, "qty"),
+        "compare_weight_current": _sum(current_identity, "weight"),
+        "compare_weight_prior": _sum(prior_identity, "weight"),
+    }
+
+    if current_identity.empty or "product_key" not in current_identity.columns or revenue <= 0:
+        return totals
+
+    per_sku = (
+        pd.to_numeric(current_identity["revenue"], errors="coerce")
+        .fillna(0.0)
+        .groupby(current_identity["product_key"])
+        .sum()
+        .sort_values(ascending=False)
+    )
+    per_sku = per_sku[per_sku > 0]
+    if per_sku.empty:
+        return totals
+
+    shares = per_sku / per_sku.sum() * 100.0
+    cumulative = shares.cumsum()
+    reached_80 = cumulative[cumulative >= 80.0]
+
+    totals.update(
+        {
+            "products": int(per_sku.size),
+            "concentration_top1_share": float(shares.iloc[0]),
+            "concentration_top10_share": float(shares.iloc[:10].sum()),
+            "concentration_hhi": float((shares**2).sum()),
+            # The whole tail, not `min(tail, 200)`.
+            "concentration_skus_to_80": int(cumulative.index.get_loc(reached_80.index[0])) + 1
+            if not reached_80.empty
+            else int(per_sku.size),
+        }
+    )
+    return totals
+
+
 def _summary_metrics_and_context(
     comparison_where_sql: str,
     comparison_params: List[Any],
@@ -2605,6 +2686,12 @@ def _summary_metrics_and_context(
     if not all([date_col, revenue_col, sku_col, prod_name, cust_id, order_id]):
         return {"error": {"message": "Required columns missing for products summary"}, "meta": {"cached": False}}
 
+    # The top 200 SKUs by revenue. Everything shaped like a *distribution* -
+    # price percentiles, guardrail counts, department mix, the profitability
+    # histogram - is read off these rows, because those need per-SKU detail and
+    # the head of the curve is where they are decided.
+    #
+    # Nothing shaped like a *total* may come from here. See below.
     lightweight_table = _table_payload(
         comparison_where_sql,
         comparison_params,
@@ -2620,14 +2707,27 @@ def _summary_metrics_and_context(
         current_start=current_start,
         current_end=current_end,
     )
+    weight_expr = _coalesce_expr(cols, (fs.CANON.weight_lb, "Weight", "WeightLb", "ShippedLb", "pack_weight_lb_sum"), "0")
+    product_key_expr = _product_exprs(cols)["product_key_expr"]
+    # The same cost basis the rest of the app states margin on: ledger cost plus
+    # the flat per-line overhead charge from `margin_rules`. This query used the
+    # raw column, so the Products page reported profit exactly one overhead
+    # charge per line - $130,364 on the demo window - above every other page,
+    # while its own table rows carried the effective cost. A page that disagrees
+    # with itself is harder to spot than one that disagrees with its neighbours.
+    effective_cost_expr = margin_rules.sql_effective_cost_expr(
+        cost_expr, weight_expr, qty_expr, fallback="NULL::DOUBLE"
+    )
     identity_sql = f"""
         SELECT
             {date_col}::DATE AS date,
             {cust_id}::VARCHAR AS customer_id,
             {order_id}::VARCHAR AS order_id,
+            {product_key_expr} AS product_key,
             CAST({revenue_col} AS DOUBLE) AS revenue,
-            CAST({cost_expr} AS DOUBLE) AS cost,
-            CAST({qty_expr} AS DOUBLE) AS qty
+            ({effective_cost_expr}) AS cost,
+            CAST({qty_expr} AS DOUBLE) AS qty,
+            CAST({weight_expr} AS DOUBLE) AS weight
         FROM fact
         WHERE {comparison_where_sql}
     """
@@ -2649,6 +2749,21 @@ def _summary_metrics_and_context(
         summary_row["orders"] = int(current_identity["order_id"].nunique(dropna=True))
         summary_row["compare_orders_current"] = int(current_identity["order_id"].nunique(dropna=True))
         summary_row["compare_orders_prior"] = int(prior_identity["order_id"].nunique(dropna=True))
+
+        # Every total on this page comes from here, not from the 200 rows above.
+        #
+        # It used to come from the rows, and the Products page was the only one
+        # in the app that disagreed with the company: $32.5M of revenue against
+        # $51.0M on Customers, Regions, Sales Reps and Suppliers under the same
+        # filter - the top 200 of 880 SKUs, 63.8% of the book. The header printed
+        # "Products 200" beside an inventory strip reading "880 SKUs", the
+        # Revenue tile's own tooltip called it "shipped revenue in the active
+        # filter window", and every share quoted "of filtered revenue" was a
+        # share of the slice. `customers` and `orders` were already corrected
+        # here, which is what made the rest look like it had been.
+        #
+        # This costs nothing: the frame is scanned already, for the trajectory.
+        summary_row.update(_population_totals(current_identity, prior_identity))
         window_days = max((pd.Timestamp(current_end) - pd.Timestamp(current_start)).days + 1, 1)
         grain = "weekly" if window_days < 120 else "monthly"
         period_code = "W-SUN" if grain == "weekly" else "M"
@@ -2900,6 +3015,7 @@ def _summary_metrics_and_context(
             "low_outlier_count": _clean_int(row.get("low_price_outlier_count")),
             "outside_count": _clean_int(row.get("outside_guardrail_count")),
             "outside_pct": _safe_float(row.get("outside_guardrail_pct")),
+            "outside_basis": _clean_int(row.get("outside_guardrail_basis")),
             "rows": [],
         },
         "execution_lists": {
@@ -3513,6 +3629,12 @@ def _summary_row_from_product_rows(
         "low_price_outlier_count": len(low_outliers),
         "outside_guardrail_count": len(outside_ids),
         "outside_guardrail_pct": len(outside_ids) / len(rows) * 100 if rows else None,
+        # The denominator, carried with the percentage. Price guardrails need
+        # per-SKU detail and are read off the revenue-ranked head of the
+        # catalogue, not all of it - so "79%" is 79% of *these* SKUs. Sending
+        # the basis lets the card say which, instead of leaving a reader to
+        # assume it means the SKU count printed at the top of the same page.
+        "outside_guardrail_basis": len(rows),
     }
 
 
@@ -3719,7 +3841,7 @@ def _empty_products_metrics() -> Dict[str, Any]:
         "velocity": {"avg_weekly": 0.0, "weekly_revenue": 0.0, "active_skus": 0},
         "monthly_series": [],
         "sku_metrics": [],
-        "pricing_guardrails": {"high_outlier_count": 0, "low_outlier_count": 0, "outside_count": 0, "outside_pct": None, "rows": []},
+        "pricing_guardrails": {"high_outlier_count": 0, "low_outlier_count": 0, "outside_count": 0, "outside_pct": None, "outside_basis": 0, "rows": []},
         "execution_lists": {"pricing_fixes": [], "cost_fixes": [], "promote_candidates": []},
         "protein_insights": {
             "summary": {"family_count": 0, "top_family": None, "top_family_share": None, "concentration_hhi": None},
@@ -3900,7 +4022,7 @@ def build_products_bundle(
             "quadrants": [],
         },
     )
-    payload.setdefault("pricing_guardrails", {"high_outlier_count": 0, "low_outlier_count": 0, "outside_count": 0, "outside_pct": None, "rows": []})
+    payload.setdefault("pricing_guardrails", {"high_outlier_count": 0, "low_outlier_count": 0, "outside_count": 0, "outside_pct": None, "outside_basis": 0, "rows": []})
     payload.setdefault("execution_lists", {"pricing_fixes": [], "cost_fixes": [], "promote_candidates": []})
     payload.setdefault(
         "protein_insights",

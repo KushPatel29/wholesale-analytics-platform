@@ -899,11 +899,30 @@ def _scoped_cte(cols: set[str], cols_map: Mapping[str, Any], where_sql: str) -> 
     weight_expr = _coalesce_num_expr(cols, cols_map.get("weight_candidates") or (), "0")
 
     cost_total_expr = _coalesce_nonzero_num_expr(cols, cols_map.get("cost_total_candidates") or (), "NULL::DOUBLE")
+    # The same candidates, but a recorded 0 survives instead of being nullified.
+    # `cost_total_expr` skips zeros so a zero-filled column cannot shadow a real
+    # one; that is a question about which *column* to read, and it must not be
+    # allowed to answer the different question of whether a cost was recorded
+    # at all. See `base_cost_expr` below for what that conflation cost.
+    cost_recorded_expr = _coalesce_num_expr(cols, cols_map.get("cost_total_candidates") or (), "NULL::DOUBLE")
     cost_per_unit_expr = _coalesce_nonzero_num_expr(cols, cols_map.get("cost_per_unit_candidates") or (), "NULL::DOUBLE")
     cost_per_lb_expr = _coalesce_nonzero_num_expr(cols, cols_map.get("cost_per_lb_candidates") or (), "NULL::DOUBLE")
+    # `cost_recorded` sits between the ledger total and the rate-derived proxies
+    # so a line that genuinely cost nothing stays at nothing.
+    #
+    # Without it, this page was the only one in the app that disagreed with the
+    # fact table on margin - 22.3% against 22.96% on identical revenue. The
+    # dataset carries 3,056 stockout lines with QuantityShipped = 0, Revenue = 0
+    # and Cost = 0. `NULLIF(Cost, 0)` turned those into "no cost recorded", the
+    # COALESCE fell through to `cost_per_unit * units`, and `units` falls back
+    # to QuantityOrdered when nothing shipped - so $333,573 of cost for goods
+    # that were never shipped and never sold was charged against $0 of revenue.
+    # A derived cost must never outrank a recorded one, and a proxy must use the
+    # same quantity basis as the revenue it will be compared against.
     base_cost_expr = """
                 COALESCE(
                     cost_total,
+                    cost_recorded,
                     cost_per_lb * NULLIF(weight_lb, 0),
                     cost_per_unit * NULLIF(units, 0)
                 )
@@ -930,6 +949,7 @@ def _scoped_cte(cols: set[str], cols_map: Mapping[str, Any], where_sql: str) -> 
                 CAST({units_expr} AS DOUBLE) AS units,
                 CAST({weight_expr} AS DOUBLE) AS weight_lb,
                 {cost_total_expr} AS cost_total,
+                {cost_recorded_expr} AS cost_recorded,
                 {cost_per_lb_expr} AS cost_per_lb,
                 {cost_per_unit_expr} AS cost_per_unit
             FROM fact

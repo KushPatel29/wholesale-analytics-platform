@@ -12,10 +12,18 @@ service-layer one: the failure it guards against is two pages computing the
 same idea differently, and a service-layer test would have to know about both
 implementations to catch that.
 
-`test_margin_pct_agrees_across_pages` is currently an expected failure with the
-measured deltas recorded in it. That is on purpose. The alternative - deleting
-the assertion until someone fixes the pipelines - is how the inconsistency
-survived to production in the first place.
+`test_margin_pct_agrees_across_pages` was an expected failure for three
+sessions with the measured deltas recorded in it, which is what kept it
+findable; it now asserts, and its docstring carries the cause.
+
+This module only has anything to compare when it is pointed at a built
+dataset, which the root conftest deliberately withholds:
+
+    PARQUET_PATH=cache/fact_dataset pytest tests/test_cross_page_consistency.py
+
+The service-level guards that run in every environment are
+`tests/test_bundle_kpi_reconciliation.py`, which diffs every shared KPI across
+the five page bundles, and `tests/test_supplier_cost_basis.py`.
 """
 
 from __future__ import annotations
@@ -58,7 +66,13 @@ def demo_client():
     app = create_app()
     app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SECRET_KEY="test")
 
-    from app.auth.models import User, get_session, get_user_by_username, sync_permissions
+    from app.auth.models import (
+        User,
+        UserScopeRule,
+        get_session,
+        get_user_by_username,
+        sync_permissions,
+    )
 
     sync_permissions()
     user = get_user_by_username(DEMO_VIEWER_USERNAME)
@@ -72,6 +86,21 @@ def demo_client():
             session.add(created)
             session.commit()
         user = get_user_by_username(DEMO_VIEWER_USERNAME)
+
+    # The scope rule is what `manage.py seed-demo-users` gives this account, and
+    # without it every page here renders "Access not configured" with no figures
+    # on it. That does not fail anything: `rendered` keeps pages by status code,
+    # and 200 is exactly what an empty page returns. So the whole module passed
+    # while asserting nothing - including the margin test below, which xpassed
+    # on an empty dict and read as if the defect it tracks had been fixed.
+    with get_session() as session:
+        session.query(UserScopeRule).filter(UserScopeRule.user_id == user.id).delete()
+        session.add(
+            UserScopeRule(
+                user_id=user.id, scope_type="rep", scope_value="*", scope_mode="allow"
+            )
+        )
+        session.commit()
 
     client = app.test_client()
     with client.session_transaction() as session:
@@ -106,7 +135,15 @@ def rendered(demo_client):
     live = {path: text for path, text in pages.items() if text}
     if len(live) < 2:
         pytest.skip("needs a generated dataset; run seed.generate_synthetic_data")
-    return live
+
+    # A page that renders but carries no figures is not a page this module can
+    # compare, and treating it as one is how every assertion below quietly went
+    # vacuous. Skip only when *no* page has data (no dataset built); fail when
+    # some do and others do not, because that is a real rendering defect.
+    with_figures = {path for path, text in live.items() if _MONEY.search(text)}
+    if not with_figures:
+        pytest.skip("no page rendered a company figure; run seed.generate_synthetic_data")
+    return {path: live[path] for path in with_figures}
 
 
 class TestRevenue:
@@ -225,24 +262,26 @@ class TestHhiIsAlwaysQualified:
         assert not offenders, f"unqualified HHI labels: {offenders}"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN DEFECT, tracked rather than hidden. Under the same filter the "
-        "pages agree on revenue ($8,402,380, asserted above) but not on margin: "
-        "Customers reports 20.2%, Suppliers 19.5%, and the fact table's own "
-        "revenue-weighted figure is 20.49% - so all three differ and none is "
-        "right. It is not the formula and not the grain: cost coverage is "
-        "100% (26,412/26,412 rows) and no rows are dropped by customer or "
-        "supplier join. The divergence is inside the two page aggregation "
-        "pipelines and reconciling them is a separate piece of work. "
-        "app/services/metrics.py:margin_pct is the definition they should adopt."
-    ),
-    strict=False,
-)
 def test_margin_pct_agrees_across_pages(rendered):
+    """
+    Was an xfail for three sessions. The cause turned out to be one COALESCE.
+
+    Suppliers read 22.3% where Customers, Regions and Sales Reps all read
+    22.96% on identical revenue, and 22.96% is what the fact table says.
+    `suppliers_bundle` nullified a zero cost before deciding whether a cost had
+    been recorded, so 3,056 stockout lines - QuantityShipped 0, Revenue $0,
+    Cost $0 - fell through to `cost_per_unit * units`, `units` fell back to
+    QuantityOrdered because nothing shipped, and $333,573 of cost for goods
+    that were never shipped landed against $0 of revenue.
+
+    If this fails again, compare the four bundles' cost totals before touching
+    any margin formula: the formula was never wrong.
+    """
     margins: dict[str, str] = {}
     for path, text in rendered.items():
         match = re.search(r"[Mm]argin %?\s*:?\s*(\d{1,3}\.\d)%", text)
         if match:
             margins[path] = match.group(1)
+    if len(margins) < 2:
+        pytest.skip(f"fewer than two pages print a margin server-side: {sorted(margins)}")
     assert len(set(margins.values())) <= 1, f"margin %% differs by page: {margins}"

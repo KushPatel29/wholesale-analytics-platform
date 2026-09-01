@@ -3,7 +3,7 @@
 {% block title %}Products | Northgate Retail Analytics{% endblock %}
 {% import 'products/_components.html' as products_ui %}
 {% set filters_handler = 'ajax' %}
-{% set products_v4_rev = config.get('STATIC_REV', '20260408') ~ '-products-live17' %}
+{% set products_v4_rev = config.get('STATIC_REV', '20260408') ~ '-products-live18' %}
 {% block head_extras %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/products_workspace_v4.css', v=products_v4_rev) }}">
@@ -767,7 +767,7 @@
             <div class="d-flex justify-content-between py-1"><span>High outliers</span><strong id="guardrailHighOutliers">—</strong></div>
             <div class="d-flex justify-content-between py-1"><span>Low outliers</span><strong id="guardrailLowOutliers">—</strong></div>
             <div class="d-flex justify-content-between py-1"><span>Outside guardrails</span><strong id="guardrailOutsidePct">—</strong></div>
-            <div class="small text-muted mt-2">Rules: high if ASP > P90 × 1.15, low if ASP < P10 / 1.15.</div>
+            <div class="small text-muted mt-2">Rules: high if ASP &gt; P90 × 1.15, low if ASP &lt; P10 / 1.15. Measured on the revenue-ranked head of the catalogue, not every SKU — the count beside the percentage names its basis.</div>
           </div>
         </div>
       </div>

@@ -67,10 +67,18 @@
     <div class="col-6 col-xl-2">
       <div class="card text-center shadow-sm h-100 kpi-card">
         <div class="card-body">
-          <div class="text-muted small"><i class="bi bi-activity me-1"></i>Avg Margin %</div>
+          {# "Avg" was the wrong word and it described the wrong number: this
+             card once held the unweighted mean of the per-supplier margin
+             column, which weights a $12k vendor like a $1.2m one and read 22.3%
+             where the rest of the app read 23.0% on identical revenue. It is
+             the portfolio's own margin now - total profit over total revenue -
+             so the label says which, the same way HHI below names its
+             dimension. #}
+          <div class="text-muted small"><i class="bi bi-activity me-1"></i>Margin % (revenue-weighted)</div>
           <div class="fs-4 fw-bold" id="kpiMargin">
             {% if kpis and kpis.avg_margin is not none %}{{ '%.1f'|format(kpis.avg_margin) }}%{% else %}<span class="text-muted">n/a</span>{% endif %}
           </div>
+          <div class="text-muted" style="font-size: 0.72rem;">Total profit ÷ total revenue</div>
         </div>
       </div>
     </div>

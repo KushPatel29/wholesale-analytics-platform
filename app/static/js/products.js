@@ -3982,9 +3982,17 @@
     setText("guardrailHighOutliers", fmtInt.format(guardrails?.high_outlier_count ?? 0));
     setText("guardrailLowOutliers", fmtInt.format(guardrails?.low_outlier_count ?? 0));
     const outsidePct = guardrails?.outside_pct;
+    // Say what the percentage is *of*. Guardrails are read off the top SKUs by
+    // revenue, so this denominator is not the SKU count in the page header, and
+    // "79.0% (158)" beside "Products 880" invites exactly the wrong reading.
+    const outsideBasis = guardrails?.outside_basis;
     setText(
       "guardrailOutsidePct",
-      outsidePct != null ? `${fmtPct1.format(outsidePct)}% (${fmtInt.format(guardrails?.outside_count ?? 0)})` : EM_DASH
+      outsidePct != null
+        ? `${fmtPct1.format(outsidePct)}% (${fmtInt.format(guardrails?.outside_count ?? 0)}${
+            outsideBasis ? ` of ${fmtInt.format(outsideBasis)}` : ""
+          })`
+        : EM_DASH
     );
     const host = document.getElementById("guardrailActionList");
     if (!host) return;
