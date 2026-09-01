@@ -50,10 +50,14 @@ nothing is not worth looking at:
   markdown problem rather than a demand problem: it shows up in margin and in
   the SKU watchlist, never in the sales line.
 
-The hosted demo runs a smaller cut of the same generator (110 stores, 320
-SKUs, three fiscal years, ~95k order lines) because it lives on a 512 MB
-shared-CPU box, so its totals are smaller than the ones quoted below. The shape
-of the data, and every finding, is identical.
+**Two datasets, and telling them apart matters when you check a number.** The
+hosted demo runs a smaller cut of the same generator (110 stores, 320 SKUs, 24
+vendors, three fiscal years, ~95k order lines) because it lives on a 512 MB
+shared-CPU box. A clean clone generates a larger book. The shape of the data,
+and every finding, is identical — the totals are not. Figures quoted from the
+live site are marked as such in
+[What it reads](#what-it-reads-on-the-published-snapshot); figures quoted from a
+development run say so where they appear.
 
 **A note on column names.** The warehouse columns still carry legacy source
 names while the semantic layer exposes retail departments, sell-through, and
@@ -77,7 +81,7 @@ same pages narrow to one rep's accounts.
 
 **The build** — [What it is](#what-it-is) · [The architecture worth explaining](#the-architecture-worth-explaining) · [Access control you can log into](#access-control-you-can-log-into) · [Running it](#running-it)
 
-**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough)
+**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough)
 
 **The numbers** — [Metric definitions](#metric-definitions) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
 
@@ -97,7 +101,8 @@ built.
 | **Structure** | 20 blueprints, 47 services, 136 test files · 1,290 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
-| **Demo data** | 620 stores · 880 SKUs · 326k order lines · 24 months |
+| **Dev dataset** | 620 stores · 880 SKUs · 326k order lines · 24 months |
+| **Hosted cut** | 110 stores · 320 SKUs · 24 vendors · ~95k lines · 3 fiscal years |
 
 **Dashboards:** Overview (executive), Customers (KPIs, RFM, CLV, cohorts),
 Products (with drilldown and forecasting), Suppliers, Regions, Sales Reps,
@@ -228,7 +233,12 @@ exists would have passed against the broken version too.
 
 Five pages report the company's margin. For three review passes they gave four
 answers, and the disagreement was recorded as an expected failure with the
-measured numbers in it rather than deleted:
+measured numbers in it rather than deleted.
+
+Measured on a development run, because that is where the reconciliation was done
+— the hosted cut is smaller and shows the same two defects at its own scale
+(Suppliers read 19.3% there against the Overview's 20.1%, and Products printed
+`Products 200`):
 
 | Page | Margin % | Revenue |
 |---|---|---|
@@ -313,6 +323,36 @@ page returns, and eight tests then compared empty sets and agreed. The xfail
 tracking the margin gap had quietly turned into an *xpass*, which reads as
 fixed. A test that cannot fail is worse than no test, because it is also a
 claim; the fixture now refuses a page with no figures on it.
+
+---
+
+## Eleven cells that were never going to have a number in them
+
+Found while checking the figures above against the live site, which is the only
+reason it was found at all.
+
+The Customers page prints an eleven-cell block of customer economics — Retention
+(logo), Churn (logo), Churn (revenue), ARPA, New/established ARPA and a
+five-line NRR decomposition. Every one of them rendered an em-dash. On the live
+demo, and locally, on every visit since the block was added.
+
+Nothing was wrong with the arithmetic. `kpis_v3.html` reads its figures from
+`summary`, which is a hand-maintained projection of the bundle's `kpis` in
+`app/blueprints/customers.py`, and seven keys were never added to it. The
+numbers were computed, returned by the API, and then dropped between the
+service and the template.
+
+What made it survive is that **NRR and GRR sit in the same row and rendered
+fine** — those two keys *are* in the projection. A row that is entirely blank
+reads as a broken feature and gets fixed. A row that is two-thirds blank beside
+two working figures reads as sparse data, which is a thing synthetic datasets
+do, so it reads as expected behaviour.
+
+This is the argument against hand-maintained projections generally: nothing
+fails when you forget one, and the thing you forgot looks exactly like a thing
+that has no value. `tests/test_customers_kpis_v3.py` now asserts each of those
+labels has a digit next to it — not what the digit is, which would break on any
+change to the seed, only that the cell was answered.
 
 ---
 
@@ -447,7 +487,10 @@ What the catalogue added beyond the originals:
   on the Overview, so the basis of every other figure is answerable in one line.
 * **Customer economics** — retention and churn as *rates* rather than counts,
   revenue-weighted as well as logo, NRR decomposed into new/expansion/
-  contraction/churned, ARPA, and CLV with its inputs beside it.
+  contraction/churned, ARPA, and CLV with its inputs beside it. This block
+  rendered [eleven em-dashes](#eleven-cells-that-were-never-going-to-have-a-number-in-them)
+  until the figures in this README were checked against the page that was
+  supposed to be showing them.
 * **Retail and ops** — GMROI, sell-through, shrink, return rate, return cost
   rate, resolution time, quota attainment, revenue per employee and per paid
   hour, and employee turnover split voluntary/involuntary.
@@ -481,24 +524,33 @@ easier and worth less.
 
 ### What it reads, on the published snapshot
 
-Every figure below is on the live site right now, on the FY-to-date scope. They
-are here because a README that describes a metric layer without showing a single
-number is asking to be taken on faith.
+Every figure below was read off [the live site](https://kushpatel29.github.io/wholesale-analytics-platform/)
+on 1 September 2026, on its **default Current FY scope** — which is what a
+reader lands on, so it is what a reader can check.
+
+**These are the hosted cut's numbers, not this repo's.** The published demo runs
+a smaller seed (110 stores, 320 SKUs, 24 vendors) so it fits a 512 MB box; a
+clean clone generated with the command under [Running it](#running-it) produces
+a larger book with the same shape. This table used to carry the *local* figures
+under the heading "on the published snapshot", which is a claim a reader
+disproves in one click — $51.0M here against $8.3M on the page. Every number
+below has been checked against the page it names.
 
 | | | |
 |---|---|---|
-| Revenue · profit | **$51.0M · $11.7M** | Invoiced sales, stated basis |
-| Gross · net margin | **23.0% · 4.6%** | Net margin is below the D&A, interest and tax lines |
-| Net revenue retention | **104.4%** | Expansion outruns contraction and churn |
-| Retention · logo churn | **94.3% · 5.7%** | Rates, not counts; revenue churn 3.5% alongside |
-| ARPA · AOV | **$92,259 · $2,097** | Per account and per order — different questions |
-| Current ratio · working capital | **2.23× · $7.46M** | Month-end balance |
-| AR turnover · ROA | **9.7× · 11.8%** | Average balance, ~37-day DSO |
-| Inventory turnover | **8.1×** cost basis | The Inventory page's usage-based turns is a *different* measure |
-| CAC · payback | **$17,655 · 9.1 months** | Marketing plus an 18% acquisition share of selling |
-| CLV:CAC | **1.32×** | 12-month CLV — stricter than the lifetime basis the 3:1 rule assumes |
-| Forecast scoring | **WAPE · SMAPE · signed bias** | Complete-period rolling-origin backtest; MAPE is diagnostic only |
-| Customer concentration | **HHI 30** | Labelled with its dimension, on the 0–10,000 scale |
+| Revenue · profit | **$8,281,387 · $1,665,816** | Overview, invoiced sales, stated basis |
+| Margin % | **20.1%** | Against a 26.3% target and a 19.9% floor, both on screen |
+| Orders · AOV | **4,184 · $1,979.30** | Per order, and the order count it divides |
+| Net revenue retention · GRR | **103.5% · 85.1%** | Expansion outruns contraction; gross retention says by how much |
+| New · returning revenue share | **2.7% · 97.3%** | The book is renewal-led, and says so |
+| Gross · net margin (FY2025) | **22.1% · 2.8%** | Finance page, full fiscal year; net is below D&A, interest and tax |
+| Current ratio · working capital | **1.02× · $42,590** | Month-end balance — thin, and not smoothed to look otherwise |
+| AR turnover · ROA | **9.69× · 2.3%** | Average of month-end balances; ROA on closing assets |
+| Inventory turnover | **8.15×** cost basis | The Inventory page's usage-based turns is a *different* measure |
+| CAC · payback | **$17,667 · 11.0 months** | Marketing plus an 18% acquisition share of selling |
+| CLV:CAC | **1.09×** | 12-month CLV — stricter than the lifetime basis the 3:1 rule assumes |
+| Forecast scoring | **WAPE 11.6% · SMAPE 12.0% · bias −$16,964 · hit rate 40%** | Rolling-origin backtest over 5 complete periods; MAPE 12.4%, diagnostic only |
+| Customer concentration | **HHI (customers) 181** | Labelled with its dimension, on the 0–10,000 scale |
 
 MAPE remains visible as a diagnostic because sparse SKU series make its failure
 mode instructive, but it is no longer the headline. WAPE weights errors by

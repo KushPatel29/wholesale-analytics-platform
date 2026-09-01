@@ -44,6 +44,17 @@ PAGES = ("/overview", "/customers/", "/suppliers/", "/regions/", "/salesreps/")
 _MONEY = re.compile(r"\$([\d,]{7,})")
 _PERCENT = re.compile(r"(\d{1,3}\.\d)%")
 
+# "Margin % 23.0%", "Margin %: 23.0%", and "Margin % (revenue-weighted) 23.0%".
+#
+# The parenthetical is not decoration - this app labels a ratio with its basis
+# the same way it labels an HHI with its dimension, and the Suppliers card gained
+# "(revenue-weighted)" the day its margin stopped being an unweighted mean. The
+# regex without `(?:\([^)]*\)\s*)?` stopped matching that page and the
+# comparison silently fell to one page, which is a skip, which is green. A test
+# that stops comparing when a label is improved is a test that stops working
+# exactly when someone is working on the thing it guards.
+_MARGIN = re.compile(r"[Mm]argin %?\s*(?:\([^)]*\)\s*)?:?\s*(\d{1,3}\.\d)%")
+
 
 FEATURE_FLAGS = (
     "OVERVIEW_V2", "OVERVIEW_V3", "PRODUCTS_V3", "PRODUCTS_V4",
@@ -279,7 +290,7 @@ def test_margin_pct_agrees_across_pages(rendered):
     """
     margins: dict[str, str] = {}
     for path, text in rendered.items():
-        match = re.search(r"[Mm]argin %?\s*:?\s*(\d{1,3}\.\d)%", text)
+        match = _MARGIN.search(text)
         if match:
             margins[path] = match.group(1)
     if len(margins) < 2:

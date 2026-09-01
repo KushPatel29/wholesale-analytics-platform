@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 
 import pandas as pd
 import pytest
@@ -312,3 +313,62 @@ def test_customers_kpis_v3_flag_off_falls_back_to_v2(app_client, seed_customers_
     body = resp.get_data(as_text=True)
     assert "Customer Health" in body
     assert "Executive Scorecard" not in body
+
+
+def test_customer_economics_cells_are_not_permanently_blank(
+    app_client, seed_customers_kpis_v3, monkeypatch
+):
+    """
+    Eleven cells rendered em-dashes on every visit, including the live demo.
+
+    `kpis_v3.html` reads its figures from `summary`, which is a hand-maintained
+    projection of the bundle's `kpis` in `app/blueprints/customers.py`. Seven
+    keys were never added to it - retention, logo churn, revenue churn, ARPA,
+    new/established ARPA and `revenue_movement` - so Retention (logo), Churn
+    (logo), Churn (revenue), ARPA, New/established ARPA and every line of the
+    NRR decomposition asked `summary` for keys that only ever existed on
+    `kpis`, and got nothing.
+
+    NRR and GRR sat in the same row rendering fine, which is exactly what made
+    it read as sparse data rather than a missing mapping. Nothing was ever
+    wrong with the arithmetic; the numbers were computed, and then dropped
+    between the service and the template.
+
+    This asserts the labels have values beside them rather than pinning the
+    values themselves - the fixture's figures are a fixture's business, and a
+    test that pins them fails on any change to the seed rather than on the
+    defect it exists to catch.
+    """
+    monkeypatch.setattr("app.services.filters_service.scope_from_user", lambda _u: _scope_admin())
+    monkeypatch.setitem(app_client.application.config, "CUSTOMERS_KPIS_V3", True)
+
+    resp = app_client.get("/customers/", query_string={"start": "2025-03-01", "end": "2025-03-31"})
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+
+    text = re.sub(r"<script.*?</script>", " ", body, flags=re.S)
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))
+
+    # label -> how many characters after it to look in for a rendered value
+    cells = {
+        "Retention (logo)": 24,
+        "Churn (logo)": 24,
+        "Churn (revenue)": 24,
+        "ARPA": 24,
+        "Starting revenue": 30,
+        "New revenue": 30,
+        "Expansion": 30,
+        "Contraction": 30,
+        "Churned revenue": 30,
+    }
+    blank = []
+    for label, span in cells.items():
+        index = text.find(label)
+        if index < 0:
+            blank.append(f"{label} (label missing)")
+            continue
+        window = text[index + len(label) : index + len(label) + span]
+        if not re.search(r"[\d]", window):
+            blank.append(f"{label} -> '{window.strip()}'")
+
+    assert not blank, "customer-economics cells rendered with no value: " + "; ".join(blank)

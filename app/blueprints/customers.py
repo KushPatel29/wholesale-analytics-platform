@@ -696,6 +696,23 @@ def index():
         "returning_customer_revenue_share_pct": kpis.get("returning_customer_revenue_share_pct"),
         "churn_risk_summary": churn_risk_summary,
         "window": kpis.get("window") or {},
+        # Customer economics. `summary` is a hand-maintained projection of
+        # `kpis`, and these seven were never added to it - so `kpis_v3.html`
+        # asked `summary` for keys that only ever existed on `kpis`, and eleven
+        # cells rendered em-dashes: Retention (logo), Churn (logo), Churn
+        # (revenue), ARPA, New/established ARPA, and every line of the NRR
+        # decomposition. NRR and GRR sat in the same row reading fine, which is
+        # what made it look like sparse data rather than a missing mapping.
+        #
+        # Nothing here is computed here. It is the same `kpis` the API returns,
+        # which already had all of it under exactly these names.
+        "retention_rate_pct": kpis.get("retention_rate_pct"),
+        "logo_churn_rate_pct": kpis.get("logo_churn_rate_pct"),
+        "revenue_churn_rate_pct": kpis.get("revenue_churn_rate_pct"),
+        "arpa": kpis.get("arpa"),
+        "new_account_arpa": kpis.get("new_account_arpa"),
+        "established_account_arpa": kpis.get("established_account_arpa"),
+        "revenue_movement": kpis.get("revenue_movement") or {},
     }
     page_totals = table.get("page_totals") or {
         "revenue": sum(r.get("TotalRevenue", 0) for r in rows),
