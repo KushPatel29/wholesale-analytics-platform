@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 import importlib.util
 import tempfile
@@ -45,29 +46,162 @@ def _csv_filename_from_excel_name(filename: str) -> str:
     return f"{stem}.csv"
 
 
+# --- literal text ------------------------------------------------------------
+#
+# A cell whose text starts with "=" is a formula to Excel, so a product called
+# "=Rebate" arrived as a broken formula rather than as its own name. xlsxwriter
+# offers a switch for this; openpyxl infers the formula from the leading "=" as
+# the cell is assigned, so those cells are demoted back to text after the frame
+# is written. Neither approach alters the string - no apostrophe is prepended -
+# so the exported value still reads back as what the page displayed.
+
+_XLSXWRITER_ENGINE_KWARGS = {"options": {"strings_to_formulas": False, "strings_to_urls": False}}
+
+
+def _excel_writer(target: Any, engine: str):
+    """`pd.ExcelWriter` with text kept as text."""
+    if str(engine or "").strip().lower() == "xlsxwriter":
+        return pd.ExcelWriter(target, engine=engine, engine_kwargs=_XLSXWRITER_ENGINE_KWARGS)
+    return pd.ExcelWriter(target, engine=engine)
+
+
+def _demote_openpyxl_formulas(writer, sheet_name: str) -> None:
+    """Turn any cell openpyxl decided was a formula back into a string."""
+    if str(getattr(writer, "engine", "")).strip().lower() != "openpyxl":
+        return
+    try:
+        ws = writer.sheets[sheet_name]
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.data_type == "f":
+                    cell.data_type = "s"
+    except Exception:
+        pass
+
+
+# --- column units ------------------------------------------------------------
+#
+# A workbook that disagrees with the page it was downloaded from is worse than
+# no workbook, so the number format is chosen from an explicit unit rather than
+# from whichever substring happened to match first.
+#
+# The house convention for a percentage is the 0-100 scale - see
+# `app/services/formatting.py:percent`, "a percentage that is already on the
+# 0-100 scale", which prints 22.96 as "23.0%". Excel's own `0.0%` format
+# multiplies the stored number by 100 before displaying it, so a margin of
+# 22.96 rendered as **2296.0%**. `PERCENT_FORMAT` therefore prints a literal
+# percent sign and leaves the number alone; the cell still holds 22.96, which
+# is what the page, the API and the CSV of the same export all hold.
+
+CURRENCY_FORMAT = "$#,##0.00"
+PERCENT_FORMAT = '0.0"%"'
+COUNT_FORMAT = "#,##0"
+
+# Matched against whole words, not substrings: "generated_at" contains "rate"
+# and was being formatted as a percentage.
+# "ratio" is deliberately absent: `current_ratio` is 1.8, not 1.8%. A ratio
+# gets no unit rather than a wrong one.
+_PERCENT_WORDS = {"pct", "percent", "percentage", "rate", "share"}
+_CURRENCY_WORDS = {
+    "revenue", "cost", "cogs", "spend", "price", "profit", "amount", "sales",
+    "value", "dollars", "usd",
+}
+
+# `rate` is the ambiguous one: `repeat_rate` is a percentage and `blended_rate`
+# is labor cost divided by paid hours - dollars per hour. Names whose `rate` is
+# a unit price rather than a proportion are listed here so the word does not
+# have to be dropped entirely.
+_CURRENCY_RATE_NAMES = {
+    "blended_rate", "prior_blended_rate", "effective_rate", "hourly_rate",
+    "pay_rate", "bill_rate", "run_rate", "exchange_rate", "rate", "avg_rate",
+    "average_rate", "labor_rate", "department_rate",
+}
+
+
+def _split_name(name: str) -> list[str]:
+    """Split a column name into lowercase words, handling snake and camel case."""
+    text = str(name or "")
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text)
+    return [word for word in re.split(r"[^A-Za-z0-9]+", spaced.lower()) if word]
+
+
+def _name_words(name: str) -> set[str]:
+    return set(_split_name(name))
+
+
+def _normalized_name(name: str) -> str:
+    """`blended_rate`, `Blended Rate` and `blendedRate` all normalise alike.
+
+    Exports rename columns to display labels on the way out (`blended_rate` ->
+    `Blended Rate`), so a lookup against the raw name would miss the renamed
+    half of them.
+    """
+    return "_".join(_split_name(name))
+
+
+def column_unit(name: str) -> str:
+    """Return "percent", "currency", "count" or "plain" for a column name.
+
+    Percent wins over currency: `revenue_share_pct` and `cost_coverage_pct` are
+    percentages that merely mention money, and the old ordering printed them as
+    `$23.40`.
+    """
+    raw = str(name or "").strip()
+    if not raw:
+        return "plain"
+    if _normalized_name(raw) in _CURRENCY_RATE_NAMES:
+        return "currency"
+    words = _name_words(raw)
+    # Percent wins outright. Naming the measure a column is a proportion *of*
+    # does not make it money: `core_revenue_share`, `cost_null_rate` and
+    # `below_target_revenue_share` are all percentages, and an earlier version
+    # of this that let a currency word override them printed each as dollars.
+    if raw.endswith("%") or (words & _PERCENT_WORDS):
+        return "percent"
+    if words & _CURRENCY_WORDS:
+        return "currency"
+    return "count"
+
+
 def _apply_worksheet_formatting(writer, sheet_name: str, df: pd.DataFrame) -> None:
+    """Set column widths and number formats on a written sheet.
+
+    Every column is handled independently. This used to be one `try` around the
+    whole loop, so a single column that raised - an all-`None` column, which is
+    exactly what permission masking produces - silently left every column after
+    it unformatted.
+    """
     try:
         wb = writer.book
         ws = writer.sheets[sheet_name]
-        # Basic formats
-        fmt_curr = wb.add_format({"num_format": "$#,##0.00"})
-        fmt_int = wb.add_format({"num_format": "#,##0"})
-        fmt_pct = wb.add_format({"num_format": "0.0%"})
-        # Column widths heuristic
-        for i, col in enumerate(df.columns):
+        formats = {
+            "currency": wb.add_format({"num_format": CURRENCY_FORMAT}),
+            "percent": wb.add_format({"num_format": PERCENT_FORMAT}),
+            "count": wb.add_format({"num_format": COUNT_FORMAT}),
+        }
+    except Exception:
+        return
+
+    for i, col in enumerate(df.columns):
+        try:
             col_series = df[col]
-            # Choose format by column name
-            name = str(col).lower()
-            f = None
-            if any(k in name for k in ["revenue", "cost", "spend", "price", "profit", "amount", "avgprice"]):
-                f = fmt_curr
-            elif any(k in name for k in ["pct", "percent", "rate"]):
-                f = fmt_pct
-            elif pd.api.types.is_integer_dtype(col_series) or pd.api.types.is_float_dtype(col_series):
-                f = fmt_int
-            width = max(10, min(40, int(col_series.astype(str).str.len().quantile(0.9)) + 2))
-            ws.set_column(i, i, width, f)
-        # Freeze header and autofilter
+            unit = column_unit(col)
+            numeric = pd.api.types.is_numeric_dtype(col_series) and not pd.api.types.is_bool_dtype(col_series)
+            # A number format on a text column is meaningless, and on a masked
+            # (all-null) column it would imply a value that is not there.
+            fmt = formats.get(unit) if numeric else None
+            try:
+                widths = col_series.astype(str).str.len()
+                quantile = widths.quantile(0.9)
+                width = max(10, min(40, int(quantile) + 2)) if pd.notna(quantile) else 12
+            except Exception:
+                width = 12
+            width = max(width, min(40, len(str(col)) + 2))
+            ws.set_column(i, i, width, fmt)
+        except Exception:
+            continue
+
+    try:
         max_row, max_col = df.shape
         if max_row and max_col:
             ws.autofilter(0, 0, max_row, max_col - 1)
@@ -350,7 +484,7 @@ def dataframes_to_xlsx_bytes(
         return _build_minimal_xlsx_bytes(sheets)
     output = BytesIO()
     safe_sheets: Dict[str, pd.DataFrame] = {}
-    with pd.ExcelWriter(output, engine=engine) as writer:
+    with _excel_writer(output, engine) as writer:
         for name, df in sheets.items():
             # Ensure a safe sheet name (max 31 chars, no special characters)
             safe = str(name)[:31].replace(":", "_").replace("/", "_")
@@ -358,6 +492,7 @@ def dataframes_to_xlsx_bytes(
             safe_sheets[safe] = frame
             frame.to_excel(writer, sheet_name=safe, index=False)
             _apply_worksheet_formatting(writer, safe, frame)
+            _demote_openpyxl_formulas(writer, safe)
         _apply_xlsxwriter_charts(writer, safe_sheets, chart_specs=chart_specs)
     output.seek(0)
     return output.read()
@@ -402,11 +537,12 @@ def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str =
         tmp_path = Path(tmp.name)
         tmp.close()
         try:
-            with pd.ExcelWriter(tmp_path.as_posix(), engine=engine) as writer:
+            with _excel_writer(tmp_path.as_posix(), engine) as writer:
                 for name, df in sheets.items():
                     safe = str(name)[:31].replace(":", "_").replace("/", "_")
                     (df if df is not None else pd.DataFrame()).to_excel(writer, sheet_name=safe, index=False)
                     _apply_worksheet_formatting(writer, safe, df if df is not None else pd.DataFrame())
+                    _demote_openpyxl_formulas(writer, safe)
 
             @after_this_request
             def _cleanup(resp):  # pragma: no cover - side effect
@@ -512,11 +648,12 @@ def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str =
         tmp_path = Path(tmp.name)
         tmp.close()
         try:
-            with pd.ExcelWriter(tmp_path.as_posix(), engine=engine) as writer:
+            with _excel_writer(tmp_path.as_posix(), engine) as writer:
                 for name, df in sheets.items():
                     safe = str(name)[:31].replace(":", "_").replace("/", "_")
                     (df if df is not None else pd.DataFrame()).to_excel(writer, sheet_name=safe, index=False)
                     _apply_worksheet_formatting(writer, safe, df if df is not None else pd.DataFrame())
+                    _demote_openpyxl_formulas(writer, safe)
 
             @after_this_request
             def _cleanup(resp):  # pragma: no cover - side effect
@@ -547,12 +684,13 @@ def to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Data", instructions: Opt
     """
     sheets = {sheet_name: df if df is not None else pd.DataFrame()}
     output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    with _excel_writer(output, "xlsxwriter") as writer:
         # Write data
         for name, sdf in sheets.items():
             safe = str(name)[:31].replace(":", "_").replace("/", "_")
             sdf.to_excel(writer, sheet_name=safe, index=False)
             _apply_worksheet_formatting(writer, safe, sdf)
+            _demote_openpyxl_formulas(writer, safe)
 
         if instructions:
             instr_name = "Instructions"

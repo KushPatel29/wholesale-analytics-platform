@@ -16,6 +16,7 @@ from flask import current_app, request, url_for
 from app.core import prebuilt_cache
 from app.core.cache_manager import TTLValueCache
 from app.services import comparison, fact_schema as fs, fact_store, labor_store, metrics
+from app.core.exports import column_unit as export_column_unit
 
 
 WEEKDAY_ORDER = {
@@ -3558,6 +3559,45 @@ def build_client_payload(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _li_percent_columns_to_points(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """Put this module's percentages on the app's 0-100 scale before export.
+
+    Labor is the one module that carries proportions as fractions - every
+    `*_pct` here is a plain ratio (`premium_cost / labor_cost`), and the page
+    multiplies on the way to the screen (`_li_format_percent` uses `:.1%`).
+    The rest of the app stores 22.96 and prints "23.0%"
+    (`app/services/formatting.py`), which is what the workbook writer assumes.
+
+    Without this the workbook showed 0.0% where the page showed 3.2%. Scaling
+    at the export boundary keeps the page and its download on the same number
+    without re-scaling a module that is internally consistent.
+    """
+    scaled: dict[str, pd.DataFrame] = {}
+    for sheet, frame in (frames or {}).items():
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            scaled[sheet] = frame
+            continue
+        out = frame.copy()
+        for column in list(out.columns):
+            if export_column_unit(column) != 'percent':
+                continue
+            numeric = pd.to_numeric(out[column], errors='coerce')
+            if numeric.notna().any():
+                out[column] = numeric * 100.0
+        # The Summary sheet is one long metric column, so the unit lives in a
+        # sibling `Format` cell rather than in the column name.
+        if {'Value', 'Format'}.issubset(set(out.columns)):
+            values = pd.to_numeric(out['Value'], errors='coerce')
+            is_percent = out['Format'].astype(str).str.strip().str.lower().eq('percent')
+            out.loc[is_percent & values.notna(), 'Value'] = values[is_percent & values.notna()] * 100.0
+        if {'Delta', 'Delta Format'}.issubset(set(out.columns)):
+            deltas = pd.to_numeric(out['Delta'], errors='coerce')
+            is_percent = out['Delta Format'].astype(str).str.strip().str.lower().eq('percent')
+            out.loc[is_percent & deltas.notna(), 'Delta'] = deltas[is_percent & deltas.notna()] * 100.0
+        scaled[sheet] = out
+    return scaled
+
+
 def build_export_frames(filters: LaborFilters, dataset: str) -> tuple[dict[str, pd.DataFrame], str]:  # noqa: F811
     analysis = _cached_analysis(filters)
     current_summary = analysis['current_summary']
@@ -3695,17 +3735,17 @@ def build_export_frames(filters: LaborFilters, dataset: str) -> tuple[dict[str, 
     )
 
     if dataset == 'detail':
-        return ({'LaborDetail': detail_df}, 'labor_detail')
+        return (_li_percent_columns_to_points({'LaborDetail': detail_df}), 'labor_detail')
     if dataset == 'department-summary':
-        return ({'DepartmentSummary': department_df}, 'labor_department_summary')
+        return (_li_percent_columns_to_points({'DepartmentSummary': department_df}), 'labor_department_summary')
     if dataset == 'category-summary':
-        return ({'CategorySummary': category_df}, 'labor_category_summary')
+        return (_li_percent_columns_to_points({'CategorySummary': category_df}), 'labor_category_summary')
     if dataset == 'employee-summary':
-        return ({'EmployeeSummary': worker_df}, 'labor_employee_summary')
+        return (_li_percent_columns_to_points({'EmployeeSummary': worker_df}), 'labor_employee_summary')
     if dataset == 'watchlist':
-        return ({'Watchlist': watchlist_df}, 'labor_watchlist')
+        return (_li_percent_columns_to_points({'Watchlist': watchlist_df}), 'labor_watchlist')
     return (
-        {
+        _li_percent_columns_to_points({
             'Summary': summary_df,
             'DecisionSignals': signals_df,
             'Departments': department_df,
@@ -3716,6 +3756,6 @@ def build_export_frames(filters: LaborFilters, dataset: str) -> tuple[dict[str, 
             'DepartmentTrend': analysis['monthly_department_trend'],
             'Watchlist': watchlist_df,
             'Detail': detail_df,
-        },
+        }),
         'labor_snapshot',
     )
