@@ -16,9 +16,13 @@
    deliberately no "download the result" step: the exports live on the
    analytics pages, and those are the snapshot.
 
-   The write step is hidden when the reader cannot perform it, so the strip
-   never offers a door that returns 403. #}
+   Each step is hidden when it cannot be followed - the write when the reader
+   lacks the permission, the inspect step when the ledger is empty (the queue
+   table only renders with rows, so its anchor is not there either). A step
+   pointing at a control that is not on the page is worse than no step. #}
 {% set _journey_write = can_permission('actions.create') or can_permission('actions.manage') %}
+{% set _journey_rows = (listing['items'] if listing is defined and listing else none) %}
+{% set _n_write = 3 if _journey_rows else 2 %}
 <section class="demo-journey" aria-labelledby="demoJourneyTitle">
   <div class="demo-journey__head">
     <span class="demo-journey__eyebrow">Interactive demo</span>
@@ -39,18 +43,20 @@
         <a class="demo-journey__link" href="#workspaceFilterForm">Open the filters &rarr;</a>
       </div>
     </li>
+    {% if _journey_rows %}
     <li class="demo-journey__step">
       <span class="demo-journey__number" aria-hidden="true">2</span>
       <div class="demo-journey__body">
         <strong>Inspect the supporting data</strong>
         <span>Open one item to see the record it came from, who owns it, what was
           approved, and the before/after measurement.</span>
-        <a class="demo-journey__link" href="#workspaceTable">Pick an item from the list &rarr;</a>
+        <a class="demo-journey__link" href="#queue-heading">Pick an item from the list &rarr;</a>
       </div>
     </li>
+    {% endif %}
     {% if _journey_write %}
     <li class="demo-journey__step">
-      <span class="demo-journey__number" aria-hidden="true">3</span>
+      <span class="demo-journey__number" aria-hidden="true">{{ _n_write }}</span>
       <div class="demo-journey__body">
         <strong>Close the loop</strong>
         <span>Turn a signal into owned work with a due date, then record the outcome
