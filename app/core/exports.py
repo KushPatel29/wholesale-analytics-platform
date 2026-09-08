@@ -96,12 +96,22 @@ def _demote_openpyxl_formulas(writer, sheet_name: str) -> None:
 CURRENCY_FORMAT = "$#,##0.00"
 PERCENT_FORMAT = '0.0"%"'
 COUNT_FORMAT = "#,##0"
+# `#,##0` on a coefficient of variation of 0.41 prints "0", so a unitless
+# column only gets the integer format when its values actually are integers.
+DECIMAL_FORMAT = "#,##0.00"
 
 # Matched against whole words, not substrings: "generated_at" contains "rate"
 # and was being formatted as a percentage.
 # "ratio" is deliberately absent: `current_ratio` is 1.8, not 1.8%. A ratio
 # gets no unit rather than a wrong one.
 _PERCENT_WORDS = {"pct", "percent", "percentage", "rate", "share"}
+
+# A dispersion measure carries neither unit, and the words around it lie about
+# which: `Rate Volatility` was being printed as a percentage on the strength of
+# "rate", and `Cost Volatility` as dollars on the strength of "cost", so the
+# same statistic appeared twice in one sheet in two different units. These win
+# over both word lists.
+_UNITLESS_WORDS = {"volatility", "ratio", "index", "score", "hhi", "zscore", "stddev", "sigma"}
 _CURRENCY_WORDS = {
     "revenue", "cost", "cogs", "spend", "price", "profit", "amount", "sales",
     "value", "dollars", "usd",
@@ -152,6 +162,8 @@ def column_unit(name: str) -> str:
     if _normalized_name(raw) in _CURRENCY_RATE_NAMES:
         return "currency"
     words = _name_words(raw)
+    if words & _UNITLESS_WORDS:
+        return "count"
     # Percent wins outright. Naming the measure a column is a proportion *of*
     # does not make it money: `core_revenue_share`, `cost_null_rate` and
     # `below_target_revenue_share` are all percentages, and an earlier version
@@ -161,6 +173,17 @@ def column_unit(name: str) -> str:
     if words & _CURRENCY_WORDS:
         return "currency"
     return "count"
+
+
+def _is_integral(series: pd.Series) -> bool:
+    """Whether every value in a numeric column is a whole number."""
+    try:
+        numbers = pd.to_numeric(series, errors="coerce").dropna()
+        if numbers.empty:
+            return True
+        return bool((numbers % 1 == 0).all())
+    except Exception:
+        return True
 
 
 def _apply_worksheet_formatting(writer, sheet_name: str, df: pd.DataFrame) -> None:
@@ -178,6 +201,7 @@ def _apply_worksheet_formatting(writer, sheet_name: str, df: pd.DataFrame) -> No
             "currency": wb.add_format({"num_format": CURRENCY_FORMAT}),
             "percent": wb.add_format({"num_format": PERCENT_FORMAT}),
             "count": wb.add_format({"num_format": COUNT_FORMAT}),
+            "decimal": wb.add_format({"num_format": DECIMAL_FORMAT}),
         }
     except Exception:
         return
@@ -186,9 +210,22 @@ def _apply_worksheet_formatting(writer, sheet_name: str, df: pd.DataFrame) -> No
         try:
             col_series = df[col]
             unit = column_unit(col)
-            numeric = pd.api.types.is_numeric_dtype(col_series) and not pd.api.types.is_bool_dtype(col_series)
-            # A number format on a text column is meaningless, and on a masked
-            # (all-null) column it would imply a value that is not there.
+            # `is_numeric_dtype` is False for an object column, which is what a
+            # frame carrying `pd.NA` alongside floats ends up as - so several
+            # percentage columns shipped unformatted and printed as
+            # `3.106348459681461`. What matters is whether the *values* are
+            # numbers, so they are coerced and the column counts as numeric
+            # when at least one survives. A masked column is all-null and
+            # therefore still gets no format: a unit on an empty cell would
+            # imply a value that is not there.
+            if pd.api.types.is_bool_dtype(col_series):
+                numeric = False
+            elif pd.api.types.is_numeric_dtype(col_series):
+                numeric = bool(col_series.notna().any())
+            else:
+                numeric = bool(pd.to_numeric(col_series, errors="coerce").notna().any())
+            if numeric and unit == "count" and not _is_integral(col_series):
+                unit = "decimal"
             fmt = formats.get(unit) if numeric else None
             try:
                 widths = col_series.astype(str).str.len()
