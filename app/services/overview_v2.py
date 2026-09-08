@@ -3283,9 +3283,26 @@ def _compute_bundle_context(
             else:
                 # Say which movement the split explains rather than implying
                 # it explains the headline one.
+                #
+                # Naming it is not optional. On the published Current FY page
+                # this rendered as "Revenue up +$260,424 versus prior fiscal
+                # year-to-date. Across matched SKUs the movement of -$881,289
+                # splits into ..." - two windows, opposite signs, and only the
+                # first one labelled. A reader has no way to see that the
+                # decomposition is a different comparison rather than a
+                # contradiction, so the sentence now carries its own basis.
+                driver_basis = str(
+                    (drivers.get("mom") or {}).get("comparison_label") or ""
+                ).strip()
+                basis_text = (
+                    f"On a {driver_basis.lower()} basis" if driver_basis
+                    else "On the driver comparison window"
+                )
                 narrative.append(
-                    f"{headline}. Across matched SKUs the movement of "
-                    f"{_signed_money(decomposed_delta)} splits into {parts}."
+                    f"{headline}. {basis_text} — a different window from the "
+                    f"movement above — revenue moved "
+                    f"{_signed_money(decomposed_delta)} across matched SKUs, "
+                    f"splitting into {parts}."
                 )
         else:
             narrative.append(

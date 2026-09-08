@@ -74,7 +74,20 @@
     if (Number.isNaN(parsed.getTime())) return String(value);
     return withTime ? fmtDateTime.format(parsed) : fmtDateShort.format(parsed);
   };
-  const formatRefreshAge = (days, hours) => {
+  const formatRefreshAge = (days, hours, refreshedAt) => {
+    // Prefer measuring the age here rather than trusting the number in the
+    // payload. On the prerendered snapshot that number was computed when the
+    // page was frozen, so it read "0h" permanently no matter how old the build
+    // got - a freshness indicator that could never report staleness. Given the
+    // refresh timestamp, elapsed time is computed against the reader's clock.
+    if (refreshedAt) {
+      const then = Date.parse(refreshedAt);
+      if (!Number.isNaN(then)) {
+        const elapsedH = Math.max(0, Math.floor((Date.now() - then) / 3600000));
+        if (elapsedH < 48) return `${fmtNumber0.format(elapsedH)}h`;
+        return `${fmtNumber0.format(Math.floor(elapsedH / 24))}d`;
+      }
+    }
     const dayNum = asNumber(days);
     const hourNum = asNumber(hours);
     if (hourNum !== null && hourNum < 48) return `${fmtNumber0.format(hourNum)}h`;
@@ -1065,7 +1078,7 @@
         pillText = rawVal > 0 ? "Unmapped rows weaken movers and mix" : "No material mapping gap detected";
         subText = "Mapping counts respect the current filters and RBAC scope.";
       } else if (meta.key === "refresh_age") {
-        rawVal = formatRefreshAge(metaBlock.refresh_age_days, metaBlock.refresh_age_hours);
+        rawVal = formatRefreshAge(metaBlock.refresh_age_days, metaBlock.refresh_age_hours, metaBlock.last_refresh);
         const refreshText = formatTimestampish(metaBlock.last_refresh);
         const cutoffText = metaBlock.data_cutoff ? formatTimestampish(metaBlock.data_cutoff, { withTime: false }) : "n/a";
         status = "Governed";
