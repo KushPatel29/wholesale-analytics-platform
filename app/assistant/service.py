@@ -28,6 +28,7 @@ from .context import (
 from .export_job_store import export_job_payload, get_export_job
 from .provider import ProviderConfig, build_provider
 from .tools import ToolContext, execute_tool
+from .digest_schedule_store import DELIVERY_MODE as DIGEST_DELIVERY_MODE, DELIVERY_NOTE as DIGEST_DELIVERY_NOTE
 
 
 _NARRATIVE_CACHE = TTLCache(maxsize=256, ttl=75)
@@ -4318,7 +4319,14 @@ def list_digest_schedules(payload: Mapping[str, Any] | None = None) -> Dict[str,
     tool_ctx = _build_tool_context(payload)
     result = execute_tool("list_digest_schedules", tool_ctx, {})
     status = str(result.get("status") or "ok").lower()
-    out = {"status": status, "schedules": ((result.get("data") or {}).get("schedules") if isinstance(result.get("data"), Mapping) else [])}
+    out = {
+        "status": status,
+        "schedules": ((result.get("data") or {}).get("schedules") if isinstance(result.get("data"), Mapping) else []),
+        # Every response says plainly that nothing delivers these; see
+        # app/assistant/digest_schedule_store.py.
+        "delivery_mode": DIGEST_DELIVERY_MODE,
+        "delivery_note": DIGEST_DELIVERY_NOTE,
+    }
     if cfg.enable_audit:
         try:
             log_audit(
@@ -4351,7 +4359,13 @@ def create_digest_schedule(payload: Mapping[str, Any] | None = None) -> Dict[str
     result = execute_tool("create_digest_schedule", tool_ctx, args)
     status = str(result.get("status") or "ok").lower()
     data = result.get("data") if isinstance(result.get("data"), Mapping) else {}
-    out = {"status": status, "schedule": data.get("schedule"), "message": "; ".join(result.get("notes") or [])}
+    out = {
+        "status": status,
+        "schedule": data.get("schedule"),
+        "message": "; ".join(result.get("notes") or []),
+        "delivery_mode": DIGEST_DELIVERY_MODE,
+        "delivery_note": DIGEST_DELIVERY_NOTE,
+    }
     if cfg.enable_audit:
         try:
             log_audit(
@@ -4385,6 +4399,8 @@ def run_digest_schedule(schedule_id: str | None, payload: Mapping[str, Any] | No
         "schedule": data.get("schedule"),
         "digest": data.get("digest"),
         "digest_status": data.get("digest_status"),
+        "delivery_mode": DIGEST_DELIVERY_MODE,
+        "delivery_note": DIGEST_DELIVERY_NOTE,
     }
     if cfg.enable_audit:
         try:

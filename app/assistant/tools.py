@@ -34,6 +34,8 @@ from app.services import (
 from app.services.filters import FilterParams, filters_cache_key
 
 from .digest_schedule_store import (
+    DELIVERY_NOTE as DIGEST_DELIVERY_NOTE,
+    coerce_hour_local,
     create_schedule as create_digest_schedule_record,
     delete_schedule as delete_digest_schedule_record,
     get_schedule as get_digest_schedule_record,
@@ -6629,13 +6631,14 @@ def create_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None)
     if length not in {"short", "medium", "long"}:
         length = "short"
     timezone = str(args.get("timezone") or "UTC").strip() or "UTC"
-    hour_local = int(args.get("hour_local") or 8)
-    hour_local = max(0, min(23, hour_local))
+    # `int(x or 8)` here turned a requested midnight into 8 a.m., because 0 is
+    # falsy. Clamping lives in the store so both callers agree.
+    hour_local = coerce_hour_local(args.get("hour_local"))
 
     if module not in {"overview", "customers", "products", "regions", "suppliers", "salesreps", "returns"}:
         return _tool_response(
             status="error",
-            title="Digest Schedule Created",
+            title="Digest Preset Saved",
             data={"message": f"Unsupported module '{module}' for digest schedule."},
             ctx=ctx,
             module=module,
@@ -6664,15 +6667,15 @@ def create_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None)
     )
     return _tool_response(
         status="ok",
-        title="Digest Schedule Created",
+        title="Digest Preset Saved",
         data={"schedule": schedule},
         ctx=ctx,
         notes=[
-            "Schedules are permission-scoped and audit-ready.",
-            "Delivery is governed and reviewable; no destructive workflow actions are executed.",
+            "Presets are permission-scoped and audit-ready.",
+            DIGEST_DELIVERY_NOTE,
         ],
         citations=["assistant.phase5.scheduled_digest"],
-        next_actions=["Run scheduled digest now", "List scheduled digests"],
+        next_actions=["Generate this digest now", "List saved digest presets"],
         module=module,
     )
 
@@ -6693,7 +6696,7 @@ def list_digest_schedules(ctx: ToolContext, args: Dict[str, Any] | None = None) 
         visible.append(dict(row))
     return _tool_response(
         status="ok",
-        title="Digest Schedules",
+        title="Saved Digest Presets",
         data={"schedules": visible},
         ctx=ctx,
         citations=["assistant.phase5.scheduled_digest"],
@@ -6715,7 +6718,7 @@ def run_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None) ->
     if not isinstance(schedule, Mapping):
         return _tool_response(
             status="empty",
-            title="Scheduled Digest Run",
+            title="Digest Generated",
             data={"message": "No digest schedule found for this user."},
             ctx=ctx,
             module="cross_module",
@@ -6734,14 +6737,17 @@ def run_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None) ->
 
     return _tool_response(
         status="ok" if status == "ok" else status,
-        title="Scheduled Digest Run",
+        title="Digest Generated",
         data={
             "schedule": dict(schedule),
             "digest": digest.get("data") if isinstance(digest.get("data"), Mapping) else {},
             "digest_status": status,
         },
         ctx=ctx,
-        notes=["Run is explicit and auditable. Digest content remains permission-scoped."],
+        notes=[
+            "Generated on request; explicit and auditable. Digest content remains permission-scoped.",
+            DIGEST_DELIVERY_NOTE,
+        ],
         citations=["assistant.phase5.scheduled_digest", "assistant.phase4.executive_digest"],
         module=module,
     )
@@ -6753,7 +6759,7 @@ def delete_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None)
     if not schedule_id:
         return _tool_response(
             status="error",
-            title="Digest Schedule Deleted",
+            title="Digest Preset Deleted",
             data={"message": "schedule_id is required."},
             ctx=ctx,
             module="cross_module",
@@ -6761,7 +6767,7 @@ def delete_digest_schedule(ctx: ToolContext, args: Dict[str, Any] | None = None)
     removed = delete_digest_schedule_record(getattr(ctx.user, "id", "anon"), schedule_id)
     return _tool_response(
         status="ok" if removed else "empty",
-        title="Digest Schedule Deleted",
+        title="Digest Preset Deleted",
         data={"schedule_id": schedule_id, "deleted": bool(removed)},
         ctx=ctx,
         citations=["assistant.phase5.scheduled_digest"],
