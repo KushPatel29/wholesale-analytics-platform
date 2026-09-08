@@ -8,7 +8,8 @@ paths=(
   "/static/js/salesreps.js"
   "/static/vendor/chartjs/chart.umd.min.js"
   "/static/img/wa-logo-badge.png"
-  "/static/images/favicon_symbol.png"
+  "/static/images/favicon-northgate.svg"
+  "/static/images/favicon-northgate.png"
 )
 
 for path in "${paths[@]}"; do

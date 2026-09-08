@@ -65,9 +65,15 @@ def assistant_page():
     ref_path = str(request.args.get("ref") or "").strip()
     page_hint = str(request.args.get("page") or "").strip()
     ctx = initial_context(page_hint=page_hint, ref_path=ref_path)
+    # A guided link can arrive with the question already written, so the first
+    # step of the demo journey is "press Ask" rather than "think of something
+    # to type". Capped and passed through as text; it only ever fills the
+    # composer, and the visitor still has to send it.
+    prefill = str(request.args.get("q") or "").strip()[:400]
     return render_template(
         "assistant/index.html",
         assistant_context=ctx,
+        assistant_prefill=prefill,
     )
 
 

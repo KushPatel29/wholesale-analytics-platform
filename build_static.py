@@ -288,9 +288,9 @@ STATIC_BANNER = """
   <strong>Prerendered snapshot.</strong>
   Every figure below was computed at build time from the synthetic dataset.
   <a href="__LIVE_URL__" rel="noopener" data-wa-live-link>Open the live app</a>
-  for custom filters and the shared actions, operations, returns, and admin ledger
-  &mdash; <span class="static-demo-banner__warn">it runs on a free instance and
-  can take ~20s to wake</span>.
+  to filter outside these presets, inspect the rows behind a figure, and download
+  the result &mdash; <span class="static-demo-banner__warn">it runs on a free
+  instance and can take ~20s to wake</span>.
 </div>
 <style>
 .static-demo-banner{font:500 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;

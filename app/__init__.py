@@ -1277,11 +1277,19 @@ def create_app() -> Flask:
     @app.get("/favicon.ico")
     def favicon():  # pragma: no cover - trivial static
         from flask import send_from_directory as _send_from_directory
-        try:
-            return _send_from_directory("static", "favicon.svg", mimetype="image/svg+xml")
-        except Exception:
-            # If missing, just return 204 to silence errors
-            return ("", 204)
+
+        # `send_from_directory("static", ...)` resolved against the working
+        # directory, and the repo has a top-level `static/` holding only `js`.
+        # So this route had been answering 204 for every request rather than
+        # the icon it names. `app.static_folder` is the absolute path to the
+        # real one.
+        for name, mimetype in (("favicon.ico", "image/x-icon"), ("favicon.svg", "image/svg+xml")):
+            try:
+                return _send_from_directory(app.static_folder, name, mimetype=mimetype)
+            except Exception:
+                continue
+        # If missing, just return 204 to silence errors
+        return ("", 204)
 
     # Admin metrics JSON + manual refresh endpoint
     @app.get("/metrics")

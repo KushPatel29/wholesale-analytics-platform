@@ -33,14 +33,22 @@
         }
       })();
     </script>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_T_netflix_style.png') }}?v=11">
+    {# The tab icon was a serif "T" - the mark of the company this project was
+       originally modelled on, left behind when the demo became Northgate
+       Retail Group. It is now the three ascending bars from the navbar
+       wordmark, which is the only part of that lockup that survives 16px.
+       SVG first for sharpness, PNG for browsers that will not take it, and an
+       .ico at /favicon.ico because that path is requested whatever we say. #}
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon-northgate.svg') }}?v=20260908">
+    <link rel="alternate icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-northgate.png') }}?v=20260908">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/favicon-northgate-180.png') }}?v=20260908">
     {# Self-hosted rather than fetched from jsdelivr. Three reasons: the
        prerendered build has to work from a CDN with no third-party origin in
        the critical path, a cross-origin stylesheet is a second connection
        before first paint, and the strict CSP the static host applies blocks
        external hosts outright. Vendored alongside chart.js, same as before. #}
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260814-live-boundary-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css', v='20260908-demo-journey-1') }}">
     {% if request.blueprint == 'overview_page' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/overview_futuristic.css', v='20260325-theme-refine') }}">
     {% endif %}
@@ -375,6 +383,11 @@
       {% endif %}
       {% if current_user.is_authenticated and page_guide is defined and page_guide %}
         {% include "_page_guide.html" %}
+      {% endif %}
+      {# Overview only. It is the page every visitor lands on, and a route
+         through the app is orientation, not something to repeat on each page. #}
+      {% if current_user.is_authenticated and demo_logins and request.blueprint == 'overview_page' %}
+        {% include "_demo_journey.html" %}
       {% endif %}
       {% if current_user.is_authenticated and can_permission('actions.create') and request.blueprint in ['overview_page', 'customers', 'products', 'inventory', 'regions', 'suppliers', 'salesreps', 'stakeholder_report', 'finance', 'labor'] %}
       <div class="wa-action-from-view" role="region" aria-label="Create accountable action from this analytics view">

@@ -6590,3 +6590,98 @@ body.theme-wa-future a.wa-live-banner__back:not(.btn):not(.nav-link):not(.dropdo
 @media (max-width: 575.98px) {
   .wa-live-banner { font-size: 0.78rem; }
 }
+
+/* --- demo journey ---------------------------------------------------------
+   The three-step route into the interactive app, on the Overview only. Shares
+   the page-guide's tokens deliberately: it sits directly beneath it, and two
+   orientation blocks with different treatments read as two unrelated systems.
+   Cards wrap rather than scroll, so this is one column on a phone. */
+.demo-journey {
+  margin: 0 0 1rem;
+  padding: 0.95rem 1rem 1.05rem;
+  color: var(--wa-text);
+  background: linear-gradient(135deg, var(--wa-surface), var(--wa-surface-2));
+  border: 1px solid var(--wa-hairline);
+  border-radius: var(--wa-radius-lg);
+  box-shadow: var(--wa-shadow-sm);
+}
+
+.demo-journey__eyebrow {
+  display: block;
+  color: var(--wa-accent-bright);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.demo-journey__title {
+  margin: 0.08rem 0 0;
+  color: var(--wa-text-strong);
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.demo-journey__summary {
+  margin: 0.15rem 0 0;
+  color: var(--wa-text-muted);
+  font-size: 0.79rem;
+}
+
+.demo-journey__steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.7rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-journey__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.7rem 0.75rem;
+  background: var(--wa-surface);
+  border: 1px solid var(--wa-hairline);
+  border-radius: var(--wa-radius-md, 0.6rem);
+}
+
+.demo-journey__number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--wa-accent-bright);
+  font-size: 0.78rem;
+  font-weight: 800;
+  background: var(--wa-accent-wash);
+  border: 1px solid var(--wa-accent-line);
+  border-radius: 0.5rem;
+}
+
+.demo-journey__body { min-width: 0; }
+.demo-journey__body strong {
+  display: block;
+  color: var(--wa-text-strong);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.demo-journey__body span {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--wa-text-muted);
+  font-size: 0.78rem;
+}
+
+.demo-journey__link {
+  display: inline-block;
+  margin-top: 0.4rem;
+  color: var(--wa-accent-bright);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.demo-journey__link:hover,
+.demo-journey__link:focus-visible { text-decoration: underline; }

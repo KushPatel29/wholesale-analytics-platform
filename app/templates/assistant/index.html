@@ -95,12 +95,16 @@
           </label>
           {% endif %}
         </div>
+        {# `assistant_prefill` arrives from a guided link (?q=). Rendered as the
+           textarea's text content so it is escaped like any other value and
+           cannot close the tag. The visitor still presses Ask. #}
         <textarea id="assistantInput"
                   class="form-control"
                   rows="3"
                   maxlength="4000"
                   placeholder="Ask about business drivers, module watchouts, executive summary, returns workflow, or KPI definitions..."
-                  required></textarea>
+                  {% if assistant_prefill %}autofocus{% endif %}
+                  required>{{ assistant_prefill or '' }}</textarea>
         <div class="assistant-form-actions">
           <button type="button" class="btn btn-outline-secondary btn-sm" id="assistantClearBtn">New Thread</button>
           <button type="submit" class="btn btn-primary btn-sm" id="assistantSendBtn">Ask Assistant</button>
