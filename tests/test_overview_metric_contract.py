@@ -65,12 +65,25 @@ def test_window_contract_current_fy_uses_prior_fytd() -> None:
     data = window.as_dict()
     assert data["prior_month_start"] == "2024-10-01"
     assert data["prior_month_end"] == "2025-04-08"
+    # This used to expect the *full* prior fiscal year here - 2024-10-01 to
+    # 2025-09-30, 365 days - against a 190-day current window, and so pinned
+    # the defect that had the Overview reporting "FYTD +10.6%" beside "YoY
+    # -16.6%" for one business on one screen. The -16.6% was 190/365, not a
+    # decline. For a year-to-date view "the same period last year" is the prior
+    # year to date, which is what `prior_month_*` already holds, so the two
+    # comparators coincide on this preset and that is the correct answer rather
+    # than a redundancy.
     assert data["prior_year_start"] == "2024-10-01"
-    assert data["prior_year_end"] == "2025-09-30"
+    assert data["prior_year_end"] == "2025-04-08"
     assert data["method"] == "fiscal_year_to_date_vs_prior_fiscal_year_to_date"
     assert data["date_type"] == "fiscal"
     assert data["trend_bucket_label"] == "Fiscal Month"
     assert data["comparison_label"] == "Current FYTD vs prior FYTD"
+    # The invariant behind the dates above: a percentage built from these two
+    # windows is only about the business if they cover the same span.
+    current_days = (date.fromisoformat(data["end"]) - date.fromisoformat(data["start"])).days
+    yoy_days = (date.fromisoformat(data["prior_year_end"]) - date.fromisoformat(data["prior_year_start"])).days
+    assert yoy_days == current_days
 
 
 def test_window_contract_current_fq_uses_prior_fiscal_quarter_days() -> None:
