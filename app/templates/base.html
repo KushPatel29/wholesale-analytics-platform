@@ -384,9 +384,12 @@
       {% if current_user.is_authenticated and page_guide is defined and page_guide %}
         {% include "_page_guide.html" %}
       {% endif %}
-      {# Overview only. It is the page every visitor lands on, and a route
-         through the app is orientation, not something to repeat on each page. #}
-      {% if current_user.is_authenticated and demo_logins and request.blueprint == 'overview_page' %}
+      {# The Action Center only. The analytics workspaces are 302'd back to the
+         prerendered site for a demo session (see
+         `_serve_public_demo_workspaces_from_cdn`), so this is where a visitor
+         who followed the snapshot's banner actually lands, and the only page
+         where the steps below are things the server really does. #}
+      {% if current_user.is_authenticated and demo_logins and request.endpoint == 'decision_ops.index' %}
         {% include "_demo_journey.html" %}
       {% endif %}
       {% if current_user.is_authenticated and can_permission('actions.create') and request.blueprint in ['overview_page', 'customers', 'products', 'inventory', 'regions', 'suppliers', 'salesreps', 'stakeholder_report', 'finance', 'labor'] %}

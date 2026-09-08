@@ -216,7 +216,8 @@
         </div>
         <div class="decision-panel__body">
           {% if listing['items'] %}
-          <table class="decision-table">
+          {# Anchor target for the demo journey strip in _demo_journey.html. #}
+          <table class="decision-table" id="workspaceTable">
             {# Named, not generic: a screen-reader user tabbing between workspaces
                hears which ledger this is, and `scope` binds each column to its
                cells so a row reads as "Status: held" rather than as six loose

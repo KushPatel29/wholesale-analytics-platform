@@ -1,78 +1,63 @@
-{# One route through the interactive app, for a visitor who has just arrived.
+{# A short route through the half of the demo that is genuinely live.
 
-   The demo has two tiers - a prerendered snapshot and this Flask app - and a
-   reviewer who lands here without a route through it tends to click three
-   pages and leave. These are the things the app can do that the frozen
-   snapshot cannot, in the order they make sense: ask the data something it has
-   no prebuilt answer for, look at the rows behind that answer, then take the
-   result away as a file.
+   This strip was first written for the Overview, which was wrong twice over.
+   `_serve_public_demo_workspaces_from_cdn` in app/__init__.py 302s an
+   authenticated GET of `/`, `/overview/`, `/customers/` and the other analytics
+   workspaces straight back to the prerendered site - deliberately, to keep
+   pandas off a 512 MB host - so a strip on the Overview never rendered on the
+   deployed demo at all, and its "open Customers" and "download the export"
+   steps pointed through that same redirect. It only appeared to work locally,
+   where DEMO_STATIC_SITE_URL is unset.
 
-   The first step is the filter rather than the assistant because the deployed
-   demo sets `AI_ENABLED=0`: the assistant's default provider is an Ollama
-   endpoint on localhost, which does not exist on the host, so linking to it
-   there would send the visitor to a dead end. The assistant step appears ahead
-   of the others wherever it is genuinely available, and the numbering follows.
+   So it lives on the Action Center, which is the workspace that actually runs
+   server-side for a visitor, and every step is something the frozen snapshot
+   cannot do: a real query against the ledger, a record opened from it, and -
+   where the visitor is allowed - the write that closes the loop. There is
+   deliberately no "download the result" step: the exports live on the
+   analytics pages, and those are the snapshot.
 
-   Every step is hidden if the reader lacks the permission it needs, so the
-   strip never offers a door that returns 403. #}
-{% set _journey_assistant = (ai_enabled if ai_enabled is defined else false) and can_permission('page.overview.view') %}
-{% set _journey_customers = can_permission('page.customers.view') %}
-{% set _n_filter = 2 if _journey_assistant else 1 %}
-{% set _n_inspect = _n_filter + 1 %}
-{% set _n_download = _n_inspect + (1 if _journey_customers else 0) %}
-{# `data-live-only`: the frozen build removes it. Two reasons - the freeze
-   pass deletes the filters form outright, so step 1 would point at a control
-   that is not there; and every frozen page is measured against a first-paint
-   node and height budget by scripts/check_static_build.py. The prerendered
-   site routes visitors here through its own banner instead. #}
-<section class="demo-journey" data-live-only aria-labelledby="demoJourneyTitle">
+   The write step is hidden when the reader cannot perform it, so the strip
+   never offers a door that returns 403. #}
+{% set _journey_write = can_permission('actions.create') or can_permission('actions.manage') %}
+<section class="demo-journey" aria-labelledby="demoJourneyTitle">
   <div class="demo-journey__head">
     <span class="demo-journey__eyebrow">Interactive demo</span>
     <h2 class="demo-journey__title" id="demoJourneyTitle">A short route through the live app</h2>
     <p class="demo-journey__summary">
-      The prerendered site answers the preset views instantly. These steps need a
-      server behind them, which is what this tier is for.
+      The analytics pages you came from are a prerendered snapshot. This ledger is
+      not &mdash; every list below is queried per request, so these are the steps
+      that need a server.
     </p>
   </div>
   <ol class="demo-journey__steps">
-    {% if _journey_assistant %}
     <li class="demo-journey__step">
       <span class="demo-journey__number" aria-hidden="true">1</span>
       <div class="demo-journey__body">
-        <strong>Ask a sample question</strong>
-        <span>The question is already written &mdash; press Ask and read the scoped answer.</span>
-        <a class="demo-journey__link"
-           href="{{ url_for('assistant.assistant_page', ref=request.path, page=request.endpoint or request.path, q='Which customers drove the revenue change this period, and what should I do about the largest one?') }}">
-          Open the assistant &rarr;
-        </a>
+        <strong>Ask the ledger a question</strong>
+        <span>Filter by status, owner, priority or free text. The count beside each
+          option is computed over the whole queue, not the page you can see.</span>
+        <a class="demo-journey__link" href="#workspaceFilterForm">Open the filters &rarr;</a>
       </div>
     </li>
-    {% endif %}
     <li class="demo-journey__step">
-      <span class="demo-journey__number" aria-hidden="true">{{ _n_filter }}</span>
-      <div class="demo-journey__body">
-        <strong>Ask something the snapshot cannot answer</strong>
-        <span>Set a filter combination outside the presets. Every KPI, chart, table and export on the page follows it.</span>
-        <a class="demo-journey__link" href="#GlobalFilters" data-demo-journey-filters>Open Global Filters &rarr;</a>
-      </div>
-    </li>
-    {% if _journey_customers %}
-    <li class="demo-journey__step">
-      <span class="demo-journey__number" aria-hidden="true">{{ _n_inspect }}</span>
+      <span class="demo-journey__number" aria-hidden="true">2</span>
       <div class="demo-journey__body">
         <strong>Inspect the supporting data</strong>
-        <span>Open one account to see the orders, margin and service rows the headline figures were built from.</span>
-        <a class="demo-journey__link" href="{{ url_for('customers.index') }}">Open Customers &rarr;</a>
+        <span>Open one item to see the record it came from, who owns it, what was
+          approved, and the before/after measurement.</span>
+        <a class="demo-journey__link" href="#workspaceTable">Pick an item from the list &rarr;</a>
+      </div>
+    </li>
+    {% if _journey_write %}
+    <li class="demo-journey__step">
+      <span class="demo-journey__number" aria-hidden="true">3</span>
+      <div class="demo-journey__body">
+        <strong>Close the loop</strong>
+        <span>Turn a signal into owned work with a due date, then record the outcome
+          against it. This is a write, and it is the part a snapshot cannot fake.</span>
+        <a class="demo-journey__link" href="#recordTitle">Use the create panel &rarr;</a>
       </div>
     </li>
     {% endif %}
-    <li class="demo-journey__step">
-      <span class="demo-journey__number" aria-hidden="true">{{ _n_download }}</span>
-      <div class="demo-journey__body">
-        <strong>Download the result</strong>
-        <span>Export to Excel. The workbook carries the filters you set and the same figures the page just showed you.</span>
-        <a class="demo-journey__link" href="#downloadSnapshotBtn" data-demo-journey-export>Find the export control &rarr;</a>
-      </div>
-    </li>
   </ol>
 </section>
