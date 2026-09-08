@@ -599,6 +599,16 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
     previous_fq_qtd_end = _clamp_elapsed_period_end(previous_fq_start, previous_fq_full_end, current_fq_elapsed_days)
     previous_fm_mtd_end = _clamp_elapsed_period_end(previous_fm_start, previous_fm_full_end, current_fm_elapsed_days)
 
+    # A year-over-year figure has to compare like with like. Four of these
+    # presets are periods still in progress, and their YoY comparator used to
+    # be the *full* prior period ("# Full Fiscal Year") while the current side
+    # was only as long as the year so far. Under Current FY that divided 277
+    # elapsed days by a 365-day prior year, so the Overview reported FYTD
+    # +10.6% and "YoY -16.6%" for the same business on the same screen - the
+    # -16.6% was the 277/365 ratio, not a decline. The elapsed-clamped ends
+    # computed just above are the same window one calendar year earlier, which
+    # is what `comparison.year_ago_window` means by year over year everywhere
+    # else in the app.
     return {
         "current_fy": {
             "start": current_fy_start,
@@ -606,7 +616,7 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
             "comparison_start": previous_fy_start,
             "comparison_end": previous_fy_ytd_end,
             "yoy_start": previous_fy_start,
-            "yoy_end": previous_fy_end, # Full Fiscal Year
+            "yoy_end": previous_fy_ytd_end,
         },
         "previous_fy": {
             "start": previous_fy_start,
@@ -622,7 +632,7 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
             "comparison_start": previous_fq_start,
             "comparison_end": previous_fq_qtd_end,
             "yoy_start": (current_fq_start - pd.DateOffset(years=1)).normalize(),
-            "yoy_end": (previous_fq_full_end - pd.DateOffset(years=1) + pd.DateOffset(months=3)).normalize(), # Full Fiscal Quarter
+            "yoy_end": (current_fq_start - pd.DateOffset(years=1) + pd.Timedelta(days=current_fq_elapsed_days)).normalize(),
         },
         "previous_fq": {
             "start": previous_fq_start,
@@ -638,7 +648,7 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
             "comparison_start": previous_fm_start,
             "comparison_end": previous_fm_mtd_end,
             "yoy_start": (current_fm_start - pd.DateOffset(years=1)).normalize(),
-            "yoy_end": (previous_fm_full_end - pd.DateOffset(years=1) + pd.DateOffset(months=1)).normalize(), # Full Fiscal Month
+            "yoy_end": (current_fm_start - pd.DateOffset(years=1) + pd.Timedelta(days=current_fm_elapsed_days)).normalize(),
         },
         "previous_fm": {
             "start": previous_fm_start,
@@ -654,7 +664,7 @@ def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, p
             "comparison_start": previous_fy_start,
             "comparison_end": previous_fy_ytd_end,
             "yoy_start": previous_fy_start,
-            "yoy_end": previous_fy_end,
+            "yoy_end": previous_fy_ytd_end,
         },
     }
 

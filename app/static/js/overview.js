@@ -659,6 +659,14 @@
   const primaryComparisonNote = (windowMeta = getWindowMeta()) => String(windowMeta.note || "Comparisons follow the active filtered window.");
   const currentWindowLabel = (windowMeta = getWindowMeta()) => String(windowMeta.current_window_label || "");
   const priorWindowLabel = (windowMeta = getWindowMeta()) => String(windowMeta.prior_window_label || "");
+  /* The year-over-year figure is measured against a *different* baseline than
+     the primary comparison, which is how the hero could read "+3.2%" and
+     "-21.4%" at once and look like a contradiction. The payload has carried
+     this label all along (`overview_metrics.py`); nothing rendered it. */
+  const yoyWindowLabel = (windowMeta = getWindowMeta()) => String(windowMeta.yoy_window_label || "");
+  /* "+3.2% vs Oct 1 2024 - Aug 9 2025" - a delta is only readable next to the
+     window it was measured against. */
+  const withBaseline = (text, windowLabel) => (windowLabel ? `${text} vs ${windowLabel}` : text);
   const shortPrimaryBadge = (windowMeta = getWindowMeta()) => {
     const label = primaryDeltaLabel(windowMeta);
     if (label === "Prior window") return "Prior";
@@ -1180,7 +1188,17 @@
       const shortUp = mom !== null && mom >= 5;
       const yearDown = yoy !== null && yoy <= -8;
       const yearUp = yoy !== null && yoy >= 8;
-      const basis = `${primaryShort} ${mom === null ? `has no clean ${primaryCompare.toLowerCase()} comparator` : formatSigned("percent", mom)}${yoy !== null ? `, YoY ${formatSigned("percent", yoy)}` : ""}`;
+      // Each figure carries the window it was measured against, because the
+      // two are different baselines and side by side they read as a
+      // contradiction ("+3.2%" beside "-21.4%") without them.
+      const windowMeta = getWindowMeta();
+      const shortPart = mom === null
+        ? `${primaryShort} has no clean ${primaryCompare.toLowerCase()} comparator`
+        : withBaseline(`${primaryShort} ${formatSigned("percent", mom)}`, priorWindowLabel(windowMeta));
+      const yearPart = yoy === null
+        ? ""
+        : `, ${withBaseline(`YoY ${formatSigned("percent", yoy)}`, yoyWindowLabel(windowMeta))}`;
+      const basis = `${shortPart}${yearPart}`;
 
       // Divergence earns its own label rather than being rounded to one side.
       if ((shortUp && yearDown) || (shortDown && yearUp)) {
@@ -1539,14 +1557,30 @@
       els.scoreRevenueComparisonLabel.textContent = primaryCardLabel(windowMeta);
     }
     if (els.scoreRevenueMeta) {
+      const priorWindow = priorWindowLabel(windowMeta);
       els.scoreRevenueMeta.textContent = headline.revenue_mom_pct === null || headline.revenue_mom_pct === undefined
         ? `${compareLabel} delta unavailable`
         : `${primaryDeltaLabel(windowMeta)} ${formatSigned("percent", headline.revenue_mom_pct)}`;
+      els.scoreRevenueMeta.title = priorWindow ? `${primaryCompareLabel(windowMeta)}, against ${priorWindow}` : "";
     }
     if (els.scoreRevenueSupport) {
+      const yoyWindow = yoyWindowLabel(windowMeta);
+      const priorWindow = priorWindowLabel(windowMeta);
+      // On a year-to-date view "same period last year" *is* the prior
+      // year-to-date, so the two tiles legitimately show one number. Saying so
+      // is better than leaving the reader to wonder why they match - and far
+      // better than the old behaviour, which manufactured a difference by
+      // measuring this one against a full prior year.
+      const sameBaseline = Boolean(yoyWindow) && yoyWindow === priorWindow;
       els.scoreRevenueSupport.textContent = headline.revenue_yoy_pct === null || headline.revenue_yoy_pct === undefined
         ? "YoY comparator unavailable"
-        : `YoY ${formatSigned("percent", headline.revenue_yoy_pct)}`;
+        : `YoY ${formatSigned("percent", headline.revenue_yoy_pct)}${sameBaseline ? " (same window)" : ""}`;
+      // The card is too narrow for the date range, so it goes in the tooltip -
+      // but the range still has to be reachable, because this figure and the
+      // one above it can be measured against different windows.
+      els.scoreRevenueSupport.title = yoyWindow
+        ? `Year over year, against ${yoyWindow}${sameBaseline ? " - the same window the comparison above uses, because a year-to-date view compares against the prior year to date." : ""}`
+        : "";
     }
     if (els.scoreProfitMeta) {
       els.scoreProfitMeta.textContent = headline.profit_mom_pct === null || headline.profit_mom_pct === undefined
@@ -3102,6 +3136,12 @@
     }
     if (els.comparisonBasisChip) {
       els.comparisonBasisChip.textContent = primaryCompareLabel(w);
+      // Both baselines in one place: the primary comparator and the separate
+      // window the year-over-year figures are measured against.
+      const basisParts = [];
+      if (priorWindowLabel(w)) basisParts.push(`${primaryCompareLabel(w)}: ${priorWindowLabel(w)}`);
+      if (yoyWindowLabel(w)) basisParts.push(`Year over year: ${yoyWindowLabel(w)}`);
+      els.comparisonBasisChip.title = basisParts.join(" • ");
     }
     if (els.periodModeChip) {
       els.periodModeChip.textContent = periodModeLabel(w);
