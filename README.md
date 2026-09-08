@@ -9,7 +9,12 @@
 spinner, or data request on page load.
 
 **Interactive Flask app:** [wholesale-analytics-platform.onrender.com](https://wholesale-analytics-platform.onrender.com/)
-— one click on **Explore demo** and you are in, read-only, no signup. Use this
+— one click on **Explore demo** and you are in, read-only, no signup. It runs on
+a free Render instance that sleeps after fifteen minutes, so a first visit takes
+about a minute to answer while the container wakes; measured at 62s on
+2026-09-08. Nothing can keep it warm from CI — GitHub throttles scheduled
+workflows well past Render's sleep window — so the wait is stated rather than
+hidden. The GitHub Pages tier above is instant and needs no wake-up. Use this
 tier for custom filter combinations, the Action Center, operational workspaces,
 Returns, and administration. The login
 page also lists six scoped accounts; sign in as `rep.dana` to see every figure
@@ -735,7 +740,19 @@ the rest.
 
 ## Notes
 
-Ported from an internal platform I built and ran. All employer identifiers, customer
-names, supplier names and cost data have been removed — the git history starts
-at the de-branded import, and every number in this repo is generated from
-`seed/catalog.py`.
+Ported from an internal platform I built and ran. Every number in this repo is
+generated from `seed/catalog.py` — no real customer, supplier or cost data was
+carried across, and the working tree at HEAD carries no employer identifier.
+
+Two honest qualifications, because "de-branded" was doing more work in this
+paragraph than it had earned:
+
+- The git history starts at the de-branded import, but that import is not
+  itself clean: the baseline commit's `.env.example` still carries the old
+  employer's mail-protection hostname. HEAD is clean; history is not. Rewriting
+  it means force-pushing a public repository, which is a deliberate decision
+  rather than a tidy-up, so it is recorded here instead of quietly done.
+- The workforce-management integration still names its real vendor in its
+  environment variables and client module. That is a publicly marketed product,
+  not an employer or customer identifier, and renaming it across the client
+  would be a risky change for a cosmetic gain — so it stays, named.

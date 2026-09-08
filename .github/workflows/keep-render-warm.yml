@@ -1,8 +1,23 @@
-name: Keep live demo warm
+name: Live demo is fresh and answering
+
+# This job was written as a ten-minute warmer, and as a warmer it never once
+# worked. GitHub throttles scheduled workflows on free runners: across 633
+# runs the real gaps between firings were two to five HOURS, while Render
+# spins a free service down after fifteen minutes of inactivity. The ping
+# could not land inside that window, and on 2026-09-08 the service was still
+# measured cold at 62s. A shorter cron does not fix it -- GitHub throttles
+# that harder, not less.
+#
+# So it is no longer pretending. What this job actually earns its runs for is
+# the two assertions below: that the deployed service is alive, and that it is
+# serving THIS commit rather than a stale image. Four times a day catches a
+# failed auto-deploy well within a day, and stops burning 144 runs to achieve
+# nothing. The cold start itself is now stated honestly in the README instead
+# of being papered over.
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
