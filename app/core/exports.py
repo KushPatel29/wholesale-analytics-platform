@@ -175,10 +175,34 @@ def column_unit(name: str) -> str:
     return "count"
 
 
-def _is_integral(series: pd.Series) -> bool:
-    """Whether every value in a numeric column is a whole number."""
+# Exports run to 100,000 rows (`threshold_rows`), and these two questions are
+# asked once per column. Coercing a whole column to answer either is work the
+# answer does not need, so both read a bounded head of it - a column whose
+# first thousand values are all whole numbers, or all unparseable, is not going
+# to be described differently by row 90,000.
+_UNIT_SAMPLE_ROWS = 1_000
+
+
+def _sample(series: pd.Series) -> pd.Series:
+    return series.head(_UNIT_SAMPLE_ROWS) if len(series) > _UNIT_SAMPLE_ROWS else series
+
+
+def _holds_numbers(series: pd.Series) -> bool:
+    """Whether a column carries numbers, whatever dtype pandas settled on."""
     try:
-        numbers = pd.to_numeric(series, errors="coerce").dropna()
+        if pd.api.types.is_bool_dtype(series):
+            return False
+        if pd.api.types.is_numeric_dtype(series):
+            return bool(series.notna().any())
+        return bool(pd.to_numeric(_sample(series), errors="coerce").notna().any())
+    except Exception:
+        return False
+
+
+def _is_integral(series: pd.Series) -> bool:
+    """Whether the values in a numeric column are whole numbers."""
+    try:
+        numbers = pd.to_numeric(_sample(series), errors="coerce").dropna()
         if numbers.empty:
             return True
         return bool((numbers % 1 == 0).all())
@@ -214,16 +238,10 @@ def _apply_worksheet_formatting(writer, sheet_name: str, df: pd.DataFrame) -> No
             # frame carrying `pd.NA` alongside floats ends up as - so several
             # percentage columns shipped unformatted and printed as
             # `3.106348459681461`. What matters is whether the *values* are
-            # numbers, so they are coerced and the column counts as numeric
-            # when at least one survives. A masked column is all-null and
-            # therefore still gets no format: a unit on an empty cell would
-            # imply a value that is not there.
-            if pd.api.types.is_bool_dtype(col_series):
-                numeric = False
-            elif pd.api.types.is_numeric_dtype(col_series):
-                numeric = bool(col_series.notna().any())
-            else:
-                numeric = bool(pd.to_numeric(col_series, errors="coerce").notna().any())
+            # numbers, not which dtype pandas settled on. A masked column is
+            # all-null and therefore still gets no format: a unit on an empty
+            # cell would imply a value that is not there.
+            numeric = _holds_numbers(col_series)
             if numeric and unit == "count" and not _is_integral(col_series):
                 unit = "decimal"
             fmt = formats.get(unit) if numeric else None
