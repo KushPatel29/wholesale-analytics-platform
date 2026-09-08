@@ -1173,7 +1173,24 @@ def create_app() -> Flask:
 
     # Short aliases for auth routes (kept for backward compatibility)
     @app.get("/login")
-    def login_alias():  # pragma: no cover - trivial
+    def login_alias():
+        """Forward ?next= as well as the path.
+
+        This dropped the query string, and that one omission was the whole
+        reason the demo looked like a loop. Anything behind auth redirects to
+        /login?next=/whatever; this alias threw the destination away and sent
+        the visitor to a bare /auth/login. "Explore demo" then had no `next` to
+        honour, fell back to DEMO_STATIC_SITE_URL, and landed them back on the
+        prerendered snapshot they had just clicked "Open the live app" from.
+        The live app was never broken -- the visitor was simply never given a
+        way to reach it.
+
+        Only site-relative destinations are forwarded: a value starting with
+        "//" is protocol-relative and would make this an open redirect.
+        """
+        nxt = request.args.get("next")
+        if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+            return redirect(url_for("auth.login", next=nxt))
         return redirect(url_for("auth.login"))
 
     @app.get("/logout")

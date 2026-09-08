@@ -287,10 +287,12 @@ STATIC_BANNER = """
 <div class="static-demo-banner" role="note">
   <strong>Prerendered snapshot.</strong>
   Every figure below was computed at build time from the synthetic dataset.
-  <a href="__LIVE_URL__" rel="noopener" data-wa-live-link>Open the live app</a>
-  to filter outside these presets, inspect the rows behind a figure, and download
-  the result &mdash; <span class="static-demo-banner__warn">it runs on a free
-  instance and can take ~20s to wake</span>.
+  The analytics pages are the snapshot: the live app redirects them straight back
+  here, by design. What is genuinely live is the operational half &mdash;
+  <a href="__LIVE_URL__/work/" rel="noopener" data-wa-live-link>open the live Action Center</a>
+  to work the exception queue, read-only, one click, no signup.
+  <span class="static-demo-banner__warn">It runs on a free instance and can take
+  ~60s to wake on a first visit.</span>
 </div>
 <style>
 .static-demo-banner{font:500 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;
@@ -429,7 +431,7 @@ STATIC_RUNTIME = r"""
         }).catch(function () {
           select.disabled = false;
           var status = document.querySelector("[data-static-preset-status]");
-          if (status) status.textContent = "That preset is unavailable. Open the live app for custom filters.";
+          if (status) status.textContent = "That preset is not in this snapshot. The published presets are the ones listed above.";
         });
       });
     });

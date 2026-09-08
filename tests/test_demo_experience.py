@@ -671,3 +671,37 @@ class TestSecurityHeaders:
         assert "https:" not in directives["script-src"]
         assert "https://cdn.jsdelivr.net" in directives["script-src"]
         assert "https://cdn.sheetjs.com" in directives["script-src"]
+
+
+class TestLoginAliasKeepsTheDestination:
+    """The short /login alias used to throw away ?next=.
+
+    That single omission made the whole demo look like a loop. A visitor
+    clicking "Open the live app" on the prerendered snapshot hit the app root,
+    which redirects to /login?next=/ for authentication; the alias forwarded
+    them to a bare /auth/login; "Explore demo" then had no `next` to honour and
+    fell back to DEMO_STATIC_SITE_URL -- depositing them back on the snapshot
+    they had just left, having apparently gone nowhere. The live app worked the
+    whole time. There was simply no route to it.
+    """
+
+    def test_next_survives_the_alias(self, client):
+        response = client.get("/login?next=/work/")
+        assert response.status_code == 302
+        assert "next=%2Fwork%2F" in response.location or "next=/work/" in response.location, (
+            f"the alias dropped the destination: {response.location}"
+        )
+
+    def test_alias_still_works_without_a_destination(self, client):
+        response = client.get("/login")
+        assert response.status_code == 302
+        assert "/auth/login" in response.location
+
+    def test_alias_refuses_to_forward_an_offsite_destination(self, client):
+        """A protocol-relative value would make this an open redirect."""
+        for hostile in ["//evil.example.com/", "//evil.example.com"]:
+            response = client.get(f"/login?next={hostile}")
+            assert response.status_code == 302
+            assert "evil.example.com" not in response.location, (
+                f"the alias forwarded an offsite destination: {response.location}"
+            )

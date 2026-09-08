@@ -105,6 +105,18 @@ def test_the_handoff_warns_about_the_cold_start(dist_name: str):
     index = dist / "index.html"
     if not index.is_file():
         pytest.skip("no index page")
+    # A dist older than the builder is a leftover from a previous run, and
+    # asserting the current banner against it reports a failure that says
+    # nothing about the code. CI always builds fresh, so this only ever skips
+    # on a developer machine without Playwright installed.
+    builder = ROOT / "build_static.py"
+    if builder.is_file() and index.stat().st_mtime < builder.stat().st_mtime:
+        pytest.skip(f"{dist_name}/ predates build_static.py - rebuild it to check the banner")
     html = index.read_text(encoding="utf-8")
-    assert "Open the live app" in html
+    # The banner used to promise custom filtering behind a generic "Open the
+    # live app". It could not deliver it: analytics routes redirect a demo
+    # session back to this CDN by design, so the reader was returned to the
+    # page they had just left. It now links the half that is genuinely live.
+    assert "open the live Action Center" in html
+    assert "/work/" in html, "the handoff no longer points at the live operational route"
     assert "wake" in html, "the handoff does not mention the cold start"
