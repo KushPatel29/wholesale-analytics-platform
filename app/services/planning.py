@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Sequence
 
 import pandas as pd
+from pandas.api.types import is_bool_dtype, is_numeric_dtype
 
 from app.services import analytics_utils as au
 from app.services import metrics
@@ -109,16 +110,32 @@ def _split_window(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, Dict
     return prior, recent, meta
 
 
+def _as_bool(series: pd.Series) -> pd.Series:
+    """Booleans from whatever the extract typed the column as.
+
+    Anything already boolean or numeric converts cleanly. Everything else is
+    read as text, because `bool("false")` is True and a column of "false" would
+    otherwise come back as all-True.
+    """
+    if not (is_bool_dtype(series) or is_numeric_dtype(series)):
+        series = series.astype("string").str.lower().isin(["true", "1", "yes"])
+    return series.fillna(False).astype(bool)
+
+
 def _on_time_pct(frame: pd.DataFrame) -> float | None:
     """Share of lines that were not late. None when the column is absent."""
     if frame.empty or "IsLate" not in frame.columns:
         return None
     late = frame["IsLate"]
     # The column arrives as bool from parquet but as 0/1 or "true"/"false" from
-    # some extracts, so normalise rather than trusting the dtype.
-    if late.dtype == object:
-        late = late.astype("string").str.lower().isin(["true", "1", "yes"])
-    late = late.fillna(False).astype(bool)
+    # some extracts, so normalise rather than trusting the dtype - which is what
+    # `dtype == object` was doing here despite the comment saying otherwise.
+    # pandas 3 types text columns as `str`, not `object`, so the branch stopped
+    # firing and the strings fell through to .astype(bool), where "false" is
+    # True. Every line late, on-time 0%, no error anywhere. Asking what the
+    # column is NOT is the safe direction: an unfamiliar dtype gets parsed as
+    # text instead of coerced.
+    late = _as_bool(late)
     if not len(late):
         return None
     return float((~late).mean() * 100.0)
@@ -713,10 +730,7 @@ def _bool_series(frame: pd.DataFrame, column: str) -> pd.Series | None:
     """A boolean column, however the extract happened to type it."""
     if frame.empty or column not in frame.columns:
         return None
-    series = frame[column]
-    if series.dtype == object:
-        series = series.astype("string").str.lower().isin(["true", "1", "yes"])
-    return series.fillna(False).astype(bool)
+    return _as_bool(frame[column])
 
 
 def _availability(frame: pd.DataFrame) -> Dict[str, Any]:

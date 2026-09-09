@@ -5,6 +5,9 @@ import hashlib
 from typing import Any, Dict
 
 import pandas as pd
+# `dtype == object` misses pandas 3's `str` dtype, which turned these
+# categorical conversions into no-ops.
+from pandas.api.types import is_string_dtype
 from flask import Blueprint, request, Response, session, g, current_app
 from flask_login import current_user, login_required
 
@@ -176,7 +179,7 @@ def _memoized_customer_agg(cache_token: str, n: int) -> Dict[str, Any]:
     name_col = _customer_name_col(df)
     df = df.copy()
     df[rev_col] = pd.to_numeric(df[rev_col], errors="coerce").fillna(0)
-    if df["CustomerId"].dtype == object:
+    if is_string_dtype(df["CustomerId"]):
         df["CustomerId"] = df["CustomerId"].astype("category")
     agg = df.groupby(["CustomerId"]).agg(
         TotalRevenue=(rev_col, "sum"),
@@ -237,7 +240,7 @@ def _memoized_product_agg(cache_token: str, n: int) -> Dict[str, Any]:
     df = df.copy()
     df[rev_col] = pd.to_numeric(df[rev_col], errors="coerce").fillna(0)
     df[qty_col] = pd.to_numeric(df.get(qty_col), errors="coerce").fillna(0)
-    if df["ProductId"].dtype == object:
+    if is_string_dtype(df["ProductId"]):
         df["ProductId"] = df["ProductId"].astype("category")
     grp = df.groupby(["ProductId"]).agg(
         Revenue=(rev_col, "sum"),
@@ -292,7 +295,7 @@ def region_agg():
     if df is None or df.empty or not region_col:
         return _etag_response({"rows": []})
     rev_col = _select_revenue_column(df)
-    if df[region_col].dtype == object:
+    if is_string_dtype(df[region_col]):
         df[region_col] = df[region_col].astype("category")
     grp = df.groupby(region_col)
     orders = grp["OrderId"].nunique().rename("Orders")
@@ -318,7 +321,7 @@ def supplier_agg():
     cost_col = au.cost_column(df) or next((c for c in ["cost_shipped", "cost_ordered"] if c in df.columns), None)
     name_col = _supplier_name_col(df)
     grp_cols = ["SupplierId"]
-    if df["SupplierId"].dtype == object:
+    if is_string_dtype(df["SupplierId"]):
         df["SupplierId"] = df["SupplierId"].astype("category")
     g = df.groupby(grp_cols).agg(
         Revenue=(rev_col, "sum"),
