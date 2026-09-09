@@ -115,7 +115,9 @@ def _default_date_window(months: Optional[int] = None) -> Tuple[str, str]:
     except Exception:
         months_val = 12
     months_val = max(1, months_val)
-    end_ts = pd.Timestamp.utcnow().normalize()
+    # Timestamp.utcnow() is deprecated and slated for removal; requirements
+    # pins pandas>=2.3 with no ceiling, so this would break on the bump.
+    end_ts = pd.Timestamp.now(tz="UTC").normalize()
     start_ts = (end_ts - pd.DateOffset(months=months_val)).normalize()
     return start_ts.date().isoformat(), end_ts.date().isoformat()
 

@@ -15,7 +15,7 @@ def products_kpi_client(app, monkeypatch):
     tmp_dir = Path("cache") / f"products_kpi_{uuid.uuid4().hex}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    base = pd.Timestamp.utcnow().normalize().replace(day=1)
+    base = pd.Timestamp.now(tz="UTC").normalize().replace(day=1)
     rows = []
     for w in range(14):
         dt = base - pd.Timedelta(days=7 * (w + 1))

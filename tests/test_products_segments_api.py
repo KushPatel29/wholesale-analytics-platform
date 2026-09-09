@@ -1,6 +1,6 @@
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -10,7 +10,7 @@ from app.blueprints import products
 
 
 def _sample_df():
-    today = pd.Timestamp.utcnow().normalize()
+    today = pd.Timestamp.now(tz="UTC").normalize()
     start = (today - pd.DateOffset(months=5)).replace(day=1)
     dates = pd.date_range(start, periods=6, freq="MS")
     rows = []
@@ -46,7 +46,7 @@ def test_default_filter_last_six_months(app):
     start_dt = pd.to_datetime(parsed["start"]).to_pydatetime()
     if start_dt.tzinfo:
         start_dt = start_dt.replace(tzinfo=None)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     delta_days = (now - start_dt).days
     assert 150 <= delta_days <= 220  # ~6 months window
 
