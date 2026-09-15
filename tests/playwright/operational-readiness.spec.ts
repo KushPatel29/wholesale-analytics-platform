@@ -39,7 +39,7 @@ test.describe('Operational readiness regressions', () => {
     await analyticsToggle.click();
     await Promise.all([
       page.waitForURL(/\/metrics\/?(?:\?.*)?$/),
-      menu.getByRole('menuitem', { name: 'Metric Catalogue' }).click(),
+      menu.getByRole('menuitem', { name: 'Data Products & Metrics' }).click(),
     ]);
   });
 
