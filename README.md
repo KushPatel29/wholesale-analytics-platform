@@ -8,6 +8,12 @@
 — complete prerendered snapshots on GitHub Pages, with no login, cold start,
 spinner, or data request on page load.
 
+**90-second governance walkthrough:** [Data Product Control Room][catalogue]
+— verify the observed dataset run, trace nine dbt-backed products to their
+owners and operating decisions, then challenge any of 62 governed metrics at
+formula-and-grain level. The release verdict fails closed when runtime evidence
+is missing or stale.
+
 **Interactive Flask app:** [wholesale-analytics-platform.onrender.com](https://wholesale-analytics-platform.onrender.com/)
 — one click on **Explore demo** and you are in, read-only, no signup. It runs on
 a free Render instance that sleeps after fifteen minutes, so a first visit takes
@@ -88,7 +94,7 @@ same pages narrow to one rep's accounts.
 
 **The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough)
 
-**The numbers** — [Metric definitions](#metric-definitions) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
+**The numbers** — [Metric definitions](#metric-definitions) · [Data-product control room](#the-data-product-control-room) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
 
 **What it does not do** — [Known limitations](#known-limitations) · [Deliberate omissions](#deliberate-omissions)
 
@@ -102,8 +108,8 @@ built.
 
 | | |
 |---|---|
-| **Scale** | 259 Python files, ~157k lines, 85 templates, 32 runbooks |
-| **Structure** | 20 blueprints, 47 services, 142 test files · 1,412 tests |
+| **Scale** | 261 Python files, ~157k lines, 85 templates, 32 runbooks |
+| **Structure** | 20 blueprints, 48 services, 143 test files · 1,423 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
 | **Dev dataset** | 620 stores · 880 SKUs · 326k order lines · 24 months |
@@ -470,6 +476,31 @@ the same idea.
 "Recent" is measured against **the data cutoff, not the wall clock**. That one
 confusion is what produced the empty Active count: the dataset ended five weeks
 before the server's today, so nothing could fall inside a 30-day window.
+
+### The data-product control room
+
+The same public [`/metrics/` page][catalogue] now opens with an operational
+release review rather than a definitions table alone. A machine-readable
+registry in `governance/data_products.yml` binds all nine decision products to
+their dbt marts, accountable owner, data steward, consumer groups, declared
+grain, quality gates, freshness SLA, recovery target, and the decision the
+product exists to support.
+
+The release verdict is calculated from evidence. The control room validates
+every registry model against both `models/marts/schema.yml` and its SQL file,
+maps every catalogue metric to exactly one governed product, and reads the
+active fact dataset's `_manifest.json` for observed refresh time, row count,
+coverage period, source, and version. Complete contracts plus evidence within
+24 hours produce **GO**; complete contracts with stale evidence produce
+**REVIEW**; missing, invalid, or incomplete evidence produces **NO-GO**. No
+placeholder can silently turn a broken run green.
+
+For an interview, the page has a deliberate 90-second route: verify the run,
+trace accountability, then challenge the metric. The receiving-manifest rail
+makes the operating chain visible as **source → data product → decision**, and
+each product expands to show its quality gates and decision path.
+The evidence chain, state transitions, update procedure, and interview script
+are documented in [`docs/data-product-control-room.md`](docs/data-product-control-room.md).
 
 ### The catalogue
 

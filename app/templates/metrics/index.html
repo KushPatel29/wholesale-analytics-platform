@@ -1,113 +1,248 @@
 {% extends "base.html" %}
-{% block title %}Metric Catalogue{% endblock %}
+{% block title %}Data Product Control Room{% endblock %}
 
-{% block head %}
+{% block head_extras %}
 <style>
-  .metric-catalogue { --catalogue-ink: #17352d; --catalogue-soft: #edf5f1; }
-  .metric-catalogue__hero { border: 1px solid rgba(31, 92, 72, .2); background: linear-gradient(135deg, rgba(237,245,241,.96), rgba(255,255,255,.7)); border-radius: 1rem; }
-  .metric-catalogue__eyebrow { color: #27735b; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-  .metric-catalogue__count { color: var(--catalogue-ink); font-size: 2rem; font-weight: 750; line-height: 1; }
-  .metric-catalogue__table { font-size: .84rem; }
-  .metric-catalogue__table th { color: #45665c; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
-  .metric-catalogue__formula { min-width: 19rem; color: var(--catalogue-ink); font-family: var(--bs-font-monospace); font-size: .78rem; }
-  .metric-catalogue__status { display: inline-flex; border-radius: 999px; padding: .2rem .55rem; font-size: .7rem; font-weight: 750; white-space: nowrap; }
-  .metric-catalogue__status--live { background: #d9f0e5; color: #14513d; }
-  .metric-catalogue__status--held { background: #f2eee7; color: #725b39; }
-  .metric-catalogue__tier { border-left: 3px solid #27735b; }
-  .metric-catalogue__tier code { color: #1f5c48; }
-  .metric-catalogue__withheld { border-left: 3px solid #a47b3f; }
-  .metric-catalogue__withheld p { max-width: 78ch; }
+  .control-room {
+    --control-ink: #15362c;
+    --control-green: #1f6b50;
+    --control-mint: #e6f2ec;
+    --control-paper: #fbfaf5;
+    --control-line: rgba(21, 54, 44, .17);
+    --control-amber: #a76012;
+    color: var(--control-ink);
+  }
+  .control-room__hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--control-line);
+    border-radius: 1.15rem;
+    background: linear-gradient(118deg, #f8fbf8 0%, #edf5f0 62%, #e2efe8 100%);
+    box-shadow: 0 1rem 2.4rem rgba(21, 54, 44, .08);
+  }
+  .control-room__hero::after {
+    position: absolute;
+    right: -5rem;
+    bottom: -7rem;
+    width: 19rem;
+    height: 19rem;
+    border: 1.5rem solid rgba(31, 107, 80, .08);
+    border-radius: 50%;
+    content: "";
+  }
+  .control-room__eyebrow { color: var(--control-green); font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+  .control-room__lede { max-width: 72ch; font-size: 1.02rem; }
+  .control-room__status {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    border: 1px solid rgba(31, 107, 80, .25);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .72);
+    padding: .45rem .75rem;
+    color: var(--control-green);
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+  }
+  .control-room__status::before { width: .55rem; height: .55rem; border-radius: 50%; background: currentColor; content: ""; }
+  .control-room__status--review { color: var(--control-amber); border-color: rgba(167, 96, 18, .28); }
+  .control-room__status--no-go { color: #a03934; border-color: rgba(160, 57, 52, .28); }
+  .control-room__manifest {
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(21, 54, 44, .2);
+    border-radius: .8rem;
+    background: var(--control-paper);
+    box-shadow: .35rem .35rem 0 rgba(31, 107, 80, .1);
+  }
+  .control-room__manifest-head { border-bottom: 1px dashed var(--control-line); }
+  .control-room__stamp { color: var(--control-green); font: 800 .78rem/1 var(--bs-font-monospace); letter-spacing: .08em; }
+  .control-room__metric { font-size: 1.65rem; font-weight: 780; line-height: 1; }
+  .control-room__review-path { display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid var(--control-line); border-radius: .9rem; background: #fff; }
+  .control-room__review-step { position: relative; padding: 1rem 1.15rem 1rem 3.35rem; color: inherit; text-decoration: none; }
+  .control-room__review-step + .control-room__review-step { border-left: 1px solid var(--control-line); }
+  .control-room__review-step:hover { background: var(--control-mint); color: inherit; }
+  .control-room__step-number { position: absolute; top: 1rem; left: 1rem; color: var(--control-green); font: 800 1.35rem/1 var(--bs-font-monospace); }
+  .control-room__lineage { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: .65rem; }
+  .control-room__lineage-node { border: 1px solid var(--control-line); border-radius: .75rem; background: #fff; padding: 1rem; }
+  .control-room__lineage-arrow { align-self: center; color: var(--control-green); font-size: 1.35rem; font-weight: 800; }
+  .control-room__evidence { border-top: 3px solid var(--control-green); background: #fff; }
+  .control-room__evidence dt { color: #5a7068; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+  .control-room__evidence dd { margin-bottom: 0; font-weight: 700; }
+  .control-room__product-table { font-size: .82rem; }
+  .control-room__product-table th { color: #526961; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+  .control-room__product-table td { min-width: 9rem; }
+  .control-room__product-table td:first-child { min-width: 15rem; }
+  .control-room__contract { margin-top: .5rem; }
+  .control-room__contract summary { cursor: pointer; color: var(--control-green); font-size: .75rem; font-weight: 750; }
+  .control-room__contract ul { margin: .55rem 0 0; padding-left: 1.1rem; }
+  .control-room__formula { min-width: 19rem; color: var(--control-ink); font-family: var(--bs-font-monospace); font-size: .76rem; }
+  .control-room__pill { display: inline-flex; border-radius: 999px; padding: .22rem .55rem; background: var(--control-mint); color: #14513d; font-size: .68rem; font-weight: 750; white-space: nowrap; }
+  .control-room__pill--held { background: #f4eadc; color: #765221; }
+  .control-room__withheld { border-left: 3px solid var(--control-amber); }
+  html[data-theme="dark"] .control-room { --control-ink: #edf6f1; --control-green: #70c6a0; --control-mint: #16382d; --control-paper: #12221e; --control-line: rgba(177, 219, 199, .2); }
+  html[data-theme="dark"] .control-room__hero { background: linear-gradient(118deg, #12231f 0%, #17342b 62%, #1d4738 100%); box-shadow: 0 1rem 2.4rem rgba(0, 0, 0, .2); }
+  html[data-theme="dark"] .control-room__hero::after { border-color: rgba(112, 198, 160, .1); }
+  html[data-theme="dark"] .control-room__manifest,
+  html[data-theme="dark"] .control-room__review-path,
+  html[data-theme="dark"] .control-room__lineage-node,
+  html[data-theme="dark"] .control-room__evidence,
+  html[data-theme="dark"] .control-room .card { background: #101c19 !important; color: var(--control-ink); }
+  html[data-theme="dark"] .control-room__manifest { box-shadow: .35rem .35rem 0 rgba(112, 198, 160, .12); }
+  html[data-theme="dark"] .control-room__status { background: rgba(9, 21, 17, .72); }
+  html[data-theme="dark"] .control-room .text-muted { color: #a8bbb2 !important; }
+  html[data-theme="dark"] .control-room__review-step:hover { background: #17342b; }
+  html[data-theme="dark"] .control-room table { color: #dcebe4; }
+  html[data-theme="dark"] .control-room table > :not(caption) > * > * { background-color: #101c19; border-color: var(--control-line); color: inherit; }
+  html[data-theme="dark"] .control-room table tbody tr:hover > * { background-color: #173029; }
+  html[data-theme="dark"] .control-room__pill { color: #b9ecd5; }
+  html[data-theme="dark"] .control-room__pill--held { background: #3d2d18; color: #f0c78c; }
+  @media (max-width: 767.98px) {
+    .control-room__review-path { grid-template-columns: 1fr; }
+    .control-room__review-step + .control-room__review-step { border-top: 1px solid var(--control-line); border-left: 0; }
+    .control-room__lineage { grid-template-columns: 1fr; }
+    .control-room__lineage-arrow { justify-self: center; transform: rotate(90deg); }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<main class="container-fluid px-4 py-4 metric-catalogue">
-  <section class="metric-catalogue__hero p-4 p-lg-5 mb-4">
-    <div class="row align-items-end g-4">
+<main class="container-fluid px-3 px-md-4 py-4 control-room">
+  <section class="control-room__hero p-4 p-lg-5 mb-4" aria-labelledby="controlRoomTitle">
+    <div class="row align-items-center g-4">
       <div class="col-lg-8">
-        <div class="metric-catalogue__eyebrow mb-2">Governed definitions</div>
-        <h1 class="display-6 mb-2">Metric catalogue</h1>
-        <p class="text-muted mb-2">The formula, grain, lineage, owner, certification, and revenue basis behind every commercial metric added to this demo. This page is generated directly from the dbt model metadata in <code>models/marts/schema.yml</code>, so the app and warehouse definitions cannot drift.</p>
-        {# The source-table column names sales_fact, finance_month and
-           marketing_campaign, which reads as production lineage unless the page
-           says otherwise. #}
-        <p class="text-muted small mb-0">Every source table listed below is generated by <code>seed/</code>. Northgate Retail Group is a fictional retail group and all data on this site is synthetic.</p>
+        <div class="control-room__eyebrow mb-2">Executive data assurance</div>
+        <h1 class="display-5 fw-semibold mb-3" id="controlRoomTitle">Data Product Control Room</h1>
+        <p class="control-room__lede text-muted mb-3">One review surface for ownership, lineage, freshness, quality gates, recovery targets, and the 62 governed metrics that drive Northgate’s operating decisions.</p>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="control-room__status control-room__status--{{ control_room.release_state|lower|replace(' ', '-') }}">{{ control_room.release_state }} · release decision</span>
+          <span class="small text-muted">Synthetic portfolio environment · claims derived from repository evidence</span>
+        </div>
       </div>
-      <div class="col-sm-6 col-lg-2">
-        <div class="metric-catalogue__count">{{ implemented }}</div>
-        <div class="small text-muted mt-1">implemented definitions</div>
-      </div>
-      <div class="col-sm-6 col-lg-2">
-        <div class="metric-catalogue__count">{{ documented_only }}</div>
-        <div class="small text-muted mt-1">intentionally withheld</div>
+      <div class="col-lg-4">
+        <aside class="control-room__manifest" aria-label="Release manifest">
+          <div class="control-room__manifest-head d-flex justify-content-between align-items-center p-3">
+            <span class="control-room__eyebrow">Release manifest</span>
+            <span class="control-room__stamp">{{ control_room.fingerprint }}</span>
+          </div>
+          <div class="row g-0 text-center">
+            <div class="col-4 p-3 border-end"><div class="control-room__metric">{{ control_room.product_count }}</div><div class="small text-muted mt-1">products</div></div>
+            <div class="col-4 p-3 border-end"><div class="control-room__metric">{{ control_room.metric_count }}</div><div class="small text-muted mt-1">metrics</div></div>
+            <div class="col-4 p-3"><div class="control-room__metric">{{ control_room.contract_coverage_pct }}%</div><div class="small text-muted mt-1">mapped</div></div>
+          </div>
+          <div class="p-3 pt-0 small text-muted">{{ control_room.release_guidance }}</div>
+        </aside>
       </div>
     </div>
   </section>
 
-  <section class="row g-3 mb-4" aria-labelledby="certificationTitle">
-    <div class="col-12"><h2 class="h4 mb-0" id="certificationTitle">Certification tiers and lineage</h2></div>
-    <div class="col-md-4">
-      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
-        <h3 class="h6">Certified</h3>
-        <p class="small text-muted mb-0">Cross-page decision metrics with shared formula tests and reconciliation gates.</p>
-      </div></article>
+  <section class="mb-4" aria-labelledby="reviewPathTitle">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div><div class="control-room__eyebrow mb-1">Interview-ready walkthrough</div><h2 class="h4 mb-0" id="reviewPathTitle">The 90-second review path</h2></div>
+      <span class="small text-muted">Follow the evidence, then make the call.</span>
     </div>
-    <div class="col-md-4">
-      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
-        <h3 class="h6">Verified</h3>
-        <p class="small text-muted mb-0">Governed page metrics with a declared grain, owner, basis, and dbt model.</p>
-      </div></article>
-    </div>
-    <div class="col-md-4">
-      <article class="card h-100 border-0 shadow-sm metric-catalogue__tier"><div class="card-body">
-        <h3 class="h6">Diagnostic / source-gated / withheld</h3>
-        <p class="small text-muted mb-0">Interpretive measures carry caveats; absent sources produce an explanation, never a fabricated value.</p>
-      </div></article>
-    </div>
-    <div class="col-12">
-      <p class="small text-muted mb-0">Lineage follows <code>source()</code> → staging <code>ref()</code> → governed mart → catalogue → application surface. The complete dependency graph is maintained in <code>docs/metric-lineage.md</code>.</p>
+    <nav class="control-room__review-path" aria-label="Control room review sequence">
+      <a class="control-room__review-step" href="#runtime-evidence"><span class="control-room__step-number">01</span><strong>Verify the run</strong><br><span class="small text-muted">Check recency, volume, period and source.</span></a>
+      <a class="control-room__review-step" href="#product-contracts"><span class="control-room__step-number">02</span><strong>Trace accountability</strong><br><span class="small text-muted">See owner, steward, gates and recovery.</span></a>
+      <a class="control-room__review-step" href="#metric-catalogue"><span class="control-room__step-number">03</span><strong>Challenge the metric</strong><br><span class="small text-muted">Inspect formula, grain, lineage and basis.</span></a>
+    </nav>
+  </section>
+
+  <section class="mb-4" aria-labelledby="lineageTitle">
+    <div class="control-room__eyebrow mb-1">Receiving-manifest lineage</div>
+    <h2 class="h4 mb-3" id="lineageTitle">Source → governed product → operating decision</h2>
+    <div class="control-room__lineage">
+      <div class="control-room__lineage-node"><strong>Seeded source contracts</strong><p class="small text-muted mb-0 mt-1">Transactions, inventory, labour, finance, forecast, customer, return and marketing records.</p></div>
+      <div class="control-room__lineage-arrow" aria-hidden="true">→</div>
+      <div class="control-room__lineage-node"><strong>{{ control_room.product_count }} dbt-backed data products</strong><p class="small text-muted mb-0 mt-1">Named owners, stewards, grains, quality gates, freshness SLAs and recovery targets.</p></div>
+      <div class="control-room__lineage-arrow" aria-hidden="true">→</div>
+      <div class="control-room__lineage-node"><strong>{{ control_room.consumer_count }} decision surfaces</strong><p class="small text-muted mb-0 mt-1">Executive, commercial, customer, supply-chain, operations, finance and programme reviews.</p></div>
     </div>
   </section>
 
-  <section class="card border-0 shadow-sm overflow-hidden">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 metric-catalogue__table">
-        <caption class="visually-hidden">Governed metric definitions, lineage, certification, and implementation status</caption>
-        <thead><tr><th scope="col">Metric</th><th scope="col">Definition</th><th scope="col">Grain</th><th scope="col">Source</th><th scope="col">dbt mart</th><th scope="col">Owner</th><th scope="col">Basis</th><th scope="col">Certification</th><th scope="col">Status</th></tr></thead>
-        <tbody>
-        {% for metric in metrics %}
-          <tr>
-            <td class="fw-semibold">{{ metric.name }}</td>
-            <td class="metric-catalogue__formula">{{ metric.formula }}</td>
-            <td>{{ metric.grain }}</td>
-            <td><code>{{ metric.source_table }}</code></td>
-            <td><code>{{ metric.model_name }}</code></td>
-            <td>{{ metric.owner_page }}</td>
-            <td>{{ metric.basis }}</td>
-            <td><span class="metric-catalogue__status {{ 'metric-catalogue__status--held' if metric.certification == 'Withheld' else 'metric-catalogue__status--live' }}">{{ metric.certification }}</span></td>
-            <td><span class="metric-catalogue__status {{ 'metric-catalogue__status--live' if metric.status == 'Implemented' else 'metric-catalogue__status--held' }}">{{ metric.status }}</span></td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+  <section class="mb-4" id="runtime-evidence" aria-labelledby="runtimeTitle">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+      <div><div class="control-room__eyebrow mb-1">Observed, not hard-coded</div><h2 class="h4 mb-0" id="runtimeTitle">Runtime evidence</h2></div>
+      <span class="control-room__status control-room__status--{{ 'go' if control_room.runtime.state == 'CURRENT' else ('review' if control_room.runtime.state == 'STALE' else 'no-go') }}">{{ control_room.runtime.state }}</span>
+    </div>
+    <div class="card border-0 shadow-sm control-room__evidence">
+      <div class="card-body p-4">
+        <dl class="row g-3 mb-0">
+          <div class="col-6 col-lg"><dt>Last refresh UTC</dt><dd>{{ control_room.runtime.last_refresh_utc or 'Not observed' }}</dd></div>
+          <div class="col-6 col-lg"><dt>Age</dt><dd>{% if control_room.runtime.age_hours is not none %}{{ control_room.runtime.age_hours }} hours{% else %}—{% endif %}</dd></div>
+          <div class="col-6 col-lg"><dt>Rows</dt><dd>{{ control_room.runtime.row_count if control_room.runtime.row_count is not none else '—' }}</dd></div>
+          <div class="col-6 col-lg"><dt>Coverage</dt><dd>{% if control_room.runtime.min_date %}{{ control_room.runtime.min_date }} → {{ control_room.runtime.max_date }}{% else %}—{% endif %}</dd></div>
+          <div class="col-6 col-lg"><dt>Dataset version</dt><dd>{{ control_room.runtime.dataset_version or '—' }}</dd></div>
+        </dl>
+        <p class="small text-muted mb-0 mt-3">{{ control_room.runtime.guidance }} {% if control_room.runtime.synthetic %}This runtime is explicitly synthetic.{% endif %}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4" id="product-contracts" aria-labelledby="productsTitle">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+      <div><div class="control-room__eyebrow mb-1">Accountability before aesthetics</div><h2 class="h4 mb-0" id="productsTitle">Data-product contracts</h2></div>
+      <span class="small text-muted">{{ control_room.quality_gate_count }} declared quality gates across {{ control_room.product_count }} products</span>
+    </div>
+    <div class="card border-0 shadow-sm overflow-hidden">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 control-room__product-table">
+          <caption class="visually-hidden">Governed data products with ownership, decisions, controls, and service levels</caption>
+          <thead><tr><th scope="col">Product &amp; decision</th><th scope="col">Accountability</th><th scope="col">Grain &amp; mart</th><th scope="col">Service level</th><th scope="col">Metric coverage</th></tr></thead>
+          <tbody>
+          {% for product in control_room.products %}
+            <tr>
+              <td><strong>{{ product.name }}</strong><div class="small text-muted mt-1">{{ product.decision }}</div><details class="control-room__contract"><summary>Inspect operating contract</summary><div class="small mt-2"><strong>Path:</strong> {{ product.decision_path }}</div><div class="small mt-2"><strong>Quality gates</strong></div><ul class="small text-muted">{% for gate in product.quality_gates %}<li>{{ gate }}</li>{% endfor %}</ul></details></td>
+              <td><strong>{{ product.owner }}</strong><div class="small text-muted">Steward: {{ product.steward }}</div></td>
+              <td>{{ product.grain }}<div class="small mt-1"><code>{{ product.dbt_model }}</code></div></td>
+              <td><strong>{{ product.freshness_sla_hours }}h</strong> freshness<div class="small text-muted">{{ product.recovery_target_hours }}h recovery target</div></td>
+              <td><span class="control-room__pill">{{ product.metric_count }} / {{ product.metric_count }} mapped</span><div class="small text-muted mt-1">{{ product.certifications|join(' · ') }}</div></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="metric-catalogue" aria-labelledby="catalogueTitle">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+      <div><div class="control-room__eyebrow mb-1">Generated from dbt metadata</div><h2 class="h4 mb-0" id="catalogueTitle">Governed metric catalogue</h2></div>
+      <span class="small text-muted">{{ implemented }} implemented · {{ documented_only }} deliberately withheld</span>
+    </div>
+    <p class="text-muted small">Formula, grain, source, owner, certification and basis are loaded directly from <code>models/marts/schema.yml</code>. Withheld measures identify the missing source contract instead of fabricating an answer.</p>
+    <div class="card border-0 shadow-sm overflow-hidden">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 control-room__product-table">
+          <caption class="visually-hidden">Governed metric definitions, lineage, certification, and implementation status</caption>
+          <thead><tr><th scope="col">Metric</th><th scope="col">Definition</th><th scope="col">Grain</th><th scope="col">Source</th><th scope="col">dbt mart</th><th scope="col">Owner</th><th scope="col">Basis</th><th scope="col">Certification</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+          {% for metric in metrics %}
+            <tr>
+              <td class="fw-semibold">{{ metric.name }}</td>
+              <td class="control-room__formula">{{ metric.formula }}</td>
+              <td>{{ metric.grain }}</td>
+              <td><code>{{ metric.source_table }}</code></td>
+              <td><code>{{ metric.model_name }}</code></td>
+              <td>{{ metric.owner_page }}</td>
+              <td>{{ metric.basis }}</td>
+              <td><span class="control-room__pill {{ 'control-room__pill--held' if metric.certification == 'Withheld' else '' }}">{{ metric.certification }}</span></td>
+              <td><span class="control-room__pill {{ 'control-room__pill--held' if metric.status != 'Implemented' else '' }}">{{ metric.status }}</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
   <section class="mt-4" aria-labelledby="withheldTitle">
-    <div class="mb-3">
-      <div class="metric-catalogue__eyebrow mb-2">Source-gated by design</div>
-      <h2 class="h4 mb-1" id="withheldTitle">Why {{ documented_only }} requested metrics are withheld</h2>
-      <p class="text-muted mb-0">Each definition states the exact source contract needed before it can become decision-grade.</p>
-    </div>
+    <div class="control-room__eyebrow mb-1">Source-gated by design</div>
+    <h2 class="h4 mb-3" id="withheldTitle">Why {{ documented_only }} requested metrics are withheld</h2>
     <div class="row g-3">
       {% for metric in metrics if metric.certification == 'Withheld' %}
-      <div class="col-lg-6">
-        <article class="card h-100 border-0 shadow-sm metric-catalogue__withheld"><div class="card-body">
-          <h3 class="h6 mb-2">{{ metric.name }}</h3>
-          <p class="small text-muted mb-2">{{ metric.missing_source }}</p>
-          <div class="small"><strong>Required lineage:</strong> <code>{{ metric.source_table }}</code></div>
-        </div></article>
-      </div>
+      <div class="col-lg-6"><article class="card h-100 border-0 shadow-sm control-room__withheld"><div class="card-body"><h3 class="h6 mb-2">{{ metric.name }}</h3><p class="small text-muted mb-2">{{ metric.missing_source }}</p><div class="small"><strong>Required lineage:</strong> <code>{{ metric.source_table }}</code></div></div></article></div>
       {% endfor %}
     </div>
   </section>

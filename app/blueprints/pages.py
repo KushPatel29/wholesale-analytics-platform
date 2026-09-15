@@ -25,12 +25,14 @@ def home():
 @pages.get("/metrics/")
 @login_required
 def metric_catalogue():
+    from app.services.data_products import data_product_control_room
     from app.services.metrics import metric_catalogue as catalogue_rows
 
     rows = catalogue_rows()
     return render_template(
         "metrics/index.html",
         metrics=rows,
+        control_room=data_product_control_room(),
         implemented=sum(row["status"] == "Implemented" for row in rows),
         documented_only=sum(row["status"] != "Implemented" for row in rows),
     )

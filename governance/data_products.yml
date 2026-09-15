@@ -1,0 +1,132 @@
+version: 1
+portfolio_context:
+  organisation: Northgate Retail Group
+  data_classification: Synthetic portfolio demonstration
+  operating_cadence: Daily executive review
+
+data_products:
+  - key: commercial_performance
+    name: Commercial Performance
+    dbt_model: fct_commercial_performance
+    owner: Commercial Director
+    steward: Analytics Engineering
+    decision: Reallocate trade investment and protect contribution margin.
+    grain: Fiscal week x channel x region
+    sources: [sales_fact, dim_date, dim_store, dim_product]
+    consumers: [Executive Overview, Commercial Review, Finance]
+    quality_gates: [Revenue reconciles to the sales ledger, Margin is recomputed from revenue and cost, Fiscal periods are complete]
+    freshness_sla_hours: 24
+    recovery_target_hours: 4
+    decision_path: Detect margin variance -> isolate region and channel -> assign commercial action -> review next trading day
+
+  - key: customer_movement
+    name: Customer Movement
+    dbt_model: fct_customer_movement
+    owner: Customer Director
+    steward: Customer Analytics
+    decision: Prioritise retention, acquisition, and reactivation interventions.
+    grain: Customer x fiscal month
+    sources: [sales_fact, customer_master, dim_date]
+    consumers: [Customer Movement, Marketing, Executive Overview]
+    quality_gates: [Customer keys are unique, Movement states are mutually exclusive, Cohort totals reconcile to active customers]
+    freshness_sla_hours: 24
+    recovery_target_hours: 6
+    decision_path: Detect movement -> segment affected customers -> select intervention -> measure next cohort transition
+
+  - key: inventory_performance
+    name: Inventory Performance
+    dbt_model: fct_inventory_performance
+    owner: Supply Chain Director
+    steward: Operations Analytics
+    decision: Balance availability, working capital, and aged-stock exposure.
+    grain: SKU x store x fiscal week
+    sources: [inventory_snapshot, sales_fact, dim_product, dim_store]
+    consumers: [Inventory Performance, Supply Chain, Finance]
+    quality_gates: [Stock is non-negative, Weeks-of-cover denominator is governed, Inventory value reconciles to the snapshot]
+    freshness_sla_hours: 24
+    recovery_target_hours: 4
+    decision_path: Detect availability or ageing risk -> rank SKU-store exceptions -> assign replenishment or clearance action -> verify service and cash impact
+
+  - key: labor_performance
+    name: Labour Performance
+    dbt_model: fct_labor_performance
+    owner: Operations Director
+    steward: Workforce Analytics
+    decision: Align labour capacity with demand while protecting service.
+    grain: Store x fiscal week
+    sources: [labor_fact, sales_fact, dim_store, dim_date]
+    consumers: [Labour Performance, Store Operations, Finance]
+    quality_gates: [Hours and cost are non-negative, Productivity uses approved trading hours, Store-week coverage is complete]
+    freshness_sla_hours: 24
+    recovery_target_hours: 6
+    decision_path: Detect labour variance -> compare demand and schedule -> rebalance capacity -> review service and productivity
+
+  - key: forecast_performance
+    name: Forecast Performance
+    dbt_model: fct_forecast_performance
+    owner: Planning Director
+    steward: Forecasting Analytics
+    decision: Correct forecast bias before it becomes an availability or cost issue.
+    grain: SKU x region x fiscal week
+    sources: [forecast_fact, sales_fact, dim_product, dim_date]
+    consumers: [Forecast Performance, Supply Chain, Executive Overview]
+    quality_gates: [Actuals reconcile to sales, WAPE excludes zero-volume distortion, Bias direction is preserved]
+    freshness_sla_hours: 24
+    recovery_target_hours: 4
+    decision_path: Detect error or bias -> isolate hierarchy -> challenge assumptions -> approve revised forecast
+
+  - key: returns_performance
+    name: Returns Performance
+    dbt_model: fct_returns_performance
+    owner: Customer Operations Director
+    steward: Operations Analytics
+    decision: Reduce avoidable returns without obscuring customer experience risk.
+    grain: Return reason x product x fiscal week
+    sources: [returns_fact, sales_fact, dim_product, dim_date]
+    consumers: [Returns Performance, Commercial Review, Customer Operations]
+    quality_gates: [Returns reconcile to return transactions, Rate denominator uses eligible sales, Reason mapping coverage is monitored]
+    freshness_sla_hours: 24
+    recovery_target_hours: 6
+    decision_path: Detect return-rate exception -> isolate reason and product -> assign root-cause review -> verify recurrence reduction
+
+  - key: corrective_actions
+    name: Corrective Action Ledger
+    dbt_model: fct_return_corrective_actions
+    owner: Transformation Director
+    steward: Business Analysis Office
+    decision: Convert analytical exceptions into owned, time-bound corrective action.
+    grain: Action item
+    sources: [returns_fact, corrective_action_register]
+    consumers: [Returns Performance, Executive Overview, Programme Governance]
+    quality_gates: [Every action has one owner, Due dates are valid, Status transitions are auditable]
+    freshness_sla_hours: 24
+    recovery_target_hours: 2
+    decision_path: Raise action -> accept owner and due date -> record evidence -> close or escalate
+
+  - key: finance_monthly
+    name: Finance Monthly
+    dbt_model: fct_finance_monthly
+    owner: Finance Director
+    steward: Finance Analytics
+    decision: Explain performance against plan and protect the forecast.
+    grain: Fiscal month x account x region
+    sources: [finance_month, dim_date, dim_store]
+    consumers: [Finance, Executive Overview, Commercial Review]
+    quality_gates: [Actuals reconcile to the management ledger, Variances preserve sign convention, Period completeness is explicit]
+    freshness_sla_hours: 36
+    recovery_target_hours: 6
+    decision_path: Detect variance -> decompose driver -> agree management response -> update forecast narrative
+
+  - key: marketing_performance
+    name: Marketing Performance
+    dbt_model: fct_marketing_performance
+    owner: Marketing Director
+    steward: Marketing Analytics
+    decision: Shift spend toward incremental, margin-accretive activity.
+    grain: Campaign x channel x fiscal week
+    sources: [marketing_campaign, sales_fact, dim_date]
+    consumers: [Marketing, Commercial Review, Finance]
+    quality_gates: [Spend reconciles to campaign records, Attributed value is labelled, Incrementality remains source-gated]
+    freshness_sla_hours: 24
+    recovery_target_hours: 6
+    decision_path: Detect efficiency variance -> separate attributed from incremental evidence -> reallocate or test -> review marginal return
