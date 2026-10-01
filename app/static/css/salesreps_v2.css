@@ -2787,9 +2787,9 @@ body:has(.salesreps-v2) .app-main {
 }
 
 
-/* Health ring percentage text must be dark on the light executive theme */
+/* Health ring percentage text takes the theme's text colour (it was the canvas colour: unreadable). */
 .salesreps-v2 .sr-health-ring-label {
-  color: var(--wa-canvas-deep) !important;
+  color: var(--sr-ink) !important;
 }
 .salesreps-v2 .text-muted,
 .salesreps-v2 .text-secondary,
@@ -3386,7 +3386,7 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 #srFilterDrawerMount .filters-quick-range-panel,
 .salesreps-v2 #srFilterDrawerMount .filters-shell__tools {
   background: var(--wa-surface) !important;
-  color: var(--wa-canvas-deep) !important;
+  color: var(--sr-ink) !important;
   border: 0 !important;
   border-left: 3px solid var(--wa-accent-deep) !important;
 }
@@ -3395,7 +3395,7 @@ body:has(.salesreps-v2) .app-main {
 .salesreps-v2 #srFilterDrawerMount .filter-range-pill,
 .salesreps-v2 #srFilterDrawerMount .filters-status-badge {
   background: var(--wa-surface-2) !important;
-  color: var(--wa-canvas-deep) !important;
+  color: var(--sr-ink) !important;
 }
 
 .salesreps-v2 .sr-table-average-row th,
@@ -3564,7 +3564,9 @@ body:has(.salesreps-v2) .app-main {
 }
 
 .salesreps-v2 .sr-signal-pill.sr-signal-neutral .sr-signal-value {
-  color: var(--wa-canvas-deep);
+  /* The text colour, not the canvas colour: --wa-canvas-deep is a background token, and on the dark theme it made
+     a neutral signal's value the colour of the page (axe: color-contrast). */
+  color: var(--sr-ink);
 }
 
 /* ── Composite Smart Rank ───────────────────────────────────────────────── */
@@ -3575,7 +3577,7 @@ body:has(.salesreps-v2) .app-main {
   font-weight: 800;
   font-size: 0.9rem;
   white-space: nowrap;
-  color: var(--wa-canvas-deep);
+  color: var(--sr-ink);
 }
 
 .salesreps-v2 .sr-composite-rank.sr-rank-gold {

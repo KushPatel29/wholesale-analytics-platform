@@ -7,7 +7,8 @@ from app.services import products_bundle
 
 
 @pytest.fixture
-def seed_products(tmp_path, monkeypatch):
+def seed_products(tmp_path, monkeypatch, pin_today):
+    pin_today("2026-01-31")  # the rows below are December 2025 and January 2026: inside this fiscal year
     df = pd.DataFrame(
         [
             {

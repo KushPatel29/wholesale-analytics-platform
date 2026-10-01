@@ -8,7 +8,7 @@ import os
 import threading
 import time
 from dataclasses import replace
-from datetime import timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -1240,7 +1240,11 @@ def _default_window_months() -> int:
 def _apply_default_window(start_ts: Optional[pd.Timestamp], end_ts: Optional[pd.Timestamp]) -> tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]:
     if start_ts is None and end_ts is None:
         try:
-            end_ts = pd.Timestamp.now(tz=timezone.utc)
+            from app.services.filters import reference_now  # local import: filters imports this module lazily
+
+            end_ts = pd.Timestamp(reference_now())
+            if end_ts.tzinfo is None:
+                end_ts = end_ts.tz_localize("UTC")
         except Exception:
             end_ts = pd.Timestamp.now(tz="UTC")
         start_ts = end_ts - pd.DateOffset(months=_default_window_months())

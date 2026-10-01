@@ -125,6 +125,47 @@ def _coerce_tznaive(ts: pd.Timestamp) -> pd.Timestamp:
         return ts
 
 
+def _snapshot_stale_days() -> int:
+    try:
+        return max(0, int(str(os.getenv("SNAPSHOT_STALE_DAYS", "7")).strip()))
+    except Exception:
+        return 7
+
+
+def reference_now(now: pd.Timestamp | None = None) -> pd.Timestamp:
+    """
+    The day rolling and fiscal presets count from, when the caller did not name one.
+
+    Normally the wall clock. But a dataset that is a fixed snapshot (the seeded
+    demo ends on a fixed date; so does any export someone is exploring) stops
+    being "current" the day the calendar moves past it. On 1 October 2026 the
+    default view, "current fiscal year", became a year the demo holds no row of,
+    and a clean clone opened on an empty dashboard. So when the newest row is
+    more than SNAPSHOT_STALE_DAYS (7) behind today, the snapshot's last day is
+    "now". A live feed, whose newest row is yesterday or today, is unaffected.
+    A `now` the caller supplies is returned as it is.
+    """
+    if now is not None:
+        return now
+    try:
+        today = pd.Timestamp.now(tz="UTC")
+    except Exception:
+        today = pd.Timestamp.today()
+    try:
+        # Local import: comparison imports this module.
+        from app.services.comparison import data_cutoff  # type: ignore
+
+        cutoff = data_cutoff()
+        if cutoff is not None:
+            newest = pd.Timestamp(cutoff).normalize()
+            current_day = _coerce_tznaive(today).normalize()
+            if (current_day - newest).days > _snapshot_stale_days():
+                return newest
+    except Exception:
+        pass
+    return today
+
+
 def _default_filter_window() -> tuple[pd.Timestamp, pd.Timestamp]:
     """
     Derive a sensible default window:
@@ -140,8 +181,7 @@ def _default_filter_window() -> tuple[pd.Timestamp, pd.Timestamp]:
 
     global _WINDOW_CACHE, _WINDOW_CACHE_TS
 
-    now = pd.Timestamp.now(tz="UTC")
-    now = _coerce_tznaive(now).normalize()
+    now = _coerce_tznaive(reference_now()).normalize()
 
     # refresh cache every 10 minutes
     refresh = True
@@ -543,11 +583,7 @@ def _clamp_elapsed_period_end(
 
 
 def get_fiscal_periods(now: pd.Timestamp | None = None) -> dict[str, dict[str, pd.Timestamp]]:
-    if now is None:
-        try:
-            now = pd.Timestamp.now(tz="UTC")
-        except Exception:
-            now = pd.Timestamp.today()
+    now = reference_now(now)
     # The hosted demo ships an immutable snapshot and a matching prebuilt
     # analytics cache. Anchor rolling presets to that snapshot's newest row so
     # the default view remains both truthful and fast after the calendar moves
@@ -696,12 +732,7 @@ def _preset_to_range(
     token = str(preset).strip().lower()
     if not token:
         return None, None
-    if now is None:
-        try:
-            now = pd.Timestamp.now(tz="UTC")
-        except Exception:
-            now = pd.Timestamp.today()
-    now = _coerce_tznaive(now).normalize()
+    now = _coerce_tznaive(reference_now(now)).normalize()
 
     start: pd.Timestamp | None = None
     end: pd.Timestamp | None = None

@@ -1748,7 +1748,14 @@ def scope_dataframe(df: pd.DataFrame, user) -> pd.DataFrame:
         except Exception:
             default_days = 90
         candidates = []
-        now_date = datetime.now(timezone.utc).date()
+        # Measured from the newest row when the dataset is a snapshot: "the last 90 days" of a demo that ends in
+        # July is not "the 90 days before today", which by October holds nothing at all.
+        try:
+            from app.services.comparison import effective_today  # local import: avoids a cycle
+
+            now_date = effective_today()
+        except Exception:
+            now_date = datetime.now(timezone.utc).date()
         if (not is_super_user) or scope_max_history or scope_effective_start:
             candidates.append(now_date - timedelta(days=default_days))
         if scope_max_history:

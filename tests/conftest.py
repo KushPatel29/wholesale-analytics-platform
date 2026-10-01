@@ -241,6 +241,25 @@ def _restore_shared_app_config(request):
         shared_app.config.update(original)
 
 @pytest.fixture
+def pin_today(monkeypatch):
+    """Fix the day default windows count from.
+
+    A fixture with dated rows and a test that asks for "the current fiscal year" agree only while the calendar is
+    inside that year. On 1 October 2026 the fiscal year turned over and three such tests failed without a line of
+    code changing. A test that depends on "now" names its now: ``pin_today("2026-01-31")``.
+    """
+    import pandas as pd
+
+    from app.services import filters
+
+    def pin(day: str) -> None:
+        fixed = pd.Timestamp(day)
+        monkeypatch.setattr(filters, "reference_now", lambda now=None: now if now is not None else fixed)
+
+    return pin
+
+
+@pytest.fixture
 def fake_user():
     return SimpleNamespace(username="sales.alex", role="sales", sales_rep_id="GUID-1", region_id=None)
 

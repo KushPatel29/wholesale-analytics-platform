@@ -25,12 +25,15 @@ def _assert_heading_hierarchy(body: str) -> None:
 
 
 @pytest.fixture
-def product_drilldown_v2_client(app, monkeypatch, tmp_path):
+def product_drilldown_v2_client(app, monkeypatch, tmp_path, pin_today):
     products_bp._STORE_SINGLETON = None
     tmp_dir = tmp_path / f"product_drilldown_v2_{uuid.uuid4().hex}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    end_month = pd.Timestamp.now(tz="UTC").normalize().replace(day=1)
+    # A fixed "now" in the middle of a fiscal year, and 22 months ending in it: built from the wall clock, the
+    # default window (current fiscal year) held one month-start on 1 October and the basket came back empty.
+    pin_today("2026-06-15")
+    end_month = pd.Timestamp("2026-06-01", tz="UTC")
     month_starts = pd.date_range(end=end_month, periods=22, freq="MS")
     rows = []
     target_sku = "SKU-001"
