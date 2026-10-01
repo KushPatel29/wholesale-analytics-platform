@@ -5787,8 +5787,12 @@ def build_suppliers_drilldown(supplier_id: str, filters: Any, scope: Dict[str, A
         days_since_last_order = None
         if last_sold_iso:
             try:
+                from app.services.comparison import effective_today
+
                 last_dt = date.fromisoformat(last_sold_iso)
-                days_since_last_order = (date.today() - last_dt).days
+                # From the dataset's last day when it is a snapshot: a supplier who sold on the final day of a
+                # demo that ended months ago has not been silent for months.
+                days_since_last_order = (effective_today() - last_dt).days
             except Exception:
                 days_since_last_order = None
 

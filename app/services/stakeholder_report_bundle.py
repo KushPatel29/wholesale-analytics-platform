@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict
 
 import pandas as pd
@@ -93,8 +92,10 @@ def build_bundle(filters: Any, scope: Dict[str, Any], args: Any) -> Dict[str, An
         except Exception:
             pass
 
-    # Time Awareness
-    today = datetime.now()
+    # Time Awareness: the month's progress as of the data, not of the wall clock, when the dataset is a snapshot.
+    from app.services.comparison import effective_today
+
+    today = pd.Timestamp(effective_today())
     day_of_month = today.day
     days_in_month = (pd.Timestamp(today.year, today.month, 1) + pd.offsets.MonthEnd(0)).day
     month_progress_pct = (day_of_month / days_in_month) * 100.0

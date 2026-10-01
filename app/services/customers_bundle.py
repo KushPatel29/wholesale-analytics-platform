@@ -413,8 +413,19 @@ def _utc_now_iso() -> str:
 
 
 def _utc_today_ts_naive() -> pd.Timestamp:
-    """Return UTC 'today' as a timezone-naive normalized pandas timestamp."""
-    return pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+    """The day "recent" is measured from, timezone-naive and normalized: today, or the dataset's last day when the
+    dataset is a snapshot (filters.reference_now).
+
+    It was the wall clock. With no end date (the "all" scope) the customers window is the 90 days ending here, so
+    once the calendar was 90 days past the demo's last row that window held nothing: the RFM chart drew no point
+    and the static build failed on it (2026-10-01).
+    """
+    from app.services.filters import reference_now
+
+    now = pd.Timestamp(reference_now())
+    if now.tzinfo is not None:
+        now = now.tz_convert("UTC").tz_localize(None)
+    return now.normalize()
 
 
 def _to_timestamp(value: Any) -> pd.Timestamp | None:
@@ -2450,7 +2461,9 @@ def build_customers_bundle(
         weight_candidates,
         default="0::DOUBLE",
     )
-    ref_date_param = window_end_ts.date().isoformat()
+    # "Last 30/90 days" are measured from the window's end, but never from a day after the data stops: a fiscal
+    # quarter's nominal end can be months past a snapshot's last row.
+    ref_date_param = min(window_end_ts, pd.Timestamp(today_ref)).date().isoformat()
     effective_cost_alias_expr = margin_rules.sql_effective_cost_expr("cost_raw", "weight_lb", "qty", fallback="NULL::DOUBLE")
 
     cust_sql = f"""
@@ -4154,7 +4167,7 @@ def build_customers_drilldown(filters: Any, scope: Dict[str, Any], args: Any) ->
     where_sql_all = f"({scope_where_sql}) AND {fs.CANON.customer_id} = ?"
     params_all = list(scope_where_params) + [customer_id]
 
-    window_start_ts, window_end_ts = _coerce_window_bounds(start_iso, end_iso, date.today())
+    window_start_ts, window_end_ts = _coerce_window_bounds(start_iso, end_iso, _utc_today_ts_naive().date())
     window_days = max(int((window_end_ts - window_start_ts).days) + 1, 1)
     prior_end_ts = window_start_ts - pd.Timedelta(days=1)
     prior_start_ts = prior_end_ts - pd.Timedelta(days=window_days - 1)

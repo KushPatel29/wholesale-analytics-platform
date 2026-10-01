@@ -109,7 +109,7 @@ built.
 | | |
 |---|---|
 | **Scale** | 261 Python files, ~157k lines, 85 templates, 32 runbooks |
-| **Structure** | 20 blueprints, 48 services, 144 test files · 1,429 tests |
+| **Structure** | 20 blueprints, 48 services, 144 test files · 1,431 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
 | **Dev dataset** | 620 stores · 880 SKUs · 326k order lines · 24 months |

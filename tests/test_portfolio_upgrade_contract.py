@@ -126,6 +126,11 @@ def test_static_chart_gate_requires_data_and_drawn_pixels():
     builder = _read("build_static.py")
 
     assert "const canvasPainted = (canvas)" in builder
+    # One definition, used by both the wait and the freeze, sized to the canvas: a fixed 48x32 sample rejected a
+    # drawn 27-point scatter.
+    assert builder.count("const canvasPainted = (canvas)") == 1
+    assert builder.count("+ CANVAS_PAINTED_JS") == 2
+    assert "sample.width = 48" not in builder
     assert "Chart.getChart(canvas)" in builder
     assert "plot._fullData" in builder
     assert "visible charts never rendered" in builder

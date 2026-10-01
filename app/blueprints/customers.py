@@ -1429,7 +1429,10 @@ def drilldown(customer_id):
     if pd.notna(first_naive) and pd.notna(last_naive):
         months_active = (last_naive.year - first_naive.year) * 12 + (last_naive.month - first_naive.month) + 1
 
-    now_naive = pd.Timestamp.now().normalize()
+    # Measured from the dataset's last day when it is a snapshot, not from the wall clock.
+    from app.services.comparison import effective_today
+
+    now_naive = pd.Timestamp(effective_today()).normalize()
     days_since_last_order = None
     if pd.notna(last_naive):
         days_since_last_order = (now_naive - last_naive).days

@@ -56,3 +56,20 @@ def test_the_staleness_threshold_is_configurable(snapshot, monkeypatch):
 def test_row_level_history_is_measured_from_the_snapshot(snapshot):
     snapshot(date(2026, 7, 4))
     assert comparison.effective_today() == date(2026, 7, 4)
+
+
+def test_the_customers_recent_window_ends_on_the_snapshots_last_day(snapshot):
+    from app.services import customers_bundle
+
+    snapshot(date(2026, 7, 4))
+    assert customers_bundle._utc_today_ts_naive() == pd.Timestamp("2026-07-04")
+    # No end date (the "all" scope): the window is the 90 days ending on the reference day, which now holds data.
+    start, end = customers_bundle._coerce_window_bounds(None, None, customers_bundle._utc_today_ts_naive().date())
+    assert (start, end) == (pd.Timestamp("2026-04-06"), pd.Timestamp("2026-07-04"))
+
+
+def test_the_customers_recent_window_follows_the_calendar_on_live_data(snapshot):
+    from app.services import customers_bundle
+
+    snapshot(date.today() - timedelta(days=1))
+    assert customers_bundle._utc_today_ts_naive() == pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()

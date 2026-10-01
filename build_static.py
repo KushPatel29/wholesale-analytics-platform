@@ -1074,19 +1074,20 @@ PLOTLY_FREEZE_JS = (
     }"""
 )
 
-CANVAS_FREEZE_JS = (
-    "(el) => {"
-    + HOTSPOT_HELPERS
-    + """
-      const rect = el.getBoundingClientRect();
-      let hotspots = [];
-      try { hotspots = chartjsHotspots(el); } catch (_) { hotspots = []; }
-      const painted = (() => {
+# "Has this canvas been drawn on?" - shared by the wait before the freeze and by
+# the freeze itself, so the two cannot disagree. The canvas is shrunk by at most
+# about 4x a side before its pixels are counted. It used to be shrunk to a fixed
+# 48x32: a sparse scatter on a 1263x758 canvas (27 points, hairline grid)
+# averaged away to 8 faint samples and the build rejected a fully drawn chart as
+# "never rendered" (the four-day fiscal-month scope, 2026-10-01).
+CANVAS_PAINTED_JS = """
+      const canvasPainted = (canvas) => {
         try {
           const sample = document.createElement('canvas');
-          sample.width = 48; sample.height = 32;
+          sample.width = Math.max(1, Math.min(canvas.width, 320));
+          sample.height = Math.max(1, Math.round(canvas.height * sample.width / canvas.width));
           const ctx = sample.getContext('2d', {willReadFrequently: true});
-          ctx.drawImage(el, 0, 0, sample.width, sample.height);
+          ctx.drawImage(canvas, 0, 0, sample.width, sample.height);
           const px = ctx.getImageData(0, 0, sample.width, sample.height).data;
           let opaque = 0; const colours = new Set();
           for (let i = 0; i < px.length; i += 4) {
@@ -1095,7 +1096,18 @@ CANVAS_FREEZE_JS = (
           }
           return opaque > 8 && colours.size > 2;
         } catch (_) { return false; }
-      })();
+      };
+"""
+
+CANVAS_FREEZE_JS = (
+    "(el) => {"
+    + HOTSPOT_HELPERS
+    + CANVAS_PAINTED_JS
+    + """
+      const rect = el.getBoundingClientRect();
+      let hotspots = [];
+      try { hotspots = chartjsHotspots(el); } catch (_) { hotspots = []; }
+      const painted = canvasPainted(el);
       // Nearest card first, then the section. Two charts sharing one section
       // both inherited its heading - the regions drilldown published two
       // images both called "Operational Mix", which a screen reader cannot
@@ -2050,21 +2062,9 @@ class Builder:
                         return style.display !== 'none' && style.visibility !== 'hidden'
                           && rect.width > 30 && rect.height > 30;
                       };
-                      const canvasPainted = (canvas) => {
-                        try {
-                          const sample = document.createElement('canvas');
-                          sample.width = 48; sample.height = 32;
-                          const ctx = sample.getContext('2d', {willReadFrequently: true});
-                          ctx.drawImage(canvas, 0, 0, sample.width, sample.height);
-                          const px = ctx.getImageData(0, 0, sample.width, sample.height).data;
-                          let opaque = 0; const colours = new Set();
-                          for (let i = 0; i < px.length; i += 4) {
-                            if (px[i + 3] > 8) opaque += 1;
-                            colours.add(`${px[i] >> 4}:${px[i + 1] >> 4}:${px[i + 2] >> 4}:${px[i + 3] >> 4}`);
-                          }
-                          return opaque > 8 && colours.size > 2;
-                        } catch (_) { return false; }
-                      };
+"""
+                    + CANVAS_PAINTED_JS
+                    + """
                       const plotReady = (plot) => {
                         const traces = Array.isArray(plot._fullData) ? plot._fullData : [];
                         const hasData = traces.some((trace) => {
