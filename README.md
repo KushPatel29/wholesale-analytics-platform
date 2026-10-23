@@ -92,7 +92,7 @@ same pages narrow to one rep's accounts.
 
 **The build** — [What it is](#what-it-is) · [The architecture worth explaining](#the-architecture-worth-explaining) · [Access control you can log into](#access-control-you-can-log-into) · [Running it](#running-it)
 
-**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough) · [The dbt marts, first run on Snowflake](#the-dbt-marts-first-run-on-snowflake)
+**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough) · [The dbt marts, first run on Snowflake](#the-dbt-marts-first-run-on-snowflake) · [Around the marts: access, Streams and Tasks, Snowpark, cost](#around-the-marts-access-incremental-loads-snowpark-and-a-cost-cap)
 
 **The numbers** — [Metric definitions](#metric-definitions) · [Data-product control room](#the-data-product-control-room) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
 
@@ -109,7 +109,7 @@ built.
 | | |
 |---|---|
 | **Scale** | 261 Python files, ~157k lines, 85 templates, 32 runbooks |
-| **Structure** | 20 blueprints, 48 services, 145 test files · 1,439 tests |
+| **Structure** | 20 blueprints, 48 services, 146 test files · 1,450 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
 | **Dev dataset** | 620 stores · 880 SKUs · 326k order lines · 24 months |
@@ -660,6 +660,64 @@ apart.
 The profile holds no account, user or password: Snowflake runs the project as
 the signed-in user. CI does not repeat the run; tests hold the record, the
 reconciliation and this section to each other.
+
+## Around the marts: access, incremental loads, Snowpark and a cost cap
+
+The same Snowflake account, after the marts: the parts of a warehouse a data
+team has to run, in [`warehouse/snowflake/platform/`](warehouse/snowflake/platform/),
+each script run from the Git repository on 23 October 2026. Every number here
+is Snowflake's, recorded with its query ID in
+[`evidence.json`](warehouse/snowflake/platform/evidence.json), and
+[`test_snowflake_platform.py`](tests/test_snowflake_platform.py) holds it to the
+design and to pandas.
+
+**Access roles, tested as each role.** Three functional roles (loader,
+transformer, analyst) hold nothing but database roles (raw read, raw write,
+model read and write, mart read) and the warehouse, and all three roll up to
+SYSADMIN ([`01_access.sql`](warehouse/snowflake/platform/01_access.sql)). Future
+grants cover tables that do not exist yet. The checks try nine actions as each
+of four roles through a caller's-rights procedure, from a design kept as data
+([`access_matrix.py`](warehouse/snowflake/platform/access_matrix.py)):
+**36 of 36 outcomes as designed**. The analyst reads the marts and nothing else, the
+loader cannot see a model, the transformer cannot write raw data, and only
+ACCOUNTADMIN reads account usage. Two checks are on objects created after the
+grants: a table the pipeline below made, and a mart that dbt rebuilt (48 of 48
+nodes) after them. The first run was wrong in a useful way: the analyst read raw
+data. The session's default secondary roles (`ALL`) lent it the user's other
+roles for reads and writes, while `CREATE`, which uses the primary role only,
+was correctly refused. The checks now turn secondary roles off.
+
+**Incremental loading with Streams and Tasks.** Order lines arrive as a change
+feed in three batches, built from the real fact table
+([`03_incremental.sql`](warehouse/snowflake/platform/03_incremental.sql)): 847
+lines first priced 10% low and corrected later, 171 delivered twice, 84 test
+orders later cancelled, 42 stale replays of an older version, and every line
+whose ID is a multiple of 997 arriving months late. A stream on the landing
+table triggers a task that `MERGE`s the newest event per line; a second stream
+feeds a child task that recomputes only the (date, region) cells the change
+touched. After the last batch the current table equals the source **row for
+row (94,758 lines, 0 values different)**, and the aggregate kept incrementally
+equals a full recompute in all 5,979 cells. The check after each batch takes its
+expectation from the source alone. The first one expected 847 wrong prices
+after batch 1 and found 832: 15 of those lines are no-charge lines, and 90% of
+zero is zero.
+
+**A second judge, in Snowpark.** A Python stored procedure
+([`06_snowpark.sql`](warehouse/snowflake/platform/06_snowpark.sql)) rebuilds
+the lines and the aggregate with the Snowpark DataFrame API and compares them
+with the pipeline's tables, `EXCEPT` both ways: 0 differences, and revenue of
+$30,805,651.58 on both sides, the total pandas gets from the Parquet.
+
+**Cost.** A resource monitor caps the warehouse at 10 credits a month (notify
+at 75%, stop new queries at 100%, cancel running ones at 110%); the warehouse
+suspends after 60 seconds idle and cancels any statement over 10 minutes
+([`07_cost.sql`](warehouse/snowflake/platform/07_cost.sql)). Every script tags
+its queries, so `ACCOUNT_USAGE` can say which part spent the time. Everything on
+this account so far, both dbt projects and all of the above, has used 0.48 credits.
+
+What this is not: a production account. It is a trial, used by one person, so
+the roles were tested by switching roles rather than by separate users; files
+arrive by script, not by Snowpipe; and the tasks were suspended after the run.
 
 ## Known limitations
 

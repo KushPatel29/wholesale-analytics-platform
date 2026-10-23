@@ -1,0 +1,595 @@
+{
+  "what": "The platform around Northgate's dbt marts on Snowflake: access roles tested as each role, an incremental load with Streams and Tasks, a Snowpark Python judge, and a cost cap. Every number below was returned by Snowflake and is quoted with its query ID.",
+  "account": "Snowflake trial account (AWS ap-southeast-7), X-Small warehouse DBT_WH, database NORTHGATE_DEMO, Snowflake 10.38.101",
+  "run_on": "2026-10-23",
+  "deployed_from": "Git repository object NORTHGATE_DEMO.DEPLOY.WHOLESALE_ANALYTICS_PLATFORM (main); each script in warehouse/snowflake/platform/ run with EXECUTE IMMEDIATE FROM",
+  "access": {
+    "design": "warehouse/snowflake/platform/access_matrix.py",
+    "dbt_rebuild_after_grants": {
+      "query_id": "01c7ec62-000e-1c9e-0002-c8920001b09a",
+      "result": "PASS 48 WARN 0 ERROR 0 SKIP 0 TOTAL 48",
+      "why": "dbt replaces the marts on every build; the analyst's read on a rebuilt mart is what the future grants must survive"
+    },
+    "first_attempt": {
+      "query_id": "01c7ec63-000e-1c9e-0002-c8920001b756",
+      "what_happened": "NORTHGATE_ANALYST read raw SALES_FACT, inserted into a raw table and deleted from a mart. The session's default secondary roles (ALL) lent it the user's other roles for reads and writes; CREATE, which uses the primary role only, was denied. The checks now run with USE SECONDARY ROLES NONE."
+    },
+    "query_id": "01c7ec64-000e-1c86-0002-c8920001c29e",
+    "checks": [
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "create table",
+        "object": "model schema DBT_STAGING",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_STAGING' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "create table",
+        "object": "raw schema INGEST",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.INGEST' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "delete",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE",
+        "outcome": "denied",
+        "snowflake_said": "Insufficient privileges to operate on table 'FCT_COMMERCIAL_PERFORMANCE'"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "insert",
+        "object": "raw SYNTHETIC_SEED.FINANCE_MONTH",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.SYNTHETIC_SEED' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "select",
+        "object": "account usage SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'SNOWFLAKE.ACCOUNT_USAGE' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "select",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE (rebuilt by dbt after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "select",
+        "object": "raw INGEST.SALES_LINES_CURRENT (created after the grants)",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.INGEST' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "select",
+        "object": "raw SYNTHETIC_SEED.SALES_FACT",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.SYNTHETIC_SEED' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_ANALYST",
+        "action": "select",
+        "object": "staging DBT_STAGING.STG_SALES_FACT",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_STAGING' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "create table",
+        "object": "model schema DBT_STAGING",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_STAGING' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "create table",
+        "object": "raw schema INGEST",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "delete",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_ANALYTICS' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "insert",
+        "object": "raw SYNTHETIC_SEED.FINANCE_MONTH",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "select",
+        "object": "account usage SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'SNOWFLAKE.ACCOUNT_USAGE' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "select",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE (rebuilt by dbt after the grants)",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_ANALYTICS' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "select",
+        "object": "raw INGEST.SALES_LINES_CURRENT (created after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "select",
+        "object": "raw SYNTHETIC_SEED.SALES_FACT",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_LOADER",
+        "action": "select",
+        "object": "staging DBT_STAGING.STG_SALES_FACT",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'NORTHGATE_DEMO.DBT_STAGING' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "create table",
+        "object": "model schema DBT_STAGING",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "create table",
+        "object": "raw schema INGEST",
+        "outcome": "denied",
+        "snowflake_said": "Insufficient privileges to operate on schema 'INGEST'"
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "delete",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE",
+        "outcome": "denied",
+        "snowflake_said": "Insufficient privileges to operate on table 'FCT_COMMERCIAL_PERFORMANCE'"
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "insert",
+        "object": "raw SYNTHETIC_SEED.FINANCE_MONTH",
+        "outcome": "denied",
+        "snowflake_said": "Insufficient privileges to operate on table 'FINANCE_MONTH'"
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "select",
+        "object": "account usage SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'SNOWFLAKE.ACCOUNT_USAGE' does not exist or not authorized"
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "select",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE (rebuilt by dbt after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "select",
+        "object": "raw INGEST.SALES_LINES_CURRENT (created after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "select",
+        "object": "raw SYNTHETIC_SEED.SALES_FACT",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "NORTHGATE_TRANSFORMER",
+        "action": "select",
+        "object": "staging DBT_STAGING.STG_SALES_FACT",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "create table",
+        "object": "model schema DBT_STAGING",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "create table",
+        "object": "raw schema INGEST",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "delete",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "insert",
+        "object": "raw SYNTHETIC_SEED.FINANCE_MONTH",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "select",
+        "object": "account usage SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY",
+        "outcome": "denied",
+        "snowflake_said": "Schema 'SNOWFLAKE.ACCOUNT_USAGE' does not exist or not authorized"
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "select",
+        "object": "mart DBT_ANALYTICS.FCT_COMMERCIAL_PERFORMANCE (rebuilt by dbt after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "select",
+        "object": "raw INGEST.SALES_LINES_CURRENT (created after the grants)",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "select",
+        "object": "raw SYNTHETIC_SEED.SALES_FACT",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      },
+      {
+        "role": "SYSADMIN",
+        "action": "select",
+        "object": "staging DBT_STAGING.STG_SALES_FACT",
+        "outcome": "allowed",
+        "snowflake_said": ""
+      }
+    ]
+  },
+  "incremental": {
+    "setup_query_id": "01c7ec62-000e-1c86-0002-c8920001c1f6",
+    "plan": [
+      {
+        "batch": 1,
+        "note": "first delivery",
+        "events": 85505
+      },
+      {
+        "batch": 1,
+        "note": "test order",
+        "events": 84
+      },
+      {
+        "batch": 2,
+        "note": "duplicate delivery",
+        "events": 171
+      },
+      {
+        "batch": 2,
+        "note": "first delivery",
+        "events": 5941
+      },
+      {
+        "batch": 2,
+        "note": "price correction",
+        "events": 847
+      },
+      {
+        "batch": 3,
+        "note": "first delivery",
+        "events": 3312
+      },
+      {
+        "batch": 3,
+        "note": "stale replay",
+        "events": 42
+      },
+      {
+        "batch": 3,
+        "note": "test order cancelled",
+        "events": 84
+      }
+    ],
+    "landed": [
+      {
+        "batch": 1,
+        "events": 85589,
+        "query_id": "01c7ec65-000e-1c9e-0002-c8920001b99a"
+      },
+      {
+        "batch": 2,
+        "events": 6959,
+        "query_id": "01c7ec68-000e-1c86-0002-c8920001c592"
+      },
+      {
+        "batch": 3,
+        "events": 3438,
+        "query_id": "01c7ec6a-000e-1c86-0002-c8920001c626"
+      }
+    ],
+    "first_check_after_batch_1": {
+      "query_id": "01c7ec67-000e-1c9e-0002-c8920001ba3e",
+      "expected_provisional_prices": 847,
+      "value_mismatches": 832,
+      "why": "15 of the 847 provisionally priced lines are no-charge lines (revenue 0), where 90% of the price is the price; the check now expects 832"
+    },
+    "after_each_batch": [
+      {
+        "check_query_id": "01c7ec68-000e-1c86-0002-c8920001c572",
+        "after_batch": 1,
+        "events_landed": 85589,
+        "expected": {
+          "provisional_prices": 832,
+          "real_lines": 85505,
+          "test_orders": 84
+        },
+        "actual": {
+          "missing_lines": 0,
+          "real_lines": 85505,
+          "test_orders": 84,
+          "unexpected_lines": 0,
+          "value_mismatches": 832
+        },
+        "daily_region_sales": {
+          "cells": 5407,
+          "extra_or_wrong": 0,
+          "missing_or_wrong": 0
+        },
+        "streams_pending": {
+          "current": false,
+          "events": false
+        },
+        "task_runs": [
+          {
+            "task": "APPLY_SALES_EVENTS",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 06:58:28.134 -0700",
+            "completed": "2026-10-23 06:58:29.171 -0700",
+            "query_id": "01c7ec66-000e-1c9e-0002-c8920001b9ea"
+          },
+          {
+            "task": "REFRESH_DAILY_REGION_SALES",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 06:58:29.171 -0700",
+            "completed": "2026-10-23 06:58:31.184 -0700",
+            "query_id": "01c7ec66-000e-1c9e-0002-c8920001b9ee"
+          }
+        ],
+        "checked_at": "2026-10-23 07:00:39.394 -0700"
+      },
+      {
+        "check_query_id": "01c7ec6a-000e-1c9e-0002-c8920001babe",
+        "after_batch": 2,
+        "events_landed": 92548,
+        "expected": {
+          "provisional_prices": 0,
+          "real_lines": 91446,
+          "test_orders": 84
+        },
+        "actual": {
+          "missing_lines": 0,
+          "real_lines": 91446,
+          "test_orders": 84,
+          "unexpected_lines": 0,
+          "value_mismatches": 0
+        },
+        "daily_region_sales": {
+          "cells": 5774,
+          "extra_or_wrong": 0,
+          "missing_or_wrong": 0
+        },
+        "streams_pending": {
+          "current": false,
+          "events": false
+        },
+        "task_runs": [
+          {
+            "task": "APPLY_SALES_EVENTS",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 07:01:28.134 -0700",
+            "completed": "2026-10-23 07:01:30.509 -0700",
+            "query_id": "01c7ec69-000e-1c86-0002-c8920001c5f2"
+          },
+          {
+            "task": "REFRESH_DAILY_REGION_SALES",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 07:01:30.509 -0700",
+            "completed": "2026-10-23 07:01:32.213 -0700",
+            "query_id": "01c7ec69-000e-1c9e-0002-c8920001baa6"
+          }
+        ],
+        "checked_at": "2026-10-23 07:02:02.947 -0700",
+        "pending_before_the_run": {
+          "check_query_id": "01c7ec69-000e-1c9e-0002-c8920001ba8a",
+          "streams_pending": {
+            "current": false,
+            "events": true
+          },
+          "missing_lines": 5941,
+          "value_mismatches": 832
+        }
+      },
+      {
+        "check_query_id": "01c7ec6b-000e-1c86-0002-c8920001c67e",
+        "after_batch": 3,
+        "events_landed": 95986,
+        "expected": {
+          "provisional_prices": 0,
+          "real_lines": 94758,
+          "test_orders": 0
+        },
+        "actual": {
+          "missing_lines": 0,
+          "real_lines": 94758,
+          "test_orders": 0,
+          "unexpected_lines": 0,
+          "value_mismatches": 0
+        },
+        "daily_region_sales": {
+          "cells": 5979,
+          "extra_or_wrong": 0,
+          "missing_or_wrong": 0
+        },
+        "streams_pending": {
+          "current": false,
+          "events": false
+        },
+        "task_runs": [
+          {
+            "task": "APPLY_SALES_EVENTS",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 07:02:28.134 -0700",
+            "completed": "2026-10-23 07:02:30.220 -0700",
+            "query_id": "01c7ec6a-000e-1c9e-0002-c8920001baf6"
+          },
+          {
+            "task": "REFRESH_DAILY_REGION_SALES",
+            "state": "SUCCEEDED",
+            "scheduled_from": "TRIGGER",
+            "scheduled": "2026-10-23 07:02:30.220 -0700",
+            "completed": "2026-10-23 07:02:32.213 -0700",
+            "query_id": "01c7ec6a-000e-1c9e-0002-c8920001bafe"
+          }
+        ],
+        "checked_at": "2026-10-23 07:03:29.964 -0700"
+      }
+    ],
+    "tasks_after_the_run": {
+      "query_id": "01c7ec7d-000e-1c86-0002-c8920001c886",
+      "APPLY_SALES_EVENTS": "suspended",
+      "REFRESH_DAILY_REGION_SALES": "suspended"
+    }
+  },
+  "snowpark": {
+    "query_id": "01c7ec6c-000e-1c9e-0002-c8920001bbbe",
+    "result": {
+      "current_lines": 94758,
+      "daily_cells_expected": 5979,
+      "daily_cells_pipeline": 5979,
+      "daily_only_in_pipeline": 0,
+      "daily_only_in_source": 0,
+      "engine": "Snowpark Python procedure, Snowflake 10.38.101",
+      "lines_only_in_pipeline": 0,
+      "lines_only_in_source": 0,
+      "pipeline_lines_in_daily": 94758,
+      "pipeline_revenue": "30805651.584420",
+      "source_lines": 94758,
+      "source_revenue": "30805651.584420"
+    }
+  },
+  "cost": {
+    "query_id": "01c7ec6c-000e-1c9e-0002-c8920001bc4a",
+    "reported_at": "2026-10-23 07:04:53.230 -0700",
+    "resource_monitor": {
+      "credit_quota": "10.00",
+      "frequency": "MONTHLY",
+      "name": "NORTHGATE_MONTHLY",
+      "notify_at": "75%",
+      "suspend_at": "100%",
+      "suspend_immediately_at": "110%",
+      "used_credits": "0.00"
+    },
+    "warehouse": {
+      "auto_suspend": 60,
+      "name": "DBT_WH",
+      "resource_monitor": "NORTHGATE_MONTHLY",
+      "size": "X-Small"
+    },
+    "credits_by_day": [
+      {
+        "credits": 0.0002,
+        "day": "2026-10-22",
+        "warehouse": "CLOUD_SERVICES_ONLY"
+      },
+      {
+        "credits": 0.1698,
+        "day": "2026-10-22",
+        "warehouse": "DBT_WH"
+      },
+      {
+        "credits": 0.0002,
+        "day": "2026-10-23",
+        "warehouse": "CLOUD_SERVICES_ONLY"
+      },
+      {
+        "credits": 0.3107,
+        "day": "2026-10-23",
+        "warehouse": "DBT_WH"
+      }
+    ],
+    "credits_total_since_oct_1": 0.4809,
+    "northgate_queries_by_tag": [
+      {
+        "execution_seconds": 66.6,
+        "gb_scanned": 0,
+        "queries": 261,
+        "query_tag": "northgate:access-checks"
+      },
+      {
+        "execution_seconds": 48.6,
+        "gb_scanned": 0,
+        "queries": 154,
+        "query_tag": "northgate:incremental-setup"
+      },
+      {
+        "execution_seconds": 20.6,
+        "gb_scanned": 0.032,
+        "queries": 52,
+        "query_tag": "northgate:incremental-checks"
+      },
+      {
+        "execution_seconds": 7.4,
+        "gb_scanned": 0.009,
+        "queries": 21,
+        "query_tag": "northgate:incremental-land"
+      },
+      {
+        "execution_seconds": 2.5,
+        "gb_scanned": 0,
+        "queries": 86,
+        "query_tag": "northgate:access"
+      },
+      {
+        "execution_seconds": 1.3,
+        "gb_scanned": 0.013,
+        "queries": 3,
+        "query_tag": "northgate:incremental-apply"
+      },
+      {
+        "execution_seconds": 1,
+        "gb_scanned": 0.017,
+        "queries": 3,
+        "query_tag": "northgate:incremental-refresh"
+      }
+    ]
+  }
+}
