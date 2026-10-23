@@ -2,7 +2,10 @@
 -- Every action, tried as every role, through PLATFORM.TRY_ACCESS (caller's rights).
 -- Each attempt writes one row to PLATFORM.ACCESS_CHECKS; the last statement returns them.
 
+-- Secondary roles off: with the default (ALL), every role granted to the user
+-- adds its privileges to reads and writes, and an analyst would appear to read raw data.
 ALTER SESSION SET QUERY_TAG = 'northgate:access-checks';
+USE SECONDARY ROLES NONE;
 USE ROLE SYSADMIN;
 TRUNCATE TABLE NORTHGATE_DEMO.PLATFORM.ACCESS_CHECKS;
 
@@ -55,6 +58,7 @@ CALL NORTHGATE_DEMO.PLATFORM.TRY_ACCESS('delete', 'mart DBT_ANALYTICS.FCT_COMMER
 CALL NORTHGATE_DEMO.PLATFORM.TRY_ACCESS('select', 'account usage SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY', 'SELECT COUNT(*) FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY WHERE FALSE', '');
 
 USE ROLE SYSADMIN;
+USE SECONDARY ROLES ALL;
 SELECT ARRAY_AGG(OBJECT_CONSTRUCT('role', ROLE_NAME, 'action', ACTION, 'object', OBJECT_NAME,
                                   'outcome', OUTCOME, 'detail', DETAIL))
          WITHIN GROUP (ORDER BY ROLE_NAME, ACTION, OBJECT_NAME) AS ACCESS_CHECKS
