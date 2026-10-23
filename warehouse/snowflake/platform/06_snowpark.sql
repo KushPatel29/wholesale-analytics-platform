@@ -53,7 +53,7 @@ def run(session: Session):
     totals = truth.agg(F.count(F.lit(1)).alias("N"), F.sum(F.col("REVENUE").cast(MONEY)).alias("REV")).collect()[0]
     daily_totals = daily.agg(F.sum("ORDER_LINES").alias("N"), F.sum("REVENUE").alias("REV")).collect()[0]
     result = {
-        "engine": "Snowpark Python " + session.sql("SELECT CURRENT_VERSION()").collect()[0][0],
+        "engine": "Snowpark Python procedure, Snowflake " + session.sql("SELECT CURRENT_VERSION()").collect()[0][0],
         "source_lines": totals["N"],
         "current_lines": current.count(),
         "lines_only_in_source": truth.except_(current).count(),
