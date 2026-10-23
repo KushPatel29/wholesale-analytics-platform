@@ -20,11 +20,11 @@ truth AS (
 -- What should be in the current table after batch N, from the truth alone.
 expected AS (
   SELECT
-    (SELECT COUNT(*) FROM truth, landed WHERE ARRIVES_IN <= landed.N) AS REAL_LINES,
-    (SELECT IFF(landed.N BETWEEN 1 AND 2, COUNT(*), 0) FROM truth, landed
-       WHERE MOD(ORDER_LINE_ID, 1013) = 0 AND ARRIVES_IN = 1) AS TEST_ORDERS,
-    (SELECT IFF(landed.N = 1, COUNT(*), 0) FROM truth, landed
-       WHERE MOD(ORDER_LINE_ID, 101) = 0 AND ARRIVES_IN = 1) AS PROVISIONAL_PRICES
+    (SELECT COUNT(*) FROM truth WHERE ARRIVES_IN <= (SELECT N FROM landed)) AS REAL_LINES,
+    IFF((SELECT N FROM landed) BETWEEN 1 AND 2,
+        (SELECT COUNT(*) FROM truth WHERE MOD(ORDER_LINE_ID, 1013) = 0 AND ARRIVES_IN = 1), 0) AS TEST_ORDERS,
+    IFF((SELECT N FROM landed) = 1,
+        (SELECT COUNT(*) FROM truth WHERE MOD(ORDER_LINE_ID, 101) = 0 AND ARRIVES_IN = 1), 0) AS PROVISIONAL_PRICES
 ),
 current_state AS (
   SELECT COUNT_IF(ORDER_LINE_ID > 0) AS REAL_LINES, COUNT_IF(ORDER_LINE_ID < 0) AS TEST_ORDERS
@@ -39,10 +39,11 @@ diff AS (
                   AND c.REGION_NAME = t.REGION_NAME AND c.REVENUE = t.REVENUE
                   AND c.DISCOUNT_AMOUNT = t.DISCOUNT_AMOUNT AND c.COST = t.COST
                   AND c.QUANTITY_SHIPPED = t.QUANTITY_SHIPPED AND c.WEIGHT_LB = t.WEIGHT_LB)) AS VALUE_MISMATCHES,
-    (SELECT COUNT(*) FROM truth t, landed WHERE t.ARRIVES_IN <= landed.N
+    (SELECT COUNT(*) FROM truth t WHERE t.ARRIVES_IN <= (SELECT N FROM landed)
        AND t.ORDER_LINE_ID NOT IN (SELECT ORDER_LINE_ID FROM SALES_LINES_CURRENT)) AS MISSING_LINES,
-    (SELECT COUNT(*) FROM SALES_LINES_CURRENT c, landed WHERE c.ORDER_LINE_ID > 0
-       AND c.ORDER_LINE_ID NOT IN (SELECT t.ORDER_LINE_ID FROM truth t WHERE t.ARRIVES_IN <= landed.N)) AS UNEXPECTED_LINES
+    (SELECT COUNT(*) FROM SALES_LINES_CURRENT c WHERE c.ORDER_LINE_ID > 0
+       AND c.ORDER_LINE_ID NOT IN (SELECT t.ORDER_LINE_ID FROM truth t
+                                   WHERE t.ARRIVES_IN <= (SELECT N FROM landed))) AS UNEXPECTED_LINES
 ),
 -- The incrementally maintained aggregate against a full recompute of the current table.
 full_daily AS (
