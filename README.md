@@ -92,7 +92,7 @@ same pages narrow to one rep's accounts.
 
 **The build** — [What it is](#what-it-is) · [The architecture worth explaining](#the-architecture-worth-explaining) · [Access control you can log into](#access-control-you-can-log-into) · [Running it](#running-it)
 
-**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough)
+**The defects, and how each was found** — [A row-level security bypass](#finding-a-row-level-security-bypass) · [The margin gap, and the COALESCE under it](#the-margin-gap-and-the-coalesce-under-it) · [Eleven blank cells](#eleven-cells-that-were-never-going-to-have-a-number-in-them) · [Seven more, from the right lint rules](#seven-more-defects-found-by-turning-on-the-right-lint-rules) · [The deploy gate](#the-deploy-gate-and-why-status-ok-was-not-enough) · [The dbt marts, first run on Snowflake](#the-dbt-marts-first-run-on-snowflake)
 
 **The numbers** — [Metric definitions](#metric-definitions) · [Data-product control room](#the-data-product-control-room) · [The catalogue](#the-catalogue) · [What it reads, on the published snapshot](#what-it-reads-on-the-published-snapshot) · [What the demo data says](#what-the-demo-data-says)
 
@@ -109,7 +109,7 @@ built.
 | | |
 |---|---|
 | **Scale** | 261 Python files, ~157k lines, 85 templates, 32 runbooks |
-| **Structure** | 20 blueprints, 48 services, 144 test files · 1,431 tests |
+| **Structure** | 20 blueprints, 48 services, 145 test files · 1,439 tests |
 | **Engine** | Flask + DuckDB over hive-partitioned parquet |
 | **Access** | Role permissions, row-level scoping, cost masking |
 | **Dev dataset** | 620 stores · 880 SKUs · 326k order lines · 24 months |
@@ -511,7 +511,8 @@ because a definition nobody can read is a definition nobody can check. Each row
 carries a formula, grain, source, Snowflake dbt mart, owner, **gross-or-net
 basis**, and certification tier. Implemented formulas are pinned by unit tests
 with hand-computed expected values; CI parses the dbt project and rejects
-catalogue/model drift.
+catalogue/model drift, and the project has been
+[built on Snowflake](#the-dbt-marts-first-run-on-snowflake) and reconciled.
 
 What the catalogue added beyond the originals:
 
@@ -612,6 +613,53 @@ Windows are clamped to the last row in the dataset. Before that, the filter ran
 zero — a partial-period artefact that read as a business imploding.
 
 ---
+
+## The dbt marts, first run on Snowflake
+
+The governed marts behind the catalogue are a dbt project in Snowflake SQL
+([`models/`](models/)). Until October 2026 CI only parsed it: nothing had ever
+run it. Running it means loading the app's data into Snowflake, and getting the
+sources ready showed the project **could not have run against this app**:
+
+- the Returns sources were named `return_rma` and `return_rma_item`; the app's
+  tables are `return_rmas` and `return_rma_items`;
+- `fct_returns_performance` read `closed_at`, a column the Returns app does not
+  have. It derives the close on every page (finance clearance, else rejection,
+  else manager approval, else the last update of a closed RMA), and staging now
+  follows that rule;
+- `stg_labor_fact` selected `department` and `hire_date`; the source has
+  `department_name` and no hire date.
+
+[`export_landing.py`](warehouse/snowflake/export_landing.py) lands the nine
+sources as Parquet, as the app reads them: the order-line fact and the labour
+fact from their DuckDB views, Finance and Marketing from their datasets, the
+Returns tables from SQLite with only the columns a warehouse needs, and the
+Planner's rolling-origin backtest from the Planner's own function. In
+Snowflake, [`deploy.sql`](warehouse/snowflake/deploy.sql) runs straight from
+the Git repository (`EXECUTE IMMEDIATE FROM`): it copies the Parquet into a
+stage, infers each table's schema, `COPY INTO`s it, then deploys the project
+with dbt Projects on Snowflake and runs `dbt build`.
+
+The first run built 46 of 48 nodes. Both failures had one cause: without
+`USE_LOGICAL_TYPE = TRUE`, Snowflake infers Parquet timestamps as numbers.
+With it, **48 of 48 dbt nodes green on Snowflake**: 17 models and 31 data tests
+([run summary](warehouse/snowflake/run_summary.json)).
+
+Green says the tests pass; it does not say the marts are right.
+[`reconcile.py`](warehouse/snowflake/reconcile.py) rebuilds every mart a second
+way, in pandas from the same Parquet, and compares the row count and the sum of
+every measure with what Snowflake returned (recorded with its query ID in
+[`snowflake_totals.json`](warehouse/snowflake/snowflake_totals.json)):
+**107 of 107 measures across 9 marts** agree to under half a cent
+([reconciliation.csv](warehouse/snowflake/reconciliation.csv)). Getting there
+took matching how Snowflake rounds a float into `NUMBER(18,2)`: it rounds the
+double's exact binary value, so float arithmetic left the first comparison
+$4.38 apart on $30.8M of sales and rounding the printed decimal left it $4.75
+apart.
+
+The profile holds no account, user or password: Snowflake runs the project as
+the signed-in user. CI does not repeat the run; tests hold the record, the
+reconciliation and this section to each other.
 
 ## Known limitations
 

@@ -12,7 +12,7 @@ month. For each mart it compares the row count and the sum of every measure.
 
 `compare` reads warehouse/snowflake/snowflake_totals.json (what the query
 returned, with its query ID) and writes warehouse/snowflake/reconciliation.csv.
-Any difference beyond a cent, or a millionth of the total, exits 1.
+Any difference of half a cent or more exits 1.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ import csv
 import json
 import sys
 from pathlib import Path
+
+from decimal import ROUND_HALF_UP, Decimal
 
 import numpy as np
 import pandas as pd
@@ -40,10 +42,18 @@ def _read(table: str) -> pd.DataFrame:
 
 
 def _num(series: pd.Series, places: int) -> pd.Series:
-    """Snowflake's float -> NUMBER(p, s) cast: round half away from zero."""
-    x = series.astype("float64")
-    scale = 10.0**places
-    return np.sign(x) * np.floor(np.abs(x) * scale + 0.5) / scale
+    """Snowflake's FLOAT -> NUMBER(p, s) cast: the double's exact binary value,
+    rounded half away from zero. Rounding with float arithmetic instead
+    (x * 100 + 0.5) left the first comparison $4.38 apart on $30.8M of sales,
+    and rounding the printed decimal left it $4.75 apart; this matches to the cent."""
+    q = Decimal(1).scaleb(-places)
+
+    def one(x: float) -> float:
+        if pd.isna(x):
+            return np.nan
+        return float(Decimal(float(x)).quantize(q, rounding=ROUND_HALF_UP))
+
+    return series.astype("float64").map(one)
 
 
 def _monday(dates: pd.Series) -> pd.Series:
@@ -194,7 +204,7 @@ def compare(reference: dict[str, dict[str, float]], recorded: list[dict]) -> tup
         for measure, ref in measures.items():
             sf = got.get((mart, measure))
             diff = abs(ref - sf) if sf is not None else float("inf")
-            ok = diff <= max(0.01, 1e-6 * abs(ref))
+            ok = diff <= 0.005  # half a cent: every measure is money, a count or a rate
             bad += not ok
             rows.append({"mart": mart, "measure": measure, "pandas": f"{ref:.6f}",
                          "snowflake": "missing" if sf is None else f"{sf:.6f}",

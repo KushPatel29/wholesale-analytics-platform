@@ -1,0 +1,32 @@
+{
+  "engine": "Snowflake trial account (AWS), dbt Projects on Snowflake, X-Small warehouse DBT_WH, database NORTHGATE_DEMO",
+  "dbt_version": "1.11.11",
+  "adapter": "dbt-snowflake 1.11.5",
+  "deployed_from": "Git repository object on main; warehouse/snowflake/deploy.sql run with EXECUTE IMMEDIATE FROM",
+  "command": "EXECUTE DBT PROJECT NORTHGATE_DEMO.DEPLOY.NORTHGATE_RETAIL_ANALYTICS ARGS = 'build --target snowflake'",
+  "query_id": "01c7ebc0-000e-1c35-0002-c892000178b6",
+  "started_at": "2026-10-23T11:13:34Z",
+  "elapsed_seconds": 5.96,
+  "loaded_rows": {
+    "SALES_FACT": 94758,
+    "LABOR_FACT": 20656,
+    "FINANCE_MONTH": 33,
+    "MARKETING_CAMPAIGN": 126,
+    "FORECAST_BACKTEST": 395,
+    "RETURN_RMAS": 140,
+    "RETURN_RMA_ITEMS": 197,
+    "RETURN_CORRECTIVE_ACTIONS": 0
+  },
+  "nodes": {
+    "model:success": 17,
+    "test:pass": 31
+  },
+  "failures": [],
+  "first_attempt": "46 of 48 nodes: the two failures were Parquet timestamps inferred as numbers (fixed with USE_LOGICAL_TYPE = TRUE)",
+  "defects_found_before_the_run": [
+    "sources named return_rma and return_rma_item; the app's tables are return_rmas and return_rma_items",
+    "fct_returns_performance read closed_at, which the Returns app does not have",
+    "stg_labor_fact selected department and hire_date; the source has department_name and no hire date"
+  ],
+  "reconciliation": "warehouse/snowflake/reconciliation.csv"
+}

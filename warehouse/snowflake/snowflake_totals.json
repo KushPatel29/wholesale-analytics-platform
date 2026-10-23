@@ -1,0 +1,544 @@
+{
+ "query_id": "01c7ebc2-000e-1c35-0002-c89200018092",
+ "run_at": "2026-10-23T11:15:01+00:00",
+ "query": "warehouse/snowflake/totals.sql (EXECUTE IMMEDIATE FROM the Git repository)",
+ "schema": "NORTHGATE_DEMO.DBT_ANALYTICS",
+ "note": "What the query returned in Snowsight after deploy.sql built the project, copied verbatim.",
+ "totals": [
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "active_customers",
+   "value": "2879"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "approved_returns",
+   "value": "393533.02"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "cogs",
+   "value": "24343822.18"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "discounts",
+   "value": "1464980.11"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "gross_profit",
+   "value": "4603317.19"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "gross_sales",
+   "value": "30805652.50"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "net_sales",
+   "value": "28947139.37"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "order_count",
+   "value": "15140"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "row_count",
+   "value": "34"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "units_shipped",
+   "value": "304579.000"
+  },
+  {
+   "mart": "fct_commercial_performance",
+   "measure": "weight_lb",
+   "value": "3438807.432"
+  },
+  {
+   "mart": "fct_customer_movement",
+   "measure": "contraction",
+   "value": "9152600.87"
+  },
+  {
+   "mart": "fct_customer_movement",
+   "measure": "expansion",
+   "value": "9939126.33"
+  },
+  {
+   "mart": "fct_customer_movement",
+   "measure": "prior_revenue",
+   "value": "28554146.93"
+  },
+  {
+   "mart": "fct_customer_movement",
+   "measure": "revenue",
+   "value": "29340672.39"
+  },
+  {
+   "mart": "fct_customer_movement",
+   "measure": "row_count",
+   "value": "2879"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "accounts_payable",
+   "value": "25787456.42"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "accounts_receivable",
+   "value": "38602799.2"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "accrued_liabilities",
+   "value": "2808172.72"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ap_overdue",
+   "value": "2278611.75"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ar_current",
+   "value": "27484110.67"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ar_d1_30",
+   "value": "7065945.45"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ar_d31_60",
+   "value": "2365814.11"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ar_d61_90",
+   "value": "1074347.71"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "ar_d90_plus",
+   "value": "612581.26"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "capex",
+   "value": "251641.29"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "cash",
+   "value": "5111933.44"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "cogs",
+   "value": "24284761.08"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "current_assets",
+   "value": "82465818.62"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "current_liabilities",
+   "value": "68195629.14"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "current_portion_debt",
+   "value": "39600000"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "days_in_month",
+   "value": "1004"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "depreciation_amortization",
+   "value": "337645.83"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "discount_handling_cost",
+   "value": "18264.46"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "discounts",
+   "value": "1461400.94"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "distributions",
+   "value": "8594904.74"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "fiscal_period",
+   "value": "201"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "fiscal_year",
+   "value": "66822"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "gross_profit",
+   "value": "6445317.4"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "gross_sales",
+   "value": "32191477.69"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "intangibles",
+   "value": "70950000"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "interest_expense",
+   "value": "171850.23"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "inventory",
+   "value": "36627034.35"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "long_term_debt",
+   "value": "237708900"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "net_income",
+   "value": "590508.42"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "net_ppe",
+   "value": "275641172.68"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opening_accounts_payable",
+   "value": "24981145.94"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opening_accounts_receivable",
+   "value": "37336953.44"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opening_inventory",
+   "value": "35388130.84"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opening_total_assets",
+   "value": "415849421.73"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "operating_expenses",
+   "value": "5111933.44"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_admin",
+   "value": "740354.47"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_marketing",
+   "value": "217495.8"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_occupancy",
+   "value": "493433.42"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_selling",
+   "value": "1910648.4"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_technology",
+   "value": "276849.03"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "opex_warehouse",
+   "value": "1473152.32"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "orders",
+   "value": "15101"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "other_expense",
+   "value": "14353.75"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "pre_tax_income",
+   "value": "809534.15"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "prepaid_expenses",
+   "value": "2124051.63"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "revenue",
+   "value": "30730078.45"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "row_count",
+   "value": "33"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "tax_expense",
+   "value": "219025.73"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "total_assets",
+   "value": "429056991.3"
+  },
+  {
+   "mart": "fct_finance_monthly",
+   "measure": "total_liabilities",
+   "value": "305904529.14"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "absolute_error",
+   "value": "16003834.61"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "actual",
+   "value": "83047063.10"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "forecast",
+   "value": "87969808.39"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "horizon_weeks",
+   "value": "1687"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "row_count",
+   "value": "395"
+  },
+  {
+   "mart": "fct_forecast_performance",
+   "measure": "signed_error",
+   "value": "4922745.29"
+  },
+  {
+   "mart": "fct_inventory_performance",
+   "measure": "cogs",
+   "value": "24343822.18"
+  },
+  {
+   "mart": "fct_inventory_performance",
+   "measure": "gross_margin",
+   "value": "4996850.21"
+  },
+  {
+   "mart": "fct_inventory_performance",
+   "measure": "net_sales",
+   "value": "29340672.39"
+  },
+  {
+   "mart": "fct_inventory_performance",
+   "measure": "row_count",
+   "value": "39964"
+  },
+  {
+   "mart": "fct_inventory_performance",
+   "measure": "units_sold",
+   "value": "304579.000"
+  },
+  {
+   "mart": "fct_labor_performance",
+   "measure": "closing_headcount",
+   "value": "987"
+  },
+  {
+   "mart": "fct_labor_performance",
+   "measure": "opening_headcount",
+   "value": "990"
+  },
+  {
+   "mart": "fct_labor_performance",
+   "measure": "paid_hours",
+   "value": "169314.000"
+  },
+  {
+   "mart": "fct_labor_performance",
+   "measure": "row_count",
+   "value": "25"
+  },
+  {
+   "mart": "fct_labor_performance",
+   "measure": "separations",
+   "value": "1"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "acquisition_selling_spend_month",
+   "value": "1263275.04"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "fiscal_period",
+   "value": "738"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "fiscal_year",
+   "value": "255204"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "leads",
+   "value": "223"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "new_customers",
+   "value": "19"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "qualified_leads",
+   "value": "67"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "revenue_month",
+   "value": "112462571.4"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "row_count",
+   "value": "126"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "selling_spend_month",
+   "value": "7018194.48"
+  },
+  {
+   "mart": "fct_marketing_performance",
+   "measure": "spend",
+   "value": "132798.99"
+  },
+  {
+   "mart": "fct_return_corrective_actions",
+   "measure": "row_count",
+   "value": "0"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "days_to_return",
+   "value": "1189"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "order_cost",
+   "value": "289050.70"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "order_revenue",
+   "value": "357002.64"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "order_units",
+   "value": "3414.000"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "preventable_credit_amount",
+   "value": "592073.03"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "preventable_lines",
+   "value": "171"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "resolution_hours",
+   "value": "7491"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "return_adjusted_margin",
+   "value": "-551295.73"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "return_lines",
+   "value": "197"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "returned_units",
+   "value": "455"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "revenue_return_rate_pct",
+   "value": "22413.129852947"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "row_count",
+   "value": "140"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "total_credit_amount",
+   "value": "619247.67"
+  },
+  {
+   "mart": "fct_returns_performance",
+   "measure": "unit_return_rate_pct",
+   "value": "2485.114013074"
+  }
+ ]
+}

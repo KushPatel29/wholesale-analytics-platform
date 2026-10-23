@@ -48,4 +48,4 @@ flowchart LR
 - **Source-gated:** implemented only when the declared source field is populated for the selected scope.
 - **Withheld:** definition is documented, but the required source does not exist. The app must render a source requirement rather than a number.
 
-The dbt project parses against the Snowflake adapter in CI. Runtime data remains entirely synthetic.
+The dbt project parses against the Snowflake adapter in CI, and it has been built on Snowflake with dbt Projects on Snowflake: 48 of 48 nodes green, every mart reconciled with an independent pandas build (see `warehouse/snowflake/`). Runtime data remains entirely synthetic.
