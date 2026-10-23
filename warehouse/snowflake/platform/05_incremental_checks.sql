@@ -17,14 +17,18 @@ truth AS (
               WHEN "Date" < '2026-04-01' THEN 1 WHEN "Date" < '2026-06-01' THEN 2 ELSE 3 END AS ARRIVES_IN
   FROM NORTHGATE_DEMO.SYNTHETIC_SEED.SALES_FACT
 ),
--- What should be in the current table after batch N, from the truth alone.
+-- What should be in the current table after batch N, from the truth alone. A
+-- provisional price is 90% of the real one, so on a no-charge line (revenue 0)
+-- it is not wrong: the first run expected 847 mismatches and found 832, the
+-- difference being the 15 no-charge lines among them.
 expected AS (
   SELECT
     (SELECT COUNT(*) FROM truth WHERE ARRIVES_IN <= (SELECT N FROM landed)) AS REAL_LINES,
     IFF((SELECT N FROM landed) BETWEEN 1 AND 2,
         (SELECT COUNT(*) FROM truth WHERE MOD(ORDER_LINE_ID, 1013) = 0 AND ARRIVES_IN = 1), 0) AS TEST_ORDERS,
     IFF((SELECT N FROM landed) = 1,
-        (SELECT COUNT(*) FROM truth WHERE MOD(ORDER_LINE_ID, 101) = 0 AND ARRIVES_IN = 1), 0) AS PROVISIONAL_PRICES
+        (SELECT COUNT(*) FROM truth WHERE MOD(ORDER_LINE_ID, 101) = 0 AND ARRIVES_IN = 1
+                                         AND REVENUE <> 0), 0) AS PROVISIONAL_PRICES
 ),
 current_state AS (
   SELECT COUNT_IF(ORDER_LINE_ID > 0) AS REAL_LINES, COUNT_IF(ORDER_LINE_ID < 0) AS TEST_ORDERS
