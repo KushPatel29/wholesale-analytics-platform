@@ -39,7 +39,7 @@ select
     r.id as rma_id,
     r.order_id,
     r.customer_id,
-    r.date_submitted::timestamp_ntz as opened_at,
+    r.submitted_at::timestamp_ntz as opened_at,
     r.closed_at::timestamp_ntz as closed_at,
     r.status,
     r.primary_reason,
@@ -55,8 +55,8 @@ select
     coalesce(s.order_revenue, 0) - coalesce(s.order_cost, 0) - coalesce(r.total_credit_amount, 0) as return_adjusted_margin,
     coalesce(l.returned_units, 0) / nullif(s.order_units, 0) * 100 as unit_return_rate_pct,
     coalesce(r.total_credit_amount, 0) / nullif(s.order_revenue, 0) * 100 as revenue_return_rate_pct,
-    datediff('day', s.order_date, r.date_submitted) as days_to_return,
-    datediff('hour', r.date_submitted, r.closed_at) as resolution_hours
+    datediff('day', s.order_date, r.submitted_at) as days_to_return,
+    datediff('hour', r.submitted_at, r.closed_at) as resolution_hours
 from rma r
 left join return_lines l on l.rma_id = r.id
 left join sales_order s on s.order_id = r.order_id

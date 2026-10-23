@@ -1,0 +1,16 @@
+# For dbt Projects on Snowflake, which runs the project inside Snowflake as the
+# signed-in user: account and user stay empty and no password exists anywhere.
+# CI parses with .dbt-ci/profiles.yml; warehouse/snowflake/deploy.sql loads the
+# sources and runs this target.
+northgate_retail_analytics:
+  target: snowflake
+  outputs:
+    snowflake:
+      type: snowflake
+      account: ""
+      user: ""
+      role: SYSADMIN
+      database: NORTHGATE_DEMO
+      warehouse: DBT_WH
+      schema: DBT
+      threads: 8

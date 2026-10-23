@@ -22,6 +22,10 @@ sources:
     database: "{{ env_var('DBT_RETURNS_DATABASE', target.database) }}"
     schema: "{{ env_var('DBT_RETURNS_SCHEMA', 'RETURNS_APP') }}"
     tables:
+      # The app's tables are plural. These names were never checked against
+      # them until the project first ran, on Snowflake.
       - name: return_rma
+        identifier: return_rmas
       - name: return_rma_item
+        identifier: return_rma_items
       - name: return_corrective_actions
