@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import time
 import uuid
@@ -140,19 +141,23 @@ def enqueue_export_job(
     max_per_minute = max(1, _int_env("ASSISTANT_EXPORT_JOB_MAX_PER_MINUTE", 8))
     max_active = max(1, _int_env("ASSISTANT_EXPORT_JOB_MAX_ACTIVE_PER_USER", 3))
     with _LOCK:
-        rate_key = f"{user_token}:count"
-        used = int(_RATE_COUNTER.get(rate_key, 0))
-        if used >= max_per_minute:
-            return {"status": "rate_limited", "retry_after_seconds": 60}
-        active = _active_job_count_for_user(user_token)
-        if active >= max_active:
-            return {"status": "busy", "retry_after_seconds": 10}
         dedupe_key = f"{user_token}:{request_token}"
         existing_id = _REQUEST_DEDUPE.get(dedupe_key)
         existing = _JOBS.get(existing_id) if existing_id else None
         if isinstance(existing, ExportJob) and str(existing.status) in {"pending", "running", "completed"}:
             return {"status": "deduped", "job": existing}
 
+        # Count accepted submissions in the last minute, not since the user's
+        # last idle minute. Reassigning a TTL counter extended the whole window.
+        rate_now = time.monotonic()
+        rate_key = f"{user_token}:count"
+        recent = tuple(stamp for stamp in _RATE_COUNTER.get(rate_key, ()) if stamp > rate_now - 60)
+        if len(recent) >= max_per_minute:
+            retry_after = max(1, math.ceil(recent[0] + 60 - rate_now))
+            return {"status": "rate_limited", "retry_after_seconds": retry_after}
+        active = _active_job_count_for_user(user_token)
+        if active >= max_active:
+            return {"status": "busy", "retry_after_seconds": 10}
         job_id = f"aj_{uuid.uuid4().hex[:20]}"
         job = ExportJob(
             job_id=job_id,
@@ -168,9 +173,14 @@ def enqueue_export_job(
         )
         _JOBS[job_id] = job
         _REQUEST_DEDUPE[dedupe_key] = job_id
-        _RATE_COUNTER[rate_key] = used + 1
+        try:
+            _EXECUTOR.submit(_run_job, job_id, task)
+        except RuntimeError:
+            _JOBS.pop(job_id, None)
+            _REQUEST_DEDUPE.pop(dedupe_key, None)
+            return {"status": "busy", "retry_after_seconds": 10}
+        _RATE_COUNTER[rate_key] = (*recent, rate_now)
 
-    _EXECUTOR.submit(_run_job, job_id, task)
     return {"status": "queued", "job": job}
 
 
