@@ -660,7 +660,9 @@ def _metadata_frame(
     ]
     for note in list(notes or []):
         rows.append({"field": "note", "value": str(note)})
-    return pd.DataFrame(rows)
+    frame = pd.DataFrame(rows)
+    frame.attrs["assistant_generated_metadata"] = True
+    return frame
 
 
 def _is_sensitive_export_allowed(ctx: ToolContext, column_name: str) -> bool:
@@ -817,6 +819,26 @@ def _int_env(name: str, default: int) -> int:
         return int(default)
 
 
+def _export_sheets_digest(sheets: Mapping[str, pd.DataFrame]) -> str:
+    """Fingerprint the allowed output, retaining sheet/column/row order and types."""
+    digest = hashlib.sha256()
+
+    def update(value: Any) -> None:
+        digest.update(json.dumps(value, default=str, ensure_ascii=True).encode("utf-8"))
+        digest.update(b"\n")
+
+    for name, frame in sheets.items():
+        update([name, list(frame.columns)])
+        # Generated timestamps change on a retry; the remaining metadata still
+        # describes the actual permissions, scope and notes of this export.
+        content = frame
+        if frame.attrs.get("assistant_generated_metadata") and "field" in frame.columns:
+            content = frame.loc[frame["field"] != "generated_at"]
+        for row in content.itertuples(index=False, name=None):
+            update([[type(value).__qualname__, _jsonable(value)] for value in row])
+    return digest.hexdigest()
+
+
 def _build_export_request_key(
     *,
     ctx: ToolContext,
@@ -828,6 +850,11 @@ def _build_export_request_key(
     include_chart: bool,
     chart_count: int,
     row_count: int,
+    sheets: Mapping[str, pd.DataFrame],
+    filename_stem: str,
+    chart_defs: Sequence[Mapping[str, Any]],
+    export_plan: Mapping[str, Any],
+    column_policy: Mapping[str, Any],
 ) -> str:
     base = {
         "user": str(getattr(ctx.user, "id", "anon")),
@@ -839,6 +866,11 @@ def _build_export_request_key(
         "include_chart": bool(include_chart),
         "chart_count": int(chart_count),
         "row_count": int(row_count),
+        "sheets_digest": _export_sheets_digest(sheets),
+        "filename_stem": filename_stem,
+        "charts": list(chart_defs),
+        "export_plan": dict(export_plan),
+        "column_policy": dict(column_policy),
         "scope": _scope_used(ctx),
         "window": _window_used(ctx),
     }
@@ -1050,17 +1082,6 @@ def _register_workbook_export(
     force_async = bool(async_export)
     async_row_threshold = max(2000, _int_env("ASSISTANT_EXPORT_ASYNC_ROW_THRESHOLD", 8000))
     should_async = bool(force_async or row_count >= async_row_threshold)
-    request_key = _build_export_request_key(
-        ctx=ctx,
-        module=token_module,
-        export_type=export_type,
-        fmt=fmt,
-        requested_columns=list(requested_columns or []),
-        include_all_allowed_columns=bool(include_all_allowed_columns),
-        include_chart=bool(chart_defs),
-        chart_count=len(chart_defs),
-        row_count=row_count,
-    )
 
     def _build_artifact_sync() -> Dict[str, Any]:
         artifact_result = _build_export_artifact(
@@ -1092,6 +1113,22 @@ def _register_workbook_export(
         }
 
     if should_async:
+        request_key = _build_export_request_key(
+            ctx=ctx,
+            module=token_module,
+            export_type=export_type,
+            fmt=fmt,
+            requested_columns=list(requested_columns or []),
+            include_all_allowed_columns=bool(include_all_allowed_columns),
+            include_chart=bool(chart_defs),
+            chart_count=len(chart_defs),
+            row_count=row_count,
+            sheets=safe_sheets,
+            filename_stem=filename_stem,
+            chart_defs=chart_defs,
+            export_plan=export_plan_payload,
+            column_policy=column_policy,
+        )
         queued = enqueue_export_job(
             user_id,
             request_key=request_key,
