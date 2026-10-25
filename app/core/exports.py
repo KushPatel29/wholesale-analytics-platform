@@ -11,7 +11,8 @@ from pathlib import Path
 import zipfile
 from xml.sax.saxutils import escape
 
-from flask import send_file, after_this_request
+from flask import send_file
+from werkzeug.wsgi import ClosingIterator
 
 import pandas as pd
 
@@ -276,6 +277,7 @@ def _apply_xlsxwriter_charts(
         if str(getattr(writer, "engine", "")).strip().lower() != "xlsxwriter":
             return
         wb = writer.book
+        chart_sheet_names: dict[str, str] = {}
         for raw in list(chart_specs or []):
             if not isinstance(raw, Mapping):
                 continue
@@ -328,9 +330,13 @@ def _apply_xlsxwriter_charts(
                 chart.set_x_axis({"name": x_axis})
             if y_axis:
                 chart.set_y_axis({"name": y_axis})
-            chart_sheet = str(raw.get("chart_sheet") or "Charts").strip()[:31].replace(":", "_").replace("/", "_")
-            if not chart_sheet:
-                chart_sheet = "Charts"
+            requested_sheet = str(raw.get("chart_sheet") or "Charts").strip() or "Charts"
+            chart_sheet = chart_sheet_names.get(requested_sheet)
+            if chart_sheet is None:
+                chart_sheet = requested_sheet if requested_sheet in writer.sheets else (
+                    _xlsx_safe_sheet_names([*writer.sheets, requested_sheet])[-1]
+                )
+                chart_sheet_names[requested_sheet] = chart_sheet
             ws = writer.sheets.get(chart_sheet)
             if ws is None:
                 ws = wb.add_worksheet(chart_sheet)
@@ -355,18 +361,19 @@ def _xlsx_safe_sheet_names(names: Sequence[str]) -> list[str]:
     used: set[str] = set()
     out: list[str] = []
     for idx, raw in enumerate(names, start=1):
-        candidate = (str(raw or f"Sheet{idx}")[:31]).replace(":", "_").replace("/", "_").replace("\\", "_")
-        candidate = candidate.strip() or f"Sheet{idx}"
-        if candidate not in used:
-            used.add(candidate)
+        candidate = re.sub(r"[\[\]:*?/\\\x00-\x1f]", "_", str(raw or f"Sheet{idx}"))
+        candidate = candidate.strip(" '")[:31].rstrip(" '") or f"Sheet{idx}"
+        if candidate.casefold() not in used:
+            used.add(candidate.casefold())
             out.append(candidate)
             continue
-        base = candidate[:28] or "Sheet"
         suffix = 2
         while True:
-            next_name = f"{base}_{suffix}"[:31]
-            if next_name not in used:
-                used.add(next_name)
+            ending = f"_{suffix}"
+            base = candidate[:31 - len(ending)].rstrip(" '") or "Sheet"
+            next_name = base + ending
+            if next_name.casefold() not in used:
+                used.add(next_name.casefold())
                 out.append(next_name)
                 break
             suffix += 1
@@ -539,16 +546,26 @@ def dataframes_to_xlsx_bytes(
         return _build_minimal_xlsx_bytes(sheets)
     output = BytesIO()
     safe_sheets: Dict[str, pd.DataFrame] = {}
+    safe_names = _xlsx_safe_sheet_names(list(sheets))
+    aliases = dict(zip(sheets, safe_names, strict=True))
     with _excel_writer(output, engine) as writer:
-        for name, df in sheets.items():
-            # Ensure a safe sheet name (max 31 chars, no special characters)
-            safe = str(name)[:31].replace(":", "_").replace("/", "_")
+        for safe, df in zip(safe_names, sheets.values(), strict=True):
             frame = df if isinstance(df, pd.DataFrame) else pd.DataFrame()
             safe_sheets[safe] = frame
             frame.to_excel(writer, sheet_name=safe, index=False)
             _apply_worksheet_formatting(writer, safe, frame)
             _demote_openpyxl_formulas(writer, safe)
-        _apply_xlsxwriter_charts(writer, safe_sheets, chart_specs=chart_specs)
+        mapped_specs = []
+        for raw in chart_specs or []:
+            if not isinstance(raw, Mapping):
+                continue
+            spec = dict(raw)
+            for key in ("source_sheet", "chart_sheet"):
+                reference = spec.get(key)
+                if isinstance(reference, str) and reference in aliases:
+                    spec[key] = aliases[reference]
+            mapped_specs.append(spec)
+        _apply_xlsxwriter_charts(writer, safe_sheets, chart_specs=mapped_specs)
     output.seek(0)
     return output.read()
 
@@ -572,6 +589,20 @@ def _log_export_event(filename: str, fmt: str, meta: Optional[Dict[str, object]]
         pass
 
 
+def _temporary_export_response(path: Path, filename: str, mimetype: str):
+    """Close the streamed file before deleting it, including on Windows."""
+    response = send_file(path.as_posix(), as_attachment=True, download_name=filename, mimetype=mimetype)
+
+    def cleanup() -> None:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    response.response = ClosingIterator(response.response, cleanup)
+    return response
+
+
 def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str = "export.xlsx", threshold_rows: int = 100_000):
     """Return a Flask response streaming an XLSX file.
 
@@ -593,21 +624,12 @@ def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str =
         tmp.close()
         try:
             with _excel_writer(tmp_path.as_posix(), engine) as writer:
-                for name, df in sheets.items():
-                    safe = str(name)[:31].replace(":", "_").replace("/", "_")
+                for safe, df in zip(_xlsx_safe_sheet_names(list(sheets)), sheets.values(), strict=True):
                     (df if df is not None else pd.DataFrame()).to_excel(writer, sheet_name=safe, index=False)
                     _apply_worksheet_formatting(writer, safe, df if df is not None else pd.DataFrame())
                     _demote_openpyxl_formulas(writer, safe)
 
-            @after_this_request
-            def _cleanup(resp):  # pragma: no cover - side effect
-                try:
-                    tmp_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
-                return resp
-
-            return send_file(tmp_path.as_posix(), as_attachment=True, download_name=filename, mimetype=mimetype)
+            return _temporary_export_response(tmp_path, filename, mimetype)
         except Exception:
             # Fallback to in-memory if anything goes wrong
             if tmp_path.exists():
@@ -663,15 +685,7 @@ def dataframe_to_csv_response(df: pd.DataFrame, filename: str = "export.csv"):
     try:
         (df if df is not None else pd.DataFrame()).to_csv(tmp_path.as_posix(), index=False)
 
-        @after_this_request
-        def _cleanup(resp):  # pragma: no cover - side effect
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return resp
-
-        return send_file(tmp_path.as_posix(), as_attachment=True, download_name=filename, mimetype=mimetype)
+        return _temporary_export_response(tmp_path, filename, mimetype)
     except Exception:
         if tmp_path.exists():
             try:
@@ -704,21 +718,12 @@ def dataframes_to_xlsx_response(sheets: Dict[str, pd.DataFrame], filename: str =
         tmp.close()
         try:
             with _excel_writer(tmp_path.as_posix(), engine) as writer:
-                for name, df in sheets.items():
-                    safe = str(name)[:31].replace(":", "_").replace("/", "_")
+                for safe, df in zip(_xlsx_safe_sheet_names(list(sheets)), sheets.values(), strict=True):
                     (df if df is not None else pd.DataFrame()).to_excel(writer, sheet_name=safe, index=False)
                     _apply_worksheet_formatting(writer, safe, df if df is not None else pd.DataFrame())
                     _demote_openpyxl_formulas(writer, safe)
 
-            @after_this_request
-            def _cleanup(resp):  # pragma: no cover - side effect
-                try:
-                    tmp_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
-                return resp
-
-            return send_file(tmp_path.as_posix(), as_attachment=True, download_name=filename, mimetype=mimetype)
+            return _temporary_export_response(tmp_path, filename, mimetype)
         except Exception:
             # Fallback to in-memory if anything goes wrong
             if tmp_path.exists():
@@ -738,17 +743,17 @@ def to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Data", instructions: Opt
     - `instructions`: optional text placed into a separate 'Instructions' sheet.
     """
     sheets = {sheet_name: df if df is not None else pd.DataFrame()}
+    safe_names = _xlsx_safe_sheet_names([sheet_name, "Instructions"] if instructions else [sheet_name])
     output = BytesIO()
     with _excel_writer(output, "xlsxwriter") as writer:
         # Write data
-        for name, sdf in sheets.items():
-            safe = str(name)[:31].replace(":", "_").replace("/", "_")
+        for safe, sdf in zip(safe_names[:1], sheets.values(), strict=True):
             sdf.to_excel(writer, sheet_name=safe, index=False)
             _apply_worksheet_formatting(writer, safe, sdf)
             _demote_openpyxl_formulas(writer, safe)
 
         if instructions:
-            instr_name = "Instructions"
+            instr_name = safe_names[1]
             ws = writer.book.add_worksheet(instr_name)
             wrap_format = writer.book.add_format({"text_wrap": True, "valign": "top"})
             colw = 100

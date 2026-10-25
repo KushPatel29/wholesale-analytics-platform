@@ -16,7 +16,7 @@ from cachetools import TTLCache
 
 from app.core import rbac
 from app.core.access_policy import get_current_scope
-from app.core.exports import dataframes_to_xlsx_bytes, sanitize_filename
+from app.core.exports import _xlsx_safe_sheet_names, dataframes_to_xlsx_bytes, sanitize_filename
 from app.core.sensitive_data import mask_json_payload, sensitive_access_flags, sensitive_field_category
 from app.decision_ops import service as decision_ops_service
 from app.returns import service as returns_service
@@ -745,6 +745,7 @@ def _normalize_chart_specs(
     chart_specs: Sequence[Mapping[str, Any]] | None,
     *,
     available_sheets: Sequence[str],
+    sheet_aliases: Mapping[str, str] | None = None,
 ) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     available = {str(name): str(name) for name in list(available_sheets or [])}
@@ -752,6 +753,7 @@ def _normalize_chart_specs(
         if not isinstance(raw, Mapping):
             continue
         source_sheet = str(raw.get("source_sheet") or "").strip()
+        source_sheet = (sheet_aliases or {}).get(source_sheet, source_sheet)
         if source_sheet not in available:
             continue
         chart_type = str(raw.get("chart_type") or "line").strip().lower()
@@ -760,7 +762,10 @@ def _normalize_chart_specs(
         normalized.append(
             {
                 "source_sheet": source_sheet,
-                "chart_sheet": str(raw.get("chart_sheet") or "Charts").strip()[:31] or "Charts",
+                "chart_sheet": (sheet_aliases or {}).get(
+                    str(raw.get("chart_sheet") or "Charts").strip(),
+                    str(raw.get("chart_sheet") or "Charts").strip() or "Charts",
+                ),
                 "chart_type": chart_type,
                 "category_col": str(raw.get("category_col") or "").strip(),
                 "value_cols": [str(item).strip() for item in list(raw.get("value_cols") or []) if str(item).strip()],
@@ -782,8 +787,8 @@ def _sheets_with_column_policy(
 ) -> tuple[Dict[str, pd.DataFrame], Dict[str, Dict[str, Any]]]:
     out: Dict[str, pd.DataFrame] = {}
     policy: Dict[str, Dict[str, Any]] = {}
-    for name, frame in dict(sheets or {}).items():
-        safe_name = str(name or "Sheet")[:31].replace("/", "_").replace(":", "_")
+    incoming = dict(sheets or {})
+    for safe_name, frame in zip(_xlsx_safe_sheet_names(list(incoming)), incoming.values(), strict=True):
         frame_obj = frame if isinstance(frame, pd.DataFrame) else _to_frame(frame)
         filtered, column_policy = _apply_export_column_policy(
             ctx,
@@ -1032,7 +1037,10 @@ def _register_workbook_export(
             "include_all_allowed_columns": True,
         }
 
-    chart_defs = _normalize_chart_specs(chart_specs, available_sheets=list(safe_sheets.keys()))
+    aliases = dict(zip(sheets, _xlsx_safe_sheet_names(list(sheets)), strict=True))
+    chart_defs = _normalize_chart_specs(
+        chart_specs, available_sheets=list(safe_sheets.keys()), sheet_aliases=aliases,
+    )
     row_count = int(sum(len(frame.index) for frame in safe_sheets.values() if isinstance(frame, pd.DataFrame)))
     scope_used = _scope_used(ctx)
     window_used = _window_used(ctx)
