@@ -80,7 +80,7 @@ pip install -r requirements.txt
 python -m seed.generate_synthetic_data     # ~18s, writes cache/fact_dataset
 cp .env.demo .env
 python manage.py init-auth-db && python manage.py seed-demo-users
-python run.py                              # http://127.0.0.1:5057
+python run.py                              # http://127.0.0.1:5000
 ```
 
 Log in as `gm` / `demo-password-1234`, then log in as `rep.dana` and watch the
