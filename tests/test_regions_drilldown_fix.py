@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from flask import Flask
 from app.blueprints import regions
 from app.services import analytics_utils as au
@@ -26,7 +26,7 @@ def test_analytics_utils_functions():
     assert au.calculate_yoy_growth(100, None) is None
 
 @patch('app.blueprints.regions.get_fact_df')
-@patch('app.blueprints.regions.current_user')
+@patch('app.blueprints.regions.current_user', new_callable=MagicMock)
 @patch('app.blueprints.regions.apply_global_filters')
 @patch('app.blueprints.regions.scope_dataframe')
 def test_build_drilldown_payload(mock_scope, mock_apply, mock_user, mock_get_df):
@@ -35,7 +35,7 @@ def test_build_drilldown_payload(mock_scope, mock_apply, mock_user, mock_get_df)
     df = pd.DataFrame({
         'Date': dates,
         'Region': ['North'] * 100,
-        'Revenue': np.random.rand(100) * 1000,
+        'Revenue': np.random.default_rng(42).random(100) * 1000,
         'OrderId': range(100),
         'CustomerId': ['C1'] * 50 + ['C2'] * 50,
         'ProductId': ['P1'] * 100
@@ -46,6 +46,7 @@ def test_build_drilldown_payload(mock_scope, mock_apply, mock_user, mock_get_df)
     mock_scope.side_effect = lambda d, u: d
     
     mock_user.id = 'test_user'
+    mock_user.get_id.return_value = 'test_user'
     mock_user.roles = ['admin']
     mock_user.region_id = None
     
@@ -66,8 +67,9 @@ def test_build_drilldown_payload(mock_scope, mock_apply, mock_user, mock_get_df)
         assert 'mom_growth' in kpi
         assert 'wow_growth' in kpi
         
-        print(f"MoM: {kpi['mom_growth']}")
-        print(f"WoW: {kpi['wow_growth']}")
+        assert kpi['total_revenue'] == round(float(df['Revenue'].sum()), 2)
+        assert kpi['orders'] == 100
+        assert kpi['customers'] == 2
         
         # Check specific logic
         dates2 = pd.to_datetime(['2023-01-15', '2023-02-15'])
@@ -90,3 +92,4 @@ def test_build_drilldown_payload(mock_scope, mock_apply, mock_user, mock_get_df)
         # Growth = (120 - 100) / 100 = 0.20 = 20%
         
         assert payload2['kpi']['mom_growth'] == 20.0
+        assert payload2['kpi']['total_revenue'] == 220.0
